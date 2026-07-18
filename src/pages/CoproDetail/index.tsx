@@ -9,6 +9,8 @@ import type { DpeClass } from "@/lib/referentiels";
 import { useCopro, usePhotoUrl, useUploadPhoto } from "@/api/copros";
 import { ProjetTab } from "./ProjetTab";
 import { DonneesTab } from "./DonneesTab";
+import { FinancementTab } from "./FinancementTab";
+import { EnqueteTab } from "./EnqueteTab";
 import { PlaceholderScreen } from "@/components/PlaceholderScreen";
 
 const TABS = [
@@ -131,12 +133,8 @@ export default function CoproDetail() {
 
       {tab === "projet" && <ProjetTab c={c} />}
       {tab === "donnees" && <DonneesTab c={c} />}
-      {tab === "financement" && (
-        <PlaceholderScreen icon="euro" title="Plans de financement" text="Construit en M7 — en attendant, l'assistant 7 étapes arrive en M6." />
-      )}
-      {tab === "enquete" && (
-        <PlaceholderScreen icon="users" title="Enquête sociale" text="Construit en M7 : questionnaire configurable, profils MaPrimeRénov'." />
-      )}
+      {tab === "financement" && <FinancementTab c={c} />}
+      {tab === "enquete" && <EnqueteTab c={c} />}
       {tab === "fichiers" && (
         <PlaceholderScreen icon="folder" title="Fichiers" text="Construit en M8 : dossiers, dépôt de fichiers, checklists de pièces." />
       )}

@@ -10,6 +10,7 @@ import { fmtEuro } from "@/lib/format";
 import { computeFinance, computePlansIndividuels, type FinanceParams } from "@/lib/finance";
 import { useCopro } from "@/api/copros";
 import { useDonnees } from "@/api/donnees";
+import { useProfilsCopro } from "@/api/enquete";
 import {
   makeDefaultParams,
   readParams,
@@ -39,6 +40,7 @@ export default function Ingenierie() {
   const navigate = useNavigate();
   const { data: c } = useCopro(id);
   const { data: donnees } = useDonnees(id);
+  const { data: profils } = useProfilsCopro(id);
   const { data: bareme } = useBareme();
   const { data: scenarios, isLoading: scLoading } = useScenarios(id);
   const createScenario = useCreateScenario(id ?? "");
@@ -150,7 +152,7 @@ export default function Ingenierie() {
   const doValidate = async () => {
     if (!donnees) return;
     await save();
-    const { owners, totalCle } = buildOwners(donnees, draft.cle);
+    const { owners, totalCle } = buildOwners(donnees, draft.cle, profils);
     const res = await validateScenario.mutateAsync({
       scenarioId: active.id,
       params: draft,
@@ -165,7 +167,7 @@ export default function Ingenierie() {
 
   const exportCsv = () => {
     if (!donnees) return;
-    const { owners, totalCle } = buildOwners(donnees, draft.cle);
+    const { owners, totalCle } = buildOwners(donnees, draft.cle, profils);
     const head = ["Copropriétaire", "Lots", "Tantièmes", "Quote-part", "MPR indiv", "CEE", "Subv coll", "Éco-PTZ", "Reste", "Mensualité"];
     const { plans } = computePlansIndividuels(draft, d, owners, bareme, totalCle);
     const lines = plans.map((p) =>
@@ -296,7 +298,7 @@ export default function Ingenierie() {
             {step === 0 && <Step1 s={draft} set={set} d={d} c={c} bareme={bareme} />}
             {step === 1 && <Step2 s={draft} set={set} d={d} c={c} bareme={bareme} cles={donnees?.cles ?? []} />}
             {step === 2 && <Step3 s={draft} set={set} d={d} c={c} bareme={bareme} />}
-            {step === 3 && <Step4 s={draft} set={set} d={d} c={c} bareme={bareme} />}
+            {step === 3 && <Step4 s={draft} set={set} d={d} c={c} bareme={bareme} profilsEnquete={profils} />}
             {step === 4 && <Step5 s={draft} set={set} d={d} c={c} bareme={bareme} />}
             {step === 5 && <Step6 d={d} />}
             {step === 6 && (
@@ -306,6 +308,7 @@ export default function Ingenierie() {
                 c={c}
                 bareme={bareme}
                 donnees={donnees}
+                profils={profils}
                 validated={validated}
                 validating={validateScenario.isPending}
                 plansCount={plansCount}

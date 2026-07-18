@@ -150,15 +150,27 @@ export function Step3({ s, set, d, c, bareme }: StepProps) {
   );
 }
 
-export function Step4({ s, set, d }: StepProps) {
+export function Step4({ s, set, d, profilsEnquete }: StepProps & { profilsEnquete?: Map<string, Profil> }) {
   const setProf = (p: Profil, v: number) => set({ profils: { ...s.profils, [p]: v } });
   const setPrime = (p: Profil, v: number) => set({ primeIndiv: { ...s.primeIndiv, [p]: v } });
+  const reprendreEnquete = () => {
+    if (!profilsEnquete) return;
+    const counts: Record<Profil, number> = { Bleu: 0, Jaune: 0, Violet: 0, Rose: 0 };
+    for (const p of profilsEnquete.values()) counts[p] += 1;
+    set({ profils: counts });
+  };
   return (
     <div className="fade">
       <h2 className="step-h">Aides individuelles</h2>
       <p className="step-d">
         Primes MaPrimeRénov' individuelles selon le profil de revenus des copropriétaires (issu de l'enquête sociale).
       </p>
+      {profilsEnquete && profilsEnquete.size > 0 && (
+        <button className="se-btn se-btn-secondary btn-sm" style={{ marginBottom: 16 }} onClick={reprendreEnquete}>
+          <Icon name="users" size={15} />
+          Reprendre les profils de l'enquête ({profilsEnquete.size} réponses)
+        </button>
+      )}
       <div style={{ maxWidth: 640 }}>
         <div
           className="prof-row"

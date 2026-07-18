@@ -12,8 +12,12 @@ import {
 import type { CoproWithStats } from "@/api/copros";
 import type { DonneesCopro } from "@/api/donnees";
 
-/** Regroupe les lots réels par copropriétaire sur la clé choisie. */
-export function buildOwners(donnees: DonneesCopro, cle: string): { owners: OwnerInput[]; totalCle: number; nonAttribues: number } {
+/** Regroupe les lots réels par copropriétaire sur la clé choisie ; profils issus de l'enquête sociale. */
+export function buildOwners(
+  donnees: DonneesCopro,
+  cle: string,
+  profils?: Map<string, NonNullable<OwnerInput["profil"]>>
+): { owners: OwnerInput[]; totalCle: number; nonAttribues: number } {
   const byOwner = new Map<string, OwnerInput>();
   let nonAttribues = 0;
   for (const lot of donnees.lots) {
@@ -27,7 +31,7 @@ export function buildOwners(donnees: DonneesCopro, cle: string): { owners: Owner
       o = {
         id: lot.coproprietaire_id,
         nom: lot.coproprietaire?.nom ?? "—",
-        profil: null, // rattaché à l'enquête sociale en M7
+        profil: profils?.get(lot.coproprietaire_id) ?? null,
         lots: [],
       };
       byOwner.set(lot.coproprietaire_id, o);
@@ -44,14 +48,15 @@ interface Props {
   c: CoproWithStats;
   bareme: Bareme;
   donnees: DonneesCopro | undefined;
+  profils?: Map<string, NonNullable<OwnerInput["profil"]>>;
   validated: boolean;
   validating: boolean;
   plansCount: number | null;
   onValidate: () => void;
 }
 
-export function Step7({ s, d, c, bareme, donnees, validated, validating, plansCount, onValidate }: Props) {
-  const built = useMemo(() => (donnees ? buildOwners(donnees, s.cle) : null), [donnees, s.cle]);
+export function Step7({ s, d, c, bareme, donnees, profils, validated, validating, plansCount, onValidate }: Props) {
+  const built = useMemo(() => (donnees ? buildOwners(donnees, s.cle, profils) : null), [donnees, s.cle, profils]);
   const plans = useMemo(
     () => (built && built.owners.length ? computePlansIndividuels(s, d, built.owners, bareme, built.totalCle) : null),
     [built, s, d, bareme]
@@ -159,8 +164,10 @@ export function Step7({ s, d, c, bareme, donnees, validated, validating, plansCo
         </table>
       </div>
       <p className="se-small" style={{ marginTop: 12 }}>
-        {c.stats?.lots ?? 0} lots · clé {s.cle} · les profils MPR individuels seront rattachés automatiquement dès
-        l'enquête sociale saisie.
+        {c.stats?.lots ?? 0} lots · clé {s.cle} ·{" "}
+        {profils && profils.size > 0
+          ? `profils MPR rattachés depuis l'enquête sociale (${profils.size} réponses).`
+          : "les profils MPR individuels seront rattachés automatiquement dès l'enquête sociale saisie."}
       </p>
       <button
         className="se-btn se-btn-primary"
