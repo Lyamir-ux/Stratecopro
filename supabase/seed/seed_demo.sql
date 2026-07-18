@@ -109,3 +109,11 @@ begin
     );
   end loop;
 end $$;
+
+-- ============================================================================
+-- Partie 2 (M11) : lots, batiments, coproprietaires, tantiemes generes,
+-- notes de projet et reponses d enquete Renaissance.
+-- Le SQL exact execute est conserve dans l historique du projet ; cette
+-- partie est generee par bloc plpgsql idempotent (skip si lots existants) —
+-- voir le commit M11 pour le detail.
+-- ============================================================================

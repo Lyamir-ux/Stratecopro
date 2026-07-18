@@ -10,6 +10,16 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          xlsx: ["xlsx"],
+          vendor: ["react", "react-dom", "react-router-dom", "@tanstack/react-query", "@supabase/supabase-js", "zustand"],
+        },
+      },
+    },
+  },
   test: {
     environment: "node",
     include: ["src/**/__tests__/**/*.test.ts"],
