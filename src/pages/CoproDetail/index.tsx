@@ -11,7 +11,8 @@ import { ProjetTab } from "./ProjetTab";
 import { DonneesTab } from "./DonneesTab";
 import { FinancementTab } from "./FinancementTab";
 import { EnqueteTab } from "./EnqueteTab";
-import { PlaceholderScreen } from "@/components/PlaceholderScreen";
+import { FichiersTab } from "./FichiersTab";
+import { CommunicationsTab } from "./CommunicationsTab";
 
 const TABS = [
   { id: "projet", label: "Projet" },
@@ -135,12 +136,8 @@ export default function CoproDetail() {
       {tab === "donnees" && <DonneesTab c={c} />}
       {tab === "financement" && <FinancementTab c={c} />}
       {tab === "enquete" && <EnqueteTab c={c} />}
-      {tab === "fichiers" && (
-        <PlaceholderScreen icon="folder" title="Fichiers" text="Construit en M8 : dossiers, dépôt de fichiers, checklists de pièces." />
-      )}
-      {tab === "communications" && (
-        <PlaceholderScreen icon="message" title="Communications" text="Construit en M8 : notes de projet." />
-      )}
+      {tab === "fichiers" && <FichiersTab c={c} />}
+      {tab === "communications" && <CommunicationsTab c={c} />}
     </div>
   );
 }
