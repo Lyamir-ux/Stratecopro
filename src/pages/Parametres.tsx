@@ -1,7 +1,280 @@
+// Paramètres : apparence (accent, menu latéral), barèmes des aides par millésime, registre RGPD.
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
-import { PlaceholderScreen } from "@/components/PlaceholderScreen";
+import { Icon } from "@/components/Icon";
+import { Badge } from "@/components/ui";
+import { supabase } from "@/lib/supabase";
+import type { Json, Tables } from "@/lib/database.types";
+import type { Bareme } from "@/lib/finance";
+import { ACCENTS, useUi } from "@/stores/ui";
+
+function useBaremes() {
+  return useQuery({
+    queryKey: ["baremes-all"],
+    queryFn: async (): Promise<Tables<"baremes">[]> => {
+      const { data, error } = await supabase.from("baremes").select("*").order("millesime", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+function useSaveBareme() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, params, actif }: { id: string; params?: Bareme; actif?: boolean }) => {
+      const { error } = await supabase
+        .from("baremes")
+        .update({ ...(params ? { params: params as unknown as Json } : {}), ...(actif != null ? { actif } : {}) })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["baremes-all"] });
+      void qc.invalidateQueries({ queryKey: ["bareme-actif"] });
+    },
+  });
+}
+
+function useDuplicateBareme() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (src: Tables<"baremes">) => {
+      const params = src.params as unknown as Bareme;
+      const millesime = src.millesime + 1;
+      const { error } = await supabase.from("baremes").insert({
+        millesime,
+        zone: src.zone,
+        actif: false,
+        params: { ...params, millesime } as unknown as Json,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["baremes-all"] }),
+  });
+}
+
+function BaremeEditor({ row }: { row: Tables<"baremes"> }) {
+  const save = useSaveBareme();
+  const [p, setP] = useState<Bareme>(row.params as unknown as Bareme);
+  const [dirty, setDirty] = useState(false);
+
+  const num = (label: string, value: number, onChange: (v: number) => void, suffix?: string) => (
+    <div className="kv" key={label}>
+      <span className="k">{label}</span>
+      <span className="v" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <input
+          className="edit-inp sm"
+          type="number"
+          value={value}
+          onChange={(e) => {
+            onChange(Number(e.target.value) || 0);
+            setDirty(true);
+          }}
+          style={{ width: 90, textAlign: "right" }}
+        />
+        {suffix && <span style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>{suffix}</span>}
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="p-body">
+      <div className="se-eyebrow" style={{ color: "var(--fg-muted)", marginBottom: 8 }}>
+        MaPrimeRénov' Copropriétés
+      </div>
+      {num("Taux standard (gain 35-50 %)", p.mprCopro.tauxStandard, (v) => setP({ ...p, mprCopro: { ...p.mprCopro, tauxStandard: v } }), "%")}
+      {num("Taux majoré (gain ≥ 50 %)", p.mprCopro.tauxMajore, (v) => setP({ ...p, mprCopro: { ...p.mprCopro, tauxMajore: v } }), "%")}
+      {num("Bonus sortie de passoire", p.mprCopro.bonusPassoire, (v) => setP({ ...p, mprCopro: { ...p.mprCopro, bonusPassoire: v } }), "pts")}
+      {num("Seuil d'éligibilité (gain)", p.mprCopro.seuilMin, (v) => setP({ ...p, mprCopro: { ...p.mprCopro, seuilMin: v } }), "%")}
+
+      <div className="se-eyebrow" style={{ color: "var(--fg-muted)", margin: "16px 0 8px" }}>
+        Primes individuelles (€ / logement)
+      </div>
+      {(["Bleu", "Jaune", "Violet", "Rose"] as const).map((prof) =>
+        num(`Profil ${prof}`, p.primesIndiv[prof], (v) => setP({ ...p, primesIndiv: { ...p.primesIndiv, [prof]: v } }), "€")
+      )}
+
+      <div className="se-eyebrow" style={{ color: "var(--fg-muted)", margin: "16px 0 8px" }}>
+        Éco-PTZ collectif
+      </div>
+      {num("Plafond par logement", p.ecoPtz.plafondParLogement, (v) => setP({ ...p, ecoPtz: { ...p.ecoPtz, plafondParLogement: v } }), "€")}
+      {num("Durée maximale", p.ecoPtz.dureeMax, (v) => setP({ ...p, ecoPtz: { ...p.ecoPtz, dureeMax: v } }), "ans")}
+
+      <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12 }}>
+        Les seuils de revenu fiscal (profils MPR) se modifient lors du passage au millésime suivant — dupliquez le
+        barème pour préparer l'année à venir.
+      </p>
+
+      <button
+        className="se-btn se-btn-primary btn-sm"
+        style={{ marginTop: 10 }}
+        disabled={!dirty || save.isPending}
+        onClick={() => {
+          void save.mutateAsync({ id: row.id, params: p }).then(() => setDirty(false));
+        }}
+      >
+        <Icon name="check" size={15} />
+        {save.isPending ? "Enregistrement…" : dirty ? "Enregistrer le barème" : "Enregistré"}
+      </button>
+      <p className="se-small" style={{ color: "var(--color-warning-700)", marginTop: 10 }}>
+        <Icon name="alert" size={13} /> Les scénarios déjà validés conservent leur snapshot — une modification de
+        barème ne s'applique qu'aux prochains calculs.
+      </p>
+    </div>
+  );
+}
 
 export default function Parametres() {
   useCrumbs([{ label: "Paramètres" }]);
-  return <PlaceholderScreen icon="settings" title="Paramètres" text="Construit en M10 : barèmes des aides par millésime, apparence, registre RGPD." />;
+  const { data: baremes } = useBaremes();
+  const save = useSaveBareme();
+  const duplicate = useDuplicateBareme();
+  const { accent, setAccent, sidebarTheme, setSidebarTheme } = useUi();
+  const [openBareme, setOpenBareme] = useState<string | null>(null);
+
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Paramètres</h1>
+          <p className="page-sub">Apparence, barèmes des aides et conformité</p>
+        </div>
+      </div>
+
+      <div className="detail-grid">
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <div className="panel">
+            <div className="p-head">
+              <Icon name="euro" size={18} />
+              <h3>Barèmes des aides</h3>
+              <span style={{ flex: 1 }}></span>
+              <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>versionnés par millésime</span>
+            </div>
+            <div className="p-body">
+              {(baremes ?? []).map((b) => (
+                <div key={b.id} style={{ marginBottom: 10 }}>
+                  <div
+                    className="task-row"
+                    style={{ padding: "10px 4px", borderBottom: "1px solid var(--border)", cursor: "pointer" }}
+                    onClick={() => setOpenBareme(openBareme === b.id ? null : b.id)}
+                  >
+                    <Icon name={openBareme === b.id ? "chevronDown" : "chevronRight"} size={15} />
+                    <div>
+                      <div className="t-title" style={{ fontSize: 14 }}>
+                        Millésime {b.millesime} · {b.zone === "hors_idf" ? "hors Île-de-France" : "Île-de-France"}
+                      </div>
+                    </div>
+                    <span className="spacer"></span>
+                    {b.actif ? (
+                      <Badge kind="success" dot>
+                        Actif
+                      </Badge>
+                    ) : (
+                      <button
+                        className="se-btn se-btn-ghost btn-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void save.mutateAsync({ id: b.id, actif: true });
+                        }}
+                      >
+                        Activer
+                      </button>
+                    )}
+                    <button
+                      className="icon-btn"
+                      title={`Dupliquer vers ${b.millesime + 1}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void duplicate.mutateAsync(b);
+                      }}
+                    >
+                      <Icon name="copy" size={15} />
+                    </button>
+                  </div>
+                  {openBareme === b.id && <BaremeEditor row={b} />}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="p-head">
+              <Icon name="lock" size={18} />
+              <h3>Données personnelles (RGPD)</h3>
+            </div>
+            <div className="p-body">
+              <div className="kv">
+                <span className="k">Hébergement</span>
+                <span className="v">Supabase · Union européenne (Stockholm)</span>
+              </div>
+              <div className="kv">
+                <span className="k">Données sensibles</span>
+                <span className="v">Revenus fiscaux (enquête sociale)</span>
+              </div>
+              <div className="kv">
+                <span className="k">Finalité</span>
+                <span className="v" style={{ textAlign: "right" }}>
+                  Calcul des aides MaPrimeRénov' individuelles
+                </span>
+              </div>
+              <div className="kv">
+                <span className="k">Accès</span>
+                <span className="v">Équipe AMO Strat Eco uniquement</span>
+              </div>
+              <div className="kv">
+                <span className="k">Conservation</span>
+                <span className="v">Durée du dossier + obligations légales</span>
+              </div>
+              <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10 }}>
+                Pour effacer les données d'un copropriétaire (droit à l'effacement), supprimez sa fiche dans l'onglet
+                Données de la copro — ses réponses d'enquête sont supprimées en cascade.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="panel" style={{ alignSelf: "flex-start" }}>
+          <div className="p-head">
+            <Icon name="settings" size={18} />
+            <h3>Apparence</h3>
+          </div>
+          <div className="p-body">
+            <div className="se-eyebrow" style={{ color: "var(--fg-muted)", marginBottom: 10 }}>
+              Couleur d'accent
+            </div>
+            <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+              {ACCENTS.map((a) => (
+                <button
+                  key={a}
+                  onClick={() => setAccent(a)}
+                  title={a}
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: "50%",
+                    background: a,
+                    border: accent === a ? "3px solid var(--fg1)" : "3px solid transparent",
+                    cursor: "pointer",
+                  }}
+                ></button>
+              ))}
+            </div>
+            <div className="se-eyebrow" style={{ color: "var(--fg-muted)", marginBottom: 10 }}>
+              Menu latéral
+            </div>
+            <div className="opt-mini">
+              <button className={sidebarTheme === "clair" ? "on" : ""} onClick={() => setSidebarTheme("clair")}>
+                Clair
+              </button>
+              <button className={sidebarTheme === "sombre" ? "on" : ""} onClick={() => setSidebarTheme("sombre")}>
+                Sombre
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

@@ -6,16 +6,21 @@ export interface Crumb {
   to?: string;
 }
 
+export const ACCENTS = ["#7AB52C", "#2E6FA8", "#4A7A1F"] as const;
+export type Accent = (typeof ACCENTS)[number];
+
 interface UiState {
   collapsed: boolean;
   sidebarTheme: "clair" | "sombre";
   dashLayout: "kanban" | "galerie" | "tableau";
   showProgress: boolean;
+  accent: Accent;
   crumbs: Crumb[];
   toggleCollapsed: () => void;
   setSidebarTheme: (t: "clair" | "sombre") => void;
   setDashLayout: (v: "kanban" | "galerie" | "tableau") => void;
   setShowProgress: (v: boolean) => void;
+  setAccent: (a: Accent) => void;
   setCrumbs: (c: Crumb[]) => void;
 }
 
@@ -26,11 +31,13 @@ export const useUi = create<UiState>()(
       sidebarTheme: "clair",
       dashLayout: "kanban",
       showProgress: true,
+      accent: "#7AB52C",
       crumbs: [],
       toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed })),
       setSidebarTheme: (sidebarTheme) => set({ sidebarTheme }),
       setDashLayout: (dashLayout) => set({ dashLayout }),
       setShowProgress: (showProgress) => set({ showProgress }),
+      setAccent: (accent) => set({ accent }),
       setCrumbs: (crumbs) => set({ crumbs }),
     }),
     {
@@ -40,6 +47,7 @@ export const useUi = create<UiState>()(
         sidebarTheme: s.sidebarTheme,
         dashLayout: s.dashLayout,
         showProgress: s.showProgress,
+        accent: s.accent,
       }),
     }
   )
