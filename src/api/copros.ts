@@ -118,6 +118,68 @@ export function useTasksCount() {
   });
 }
 
+/** Un dossier copropriété complet (fiche + stats + équipe). */
+export function useCopro(id: string | undefined) {
+  return useQuery({
+    queryKey: ["copro", id],
+    enabled: !!id,
+    queryFn: async (): Promise<CoproWithStats> => {
+      const [{ data: copro, error: e1 }, { data: stats, error: e2 }, { data: members, error: e3 }] =
+        await Promise.all([
+          supabase.from("coproprietes").select("*").eq("id", id!).single(),
+          supabase.from("copro_stats").select("*").eq("id", id!).maybeSingle(),
+          supabase.from("copro_members").select("copro_id, user_id, profiles(initials, full_name)").eq("copro_id", id!),
+        ]);
+      if (e1) throw e1;
+      if (e2) throw e2;
+      if (e3) throw e3;
+      return {
+        ...copro,
+        stats: stats ?? null,
+        team: (members ?? []).map((m) => ({
+          user_id: m.user_id,
+          initials: m.profiles?.initials ?? "?",
+          full_name: m.profiles?.full_name ?? "",
+        })),
+      };
+    },
+  });
+}
+
+export function useUpdateCopro(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: Partial<TablesInsert<"coproprietes">>) => {
+      const { error } = await supabase.from("coproprietes").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["copro", id] });
+      void qc.invalidateQueries({ queryKey: ["copros"] });
+    },
+  });
+}
+
+/** Téléverse la photo du dossier dans le bucket privé et met à jour photo_path. */
+export function useUploadPhoto(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${id}/hero.${ext}`;
+      const { error: eUp } = await supabase.storage.from("copro-photos").upload(path, file, { upsert: true });
+      if (eUp) throw eUp;
+      const { error: eDb } = await supabase.from("coproprietes").update({ photo_path: path }).eq("id", id);
+      if (eDb) throw eDb;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["copro", id] });
+      void qc.invalidateQueries({ queryKey: ["copros"] });
+      void qc.invalidateQueries({ queryKey: ["photo-url"] });
+    },
+  });
+}
+
 /** URL signée d'une photo de copropriété (bucket privé). */
 export function usePhotoUrl(path: string | null) {
   return useQuery({
