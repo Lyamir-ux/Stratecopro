@@ -37,7 +37,8 @@ export interface Bareme {
   };
 }
 
-export type CleRepartition = "tantiemes" | "batiment" | "escalier";
+/** Code de la clé de répartition utilisée ('MUN', 'ESC', 'BAT-A'…). */
+export type CleRepartition = string;
 
 /** Paramètres d'un scénario financier (persistés en jsonb dans scenarios_financiers.params). */
 export interface FinanceParams {

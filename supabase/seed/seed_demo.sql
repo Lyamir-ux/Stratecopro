@@ -94,7 +94,7 @@ begin
       cid, v.name, 'partage', 2024,
       jsonb_build_object(
         'travaux', v.travaux, 'honoraires', v.honoraires, 'aleas', v.aleas,
-        'cle', 'tantiemes', 'mprCoproPct', v.mpr_pct, 'bonusPassoire', v.bonus,
+        'cle', 'MUN', 'mprCoproPct', v.mpr_pct, 'bonusPassoire', v.bonus,
         'cee', v.cee, 'fonds', v.fonds,
         'profils', jsonb_build_object('Bleu', 0, 'Jaune', 0, 'Violet', 0, 'Rose', 0),
         'primeIndiv', jsonb_build_object('Bleu', 3000, 'Jaune', 2250, 'Violet', 1500, 'Rose', 0),
