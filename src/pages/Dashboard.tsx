@@ -1,7 +1,504 @@
+// Tableau de bord AMO — porté de design-reference/project/dashboard.jsx
+// Vues Kanban / Galerie / Tableau, KPI, filtres phase & secteur fonctionnels.
+import { useMemo, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
-import { PlaceholderScreen } from "@/components/PlaceholderScreen";
+import { Icon } from "@/components/Icon";
+import { Modal } from "@/components/Modal";
+import { Avatar, Badge, DpePair, PhaseBadge, Progress, ThumbSlot } from "@/components/ui";
+import { PHASES, type DpeClass, type PhaseId } from "@/lib/referentiels";
+import { fmtEuro } from "@/lib/format";
+import { useUi } from "@/stores/ui";
+import { useCopros, useCreateCopro, usePhotoUrl, type CoproWithStats } from "@/api/copros";
+
+function TeamStack({ team }: { team: CoproWithStats["team"] }) {
+  return (
+    <span className="avatar-stack">
+      {team.map((m) => (
+        <Avatar key={m.user_id} who={m.initials} name={m.full_name} sm />
+      ))}
+    </span>
+  );
+}
+
+function CoproCard({ c, showProgress }: { c: CoproWithStats; showProgress: boolean }) {
+  const navigate = useNavigate();
+  const { data: photoUrl } = usePhotoUrl(c.photo_path);
+  const s = c.stats;
+  return (
+    <article className="copro-card fade">
+      <ThumbSlot photoUrl={photoUrl} placeholder={c.name} />
+      <div style={{ position: "relative" }}>
+        <div className="cc-body" style={{ cursor: "pointer" }} onClick={() => navigate(`/copros/${c.id}`)}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h3 className="cc-name">{c.name}</h3>
+              <div className="cc-loc">
+                <Icon name="mapPin" size={14} />
+                {c.adresse || [c.city, c.quartier].filter(Boolean).join(" · ") || "Adresse à renseigner"}
+              </div>
+            </div>
+            <DpePair before={c.energy_before as DpeClass | null} after={c.energy_after as DpeClass | null} />
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+            {c.fragile && (
+              <Badge kind="warn">
+                <Icon name="alert" size={12} />
+                Fragile
+              </Badge>
+            )}
+            {c.gain_pct != null && (
+              <Badge kind="primary">
+                <Icon name="trendingUp" size={12} />+{c.gain_pct}%
+              </Badge>
+            )}
+            {s?.scenario && <Badge kind="neutral">{s.scenario}</Badge>}
+          </div>
+
+          <div className="cc-meta">
+            <div className="m">
+              <span className="v">{s?.lots ?? 0}</span>
+              <span className="l">lots</span>
+            </div>
+            <div className="m">
+              <span className="v">{s?.coproprietaires ?? 0}</span>
+              <span className="l">copropriétaires</span>
+            </div>
+            <div className="m">
+              <span className="v">{s?.batiments ?? 0}</span>
+              <span className="l">bâtiment{(s?.batiments ?? 0) > 1 ? "s" : ""}</span>
+            </div>
+          </div>
+
+          {showProgress && (
+            <div className="cc-prog-row">
+              <div className="lab">
+                <span>Avancement</span>
+                <span>{c.progress}%</span>
+              </div>
+              <Progress value={c.progress} blue={c.phase === "etudes"} />
+            </div>
+          )}
+
+          {s?.next_task && (
+            <div className="cc-next">
+              <Icon name="checkCircle" size={15} className="ico" />
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                Prochaine étape · {s.next_task}
+              </span>
+            </div>
+          )}
+
+          <div className="cc-foot">
+            <TeamStack team={c.team} />
+            <span className="spacer"></span>
+            {s?.montant_ttc != null ? (
+              <span className="montant">{fmtEuro(s.montant_ttc)}</span>
+            ) : (
+              <span className="updated">Non chiffré</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function KanbanView({ copros, showProgress }: { copros: CoproWithStats[]; showProgress: boolean }) {
+  const dotColor: Record<PhaseId, string> = {
+    diagnostic: "var(--color-neutral-400)",
+    etudes: "var(--color-secondary-500)",
+    travaux: "var(--color-primary-500)",
+  };
+  return (
+    <div className="kanban">
+      {PHASES.map((ph) => {
+        const list = copros.filter((c) => c.phase === ph.id);
+        return (
+          <section className="kcol" key={ph.id}>
+            <div className="kcol-head">
+              <span className="kdot" style={{ background: dotColor[ph.id] }}></span>
+              <span className="ktitle">{ph.label}</span>
+              <span className="kcount">{list.length}</span>
+            </div>
+            <div className="kcol-body">
+              {list.map((c) => (
+                <CoproCard key={c.id} c={c} showProgress={showProgress} />
+              ))}
+              {list.length === 0 && (
+                <div style={{ padding: 18, textAlign: "center", color: "var(--fg-muted)", fontSize: 13 }}>
+                  Aucun dossier
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function GalleryView({ copros, showProgress }: { copros: CoproWithStats[]; showProgress: boolean }) {
+  return (
+    <div className="gallery">
+      {copros.map((c) => (
+        <CoproCard key={c.id} c={c} showProgress={showProgress} />
+      ))}
+    </div>
+  );
+}
+
+function TableView({ copros }: { copros: CoproWithStats[] }) {
+  const navigate = useNavigate();
+  return (
+    <div className="tablewrap fade">
+      <table className="dossiers">
+        <thead>
+          <tr>
+            <th>Copropriété</th>
+            <th>Phase</th>
+            <th>DPE</th>
+            <th>Lots</th>
+            <th>Copro.</th>
+            <th>Montant TTC</th>
+            <th>Avancement</th>
+            <th>Équipe</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {copros.map((c) => (
+            <tr key={c.id} onClick={() => navigate(`/copros/${c.id}`)}>
+              <td>
+                <div className="td-name">
+                  <span className="td-thumb">
+                    <Icon name="building" size={18} />
+                  </span>
+                  <div>
+                    <div className="nm">{c.name}</div>
+                    <div className="sub">{[c.city, c.syndic_name].filter(Boolean).join(" · ")}</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <PhaseBadge phase={c.phase} />
+              </td>
+              <td>
+                <DpePair before={c.energy_before as DpeClass | null} after={c.energy_after as DpeClass | null} />
+              </td>
+              <td style={{ fontWeight: 600 }}>{c.stats?.lots ?? 0}</td>
+              <td>{c.stats?.coproprietaires ?? 0}</td>
+              <td style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}>{fmtEuro(c.stats?.montant_ttc)}</td>
+              <td>
+                <div className="td-prog">
+                  <span className="pct">{c.progress}%</span>
+                  <div style={{ flex: 1 }}>
+                    <Progress value={c.progress} blue={c.phase === "etudes"} />
+                  </div>
+                </div>
+              </td>
+              <td>
+                <TeamStack team={c.team} />
+              </td>
+              <td>
+                <Icon name="chevronRight" size={18} style={{ color: "var(--fg-muted)" }} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function KpiStrip({ copros }: { copros: CoproWithStats[] }) {
+  const lots = copros.reduce((s, c) => s + (c.stats?.lots ?? 0), 0);
+  const coproTotal = copros.reduce((s, c) => s + (c.stats?.coproprietaires ?? 0), 0);
+  const montant = copros.reduce((s, c) => s + (c.stats?.montant_ttc ?? 0), 0);
+  const gains = copros.filter((c) => c.gain_pct != null);
+  const gainMoy = gains.length ? Math.round(gains.reduce((s, c) => s + (c.gain_pct ?? 0), 0) / gains.length) : null;
+  const kpis = [
+    { ico: "building" as const, label: "Dossiers actifs", val: String(copros.length), foot: <>sur les 3 phases</>, blue: false },
+    { ico: "users" as const, label: "Copropriétaires accompagnés", val: String(coproTotal), foot: <>{lots} lots au total</>, blue: true },
+    {
+      ico: "euro" as const,
+      label: "Montant de travaux",
+      val: (montant / 1e6).toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " M€",
+      foot: <>TTC engagés</>,
+      blue: false,
+    },
+    {
+      ico: "trendingUp" as const,
+      label: "Gain énergétique moyen",
+      val: gainMoy != null ? gainMoy + " %" : "—",
+      foot:
+        gainMoy != null && gainMoy >= 35 ? (
+          <span>
+            <span className="up">↑</span> au-dessus du seuil 35 %
+          </span>
+        ) : (
+          <>gain non évalué</>
+        ),
+      blue: false,
+    },
+  ];
+  return (
+    <div className="kpis">
+      {kpis.map((k, i) => (
+        <div className="kpi fade" key={i}>
+          <div className="k-top">
+            <span className={"k-ico" + (k.blue ? " blue" : "")}>
+              <Icon name={k.ico} size={19} />
+            </span>
+            <span className="k-label">{k.label}</span>
+          </div>
+          <div className="k-val">{k.val}</div>
+          <div className="k-foot">{k.foot}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const DPE_CLASSES: DpeClass[] = ["A", "B", "C", "D", "E", "F", "G"];
+
+function NewCoproDialog({ onClose }: { onClose: () => void }) {
+  const create = useCreateCopro();
+  const navigate = useNavigate();
+  const [form, setForm] = useState({
+    name: "",
+    city: "",
+    quartier: "",
+    adresse: "",
+    syndic_name: "",
+    phase: "diagnostic" as PhaseId,
+    energy_before: "" as string,
+    fragile: false,
+  });
+  const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const copro = await create.mutateAsync({ ...form, energy_before: form.energy_before || null });
+    onClose();
+    navigate(`/copros/${copro.id}`);
+  };
+
+  const field = (label: string, input: React.ReactNode) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <label style={{ fontSize: 13, fontWeight: 500, color: "var(--fg2)" }}>{label}</label>
+      {input}
+    </div>
+  );
+
+  return (
+    <Modal title="Nouvelle copropriété" onClose={onClose}>
+      <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {field(
+          "Nom de la copropriété *",
+          <input className="login-input" required value={form.name} onChange={(e) => set({ name: e.target.value })} />
+        )}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {field("Ville", <input className="login-input" value={form.city} onChange={(e) => set({ city: e.target.value })} />)}
+          {field(
+            "Quartier",
+            <input className="login-input" value={form.quartier} onChange={(e) => set({ quartier: e.target.value })} />
+          )}
+        </div>
+        {field(
+          "Adresse",
+          <input className="login-input" value={form.adresse} onChange={(e) => set({ adresse: e.target.value })} />
+        )}
+        {field(
+          "Syndic",
+          <input className="login-input" value={form.syndic_name} onChange={(e) => set({ syndic_name: e.target.value })} />
+        )}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {field(
+            "Phase de départ",
+            <select
+              className="login-input"
+              value={form.phase}
+              onChange={(e) => set({ phase: e.target.value as PhaseId })}
+            >
+              {PHASES.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {field(
+            "Étiquette énergétique actuelle",
+            <select
+              className="login-input"
+              value={form.energy_before}
+              onChange={(e) => set({ energy_before: e.target.value })}
+            >
+              <option value="">Non connue</option>
+              {DPE_CLASSES.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "var(--fg2)" }}>
+          <input type="checkbox" checked={form.fragile} onChange={(e) => set({ fragile: e.target.checked })} />
+          Copropriété fragile (taux d'impayés &gt; 8 %)
+        </label>
+        {create.isError && (
+          <p style={{ color: "var(--color-error-700)", fontSize: 13.5, margin: 0 }}>
+            Impossible de créer le dossier. Réessayez.
+          </p>
+        )}
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
+          <button type="button" className="se-btn se-btn-secondary" onClick={onClose}>
+            Annuler
+          </button>
+          <button type="submit" className="se-btn se-btn-primary" disabled={create.isPending}>
+            <Icon name="plus" size={16} />
+            {create.isPending ? "Création…" : "Créer le dossier"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function exportCsv(copros: CoproWithStats[]) {
+  const head = ["Copropriété", "Ville", "Phase", "DPE avant", "DPE après", "Gain %", "Lots", "Copropriétaires", "Bâtiments", "Montant TTC", "Avancement %", "Syndic"];
+  const lines = copros.map((c) =>
+    [
+      c.name,
+      c.city ?? "",
+      c.phase,
+      c.energy_before ?? "",
+      c.energy_after ?? "",
+      c.gain_pct ?? "",
+      c.stats?.lots ?? 0,
+      c.stats?.coproprietaires ?? 0,
+      c.stats?.batiments ?? 0,
+      c.stats?.montant_ttc ?? "",
+      c.progress,
+      c.syndic_name ?? "",
+    ]
+      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+      .join(";")
+  );
+  const blob = new Blob(["﻿" + [head.join(";"), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "coproprietes-strateco.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function Dashboard() {
   useCrumbs([{ label: "Vos copropriétés" }]);
-  return <PlaceholderScreen icon="gauge" title="Tableau de bord" text="Construit en M3 : KPI, vues Kanban / Galerie / Tableau, dossiers copropriétés." />;
+  const { data: copros, isLoading, error } = useCopros();
+  const { dashLayout, setDashLayout, showProgress } = useUi();
+  const [phaseFilter, setPhaseFilter] = useState<PhaseId | "">("");
+  const [cityFilter, setCityFilter] = useState<string>("");
+  const [showNew, setShowNew] = useState(false);
+
+  const cities = useMemo(
+    () => Array.from(new Set((copros ?? []).map((c) => c.city).filter((v): v is string => !!v))).sort(),
+    [copros]
+  );
+  const filtered = (copros ?? []).filter(
+    (c) => (!phaseFilter || c.phase === phaseFilter) && (!cityFilter || c.city === cityFilter)
+  );
+
+  const views = [
+    { id: "kanban" as const, label: "Kanban", icon: "columns" as const },
+    { id: "galerie" as const, label: "Galerie", icon: "grid" as const },
+    { id: "tableau" as const, label: "Tableau", icon: "table" as const },
+  ];
+
+  if (error)
+    return (
+      <div className="placeholder-screen">
+        <h2>Erreur de chargement</h2>
+        <p>{String(error)}</p>
+      </div>
+    );
+
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Vos copropriétés</h1>
+          <p className="page-sub">Suivi des projets de rénovation énergétique · Grand Est</p>
+        </div>
+        <span className="spacer"></span>
+        <button className="se-btn se-btn-secondary btn-sm" onClick={() => copros && exportCsv(copros)}>
+          <Icon name="download" size={16} />
+          Exporter
+        </button>
+        <button className="se-btn se-btn-primary btn-sm" onClick={() => setShowNew(true)}>
+          <Icon name="plus" size={16} />
+          Nouvelle copropriété
+        </button>
+      </div>
+
+      <KpiStrip copros={filtered} />
+
+      <div className="toolbar">
+        <div className="seg">
+          {views.map((v) => (
+            <button key={v.id} className={dashLayout === v.id ? "on" : ""} onClick={() => setDashLayout(v.id)}>
+              <Icon name={v.icon} size={15} />
+              {v.label}
+            </button>
+          ))}
+        </div>
+        <select
+          className="chip-filter"
+          value={phaseFilter}
+          onChange={(e) => setPhaseFilter(e.target.value as PhaseId | "")}
+          style={{ cursor: "pointer" }}
+        >
+          <option value="">Phase : toutes</option>
+          {PHASES.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <select
+          className="chip-filter"
+          value={cityFilter}
+          onChange={(e) => setCityFilter(e.target.value)}
+          style={{ cursor: "pointer" }}
+        >
+          <option value="">Secteur : tous</option>
+          {cities.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+        <span style={{ flex: 1 }}></span>
+        <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
+          {isLoading ? "Chargement…" : `${filtered.length} dossier${filtered.length > 1 ? "s" : ""}`}
+        </span>
+      </div>
+
+      {dashLayout === "kanban" && <KanbanView copros={filtered} showProgress={showProgress} />}
+      {dashLayout === "galerie" && <GalleryView copros={filtered} showProgress={showProgress} />}
+      {dashLayout === "tableau" && <TableView copros={filtered} />}
+
+      {!isLoading && filtered.length === 0 && (
+        <div style={{ padding: 40, textAlign: "center", color: "var(--fg-muted)" }}>
+          Aucun dossier pour l'instant — créez votre première copropriété.
+        </div>
+      )}
+
+      {showNew && <NewCoproDialog onClose={() => setShowNew(false)} />}
+    </div>
+  );
 }
