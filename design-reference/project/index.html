@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Strat Eco — Progiciel AMO</title>
+  <link rel="stylesheet" href="assets/colors_and_type.css" />
+  <link rel="stylesheet" href="app.css" />
+  <meta name="ext-resource-dependency" content="assets/logo-strateco.svg" data-resource-id="logoDark" />
+  <meta name="ext-resource-dependency" content="assets/logo-strateco-white.svg" data-resource-id="logoWhite" />
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+  <template id="__bundler_thumbnail" data-bg-color="#1f4d2e">
+    <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1200" height="800" fill="#1f4d2e"/>
+      <g fill="none" stroke="#a8d08a" stroke-width="14" stroke-linejoin="round">
+        <path d="M420 520 V340 L600 250 L780 340 V520 Z"/>
+        <path d="M600 250 V160"/>
+      </g>
+      <rect x="500" y="420" width="200" height="100" fill="#a8d08a"/>
+      <text x="600" y="640" font-family="Georgia, serif" font-size="72" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="2">Strat Eco</text>
+    </svg>
+  </template>
+  <div id="root"></div>
+
+  <!-- données + web component (scripts classiques) -->
+  <script src="data.js"></script>
+  <script src="image-slot.js"></script>
+
+  <!-- composants React (JSX via Babel) -->
+  <script type="text/babel" src="icons.jsx"></script>
+  <script type="text/babel" src="components.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="shell.jsx"></script>
+  <script type="text/babel" src="dashboard.jsx"></script>
+  <script type="text/babel" src="detail.jsx"></script>
+  <script type="text/babel" src="copro.jsx"></script>
+  <script type="text/babel" src="moe.jsx"></script>
+  <script type="text/babel" src="syndic.jsx"></script>
+  <script type="text/babel" src="consultations.jsx"></script>
+  <script type="text/babel" src="ingenierie.jsx"></script>
+  <script type="text/babel" src="login.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>
