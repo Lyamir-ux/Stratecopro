@@ -42,6 +42,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
+    // le temps de charger le profil, l'app reste en état « chargement »
+    // (sinon les gardes de route voient session sans profil et déconnectent)
+    setLoading(true);
     supabase
       .from("profiles")
       .select("*")

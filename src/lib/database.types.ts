@@ -1067,6 +1067,10 @@ export type Database = {
     }
     Functions: {
       is_amo: { Args: never; Returns: boolean }
+      is_copro_of: { Args: { p_copro_id: string }; Returns: boolean }
+      is_scenario_partage: { Args: { p_scenario_id: string }; Returns: boolean }
+      my_coproprietaire_ids: { Args: never; Returns: string[] }
+      my_lot_ids: { Args: never; Returns: string[] }
     }
     Enums: {
       app_role: "amo" | "syndic" | "moe" | "copro"
