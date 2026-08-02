@@ -14,6 +14,128 @@ export type Database = {
   }
   public: {
     Tables: {
+      adhesions_pret: {
+        Row: {
+          bic: string | null
+          bulletins: Json
+          copro_id: string
+          coproprietaire_id: string
+          created_at: string
+          form: Json
+          iban: string | null
+          id: string
+          lieu_signature: string | null
+          rib_concordance: string | null
+          scenario_id: string | null
+          sepa_path: string | null
+          signed_at: string | null
+          statut: string
+          updated_at: string
+        }
+        Insert: {
+          bic?: string | null
+          bulletins?: Json
+          copro_id: string
+          coproprietaire_id: string
+          created_at?: string
+          form?: Json
+          iban?: string | null
+          id?: string
+          lieu_signature?: string | null
+          rib_concordance?: string | null
+          scenario_id?: string | null
+          sepa_path?: string | null
+          signed_at?: string | null
+          statut?: string
+          updated_at?: string
+        }
+        Update: {
+          bic?: string | null
+          bulletins?: Json
+          copro_id?: string
+          coproprietaire_id?: string
+          created_at?: string
+          form?: Json
+          iban?: string | null
+          id?: string
+          lieu_signature?: string | null
+          rib_concordance?: string | null
+          scenario_id?: string | null
+          sepa_path?: string | null
+          signed_at?: string | null
+          statut?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adhesions_pret_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhesions_pret_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhesions_pret_coproprietaire_id_fkey"
+            columns: ["coproprietaire_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietaires"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhesions_pret_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "scenarios_financiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copro_financement_config: {
+        Row: {
+          adhesion_ouverte: boolean
+          banque: string
+          copro_id: string
+          duree_annees: number
+          updated_at: string
+        }
+        Insert: {
+          adhesion_ouverte?: boolean
+          banque?: string
+          copro_id: string
+          duree_annees?: number
+          updated_at?: string
+        }
+        Update: {
+          adhesion_ouverte?: boolean
+          banque?: string
+          copro_id?: string
+          duree_annees?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copro_financement_config_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: true
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copro_financement_config_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: true
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       baremes: {
         Row: {
           actif: boolean

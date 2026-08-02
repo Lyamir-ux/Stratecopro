@@ -20,7 +20,7 @@ Les données vivent dans Supabase (en ligne, chiffrées, hébergées en UE) : vo
 | **Tableau de bord** | KPI, 3 vues (Kanban / Galerie / Tableau), filtres Phase & Secteur, création d'une copropriété, export CSV, photo de dossier |
 | **Dossier → Projet** | Kanban des tâches ; clic sur la pastille = changer le statut ; assignation |
 | **Dossier → Données** | Import Excel/CSV des lots (mapping de colonnes, erreurs signalées), matrice bâtiments × clés (total 1 000 ‰), synthèse modifiable |
-| **Dossier → Plans de financement** | Scénario partagé, montants, indicateurs, liste des plans individuels |
+| **Dossier → Plans de financement** | Scénario partagé, montants, indicateurs, liste des plans individuels ; **panneau « Prêt collectif — adhésions »** : banque (CEGEE), durée votée en AG, ouverture de la campagne, dossiers reçus (statut, concordance RIB, téléchargement des bulletins signés) ; panneau « Choix de financement (portail) » |
 | **Assistant 7 étapes** | Saisie du chiffrage, taux MPR/bonus passoire, profils, éco-PTZ (sliders), cascade, étape 7 : tableau des quote-parts + « Valider », multi-scénarios (dupliquer, partager) |
 | **Dossier → Enquête sociale** | Saisie foyer/occupation/RFR → profil calculé ; configuration du questionnaire ; préparation d'envoi |
 | **Dossier → Fichiers** | Dépôt, téléchargement, suppression ; checklists cochables ; icône œil = partager le fichier au portail copropriétaire |
@@ -38,7 +38,8 @@ Connectez-vous avec le compte de démo ci-dessus. À tester :
 | **Accueil** | Timeline des phases, tuiles quote-part / aides / reste à charge (chiffres du plan individuel du scénario partagé), cartes « À faire » qui reflètent l'avancement réel |
 | **Mes quotes-parts** | Bascule entre les lots, cascade quote-part → reste à charge par lot, sélecteur de scénario s'il y en a plusieurs de partagés |
 | **Enquête sociale** | Formulaire prérempli si une réponse existe ; « Déterminer mon profil » recalcule et enregistre (visible ensuite côté AMO, onglet Enquête) |
-| **Mon financement** | Choix prêt collectif (curseur de durée + mensualité) / prêt individuel (sélection des lots) / fonds propres ; après transmission, le choix apparaît côté AMO (onglet Plans de financement) |
+| **Mon financement** | 3 choix : prêt collectif (banque + durée fixées par l'AMO — voir ci-dessous), éco-PTZ individuel (durée au choix, sélection des lots), fonds propres ; le choix transmis apparaît côté AMO |
+| **Adhésion au prêt collectif** | Après le choix collectif : formulaire (adhérents, coordonnées, IBAN/BIC validés) → signature au doigt/souris → **bulletins CEGEE pré-remplis et signés** (1 par lot d'habitation) + **mandat SEPA pré-rempli à imprimer/signer à la main** ; concordance IBAN↔RIB vérifiée automatiquement si un RIB (PDF) est téléversé |
 | **Mes documents** | Téléversement des pièces justificatives (compteur 0/3 → 3/3) ; téléchargement des documents partagés par l'AMO via l'icône œil |
 | **Plan de la copropriété** | Cascade collective du scénario partagé, détail du coût et des aides |
 
@@ -50,6 +51,7 @@ tâches internes, ni les scénarios non partagés.
 
 - **Enquête sociale** : l'envoi prépare la campagne mais **n'envoie aucun e-mail réel** — le copropriétaire répond depuis son portail.
 - **Portail copropriétaire** : le rattachement d'un copropriétaire à un compte se fait encore côté base (pas de bouton « Inviter » dans l'UI AMO pour l'instant).
+- **Adhésion prêt collectif** : CEGEE uniquement (Domofinance viendra) ; personne physique, adhérents 1 et 2 (indivision >2 et SCI : plus tard) ; la signature électronique est une signature simple (dessin + horodatage) — la banque exigeant des originaux papier, les bulletins signés restent imprimables ; la concordance RIB ne se vérifie que sur les RIB PDF (photo/scan image = contrôle manuel).
 - **Consultations** : les candidatures se saisissent à la main (le portail intervenant est en phase 2).
 - **Collaborateurs** : l'ajout d'un compte passe par le tableau de bord Supabase pour l'instant.
 - **Import Excel d'un scénario financier** : crée un scénario verrouillé avec les paramètres courants — il ne lit pas encore les chiffres du fichier.

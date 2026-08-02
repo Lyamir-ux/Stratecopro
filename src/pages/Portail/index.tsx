@@ -18,6 +18,7 @@ import {
   type Scenario,
 } from "@/api/portail";
 import { useBareme } from "@/api/scenarios";
+import type { Profil } from "@/lib/finance";
 import { Accueil } from "./Accueil";
 import { QuotesParts } from "./QuotesParts";
 import { Enquete } from "./Enquete";
@@ -181,7 +182,7 @@ export default function Portail() {
   }
 
   const copro = membership.copro;
-  const profil = reponse?.profil_mpr ?? null;
+  const profil = (reponse?.profil_mpr as Profil | null) ?? null;
   const reqPieces = PIECES.filter((p) => p.required);
   const piecesDone = reqPieces.filter((p) => (pieces ?? []).some((x) => x.type === p.type)).length;
   const flags: Record<string, boolean> = {

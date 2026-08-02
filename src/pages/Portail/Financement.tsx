@@ -1,12 +1,16 @@
-// Mon financement : choix du mode de financement du reste à charge
-// (prêt collectif éco-PTZ, prêt individuel, fonds propres) — persisté en base.
+// Mon financement : fonds propres, prêt collectif (banque + durée fixées par
+// l'AMO — CEGEE/Domofinance, durée votée en AG) ou éco-PTZ individuel (durée
+// au choix du copropriétaire). L'adhésion au prêt collectif ouvre le dossier
+// pré-rempli (bulletins + mandat SEPA) avec signature électronique.
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { fmtEuro } from "@/lib/format";
+import { useAuth } from "@/auth/AuthProvider";
 import {
   computeIndiv,
   lotTantiemes,
   totalTantiemes,
+  useFinancementConfig,
   useSaveChoix,
   type ChoixFinancement,
   type Membership,
@@ -14,15 +18,14 @@ import {
   type TypeFinancement,
 } from "@/api/portail";
 import { readParams } from "@/api/scenarios";
+import { Adhesion } from "./Adhesion";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Tables } from "@/lib/database.types";
 
-const A_FOURNIR = [
-  "Avis d'imposition (N-1)",
-  "Pièce d'identité en cours de validité",
-  "RIB correspondant au mandat SEPA",
-  "Justificatif de propriété du ou des lots",
-];
+const BANQUE_LABEL: Record<string, string> = {
+  CEGEE: "Caisse d'Epargne Grand Est Europe (CEGEE)",
+  DOMOFINANCE: "Domofinance",
+};
 
 export function Financement({
   membership,
@@ -39,12 +42,13 @@ export function Financement({
   plan: Tables<"plans_individuels"> | null;
   profil: Profil | null;
   choix: ChoixFinancement | null;
-  go: (s: string) => void;
 }) {
+  const { session } = useAuth();
   const lots = membership.lots;
+  const { data: config } = useFinancementConfig(membership.copro.id);
   const [editing, setEditing] = useState(false);
   const [type, setType] = useState<TypeFinancement>(choix?.type ?? "collectif");
-  const [years, setYears] = useState(choix?.duree_annees ?? 15);
+  const [yearsIndiv, setYearsIndiv] = useState(choix?.type === "individuel" ? (choix.duree_annees ?? 15) : 15);
   const [selLots, setSelLots] = useState<string[]>(
     choix?.lot_ids?.length ? choix.lot_ids : lots.map((l) => l.id)
   );
@@ -64,9 +68,9 @@ export function Financement({
 
   const cle = readParams(scenario.params, bareme).cle;
   const montant = computeIndiv(scenario, bareme, plan, totalTantiemes(lots, cle), profil).reste;
-  const dureeMin = bareme.ecoPtz.dureeMin;
-  const dureeMax = bareme.ecoPtz.dureeMax;
-  const mensualite = montant / (Math.max(1, years) * 12);
+  const dureeCollectif = config?.duree_annees ?? 15;
+  const mensualiteCollectif = montant / (dureeCollectif * 12);
+  const mensualiteIndiv = montant / (Math.max(1, yearsIndiv) * 12);
   const toggleLot = (id: string) =>
     setSelLots((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
@@ -74,7 +78,7 @@ export function Financement({
     save.mutate(
       {
         type: t,
-        dureeAnnees: t === "collectif" ? years : null,
+        dureeAnnees: t === "collectif" ? dureeCollectif : t === "individuel" ? yearsIndiv : null,
         lotIds: t === "individuel" ? selLots : [],
       },
       { onSuccess: () => setEditing(false) }
@@ -87,8 +91,8 @@ export function Financement({
     return (
       <div className="fade">
         <h1 className="sec-title">Mon financement</h1>
-        <div className="card-xl fade" style={{ maxWidth: 660 }}>
-          <div className="cx-body" style={{ textAlign: "center", padding: 40 }}>
+        <div className="card-xl fade" style={{ maxWidth: choix.type === "collectif" ? undefined : 660 }}>
+          <div className="cx-body" style={{ textAlign: "center", padding: "34px 40px 30px" }}>
             <div
               style={{
                 width: 64,
@@ -107,20 +111,20 @@ export function Financement({
             <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 24, margin: "0 0 8px" }}>
               Votre choix est transmis
             </h2>
-            <p className="se-body" style={{ maxWidth: 460, margin: "0 auto 20px" }}>
+            <p className="se-body" style={{ maxWidth: 520, margin: "0 auto 20px" }}>
               {choix.type === "fonds" ? (
-                <>Vous financez votre reste à charge de <b>{fmtEuro(montant)}</b> sur <b>fonds propres</b>. Aucune démarche de prêt n'est nécessaire.</>
+                <>Vous financez votre reste à charge de <b>{fmtEuro(montant)}</b> sur <b>fonds propres</b>, selon l'échéancier d'appels de fonds du syndic.</>
               ) : choix.type === "individuel" ? (
                 <>
-                  Votre demande de <b>prêt individuel</b> pour {lotsChoisis.length > 1 ? "les lots " : "le lot "}
-                  {lotsChoisis.map((l) => "n°" + l.num).join(", ")} est transmise à votre AMO, qui reviendra vers
-                  vous pour le montage du dossier bancaire.
+                  Votre demande d'<b>éco-PTZ individuel</b> sur <b>{choix.duree_annees ?? yearsIndiv} ans</b> pour{" "}
+                  {lotsChoisis.length > 1 ? "les lots " : "le lot "}
+                  {lotsChoisis.map((l) => "n°" + l.num).join(", ")} est transmise à votre AMO, qui vous accompagnera
+                  pour le dossier bancaire.
                 </>
               ) : (
                 <>
-                  Vous avez choisi le <b>prêt collectif</b> pour <b>{fmtEuro(montant)}</b> sur{" "}
-                  <b>{choix.duree_annees} ans</b> ({fmtEuro(montant / (Math.max(1, choix.duree_annees ?? 15) * 12))}
-                  /mois). Pensez à déposer vos pièces justificatives dans « Mes documents ».
+                  Vous avez choisi le <b>prêt collectif {config?.banque ?? "CEGEE"}</b> pour <b>{fmtEuro(montant)}</b>{" "}
+                  sur <b>{choix.duree_annees ?? dureeCollectif} ans</b> ({fmtEuro(montant / (Math.max(1, choix.duree_annees ?? dureeCollectif) * 12))}/mois, 0 %).
                 </>
               )}
             </p>
@@ -129,6 +133,25 @@ export function Financement({
             </button>
           </div>
         </div>
+
+        {choix.type === "collectif" &&
+          (config?.adhesion_ouverte ? (
+            <Adhesion
+              membership={membership}
+              scenario={scenario}
+              bareme={bareme}
+              config={config}
+              email={session?.user.email ?? ""}
+            />
+          ) : (
+            <div className="cc-next" style={{ marginTop: 18 }}>
+              <Icon name="alert" size={15} className="ico" />
+              <span>
+                Le dossier d'adhésion (bulletin + mandat SEPA) ouvrira dès que votre AMO aura lancé la campagne
+                d'adhésion — vous serez averti.
+              </span>
+            </div>
+          ))}
       </div>
     );
   }
@@ -138,7 +161,7 @@ export function Financement({
     <div className="fade">
       <h1 className="sec-title">Mon financement</h1>
       <p className="sec-sub">
-        Choisissez comment financer votre reste à charge de <b>{fmtEuro(montant)}</b> : prêt collectif, prêt
+        Choisissez comment financer votre reste à charge de <b>{fmtEuro(montant)}</b> : prêt collectif, éco-PTZ
         individuel ou fonds propres.
       </p>
 
@@ -146,14 +169,17 @@ export function Financement({
         <div className={"loan-opt" + (type === "collectif" ? " sel" : "")} onClick={() => setType("collectif")}>
           <div className="lo-ico"><Icon name="users" size={22} /></div>
           <h3>Prêt collectif</h3>
-          <p>Éco-PTZ souscrit par la copropriété. Vous adhérez pour votre seule quote-part — pas de banque à contacter.</p>
-          <div className="loan-terms"><span className="term">Recommandé</span><span className="term">Sans démarche bancaire</span></div>
+          <p>
+            Éco-PTZ souscrit par la copropriété auprès de {config ? BANQUE_LABEL[config.banque] : "la banque partenaire"}.
+            Vous adhérez pour votre seule quote-part — pas de banque à contacter.
+          </p>
+          <div className="loan-terms"><span className="term">Recommandé</span><span className="term">Durée votée en AG</span></div>
         </div>
         <div className={"loan-opt" + (type === "individuel" ? " sel" : "")} onClick={() => setType("individuel")}>
           <div className="lo-ico"><Icon name="user" size={22} /></div>
-          <h3>Prêt individuel</h3>
-          <p>Vous contractez l'éco-PTZ directement auprès de votre banque partenaire, lot par lot.</p>
-          <div className="loan-terms"><span className="term">Votre banque</span><span className="term">Lot par lot</span></div>
+          <h3>Éco-PTZ individuel</h3>
+          <p>Vous contractez l'éco-PTZ directement auprès de votre banque, lot par lot, et choisissez votre durée.</p>
+          <div className="loan-terms"><span className="term">Votre banque</span><span className="term">Durée au choix</span></div>
         </div>
         <div className={"loan-opt" + (type === "fonds" ? " sel" : "")} onClick={() => setType("fonds")}>
           <div className="lo-ico"><Icon name="euro" size={22} /></div>
@@ -167,26 +193,19 @@ export function Financement({
         <div className="split" style={{ marginTop: 22 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             <div className="card-xl">
-              <div className="cx-head"><Icon name="calendar" size={19} /><h2 style={{ fontSize: 18 }}>Durée de remboursement</h2></div>
+              <div className="cx-head"><Icon name="users" size={19} /><h2 style={{ fontSize: 18 }}>Conditions du prêt collectif</h2></div>
               <div className="cx-body">
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                  <span className="se-small">{dureeMin} ans</span>
-                  <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, color: "var(--color-primary-700)" }}>
-                    {years} ans
-                  </span>
-                  <span className="se-small">{dureeMax} ans</span>
-                </div>
-                <input
-                  className="range"
-                  type="range"
-                  min={dureeMin}
-                  max={dureeMax}
-                  value={years}
-                  onChange={(e) => setYears(Number(e.target.value))}
-                />
-                <div className="kv" style={{ marginTop: 14 }}><span className="k">Montant financé</span><span className="v">{fmtEuro(montant)}</span></div>
+                <div className="kv"><span className="k">Banque</span><span className="v">{config ? BANQUE_LABEL[config.banque] : "À confirmer par votre AMO"}</span></div>
+                <div className="kv"><span className="k">Durée (votée en AG)</span><span className="v">{dureeCollectif} ans</span></div>
+                <div className="kv"><span className="k">Montant financé</span><span className="v">{fmtEuro(montant)}</span></div>
                 <div className="kv"><span className="k">Taux d'intérêt</span><span className="v">0 % (éco-PTZ)</span></div>
-                <div className="casc-reste" style={{ marginTop: 12 }}><span className="l">Mensualité estimée</span><span className="v">{fmtEuro(mensualite)}</span></div>
+                <div className="casc-reste" style={{ marginTop: 12 }}>
+                  <span className="l">Mensualité estimée</span>
+                  <span className="v">{fmtEuro(mensualiteCollectif)}</span>
+                </div>
+                <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10 }}>
+                  Hors frais de garantie, ajoutés par la banque selon la tarification en vigueur.
+                </p>
               </div>
             </div>
             <button className="se-btn se-btn-primary" onClick={() => transmit("collectif")} disabled={save.isPending}>
@@ -196,17 +215,12 @@ export function Financement({
           </div>
 
           <div className="card-xl">
-            <div className="cx-head"><Icon name="clipboard" size={19} /><h2 style={{ fontSize: 18 }}>Documents à fournir</h2></div>
-            <div className="cx-body" style={{ paddingTop: 6, paddingBottom: 6 }}>
-              {A_FOURNIR.map((l) => (
-                <div key={l} className="afournir-row">
-                  <Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />{l}
-                </div>
-              ))}
-              <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10 }}>
-                Déposez ces pièces dans <b>« Mes documents »</b> — le bulletin d'adhésion vous sera transmis par
-                votre AMO.
-              </p>
+            <div className="cx-head"><Icon name="clipboard" size={19} /><h2 style={{ fontSize: 18 }}>Après votre adhésion</h2></div>
+            <div className="cx-body">
+              <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Vous complétez un formulaire (identité, coordonnées, IBAN)</div>
+              <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Vos bulletins d'adhésion sont pré-remplis et signés en ligne</div>
+              <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Le mandat SEPA pré-rempli est à signer à la main et à envoyer par courrier</div>
+              <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Vous téléversez vos pièces (RIB, identité, taxe foncière, avis d'imposition)</div>
             </div>
           </div>
         </div>
@@ -226,20 +240,31 @@ export function Financement({
                   <span className="lc-tant">{lotTantiemes(l, cle)}/1000</span>
                 </label>
               ))}
-              <p className="se-small" style={{ color: "var(--fg-muted)" }}>
-                Vous contractez un éco-PTZ par lot auprès de votre banque partenaire.
-              </p>
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            <div className="proc-note">
-              <Icon name="alert" size={18} />
-              <div>
-                <b>Votre AMO vous accompagne.</b>
-                <span>
-                  Après transmission, l'équipe Strat Eco prépare avec vous le dossier de prêt individuel à
-                  déposer auprès de la banque partenaire.
-                </span>
+            <div className="card-xl">
+              <div className="cx-head"><Icon name="calendar" size={19} /><h2 style={{ fontSize: 18 }}>Durée de remboursement</h2></div>
+              <div className="cx-body">
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                  <span className="se-small">{bareme.ecoPtz.dureeMin} ans</span>
+                  <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, color: "var(--color-primary-700)" }}>
+                    {yearsIndiv} ans
+                  </span>
+                  <span className="se-small">{bareme.ecoPtz.dureeMax} ans</span>
+                </div>
+                <input
+                  className="range"
+                  type="range"
+                  min={bareme.ecoPtz.dureeMin}
+                  max={bareme.ecoPtz.dureeMax}
+                  value={yearsIndiv}
+                  onChange={(e) => setYearsIndiv(Number(e.target.value))}
+                />
+                <div className="casc-reste" style={{ marginTop: 14 }}>
+                  <span className="l">Mensualité estimée</span>
+                  <span className="v">{fmtEuro(mensualiteIndiv)}</span>
+                </div>
               </div>
             </div>
             <button

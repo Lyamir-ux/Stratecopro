@@ -1,7 +1,15 @@
 // Onglet Plans de financement — porté de detail.jsx (FinancementTab), branché sur les scénarios réels.
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Badge, DpePair, Progress } from "@/components/ui";
+import {
+  BANQUES,
+  downloadAdhesionDoc,
+  useAdhesions,
+  useFinancementConfigAmo,
+  useSaveFinancementConfig,
+} from "@/api/financement";
 import { fmtEuro, fmtEuroFull } from "@/lib/format";
 import type { DpeClass } from "@/lib/referentiels";
 import { computeFinance, type FinanceResult } from "@/lib/finance";
@@ -21,6 +29,25 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   const active = shared ?? (scenarios ?? [])[0];
   const { data: plans } = usePlansIndividuels(active?.id);
   const { data: choix } = useChoixFinancementScenario(active?.id);
+  const { data: finConfig } = useFinancementConfigAmo(c.id);
+  const { data: adhesions } = useAdhesions(c.id);
+  const saveConfig = useSaveFinancementConfig(c.id);
+  const [banque, setBanque] = useState<string>("CEGEE");
+  const [duree, setDuree] = useState(15);
+  const [ouverte, setOuverte] = useState(false);
+
+  useEffect(() => {
+    if (!finConfig) return;
+    setBanque(finConfig.banque);
+    setDuree(finConfig.duree_annees);
+    setOuverte(finConfig.adhesion_ouverte);
+  }, [finConfig]);
+
+  const configDirty =
+    !finConfig ||
+    finConfig.banque !== banque ||
+    finConfig.duree_annees !== duree ||
+    finConfig.adhesion_ouverte !== ouverte;
 
   if (isLoading || !bareme) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
@@ -111,6 +138,112 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                 Scénario non validé — les montants sont calculés à la volée. Validez l'étape 7 pour figer les plans.
               </p>
             )}
+          </div>
+        </div>
+        <div className="panel">
+          <div className="p-head">
+            <Icon name="users" size={18} />
+            <h3>Prêt collectif — adhésions</h3>
+            <span style={{ flex: 1 }}></span>
+            <Badge kind={ouverte ? "success" : "neutral"}>{ouverte ? "Campagne ouverte" : "Fermée"}</Badge>
+          </div>
+          <div className="p-body">
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                <label style={{ fontSize: 12.5, color: "var(--fg2)" }}>Banque partenaire</label>
+                <select className="edit-inp" value={banque} onChange={(e) => setBanque(e.target.value)}>
+                  {BANQUES.map((b) => (
+                    <option key={b} value={b} disabled={b !== "CEGEE"}>
+                      {b}{b !== "CEGEE" ? " (bientôt)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                <label style={{ fontSize: 12.5, color: "var(--fg2)" }}>Durée votée en AG (ans)</label>
+                <input
+                  className="edit-inp"
+                  type="number"
+                  min={3}
+                  max={20}
+                  style={{ width: 90 }}
+                  value={duree}
+                  onChange={(e) => setDuree(Number(e.target.value))}
+                />
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, cursor: "pointer", paddingBottom: 8 }}>
+                <input type="checkbox" checked={ouverte} onChange={(e) => setOuverte(e.target.checked)} />
+                Adhésions ouvertes sur le portail
+              </label>
+              <button
+                className="se-btn se-btn-secondary btn-sm"
+                style={{ marginBottom: 4 }}
+                disabled={!configDirty || saveConfig.isPending || duree < 3 || duree > 20}
+                onClick={() => saveConfig.mutate({ banque, dureeAnnees: duree, adhesionOuverte: ouverte })}
+              >
+                {saveConfig.isPending ? "Enregistrement…" : "Enregistrer"}
+              </button>
+            </div>
+
+            <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 2 }}>
+              {(adhesions ?? []).length === 0 ? (
+                <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
+                  Aucun dossier d'adhésion pour l'instant — les copropriétaires y accèdent depuis leur portail
+                  après avoir choisi le prêt collectif.
+                </p>
+              ) : (
+                (adhesions ?? []).map((a, i, arr) => {
+                  const bulletins = (a.bulletins as { lotNum: string; path: string }[] | null) ?? [];
+                  return (
+                    <div
+                      key={a.id}
+                      className="task-row"
+                      style={{ padding: "11px 4px", borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none" }}
+                    >
+                      <Icon name={a.statut === "signee" ? "checkCircle" : "clock"} size={16}
+                        style={{ color: a.statut === "signee" ? "var(--color-success-500)" : "var(--fg-muted)" }} />
+                      <div style={{ minWidth: 0 }}>
+                        <div className="t-title" style={{ fontSize: 13 }}>
+                          {a.coproprietaire?.nom ?? "—"}
+                        </div>
+                        <div className="t-copro">
+                          {a.statut === "signee"
+                            ? `Signé · ${bulletins.length} bulletin${bulletins.length > 1 ? "s" : ""}`
+                            : "Brouillon en cours"}
+                          {a.rib_concordance === "concordant" && " · RIB concordant"}
+                          {a.rib_concordance === "discordant" && " · ⚠ IBAN ≠ RIB"}
+                          {a.rib_concordance === "non_verifie" && " · RIB à vérifier"}
+                        </div>
+                      </div>
+                      <span className="spacer"></span>
+                      {a.statut === "signee" && (
+                        <>
+                          {bulletins.map((b) => (
+                            <button
+                              key={b.path}
+                              className="icon-btn"
+                              title={`Bulletin lot n°${b.lotNum}`}
+                              onClick={() => void downloadAdhesionDoc(b.path, `bulletin-${a.coproprietaire?.nom ?? "adherent"}-lot-${b.lotNum}.pdf`)}
+                            >
+                              <Icon name="fileText" size={16} />
+                            </button>
+                          ))}
+                          {a.sepa_path && (
+                            <button
+                              className="icon-btn"
+                              title="Mandat SEPA pré-rempli"
+                              onClick={() => void downloadAdhesionDoc(a.sepa_path!, `sepa-${a.coproprietaire?.nom ?? "adherent"}.pdf`)}
+                            >
+                              <Icon name="download" size={16} />
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       </div>
