@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui";
 import { fmtEuro, fmtDate } from "@/lib/format";
 import { CONSULT_TYPES } from "@/api/consultations";
 import { useMesCandidatures, type CandidaturePresta } from "@/api/espacePrestataire";
+import type { Tables } from "@/lib/database.types";
 
 function StatutBadge({ statut }: { statut: CandidaturePresta["statut"] }) {
   if (statut === "retenue") return <Badge kind="success" dot>Retenue</Badge>;
@@ -12,8 +13,8 @@ function StatutBadge({ statut }: { statut: CandidaturePresta["statut"] }) {
   return <Badge kind="blue" dot>Reçue — en cours d'analyse</Badge>;
 }
 
-export function MesCandidatures() {
-  const { data: candidatures } = useMesCandidatures();
+export function MesCandidatures({ presta }: { presta: Tables<"prestataires"> }) {
+  const { data: candidatures } = useMesCandidatures(presta.id);
   const list = candidatures ?? [];
 
   return (

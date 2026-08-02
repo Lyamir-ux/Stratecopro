@@ -115,7 +115,7 @@ function PostulerModal({
 }
 
 export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires"> }) {
-  const { data: consultations } = useConsultationsPresta();
+  const { data: consultations } = useConsultationsPresta(presta);
   const [postulerA, setPostulerA] = useState<ConsultationPresta | null>(null);
 
   const open = (consultations ?? []).filter((c) => c.statut === "en_ligne");

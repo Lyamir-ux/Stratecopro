@@ -1,5 +1,7 @@
 // Garde de route par rôle : chaque espace n'est accessible qu'à son rôle,
 // les autres utilisateurs connectés sont renvoyés vers leur espace.
+// Exception : l'AMO accède à TOUS les espaces (aperçu syndic / copropriétaire /
+// prestataire pour le pilotage et les démonstrations).
 import { useEffect } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
@@ -29,6 +31,8 @@ export function RequireRole({ role }: { role: RoleId }) {
     );
   }
   if (!profile) return <Navigate to="/login" replace />;
-  if (profile.role !== role) return <Navigate to={homeFor(profile.role as RoleId)} replace />;
+  if (profile.role !== role && profile.role !== "amo") {
+    return <Navigate to={homeFor(profile.role as RoleId)} replace />;
+  }
   return <Outlet />;
 }

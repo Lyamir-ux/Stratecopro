@@ -24,12 +24,13 @@ export type CandidaturePresta = Tables<"candidatures"> & {
 
 const COPRO_COLS = "id, name, adresse, city, quartier, phase, fragile";
 
-/** Fiche entreprise du prestataire connecté (RLS : la sienne uniquement). */
-export function useMonPrestataire() {
+/** Fiche entreprise du prestataire connecté (RLS : la sienne uniquement).
+ *  Désactivé pour l'AMO (qui voit toutes les entreprises → choisit un aperçu). */
+export function useMonPrestataire(enabled = true) {
   const { session } = useAuth();
   return useQuery({
     queryKey: ["mon-prestataire", session?.user.id],
-    enabled: !!session,
+    enabled: !!session && enabled,
     queryFn: async (): Promise<Tables<"prestataires"> | null> => {
       const { data, error } = await supabase.from("prestataires").select("*").maybeSingle();
       if (error) throw error;
@@ -38,36 +39,45 @@ export function useMonPrestataire() {
   });
 }
 
-/** Consultations visibles : en ligne sur ses métiers + celles où il a candidaté. */
-export function useConsultationsPresta() {
+/** Consultations visibles pour une entreprise : en ligne sur ses métiers
+ *  + celles où elle a candidaté. Le filtre client reproduit la RLS du
+ *  prestataire — nécessaire quand un AMO consulte l'espace en aperçu
+ *  (sa RLS à lui renvoie tout). */
+export function useConsultationsPresta(presta: Tables<"prestataires">) {
   return useQuery({
-    queryKey: ["presta-consultations"],
+    queryKey: ["presta-consultations", presta.id],
     queryFn: async (): Promise<ConsultationPresta[]> => {
-      // le select imbriqué candidatures(*) ne renvoie que LES SIENNES (RLS)
       const { data, error } = await supabase
         .from("consultations")
         .select(`*, coproprietes(${COPRO_COLS}), candidatures(*)`)
         .order("published_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []).map((c) => {
-        const { coproprietes, candidatures, ...rest } = c as typeof c & {
-          coproprietes: CoproPublic | null;
-          candidatures: Tables<"candidatures">[];
-        };
-        return { ...rest, copro: coproprietes, maCandidature: candidatures?.[0] ?? null };
-      });
+      return (data ?? [])
+        .map((c) => {
+          const { coproprietes, candidatures, ...rest } = c as typeof c & {
+            coproprietes: CoproPublic | null;
+            candidatures: Tables<"candidatures">[];
+          };
+          return {
+            ...rest,
+            copro: coproprietes,
+            maCandidature: (candidatures ?? []).find((k) => k.prestataire_id === presta.id) ?? null,
+          };
+        })
+        .filter((c) => c.maCandidature || presta.types.includes(c.type));
     },
   });
 }
 
-/** Historique des candidatures du prestataire connecté. */
-export function useMesCandidatures() {
+/** Historique des candidatures d'une entreprise. */
+export function useMesCandidatures(prestaId: string) {
   return useQuery({
-    queryKey: ["presta-candidatures"],
+    queryKey: ["presta-candidatures", prestaId],
     queryFn: async (): Promise<CandidaturePresta[]> => {
       const { data, error } = await supabase
         .from("candidatures")
         .select(`*, consultations(*, coproprietes(${COPRO_COLS}))`)
+        .eq("prestataire_id", prestaId)
         .order("received_at", { ascending: false });
       if (error) throw error;
       return (data ?? []).map((c) => {
@@ -140,14 +150,15 @@ export type ProjetMoe = {
 };
 
 /** Projets d'une MOE retenue : copros accessibles en lecture (fiche + bâtiments). */
-export function useMesProjetsMoe(enabled: boolean) {
+export function useMesProjetsMoe(enabled: boolean, prestaId: string) {
   return useQuery({
-    queryKey: ["presta-projets-moe"],
+    queryKey: ["presta-projets-moe", prestaId],
     enabled,
     queryFn: async (): Promise<ProjetMoe[]> => {
       const { data, error } = await supabase
         .from("candidatures")
         .select(`*, consultations(*, coproprietes(${COPRO_COLS}))`)
+        .eq("prestataire_id", prestaId)
         .eq("statut", "retenue");
       if (error) throw error;
       const rows: Omit<ProjetMoe, "batiments">[] = [];

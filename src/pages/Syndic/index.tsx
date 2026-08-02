@@ -36,6 +36,11 @@ export function SyndicShell({ active, children }: { active: SectionId | null; ch
       <header className="portal-header">
         <img className="ph-logo" src="/logo-strateco.svg" alt="Strat Eco" />
         <span className="ph-spacer"></span>
+        {profile.role === "amo" && (
+          <button className="se-btn se-btn-ghost btn-sm" onClick={() => navigate("/")} title="Revenir à l'espace AMO">
+            <Icon name="gauge" size={15} />Espace AMO
+          </button>
+        )}
         <div className="ph-user">
           <Avatar who={profile.initials} name={profile.full_name} />
           <span>

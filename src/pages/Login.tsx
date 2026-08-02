@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { Icon, type IconName } from "@/components/Icon";
 import { ROLES, type RoleId } from "@/lib/referentiels";
+import { homeFor } from "@/auth/RequireRole";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthProvider";
 
@@ -28,7 +29,9 @@ export default function Login() {
       setError("Identifiants incorrects. Vérifiez votre e-mail et votre mot de passe.");
       return;
     }
-    navigate("/", { replace: true });
+    // l'espace de la tuile choisie ; RequireRole renvoie vers le bon espace
+    // si le compte n'y a pas droit (seul l'AMO accède à tous les espaces)
+    navigate(homeFor(role), { replace: true });
   };
 
   return (

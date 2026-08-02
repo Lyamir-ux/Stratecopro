@@ -6,9 +6,10 @@ import { Icon } from "@/components/Icon";
 import { Badge, PhaseBadge, THUMB_BG } from "@/components/ui";
 import { fmtEuro, fmtDate } from "@/lib/format";
 import { useMesProjetsMoe } from "@/api/espacePrestataire";
+import type { Tables } from "@/lib/database.types";
 
-export function MesProjets() {
-  const { data: projets } = useMesProjetsMoe(true);
+export function MesProjets({ presta }: { presta: Tables<"prestataires"> }) {
+  const { data: projets } = useMesProjetsMoe(true, presta.id);
   const list = projets ?? [];
 
   return (

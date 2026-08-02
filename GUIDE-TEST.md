@@ -6,7 +6,15 @@
 2. Le navigateur s'ouvre sur `http://localhost:5173`.
 3. Connectez-vous avec votre compte (`amir@strateco.fr`).
 
-Pour tester l'**espace Copropriétaire** (portail), utilisez le compte de démo :
+**Votre compte AMO accède à TOUS les espaces** : dans la barre latérale, groupe
+« Aperçu des espaces » → Espace Syndic, Portail copropriétaire (choisissez la copro
+puis le copropriétaire à consulter), Espace prestataire (choisissez l'entreprise).
+Une barre sombre « Aperçu AMO » rappelle qui vous consultez, avec un bouton de
+retour « Espace AMO ». Attention : en aperçu, les actions écrivent réellement
+(répondre à l'enquête, transmettre un choix… comme si l'utilisateur l'avait fait).
+
+Pour tester les espaces **tels que les voient leurs utilisateurs** (connexion,
+périmètre RLS), utilisez les comptes de démo :
 `copro@demo.strateco.fr` / `Demo-Copro-2026!` — il est rattaché à un copropriétaire
 de Renaissance possédant 3 lots. (Utilisez une fenêtre de navigation privée pour
 être connecté AMO et copropriétaire en même temps.)

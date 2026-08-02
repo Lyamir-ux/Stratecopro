@@ -45,6 +45,107 @@ function Loader() {
   );
 }
 
+// ---------- Aperçu AMO : choisir le copropriétaire à consulter ----------
+function ApercuSelect({
+  memberships,
+  onPick,
+  onExit,
+}: {
+  memberships: Membership[];
+  onPick: (coproprietaireId: string) => void;
+  onExit: () => void;
+}) {
+  const [coproId, setCoproId] = useState<string | null>(null);
+  const copros = useMemo(() => {
+    const seen = new Map<string, { copro: Membership["copro"]; n: number }>();
+    for (const m of memberships) {
+      const e = seen.get(m.copro.id);
+      if (e) e.n += 1;
+      else seen.set(m.copro.id, { copro: m.copro, n: 1 });
+    }
+    return [...seen.values()].sort((a, b) => a.copro.name.localeCompare(b.copro.name, "fr"));
+  }, [memberships]);
+  const cps = useMemo(
+    () =>
+      memberships
+        .filter((m) => m.copro.id === coproId)
+        .sort((a, b) => a.nom.localeCompare(b.nom, "fr", { numeric: true })),
+    [memberships, coproId]
+  );
+
+  return (
+    <div style={{ minHeight: "100vh", background: "var(--bg-soft)", display: "flex", flexDirection: "column" }}>
+      <div className="portal-header">
+        <img className="ph-logo" src="/logo-strateco.svg" alt="Strat Eco" />
+        <span className="ph-spacer"></span>
+        <button className="se-btn se-btn-ghost btn-sm" onClick={onExit}>
+          <Icon name="gauge" size={15} />Espace AMO
+        </button>
+      </div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
+        <div style={{ maxWidth: 560, width: "100%", textAlign: "center" }}>
+          <div className="se-eyebrow" style={{ justifyContent: "center" }}>Aperçu AMO</div>
+          <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 30, margin: "10px 0 8px", letterSpacing: "-0.02em" }}>
+            {coproId ? "Quel copropriétaire ?" : "Portail copropriétaire"}
+          </h1>
+          <p className="se-body" style={{ marginTop: 0, marginBottom: 28 }}>
+            {coproId
+              ? "Choisissez le copropriétaire dont vous voulez voir le portail."
+              : "Choisissez une copropriété pour consulter le portail tel que le voient ses copropriétaires."}
+          </p>
+          {!coproId ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {copros.map(({ copro, n }) => (
+                <button
+                  key={copro.id}
+                  className="copro-card"
+                  onClick={() => setCoproId(copro.id)}
+                  style={{ display: "flex", alignItems: "center", gap: 16, padding: 16, textAlign: "left", cursor: "pointer", border: "1px solid var(--border)" }}
+                >
+                  <span style={{ width: 52, height: 52, borderRadius: "var(--radius-md)", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: THUMB_BG, color: "var(--color-primary-700)" }}>
+                    <Icon name="building" size={24} />
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>{copro.name}</span>
+                    <span style={{ display: "block", fontSize: 13, color: "var(--fg3)" }}>
+                      {[copro.city, copro.quartier].filter(Boolean).join(" · ")} · {n} copropriétaire{n > 1 ? "s" : ""}
+                    </span>
+                  </span>
+                  <PhaseBadge phase={copro.phase} />
+                  <Icon name="arrowRight" size={20} style={{ color: "var(--accent)" }} />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto", padding: 2 }}>
+                {cps.map((m) => (
+                  <button
+                    key={m.coproprietaireId}
+                    className="copro-card"
+                    onClick={() => onPick(m.coproprietaireId)}
+                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", textAlign: "left", cursor: "pointer", border: "1px solid var(--border)" }}
+                  >
+                    <Icon name="user" size={18} style={{ color: "var(--fg-muted)", flex: "none" }} />
+                    <span style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: 14 }}>{m.nom}</span>
+                    <span style={{ fontSize: 12.5, color: "var(--fg3)" }}>
+                      {m.lots.length} lot{m.lots.length > 1 ? "s" : ""}
+                    </span>
+                    <Icon name="arrowRight" size={17} style={{ color: "var(--accent)" }} />
+                  </button>
+                ))}
+              </div>
+              <button className="se-btn se-btn-ghost btn-sm" style={{ marginTop: 16 }} onClick={() => setCoproId(null)}>
+                <Icon name="chevronLeft" size={15} />Changer de copropriété
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Écran de sélection de copropriété ----------
 function CoproSelect({
   memberships,
@@ -56,7 +157,7 @@ function CoproSelect({
   memberships: Membership[];
   userName: string;
   initials: string;
-  onPick: (coproId: string) => void;
+  onPick: (coproprietaireId: string) => void;
   onLogout: () => void;
 }) {
   return (
@@ -87,9 +188,9 @@ function CoproSelect({
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {memberships.map((m) => (
               <button
-                key={m.copro.id}
+                key={m.coproprietaireId}
                 className="copro-card"
-                onClick={() => onPick(m.copro.id)}
+                onClick={() => onPick(m.coproprietaireId)}
                 style={{ display: "flex", alignItems: "center", gap: 16, padding: 16, textAlign: "left", cursor: "pointer", border: "1px solid var(--border)" }}
               >
                 <span style={{ width: 64, height: 64, borderRadius: "var(--radius-md)", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: THUMB_BG, color: "var(--color-primary-700)" }}>
@@ -120,17 +221,18 @@ export default function Portail() {
   const { section: sectionParam } = useParams();
   const section: SectionId = (SECTIONS.some((s) => s.id === sectionParam) ? sectionParam : "accueil") as SectionId;
 
+  const isAmo = profile?.role === "amo";
   const { data: memberships, isLoading } = useMesCopros();
-  const [coproId, setCoproId] = useState<string | null>(null);
+  const [cpId, setCpId] = useState<string | null>(null);
 
   // sélection automatique si un seul rattachement
   useEffect(() => {
-    if (memberships?.length === 1) setCoproId(memberships[0].copro.id);
+    if (memberships?.length === 1) setCpId(memberships[0].coproprietaireId);
   }, [memberships]);
 
   const membership = useMemo(
-    () => memberships?.find((m) => m.copro.id === coproId) ?? null,
-    [memberships, coproId]
+    () => memberships?.find((m) => m.coproprietaireId === cpId) ?? null,
+    [memberships, cpId]
   );
 
   const { data: scenarios } = useScenariosPartages(membership?.copro.id);
@@ -167,13 +269,25 @@ export default function Portail() {
   }
 
   if (!membership) {
+    if (isAmo) {
+      return (
+        <ApercuSelect
+          memberships={memberships}
+          onPick={(id) => {
+            setCpId(id);
+            navigate("/portail", { replace: true });
+          }}
+          onExit={() => navigate("/")}
+        />
+      );
+    }
     return (
       <CoproSelect
         memberships={memberships}
         userName={userName}
         initials={initials}
         onPick={(id) => {
-          setCoproId(id);
+          setCpId(id);
           navigate("/portail", { replace: true });
         }}
         onLogout={() => void signOut()}
@@ -200,6 +314,19 @@ export default function Portail() {
 
   return (
     <div className="portal">
+      {isAmo && (
+        <div className="syndic-preview-bar">
+          <Icon name="eye" size={15} />
+          Aperçu AMO — portail de {membership.nom} · {copro.name}
+          <span style={{ flex: 1 }}></span>
+          <button onClick={() => setCpId(null)}>
+            <Icon name="users" size={14} />Changer
+          </button>
+          <button onClick={() => navigate("/")}>
+            <Icon name="gauge" size={14} />Espace AMO
+          </button>
+        </div>
+      )}
       <header className="portal-header">
         <img className="ph-logo" src="/logo-strateco.svg" alt="Strat Eco" />
         <div className="ph-copro">
@@ -208,8 +335,8 @@ export default function Portail() {
           <PhaseBadge phase={copro.phase} />
         </div>
         <span className="ph-spacer"></span>
-        {memberships.length > 1 && (
-          <button className="se-btn se-btn-ghost btn-sm" onClick={() => setCoproId(null)}>
+        {!isAmo && memberships.length > 1 && (
+          <button className="se-btn se-btn-ghost btn-sm" onClick={() => setCpId(null)}>
             <Icon name="building" size={15} />Changer
           </button>
         )}
@@ -243,7 +370,13 @@ export default function Portail() {
 
       <main className="portal-main">
         {section === "accueil" && (
-          <Accueil {...common} userName={userName} piecesDone={piecesDone} piecesReq={reqPieces.length} choix={choix ?? null} />
+          <Accueil
+            {...common}
+            userName={isAmo ? membership.nom : userName}
+            piecesDone={piecesDone}
+            piecesReq={reqPieces.length}
+            choix={choix ?? null}
+          />
         )}
         {section === "plan-indiv" && <QuotesParts {...common} />}
         {section === "enquete" && <Enquete membership={membership} bareme={bareme ?? null} />}

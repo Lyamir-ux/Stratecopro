@@ -39,6 +39,12 @@ export function Sidebar({ recents, tasksCount, user, onLogout }: SidebarProps) {
     { to: "/collaborateurs", icon: "users", label: "Collaborateurs" },
     { to: "/parametres", icon: "settings", label: "Paramètres" },
   ];
+  // l'AMO peut consulter chaque espace tel que le voient ses utilisateurs
+  const nav3: NavEntry[] = [
+    { to: "/syndic", icon: "building", label: "Espace Syndic" },
+    { to: "/portail", icon: "user", label: "Portail copropriétaire" },
+    { to: "/prestataire", icon: "hammer", label: "Espace prestataire" },
+  ];
 
   const isActive = (to: string) => (to === "/" ? pathname === "/" : pathname.startsWith(to));
 
@@ -102,6 +108,10 @@ export function Sidebar({ recents, tasksCount, user, onLogout }: SidebarProps) {
         <div className="sb-group">
           <div className="sb-group-label">Votre entreprise</div>
           {nav2.map(NavItem)}
+        </div>
+        <div className="sb-group">
+          <div className="sb-group-label">Aperçu des espaces</div>
+          {nav3.map(NavItem)}
         </div>
       </div>
       <div className="sb-bottom">
