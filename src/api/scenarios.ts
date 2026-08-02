@@ -194,6 +194,23 @@ export function useValidateScenario(coproId: string) {
   });
 }
 
+/** Choix de financement transmis par les copropriétaires depuis le portail. */
+export function useChoixFinancementScenario(scenarioId: string | undefined) {
+  return useQuery({
+    queryKey: ["choix-financement", scenarioId],
+    enabled: !!scenarioId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("choix_financement")
+        .select("*, coproprietaires(nom)")
+        .eq("scenario_id", scenarioId!)
+        .order("transmitted_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
 export function usePlansIndividuels(scenarioId: string | undefined) {
   return useQuery({
     queryKey: ["plans", scenarioId],

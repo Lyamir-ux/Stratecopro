@@ -522,6 +522,112 @@ export type Database = {
           },
         ]
       }
+      choix_financement: {
+        Row: {
+          coproprietaire_id: string
+          duree_annees: number | null
+          id: string
+          lot_ids: string[]
+          scenario_id: string
+          transmitted_at: string
+          type: Database["public"]["Enums"]["type_financement"]
+          updated_at: string
+        }
+        Insert: {
+          coproprietaire_id: string
+          duree_annees?: number | null
+          id?: string
+          lot_ids?: string[]
+          scenario_id: string
+          transmitted_at?: string
+          type: Database["public"]["Enums"]["type_financement"]
+          updated_at?: string
+        }
+        Update: {
+          coproprietaire_id?: string
+          duree_annees?: number | null
+          id?: string
+          lot_ids?: string[]
+          scenario_id?: string
+          transmitted_at?: string
+          type?: Database["public"]["Enums"]["type_financement"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "choix_financement_coproprietaire_id_fkey"
+            columns: ["coproprietaire_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietaires"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "choix_financement_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "scenarios_financiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pieces_justificatives: {
+        Row: {
+          copro_id: string
+          coproprietaire_id: string
+          id: string
+          mime: string | null
+          name: string
+          size: number | null
+          storage_path: string
+          type: Database["public"]["Enums"]["type_piece"]
+          uploaded_at: string
+        }
+        Insert: {
+          copro_id: string
+          coproprietaire_id: string
+          id?: string
+          mime?: string | null
+          name: string
+          size?: number | null
+          storage_path: string
+          type: Database["public"]["Enums"]["type_piece"]
+          uploaded_at?: string
+        }
+        Update: {
+          copro_id?: string
+          coproprietaire_id?: string
+          id?: string
+          mime?: string | null
+          name?: string
+          size?: number | null
+          storage_path?: string
+          type?: Database["public"]["Enums"]["type_piece"]
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pieces_justificatives_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pieces_justificatives_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pieces_justificatives_coproprietaire_id_fkey"
+            columns: ["coproprietaire_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietaires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fichiers: {
         Row: {
           copro_id: string
@@ -530,6 +636,7 @@ export type Database = {
           id: string
           mime: string | null
           name: string
+          partage_copro: boolean
           size: number | null
           storage_path: string
           uploaded_by: string | null
@@ -541,6 +648,7 @@ export type Database = {
           id?: string
           mime?: string | null
           name: string
+          partage_copro?: boolean
           size?: number | null
           storage_path: string
           uploaded_by?: string | null
@@ -552,6 +660,7 @@ export type Database = {
           id?: string
           mime?: string | null
           name?: string
+          partage_copro?: boolean
           size?: number | null
           storage_path?: string
           uploaded_by?: string | null
@@ -969,6 +1078,13 @@ export type Database = {
       statut_scenario: "brouillon" | "partage" | "importe"
       statut_tache: "todo" | "doing" | "done"
       type_consultation: "moe" | "diag" | "ct" | "sps" | "autre"
+      type_financement: "collectif" | "individuel" | "fonds"
+      type_piece:
+        | "avis_imposition"
+        | "piece_identite"
+        | "rib"
+        | "justificatif_domicile"
+        | "taxe_fonciere"
       usage_lot: "habitation" | "garage" | "caves" | "autres"
     }
     CompositeTypes: {
@@ -1106,6 +1222,14 @@ export const Constants = {
       statut_scenario: ["brouillon", "partage", "importe"],
       statut_tache: ["todo", "doing", "done"],
       type_consultation: ["moe", "diag", "ct", "sps", "autre"],
+      type_financement: ["collectif", "individuel", "fonds"],
+      type_piece: [
+        "avis_imposition",
+        "piece_identite",
+        "rib",
+        "justificatif_domicile",
+        "taxe_fonciere",
+      ],
       usage_lot: ["habitation", "garage", "caves", "autres"],
     },
   },

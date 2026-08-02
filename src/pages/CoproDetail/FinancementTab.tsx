@@ -5,7 +5,8 @@ import { Badge, DpePair, Progress } from "@/components/ui";
 import { fmtEuro, fmtEuroFull } from "@/lib/format";
 import type { DpeClass } from "@/lib/referentiels";
 import { computeFinance, type FinanceResult } from "@/lib/finance";
-import { readParams, useBareme, usePlansIndividuels, useScenarios } from "@/api/scenarios";
+import { readParams, useBareme, useChoixFinancementScenario, usePlansIndividuels, useScenarios } from "@/api/scenarios";
+import { fmtDate } from "@/lib/format";
 import type { CoproWithStats } from "@/api/copros";
 import { StatutPill } from "@/pages/Ingenierie/ScenarioMenu";
 
@@ -19,6 +20,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
     .sort((a, b) => (b.updated_at > a.updated_at ? 1 : -1))[0];
   const active = shared ?? (scenarios ?? [])[0];
   const { data: plans } = usePlansIndividuels(active?.id);
+  const { data: choix } = useChoixFinancementScenario(active?.id);
 
   if (isLoading || !bareme) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
@@ -181,6 +183,52 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                   <Icon name="arrowRight" size={15} />
                 </button>
               </>
+            )}
+          </div>
+        </div>
+        <div className="panel">
+          <div className="p-head">
+            <Icon name="users" size={18} />
+            <h3>Choix de financement (portail)</h3>
+            <span style={{ flex: 1 }}></span>
+            <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{choix?.length ?? 0}</span>
+          </div>
+          <div className="p-body" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {(choix ?? []).length === 0 ? (
+              <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
+                Aucun choix transmis — les copropriétaires choisissent leur financement depuis leur portail.
+              </p>
+            ) : (
+              (choix ?? []).map((ch, i, arr) => (
+                <div
+                  key={ch.id}
+                  className="task-row"
+                  style={{ padding: "11px 4px", borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none" }}
+                >
+                  <Icon
+                    name={ch.type === "collectif" ? "users" : ch.type === "individuel" ? "user" : "euro"}
+                    size={16}
+                    style={{ color: "var(--fg-muted)" }}
+                  />
+                  <div>
+                    <div className="t-title" style={{ fontSize: 13 }}>
+                      {(ch as { coproprietaires: { nom: string } | null }).coproprietaires?.nom ?? "—"}
+                    </div>
+                    <div className="t-copro">
+                      {ch.type === "collectif"
+                        ? `Prêt collectif · ${ch.duree_annees ?? "—"} ans`
+                        : ch.type === "individuel"
+                          ? `Prêt individuel · ${ch.lot_ids.length} lot${ch.lot_ids.length > 1 ? "s" : ""}`
+                          : "Fonds propres"}
+                      {" · " + fmtDate(ch.transmitted_at)}
+                    </div>
+                  </div>
+                  <span className="spacer"></span>
+                  <Badge kind={ch.type === "fonds" ? "neutral" : "primary"} dot>
+                    {ch.type === "collectif" ? "Collectif" : ch.type === "individuel" ? "Individuel" : "Fonds propres"}
+                  </Badge>
+                </div>
+              ))
             )}
           </div>
         </div>

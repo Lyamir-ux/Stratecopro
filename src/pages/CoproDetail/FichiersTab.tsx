@@ -9,6 +9,7 @@ import {
   useDeleteFichier,
   useFichiers,
   useToggleChecklistItem,
+  useTogglePartageFichier,
   useUploadFichier,
 } from "@/api/fichiers";
 import type { CoproWithStats } from "@/api/copros";
@@ -24,6 +25,7 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
   const { data: checklists } = useChecklists(c.id);
   const upload = useUploadFichier(c.id);
   const del = useDeleteFichier(c.id);
+  const partage = useTogglePartageFichier(c.id);
   const toggle = useToggleChecklistItem(c.id);
   const fileRef = useRef<HTMLInputElement>(null);
   const [openFolder, setOpenFolder] = useState<string | null>(null);
@@ -98,9 +100,20 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                       <div className="t-title" style={{ fontSize: 13 }}>
                         {f.name}
                       </div>
-                      <div className="t-copro">{fmtSize(f.size)}</div>
+                      <div className="t-copro">
+                        {fmtSize(f.size)}
+                        {f.partage_copro && " · visible au portail"}
+                      </div>
                     </div>
                     <span className="spacer"></span>
+                    <button
+                      className="icon-btn"
+                      title={f.partage_copro ? "Ne plus partager aux copropriétaires" : "Partager aux copropriétaires (portail)"}
+                      style={f.partage_copro ? { color: "var(--color-primary-700)" } : undefined}
+                      onClick={() => void partage.mutateAsync({ id: f.id, partage: !f.partage_copro })}
+                    >
+                      <Icon name="eye" size={16} />
+                    </button>
                     <button className="icon-btn" title="Télécharger" onClick={() => void downloadFichier(f)}>
                       <Icon name="download" size={16} />
                     </button>

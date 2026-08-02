@@ -32,5 +32,13 @@ export const ROLES: { id: RoleId; label: string; sub: string; icon: string; acti
   { id: "amo", label: "AMO", sub: "Pilotage complet des dossiers", icon: "gauge", active: true },
   { id: "syndic", label: "Syndic", sub: "Vos copropriétés gérées", icon: "building", active: false },
   { id: "moe", label: "Maîtrise d'œuvre", sub: "Vos chantiers en cours", icon: "hammer", active: false },
-  { id: "copro", label: "Copropriétaire", sub: "Votre projet de rénovation", icon: "user", active: false },
+  { id: "copro", label: "Copropriétaire", sub: "Votre projet de rénovation", icon: "user", active: true },
 ];
+
+/** Profils MaPrimeRénov' — infos d'affichage (portail + enquête). */
+export const PROFILS_MPR: Record<string, { color: string; label: string; desc: string; taux: string }> = {
+  Bleu: { color: "#2E6FA8", label: "Bleu", desc: "Revenus très modestes", taux: "jusqu'à 50 %" },
+  Jaune: { color: "#f2a30d", label: "Jaune", desc: "Revenus modestes", taux: "jusqu'à 35 %" },
+  Violet: { color: "#7A5AE0", label: "Violet", desc: "Revenus intermédiaires", taux: "jusqu'à 25 %" },
+  Rose: { color: "#DC6FA8", label: "Rose", desc: "Revenus supérieurs", taux: "jusqu'à 15 %" },
+};

@@ -54,6 +54,18 @@ export function useUploadFichier(coproId: string) {
   });
 }
 
+/** Rend un fichier visible (ou non) sur le portail copropriétaire. */
+export function useTogglePartageFichier(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, partage }: { id: string; partage: boolean }) => {
+      const { error } = await supabase.from("fichiers").update({ partage_copro: partage }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["fichiers", coproId] }),
+  });
+}
+
 export function useDeleteFichier(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
