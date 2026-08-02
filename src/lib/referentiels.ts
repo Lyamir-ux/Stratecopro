@@ -26,12 +26,16 @@ export const TEAM_FALLBACK: Record<string, TeamMember> = {
   YK: { initials: "YK", name: "Yanis Kessler", role: "Suivi de chantier" },
 };
 
-export type RoleId = "amo" | "syndic" | "moe" | "copro";
+export type RoleId = "amo" | "syndic" | "moe" | "copro" | "presta";
 
+// Le rôle `presta` couvre la MOE ET les autres intervenants (diagnostiqueur,
+// contrôleur technique, SPS…) : les métiers réellement couverts vivent sur la
+// fiche `prestataires.types`. L'ancien rôle `moe` reste dans l'enum mais
+// n'est plus proposé à la connexion.
 export const ROLES: { id: RoleId; label: string; sub: string; icon: string; active: boolean }[] = [
   { id: "amo", label: "AMO", sub: "Pilotage complet des dossiers", icon: "gauge", active: true },
   { id: "syndic", label: "Syndic", sub: "Vos copropriétés gérées", icon: "building", active: false },
-  { id: "moe", label: "Maîtrise d'œuvre", sub: "Vos chantiers en cours", icon: "hammer", active: false },
+  { id: "presta", label: "MOE & intervenants", sub: "Consultations et candidatures", icon: "hammer", active: true },
   { id: "copro", label: "Copropriétaire", sub: "Votre projet de rénovation", icon: "user", active: true },
 ];
 

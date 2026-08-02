@@ -8,9 +8,11 @@ import CoproDetail from "./pages/CoproDetail";
 import Ingenierie from "./pages/Ingenierie";
 import MesTaches from "./pages/MesTaches";
 import Consultations from "./pages/Consultations";
+import Prestataires from "./pages/Prestataires";
 import Collaborateurs from "./pages/Collaborateurs";
 import Parametres from "./pages/Parametres";
 import Portail from "./pages/Portail";
+import Prestataire from "./pages/Prestataire";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <Login /> },
@@ -28,6 +30,7 @@ export const router = createBrowserRouter([
               { path: "/copros/:id/:tab?", element: <CoproDetail /> },
               { path: "/taches", element: <MesTaches /> },
               { path: "/consultations", element: <Consultations /> },
+              { path: "/prestataires", element: <Prestataires /> },
               { path: "/collaborateurs", element: <Collaborateurs /> },
               { path: "/parametres", element: <Parametres /> },
             ],
@@ -37,6 +40,10 @@ export const router = createBrowserRouter([
       {
         element: <RequireRole role="copro" />,
         children: [{ path: "/portail/:section?", element: <Portail /> }],
+      },
+      {
+        element: <RequireRole role="presta" />,
+        children: [{ path: "/prestataire/:section?", element: <Prestataire /> }],
       },
     ],
   },

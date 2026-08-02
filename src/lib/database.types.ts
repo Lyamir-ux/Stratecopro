@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
@@ -97,45 +97,6 @@ export type Database = {
           },
         ]
       }
-      copro_financement_config: {
-        Row: {
-          adhesion_ouverte: boolean
-          banque: string
-          copro_id: string
-          duree_annees: number
-          updated_at: string
-        }
-        Insert: {
-          adhesion_ouverte?: boolean
-          banque?: string
-          copro_id: string
-          duree_annees?: number
-          updated_at?: string
-        }
-        Update: {
-          adhesion_ouverte?: boolean
-          banque?: string
-          copro_id?: string
-          duree_annees?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "copro_financement_config_copro_id_fkey"
-            columns: ["copro_id"]
-            isOneToOne: true
-            referencedRelation: "copro_stats"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "copro_financement_config_copro_id_fkey"
-            columns: ["copro_id"]
-            isOneToOne: true
-            referencedRelation: "coproprietes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       baremes: {
         Row: {
           actif: boolean
@@ -205,22 +166,37 @@ export type Database = {
       candidatures: {
         Row: {
           consultation_id: string
+          fichier_name: string | null
+          fichier_path: string | null
           id: string
+          message: string | null
+          montant: number | null
           org_name: string
+          prestataire_id: string | null
           received_at: string
           statut: Database["public"]["Enums"]["statut_candidature"]
         }
         Insert: {
           consultation_id: string
+          fichier_name?: string | null
+          fichier_path?: string | null
           id?: string
+          message?: string | null
+          montant?: number | null
           org_name: string
+          prestataire_id?: string | null
           received_at?: string
           statut?: Database["public"]["Enums"]["statut_candidature"]
         }
         Update: {
           consultation_id?: string
+          fichier_name?: string | null
+          fichier_path?: string | null
           id?: string
+          message?: string | null
+          montant?: number | null
           org_name?: string
+          prestataire_id?: string | null
           received_at?: string
           statut?: Database["public"]["Enums"]["statut_candidature"]
         }
@@ -230,6 +206,13 @@ export type Database = {
             columns: ["consultation_id"]
             isOneToOne: false
             referencedRelation: "consultations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidatures_prestataire_id_fkey"
+            columns: ["prestataire_id"]
+            isOneToOne: false
+            referencedRelation: "prestataires"
             referencedColumns: ["id"]
           },
         ]
@@ -312,6 +295,54 @@ export type Database = {
           },
         ]
       }
+      choix_financement: {
+        Row: {
+          coproprietaire_id: string
+          duree_annees: number | null
+          id: string
+          lot_ids: string[]
+          scenario_id: string
+          transmitted_at: string
+          type: Database["public"]["Enums"]["type_financement"]
+          updated_at: string
+        }
+        Insert: {
+          coproprietaire_id: string
+          duree_annees?: number | null
+          id?: string
+          lot_ids?: string[]
+          scenario_id: string
+          transmitted_at?: string
+          type: Database["public"]["Enums"]["type_financement"]
+          updated_at?: string
+        }
+        Update: {
+          coproprietaire_id?: string
+          duree_annees?: number | null
+          id?: string
+          lot_ids?: string[]
+          scenario_id?: string
+          transmitted_at?: string
+          type?: Database["public"]["Enums"]["type_financement"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "choix_financement_coproprietaire_id_fkey"
+            columns: ["coproprietaire_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietaires"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "choix_financement_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "scenarios_financiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cles_repartition: {
         Row: {
           code: string
@@ -351,10 +382,59 @@ export type Database = {
           },
         ]
       }
+      consultation_notifications: {
+        Row: {
+          consultation_id: string
+          email: string
+          erreur: string | null
+          id: string
+          prestataire_id: string
+          sent_at: string
+          statut: Database["public"]["Enums"]["statut_notification"]
+        }
+        Insert: {
+          consultation_id: string
+          email: string
+          erreur?: string | null
+          id?: string
+          prestataire_id: string
+          sent_at?: string
+          statut?: Database["public"]["Enums"]["statut_notification"]
+        }
+        Update: {
+          consultation_id?: string
+          email?: string
+          erreur?: string | null
+          id?: string
+          prestataire_id?: string
+          sent_at?: string
+          statut?: Database["public"]["Enums"]["statut_notification"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultation_notifications_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "consultations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultation_notifications_prestataire_id_fkey"
+            columns: ["prestataire_id"]
+            isOneToOne: false
+            referencedRelation: "prestataires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consultations: {
         Row: {
           budget: number | null
-          copro_id: string
+          copro_externe_adresse: string | null
+          copro_externe_lots: number | null
+          copro_externe_nom: string | null
+          copro_externe_ville: string | null
+          copro_id: string | null
           date_limite: string | null
           id: string
           mission: string
@@ -364,7 +444,11 @@ export type Database = {
         }
         Insert: {
           budget?: number | null
-          copro_id: string
+          copro_externe_adresse?: string | null
+          copro_externe_lots?: number | null
+          copro_externe_nom?: string | null
+          copro_externe_ville?: string | null
+          copro_id?: string | null
           date_limite?: string | null
           id?: string
           mission: string
@@ -374,7 +458,11 @@ export type Database = {
         }
         Update: {
           budget?: number | null
-          copro_id?: string
+          copro_externe_adresse?: string | null
+          copro_externe_lots?: number | null
+          copro_externe_nom?: string | null
+          copro_externe_ville?: string | null
+          copro_id?: string | null
           date_limite?: string | null
           id?: string
           mission?: string
@@ -394,6 +482,45 @@ export type Database = {
             foreignKeyName: "consultations_copro_id_fkey"
             columns: ["copro_id"]
             isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copro_financement_config: {
+        Row: {
+          adhesion_ouverte: boolean
+          banque: string
+          copro_id: string
+          duree_annees: number
+          updated_at: string
+        }
+        Insert: {
+          adhesion_ouverte?: boolean
+          banque?: string
+          copro_id: string
+          duree_annees?: number
+          updated_at?: string
+        }
+        Update: {
+          adhesion_ouverte?: boolean
+          banque?: string
+          copro_id?: string
+          duree_annees?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copro_financement_config_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: true
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copro_financement_config_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: true
             referencedRelation: "coproprietes"
             referencedColumns: ["id"]
           },
@@ -644,112 +771,6 @@ export type Database = {
           },
         ]
       }
-      choix_financement: {
-        Row: {
-          coproprietaire_id: string
-          duree_annees: number | null
-          id: string
-          lot_ids: string[]
-          scenario_id: string
-          transmitted_at: string
-          type: Database["public"]["Enums"]["type_financement"]
-          updated_at: string
-        }
-        Insert: {
-          coproprietaire_id: string
-          duree_annees?: number | null
-          id?: string
-          lot_ids?: string[]
-          scenario_id: string
-          transmitted_at?: string
-          type: Database["public"]["Enums"]["type_financement"]
-          updated_at?: string
-        }
-        Update: {
-          coproprietaire_id?: string
-          duree_annees?: number | null
-          id?: string
-          lot_ids?: string[]
-          scenario_id?: string
-          transmitted_at?: string
-          type?: Database["public"]["Enums"]["type_financement"]
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "choix_financement_coproprietaire_id_fkey"
-            columns: ["coproprietaire_id"]
-            isOneToOne: false
-            referencedRelation: "coproprietaires"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "choix_financement_scenario_id_fkey"
-            columns: ["scenario_id"]
-            isOneToOne: false
-            referencedRelation: "scenarios_financiers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pieces_justificatives: {
-        Row: {
-          copro_id: string
-          coproprietaire_id: string
-          id: string
-          mime: string | null
-          name: string
-          size: number | null
-          storage_path: string
-          type: Database["public"]["Enums"]["type_piece"]
-          uploaded_at: string
-        }
-        Insert: {
-          copro_id: string
-          coproprietaire_id: string
-          id?: string
-          mime?: string | null
-          name: string
-          size?: number | null
-          storage_path: string
-          type: Database["public"]["Enums"]["type_piece"]
-          uploaded_at?: string
-        }
-        Update: {
-          copro_id?: string
-          coproprietaire_id?: string
-          id?: string
-          mime?: string | null
-          name?: string
-          size?: number | null
-          storage_path?: string
-          type?: Database["public"]["Enums"]["type_piece"]
-          uploaded_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pieces_justificatives_copro_id_fkey"
-            columns: ["copro_id"]
-            isOneToOne: false
-            referencedRelation: "copro_stats"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pieces_justificatives_copro_id_fkey"
-            columns: ["copro_id"]
-            isOneToOne: false
-            referencedRelation: "coproprietes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pieces_justificatives_coproprietaire_id_fkey"
-            columns: ["coproprietaire_id"]
-            isOneToOne: false
-            referencedRelation: "coproprietaires"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       fichiers: {
         Row: {
           copro_id: string
@@ -949,6 +970,64 @@ export type Database = {
           },
         ]
       }
+      pieces_justificatives: {
+        Row: {
+          copro_id: string
+          coproprietaire_id: string
+          id: string
+          mime: string | null
+          name: string
+          size: number | null
+          storage_path: string
+          type: Database["public"]["Enums"]["type_piece"]
+          uploaded_at: string
+        }
+        Insert: {
+          copro_id: string
+          coproprietaire_id: string
+          id?: string
+          mime?: string | null
+          name: string
+          size?: number | null
+          storage_path: string
+          type: Database["public"]["Enums"]["type_piece"]
+          uploaded_at?: string
+        }
+        Update: {
+          copro_id?: string
+          coproprietaire_id?: string
+          id?: string
+          mime?: string | null
+          name?: string
+          size?: number | null
+          storage_path?: string
+          type?: Database["public"]["Enums"]["type_piece"]
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pieces_justificatives_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pieces_justificatives_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pieces_justificatives_coproprietaire_id_fkey"
+            columns: ["coproprietaire_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietaires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plans_individuels: {
         Row: {
           avance_part: number
@@ -1011,6 +1090,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      prestataires: {
+        Row: {
+          actif: boolean
+          contact_nom: string | null
+          created_at: string
+          email: string
+          id: string
+          notes: string | null
+          raison_sociale: string
+          siret: string | null
+          telephone: string | null
+          types: Database["public"]["Enums"]["type_consultation"][]
+          updated_at: string
+          user_id: string | null
+          ville: string | null
+        }
+        Insert: {
+          actif?: boolean
+          contact_nom?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          notes?: string | null
+          raison_sociale: string
+          siret?: string | null
+          telephone?: string | null
+          types?: Database["public"]["Enums"]["type_consultation"][]
+          updated_at?: string
+          user_id?: string | null
+          ville?: string | null
+        }
+        Update: {
+          actif?: boolean
+          contact_nom?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          notes?: string | null
+          raison_sociale?: string
+          siret?: string | null
+          telephone?: string | null
+          types?: Database["public"]["Enums"]["type_consultation"][]
+          updated_at?: string
+          user_id?: string | null
+          ville?: string | null
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -1188,19 +1315,29 @@ export type Database = {
       }
     }
     Functions: {
+      a_postule: { Args: { p_consultation_id: string }; Returns: boolean }
+      copro_visible_presta: { Args: { p_copro_id: string }; Returns: boolean }
       is_amo: { Args: never; Returns: boolean }
       is_copro_of: { Args: { p_copro_id: string }; Returns: boolean }
+      is_moe_retenu_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_scenario_partage: { Args: { p_scenario_id: string }; Returns: boolean }
       my_coproprietaire_ids: { Args: never; Returns: string[] }
       my_lot_ids: { Args: never; Returns: string[] }
+      my_presta_types: {
+        Args: never
+        Returns: Database["public"]["Enums"]["type_consultation"][]
+      }
+      my_prestataire_id: { Args: never; Returns: string }
+      peut_postuler: { Args: { p_consultation_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "amo" | "syndic" | "moe" | "copro"
+      app_role: "amo" | "syndic" | "moe" | "copro" | "presta"
       member_role: "amo_referent" | "syndic" | "moe" | "coproprietaire"
       phase_copro: "diagnostic" | "etudes" | "travaux"
       statut_candidature: "recue" | "retenue" | "non_retenue"
       statut_consultation: "en_ligne" | "cloturee"
       statut_enquete: "brouillon" | "prete" | "envoyee"
+      statut_notification: "simule" | "envoye" | "erreur"
       statut_scenario: "brouillon" | "partage" | "importe"
       statut_tache: "todo" | "doing" | "done"
       type_consultation: "moe" | "diag" | "ct" | "sps" | "autre"
@@ -1339,12 +1476,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["amo", "syndic", "moe", "copro"],
+      app_role: ["amo", "syndic", "moe", "copro", "presta"],
       member_role: ["amo_referent", "syndic", "moe", "coproprietaire"],
       phase_copro: ["diagnostic", "etudes", "travaux"],
       statut_candidature: ["recue", "retenue", "non_retenue"],
       statut_consultation: ["en_ligne", "cloturee"],
       statut_enquete: ["brouillon", "prete", "envoyee"],
+      statut_notification: ["simule", "envoye", "erreur"],
       statut_scenario: ["brouillon", "partage", "importe"],
       statut_tache: ["todo", "doing", "done"],
       type_consultation: ["moe", "diag", "ct", "sps", "autre"],

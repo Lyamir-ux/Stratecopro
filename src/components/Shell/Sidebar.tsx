@@ -35,6 +35,7 @@ export function Sidebar({ recents, tasksCount, user, onLogout }: SidebarProps) {
     { to: "/consultations", icon: "megaphone", label: "Consulter un intervenant" },
   ];
   const nav2: NavEntry[] = [
+    { to: "/prestataires", icon: "briefcase", label: "Base prestataires" },
     { to: "/collaborateurs", icon: "users", label: "Collaborateurs" },
     { to: "/parametres", icon: "settings", label: "Paramètres" },
   ];

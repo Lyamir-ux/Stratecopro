@@ -5,9 +5,11 @@ import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
 import type { RoleId } from "@/lib/referentiels";
 
-/** Route d'accueil de chaque rôle (syndic/moe : phase 2, repli portail). */
+/** Route d'accueil de chaque rôle (syndic : phase 2, repli espace AMO). */
 export function homeFor(role: RoleId | undefined): string {
-  return role === "copro" ? "/portail" : "/";
+  if (role === "copro") return "/portail";
+  if (role === "presta") return "/prestataire";
+  return "/";
 }
 
 export function RequireRole({ role }: { role: RoleId }) {
