@@ -34,7 +34,7 @@ export type RoleId = "amo" | "syndic" | "moe" | "copro" | "presta";
 // n'est plus proposé à la connexion.
 export const ROLES: { id: RoleId; label: string; sub: string; icon: string; active: boolean }[] = [
   { id: "amo", label: "AMO", sub: "Pilotage complet des dossiers", icon: "gauge", active: true },
-  { id: "syndic", label: "Syndic", sub: "Vos copropriétés gérées", icon: "building", active: false },
+  { id: "syndic", label: "Syndic", sub: "Vos copropriétés gérées", icon: "building", active: true },
   { id: "presta", label: "MOE & intervenants", sub: "Consultations et candidatures", icon: "hammer", active: true },
   { id: "copro", label: "Copropriétaire", sub: "Votre projet de rénovation", icon: "user", active: true },
 ];

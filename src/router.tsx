@@ -13,6 +13,8 @@ import Collaborateurs from "./pages/Collaborateurs";
 import Parametres from "./pages/Parametres";
 import Portail from "./pages/Portail";
 import Prestataire from "./pages/Prestataire";
+import Syndic from "./pages/Syndic";
+import CoproSyndic from "./pages/Syndic/CoproSyndic";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <Login /> },
@@ -44,6 +46,13 @@ export const router = createBrowserRouter([
       {
         element: <RequireRole role="presta" />,
         children: [{ path: "/prestataire/:section?", element: <Prestataire /> }],
+      },
+      {
+        element: <RequireRole role="syndic" />,
+        children: [
+          { path: "/syndic/copros/:id/:tab?", element: <CoproSyndic /> },
+          { path: "/syndic/:section?", element: <Syndic /> },
+        ],
       },
     ],
   },

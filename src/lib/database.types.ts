@@ -1317,10 +1317,21 @@ export type Database = {
     Functions: {
       a_postule: { Args: { p_consultation_id: string }; Returns: boolean }
       copro_visible_presta: { Args: { p_copro_id: string }; Returns: boolean }
+      enquete_reponses_syndic: {
+        Args: { p_copro_id: string }
+        Returns: {
+          coproprietaire_id: string
+          nb_personnes: number
+          profil_mpr: string
+          statut_occupation: string
+          updated_at: string
+        }[]
+      }
       is_amo: { Args: never; Returns: boolean }
       is_copro_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_moe_retenu_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_scenario_partage: { Args: { p_scenario_id: string }; Returns: boolean }
+      is_syndic_of: { Args: { p_copro_id: string }; Returns: boolean }
       my_coproprietaire_ids: { Args: never; Returns: string[] }
       my_lot_ids: { Args: never; Returns: string[] }
       my_presta_types: {

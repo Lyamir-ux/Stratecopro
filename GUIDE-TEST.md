@@ -48,6 +48,28 @@ Vérifiez aussi la **confidentialité** : le compte démo ne doit jamais voir le
 des autres copropriétaires (ni leurs réponses d'enquête, ni leurs plans), ni les
 tâches internes, ni les scénarios non partagés.
 
+## Espace Syndic — nouveau
+
+**Compte de démo** : `syndic@demo.strateco.fr` / `Demo-Syndic-2026!`
+(Camille Aubry, gestionnaire — rattachée à Renaissance, Nouvelle Cité et Cours Vauban).
+Tuile « Syndic » sur l'écran de connexion. Tout l'espace est en **lecture seule** :
+le syndic consulte, il ne modifie rien.
+
+| Section | Ce qui doit marcher |
+|---|---|
+| **Portefeuille** | Bulles animées des copropriétés gérées (taille = nombre de lots, « ! » = fragile), légende par phase ; clic sur une bulle = ouvrir le dossier |
+| **Vos tâches** | Actions du syndic par copropriété et phase (AG, PV, fiche État, compte travaux, DO, validations d'aides…) |
+| **Dossier → Projet** | Les mêmes actions phase par phase, avec l'avancement |
+| **Dossier → Données de la copro** | Lots (bâtiment, usage, copropriétaire, tantièmes), copropriétaires, bâtiments — sans import ni édition |
+| **Dossier → Enquête sociale** | Vue d'information uniquement : profils MPR, réponses (foyer, occupation, profil — **jamais le RFR**), questionnaire, état de la campagne. **Aucun bouton d'envoi ou de relance** — l'enquête est pilotée par l'AMO |
+| **Dossier → Financement** | **Mode de financement choisi par chaque copropriétaire** : fonds propres / éco-PTZ collectif / éco-PTZ individuel (+ « En attente » tant que rien n'est transmis), tuiles de comptage, scénario partagé, paramètres du prêt collectif (banque, durée AG, adhésions ouvertes) |
+| **Dossier → Fichiers** | Documents partagés par l'AMO (les mêmes que le portail copropriétaire), téléchargement |
+
+Vérifiez aussi la **confidentialité côté syndic** : jamais les revenus fiscaux (RFR),
+ni les tâches internes AMO, ni les notes de projet, ni les plans individuels chiffrés,
+ni les adhésions bancaires (IBAN) — et uniquement SES copropriétés (Les Tilleuls,
+Le Belvédère… restent invisibles).
+
 ## Espace MOE & intervenants (prestataires) — nouveau
 
 **Compte de démo** : `presta@demo.strateco.fr` / `Demo-Presta-2026!`
@@ -85,6 +107,7 @@ candidatures (et, une fois retenu en MOE, la fiche copro + bâtiments du projet)
 - **Adhésion prêt collectif** : CEGEE uniquement (Domofinance viendra) ; personne physique, adhérents 1 et 2 (indivision >2 et SCI : plus tard) ; la signature électronique est une signature simple (dessin + horodatage) — la banque exigeant des originaux papier, les bulletins signés restent imprimables ; la concordance RIB ne se vérifie que sur les RIB PDF (photo/scan image = contrôle manuel).
 - **Consultations** : l'alerte e-mail aux prestataires est **simulée** (journalisée mais pas envoyée) tant que la clé d'envoi `RESEND_API_KEY` n'est pas configurée côté Supabase — tout le reste du circuit est réel.
 - **Prestataires** : le rattachement d'une entreprise à un compte de connexion se fait encore côté base (comme pour les copropriétaires) ; l'espace « Mes projets » d'une MOE retenue est en lecture (le pilotage des missions loi MOP viendra ensuite).
+- **Espace Syndic** : le rattachement d'un compte syndic à ses copropriétés se fait encore côté base (`copro_members`, rôle `syndic`) ; les tâches syndic affichées sont des repères générés depuis la phase du dossier (pas encore cochables).
 - **Collaborateurs** : l'ajout d'un compte passe par le tableau de bord Supabase pour l'instant.
 - **Import Excel d'un scénario financier** : crée un scénario verrouillé avec les paramètres courants — il ne lit pas encore les chiffres du fichier.
 - **Recherche globale** (barre du haut), notifications et bouton Aide : décoratifs pour l'instant.

@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 
 export default defineConfig({
   plugins: [react()],
+  // port assigné par l'outillage (PORT) sinon 5173 par défaut
+  server: { port: process.env.PORT ? Number(process.env.PORT) : 5173 },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
