@@ -1,7 +1,7 @@
 // Plans de financement définitifs (nomenclature chef de projet) : CRUD + import xlsx.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import type { Json, Tables } from "@/lib/database.types";
+import type { Json, Tables, TablesUpdate } from "@/lib/database.types";
 import {
   computePlanDefinitif,
   readPlanDefinitif,
@@ -132,7 +132,7 @@ export function useValiderPlanDefinitif(coproId: string) {
           const l = (s ?? "").trim().toUpperCase().slice(0, 1);
           return l && "ABCDEFG".includes(l) ? l : null;
         };
-        const patch: Record<string, unknown> = {};
+        const patch: TablesUpdate<"coproprietes"> = {};
         if (res?.performancePct) patch.gain_pct = Math.round(res.performancePct * 10) / 10;
         const avant = lireEtiquette(infos.etiquetteInitiale);
         const apres = lireEtiquette(infos.etiquetteProjet);
