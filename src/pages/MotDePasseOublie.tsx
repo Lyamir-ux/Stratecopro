@@ -21,10 +21,14 @@ export default function MotDePasseOublie() {
     });
     setBusy(false);
     if (err) {
-      const code = (err as { code?: string }).code;
+      const { code, status } = err as { code?: string; status?: number };
       if (code === "email_address_invalid") {
         setError(
           "Cette adresse ne peut pas recevoir d'e-mail (domaine inexistant ou boîte injoignable). Vérifiez la saisie.",
+        );
+      } else if (code === "over_request_rate_limit" || status === 429) {
+        setError(
+          "Un lien vient déjà d'être envoyé à cette adresse. Patientez une minute avant d'en redemander un — et pensez à vérifier vos courriers indésirables.",
         );
       } else if (code === "over_email_send_rate_limit") {
         setError("Trop de demandes d'envoi pour le moment. Réessayez dans une heure.");
