@@ -1626,6 +1626,7 @@ export type Database = {
           locked: boolean
           name: string
           params: Json
+          plan_definitif_id: string | null
           resultat: Json | null
           statut: Database["public"]["Enums"]["statut_scenario"]
           updated_at: string
@@ -1639,6 +1640,7 @@ export type Database = {
           locked?: boolean
           name: string
           params: Json
+          plan_definitif_id?: string | null
           resultat?: Json | null
           statut?: Database["public"]["Enums"]["statut_scenario"]
           updated_at?: string
@@ -1652,6 +1654,7 @@ export type Database = {
           locked?: boolean
           name?: string
           params?: Json
+          plan_definitif_id?: string | null
           resultat?: Json | null
           statut?: Database["public"]["Enums"]["statut_scenario"]
           updated_at?: string
@@ -1670,6 +1673,13 @@ export type Database = {
             columns: ["copro_id"]
             isOneToOne: false
             referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scenarios_financiers_plan_definitif_id_fkey"
+            columns: ["plan_definitif_id"]
+            isOneToOne: false
+            referencedRelation: "plans_definitifs"
             referencedColumns: ["id"]
           },
         ]

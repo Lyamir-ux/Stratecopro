@@ -5,9 +5,14 @@ import type { Json, Tables, TablesUpdate } from "@/lib/database.types";
 import {
   computePlanDefinitif,
   readPlanDefinitif,
+  round2,
+  type Bareme,
+  type FinanceParams,
   type PlanDefinitifData,
   type PlanDefinitifResult,
+  type PlanIndividuelPf,
 } from "@/lib/finance";
+import { makeDefaultParams } from "./scenarios";
 
 export type PlanDefinitif = Tables<"plans_definitifs">;
 
@@ -160,5 +165,141 @@ export function useDeletePlanDefinitif(coproId: string) {
       if (error) throw error;
     },
     onSuccess: () => invalidate(qc, coproId),
+  });
+}
+
+/**
+ * Scénario « pont » créé par le partage du PF définitif au portail
+ * copropriétaire (null si jamais partagé ; statut ≠ partage = partage retiré).
+ */
+export function usePfPartage(planId: string | undefined) {
+  return useQuery({
+    queryKey: ["pf-partage", planId],
+    enabled: !!planId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("scenarios_financiers")
+        .select("*")
+        .eq("plan_definitif_id", planId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+/**
+ * Partage (ou retire) le PF définitif validé aux copropriétaires. Le partage
+ * matérialise les plans individuels du PF dans le circuit du portail : un
+ * scénario financier verrouillé (statut partage, relié au plan par
+ * plan_definitif_id) + une ligne plans_individuels par copropriétaire.
+ * Tout le portail (accueil, quotes-parts, plan de la copro, choix de
+ * financement) fonctionne alors sans autre branchement.
+ */
+export function usePartagerPfCopros(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      plan: PlanDefinitif;
+      pv: PlanDefinitifResult;
+      pvData: PlanDefinitifData;
+      plans: PlanIndividuelPf[];
+      /** Tantièmes par copropriétaire sur la clé de référence (mise à l'échelle par lot côté portail). */
+      tantiemesRef: Record<string, number>;
+      /** Code de la clé de référence (clé unique ou clé par défaut de la copro). */
+      cleRef: string;
+      bareme: Bareme;
+      partager: boolean;
+    }) => {
+      const { data: existant, error: errSel } = await supabase
+        .from("scenarios_financiers")
+        .select("id")
+        .eq("plan_definitif_id", input.plan.id)
+        .maybeSingle();
+      if (errSel) throw errSel;
+
+      if (!input.partager) {
+        if (existant) {
+          const { error } = await supabase
+            .from("scenarios_financiers")
+            .update({ statut: "brouillon" })
+            .eq("id", existant.id);
+          if (error) throw error;
+        }
+        return;
+      }
+
+      // Paramètres choisis pour que les cascades du portail (« Plan de la
+      // copropriété », estimations de repli) retombent sur les montants du PF :
+      // travaux × mprCoproPct = aides publiques, cee = prime CEE.
+      const { pv, pvData } = input;
+      const travaux = round2(pv.totalTravauxTtc);
+      const params: FinanceParams = {
+        ...makeDefaultParams(input.bareme),
+        travaux,
+        honoraires: round2(pv.totalMoeTtc),
+        aleas: round2(pv.totalTravauxTtcImprevus - pv.totalTravauxTtc),
+        cle: input.cleRef,
+        mprCoproPct: travaux > 0 ? round2(((pv.totalAides - pv.primeCee) / travaux) * 100) : 0,
+        bonusPassoire: false,
+        cee: round2(pv.primeCee),
+        fonds: pvData.params.fondsTravaux,
+        ecoPtz: true,
+        ecoPtzDuree: pvData.params.dureeEcoPtzAns,
+      };
+      const nom = `PF définitif — ${input.plan.nom}`;
+
+      let scenarioId: string;
+      if (existant) {
+        const { error } = await supabase
+          .from("scenarios_financiers")
+          .update({ name: nom, statut: "partage", locked: true, params: params as unknown as Json })
+          .eq("id", existant.id);
+        if (error) throw error;
+        scenarioId = existant.id;
+      } else {
+        const { data: cree, error } = await supabase
+          .from("scenarios_financiers")
+          .insert({
+            copro_id: coproId,
+            name: nom,
+            statut: "partage",
+            locked: true,
+            bareme_millesime: input.bareme.millesime,
+            params: params as unknown as Json,
+            plan_definitif_id: input.plan.id,
+          })
+          .select("id")
+          .single();
+        if (error) throw error;
+        scenarioId = cree.id;
+      }
+
+      const { error: eDel } = await supabase.from("plans_individuels").delete().eq("scenario_id", scenarioId);
+      if (eDel) throw eDel;
+      if (input.plans.length) {
+        const { error: eIns } = await supabase.from("plans_individuels").insert(
+          input.plans.map((p) => ({
+            scenario_id: scenarioId,
+            coproprietaire_id: p.coproprietaireId,
+            tantiemes: input.tantiemesRef[p.coproprietaireId] ?? 0,
+            quote_part: p.quotePartAvant,
+            mpr_indiv: 0,
+            cee_part: 0,
+            subv_coll_part: p.aidesEtFonds,
+            eco_ptz_part: 0,
+            reste: p.reste,
+            mensualite: 0,
+            detail: { source: "pf", planDefinitifId: input.plan.id } as unknown as Json,
+          }))
+        );
+        if (eIns) throw eIns;
+      }
+    },
+    onSuccess: (_r, v) => {
+      void qc.invalidateQueries({ queryKey: ["pf-partage", v.plan.id] });
+      void qc.invalidateQueries({ queryKey: ["scenarios", coproId] });
+      void qc.invalidateQueries({ queryKey: ["portail"] });
+    },
   });
 }

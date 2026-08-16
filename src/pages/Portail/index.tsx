@@ -1,7 +1,7 @@
 // Espace copropriétaire (portail) — port de design-reference/project/copro.jsx.
 // Sélection de copro (si plusieurs rattachements), en-tête, navigation, sections.
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Avatar, PhaseBadge, THUMB_BG } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
@@ -224,11 +224,21 @@ export default function Portail() {
   const isAmo = profile?.role === "amo";
   const { data: memberships, isLoading } = useMesCopros();
   const [cpId, setCpId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Lien profond ?cp=<coproprietaireId> (ex. clic sur un plan individuel côté
+  // AMO) : sélectionne directement ce copropriétaire, puis nettoie l'URL.
+  const cpParam = searchParams.get("cp");
+  useEffect(() => {
+    if (!cpParam || !memberships) return;
+    if (memberships.some((m) => m.coproprietaireId === cpParam)) setCpId(cpParam);
+    setSearchParams({}, { replace: true });
+  }, [cpParam, memberships, setSearchParams]);
 
   // sélection automatique si un seul rattachement
   useEffect(() => {
-    if (memberships?.length === 1) setCpId(memberships[0].coproprietaireId);
-  }, [memberships]);
+    if (!cpParam && memberships?.length === 1) setCpId(memberships[0].coproprietaireId);
+  }, [memberships, cpParam]);
 
   const membership = useMemo(
     () => memberships?.find((m) => m.coproprietaireId === cpId) ?? null,

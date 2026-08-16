@@ -24,6 +24,8 @@ import {
 import { readParams, useBareme, useChoixFinancementScenario, usePlansIndividuels, useScenarios } from "@/api/scenarios";
 import {
   useDeletePlanDefinitif,
+  usePartagerPfCopros,
+  usePfPartage,
   usePlansDefinitifs,
   useUpdatePlanDefinitif,
   useValiderPlanDefinitif,
@@ -368,7 +370,16 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                   <div
                     key={p.id}
                     className="task-row"
-                    style={{ padding: "11px 4px", borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none" }}
+                    role="button"
+                    tabIndex={0}
+                    title="Ouvrir le portail de ce copropriétaire (aperçu AMO)"
+                    onClick={() => navigate(`/portail?cp=${p.coproprietaire_id}`)}
+                    onKeyDown={(e) => e.key === "Enter" && navigate(`/portail?cp=${p.coproprietaire_id}`)}
+                    style={{
+                      padding: "11px 4px",
+                      borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
+                      cursor: "pointer",
+                    }}
                   >
                     <Icon name="user" size={16} style={{ color: "var(--fg-muted)" }} />
                     <div>
@@ -380,7 +391,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                       </div>
                     </div>
                     <span className="spacer"></span>
-                    <Icon name="fileText" size={16} style={{ color: "var(--color-secondary-500)" }} />
+                    <Icon name="arrowRight" size={16} style={{ color: "var(--accent)" }} />
                   </div>
                 ))}
                 <button className="se-btn se-btn-ghost btn-sm" style={{ marginTop: 8, alignSelf: "flex-start" }} onClick={openAssistant}>
@@ -640,8 +651,12 @@ function PlansIndividuelsPfPanel({
   pv: PlanDefinitifResult;
   pvData: PlanDefinitifData;
 }) {
+  const navigate = useNavigate();
   const { data: donnees } = useDonnees(coproId);
+  const { data: bareme } = useBareme();
+  const { data: scenarioPf } = usePfPartage(plan.id);
   const update = useUpdatePlanDefinitif(coproId);
+  const partagerMut = usePartagerPfCopros(coproId);
   const [configOpen, setConfigOpen] = useState(false);
 
   const cles = donnees?.cles ?? [];
@@ -681,17 +696,56 @@ function PlansIndividuelsPfPanel({
       { onSuccess: () => setConfigOpen(false) }
     );
 
+  // Partage au portail copropriétaire : clé de référence pour la mise à
+  // l'échelle par lot (clé unique, sinon clé par défaut de la copro).
+  const cleRef = cleUnique ?? cles.find((k) => k.is_default)?.code ?? cles[0]?.code ?? null;
+  const partage = scenarioPf?.statut === "partage";
+  const partageable = plans.length > 0 && manquants.length === 0 && !!cleRef && !!bareme;
+  const togglePartage = (partager: boolean) => {
+    if (!cleRef || !bareme) return;
+    const tantiemesRef = Object.fromEntries(
+      [...parCopro.values()].map((co) => [co.coproprietaireId, co.tantiemes[cleRef] ?? 0])
+    );
+    partagerMut.mutate({ plan, pv, pvData, plans, tantiemesRef, cleRef, bareme, partager });
+  };
+  const openPortail = (coproprietaireId: string) => navigate(`/portail?cp=${coproprietaireId}`);
+
   return (
     <div className="panel">
       <div className="p-head">
         <Icon name="fileText" size={18} />
         <h3>Plans individuels</h3>
+        {partage && (
+          <Badge kind="success" dot>
+            Partagé au portail
+          </Badge>
+        )}
         <span style={{ flex: 1 }}></span>
         {cles.length > 1 && (
           <button className="se-btn se-btn-ghost btn-sm" onClick={() => setConfigOpen(true)}>
             Clés de répartition
           </button>
         )}
+        {partageable &&
+          (partage ? (
+            <button
+              className="se-btn se-btn-ghost btn-sm"
+              disabled={partagerMut.isPending}
+              onClick={() => togglePartage(false)}
+            >
+              Ne plus partager
+            </button>
+          ) : (
+            <button
+              className="se-btn se-btn-primary btn-sm"
+              disabled={partagerMut.isPending}
+              onClick={() => togglePartage(true)}
+              title="Publier les quotes-parts sur le portail des copropriétaires"
+            >
+              <Icon name="eye" size={14} />
+              {partagerMut.isPending ? "Partage…" : "Partager aux copropriétaires"}
+            </button>
+          ))}
         <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{plans.length}</span>
       </div>
       <div className="p-body" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -735,7 +789,16 @@ function PlansIndividuelsPfPanel({
               <div
                 key={p.coproprietaireId}
                 className="task-row"
-                style={{ padding: "11px 4px", borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none" }}
+                role="button"
+                tabIndex={0}
+                title={`Ouvrir le portail de ${p.nom} (aperçu AMO)`}
+                onClick={() => openPortail(p.coproprietaireId)}
+                onKeyDown={(e) => e.key === "Enter" && openPortail(p.coproprietaireId)}
+                style={{
+                  padding: "11px 4px",
+                  borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
+                  cursor: "pointer",
+                }}
               >
                 <Icon name="user" size={16} style={{ color: "var(--fg-muted)" }} />
                 <div>
@@ -746,7 +809,7 @@ function PlansIndividuelsPfPanel({
                   </div>
                 </div>
                 <span className="spacer"></span>
-                <Icon name="fileText" size={16} style={{ color: "var(--color-secondary-500)" }} />
+                <Icon name="arrowRight" size={16} style={{ color: "var(--accent)" }} />
               </div>
             ))}
           </>
