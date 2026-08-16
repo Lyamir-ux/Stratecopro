@@ -21,7 +21,16 @@ export default function MotDePasseOublie() {
     });
     setBusy(false);
     if (err) {
-      setError("L'envoi a échoué. Réessayez dans quelques instants.");
+      const code = (err as { code?: string }).code;
+      if (code === "email_address_invalid") {
+        setError(
+          "Cette adresse ne peut pas recevoir d'e-mail (domaine inexistant ou boîte injoignable). Vérifiez la saisie.",
+        );
+      } else if (code === "over_email_send_rate_limit") {
+        setError("Trop de demandes d'envoi pour le moment. Réessayez dans une heure.");
+      } else {
+        setError("L'envoi a échoué. Réessayez dans quelques instants.");
+      }
       return;
     }
     // même message que le compte existe ou non (pas d'énumération d'e-mails)
