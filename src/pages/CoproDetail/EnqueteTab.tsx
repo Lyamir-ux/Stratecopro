@@ -1,27 +1,34 @@
-// Onglet Enquête sociale — porté de detail.jsx (EnqueteTab), branché sur les vraies tables.
-// La saisie des réponses se fait par l'AMO en V1 ; l'envoi prépare la campagne
-// (aucun e-mail réel n'est expédié — le portail copropriétaire arrive en phase 2).
-import { useMemo, useRef, useState } from "react";
+// Onglet Enquête sociale & technique (AMO).
+// Le questionnaire est configuré depuis le catalogue (src/lib/enqueteCatalogue.ts) :
+// l'AMO active/désactive chaque question ; les questions socle (identité, usage des
+// lots) sont verrouillées. Les conditions d'affichage sont montrées à titre informatif —
+// elles s'appliquent côté portail copropriétaire au moment de la saisie.
+import { useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
 import type { Profil } from "@/lib/finance";
 import { useBareme } from "@/api/scenarios";
 import { useDonnees } from "@/api/donnees";
+import { useEnquete, useReponses, useSaveReponse, useUpdateEnquete } from "@/api/enquete";
 import {
-  useEnquete,
-  useReponses,
-  useSaveReponse,
-  useUpdateEnquete,
-  type Question,
-} from "@/api/enquete";
+  SECTIONS,
+  describeType,
+  condTexts,
+  normalizeConfig,
+  resolveQuestions,
+  type ConfigItem,
+  type ResolvedQuestion,
+  type Scope,
+} from "@/lib/enqueteCatalogue";
 import type { CoproWithStats } from "@/api/copros";
 
-const PROFIL_META: { p: Profil; color: string }[] = [
-  { p: "Bleu", color: "#2E6FA8" },
-  { p: "Jaune", color: "#f2a30d" },
-  { p: "Violet", color: "#7A5AE0" },
-  { p: "Rose", color: "#DC6FA8" },
+// Libellés grand public (plafonds Anah) — les couleurs MPR restent un simple repère visuel.
+const PROFIL_META: { p: Profil; label: string; color: string }[] = [
+  { p: "Bleu", label: "Très modeste", color: "#2E6FA8" },
+  { p: "Jaune", label: "Modeste", color: "#f2a30d" },
+  { p: "Violet", label: "Intermédiaire", color: "#7A5AE0" },
+  { p: "Rose", label: "Supérieur", color: "#DC6FA8" },
 ];
 
 function ReponseRow({
@@ -59,7 +66,7 @@ function ReponseRow({
   };
 
   const profil = existing?.profil_mpr as Profil | null;
-  const color = PROFIL_META.find((m) => m.p === profil)?.color;
+  const meta = PROFIL_META.find((m) => m.p === profil);
 
   return (
     <tr style={{ cursor: "default" }}>
@@ -78,10 +85,10 @@ function ReponseRow({
         <input className="edit-inp sm" type="number" min="0" value={rfr} placeholder="—" onChange={(e) => setRfr(e.target.value)} style={{ width: 100 }} />
       </td>
       <td>
-        {profil ? (
+        {meta ? (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 13 }}>
-            <span style={{ width: 10, height: 10, borderRadius: "50%", background: color }}></span>
-            {profil}
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: meta.color }}></span>
+            {meta.label}
           </span>
         ) : (
           <span style={{ color: "var(--fg-muted)" }}>—</span>
@@ -97,18 +104,88 @@ function ReponseRow({
   );
 }
 
+/** Ligne de question dans l'écran de configuration (calquée sur la maquette). */
+function ConfigRow({
+  q,
+  scope,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  q: ResolvedQuestion;
+  scope: Scope;
+  onToggle?: () => void;
+  onEdit?: (text: string) => void;
+  onDelete?: () => void;
+}) {
+  const conds = condTexts(q);
+  return (
+    <div className={"qc-row" + (q.on ? "" : " off")}>
+      <div className="qc-main">
+        <div className="qc-line">
+          <span className={"qc-chip " + scope}>{q.tag}</span>
+          {onEdit ? (
+            <input className="edit-inp" value={q.q} placeholder="Texte de la question…" onChange={(e) => onEdit(e.target.value)} style={{ flex: 1 }} />
+          ) : (
+            <span className="qc-q">{q.q}</span>
+          )}
+          {q.aide && (
+            <span className="qc-help" title={q.aide}>
+              <Icon name="help" size={14} />
+            </span>
+          )}
+        </div>
+        <div className="qc-meta">{describeType(q)}</div>
+        <div className="qc-cond">
+          {conds.length === 0 ? (
+            scope === "coproprietaire" ? "Cette question concerne tous les copropriétaires." : "Cette question concerne tous les lots."
+          ) : (
+            <>
+              Cette question se pose sous conditions :
+              {conds.map((t) => (
+                <span key={t} className="qc-cond-item">{t}</span>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+      <div className="qc-ctrls">
+        {onDelete && (
+          <button className="q-del" onClick={onDelete} title="Supprimer cette question">
+            <Icon name="trash" size={15} />
+          </button>
+        )}
+        {q.locked ? (
+          <span className="q-switch on locked" title="Question socle — toujours posée">
+            <Icon name="lock" size={11} className="lock-ico" />
+            <span className="knob"></span>
+          </span>
+        ) : (
+          <button
+            className={"q-switch" + (q.on ? " on" : "")}
+            onClick={onToggle}
+            title={q.on ? "Désactiver cette question" : "Activer cette question"}
+          >
+            <span className="knob"></span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function EnqueteTab({ c }: { c: CoproWithStats }) {
   const { data: enquete } = useEnquete(c.id);
   const { data: reponses } = useReponses(enquete?.id);
   const { data: donnees } = useDonnees(c.id);
+  const { data: bareme } = useBareme();
   const updateEnquete = useUpdateEnquete(c.id);
 
   const [configuring, setConfiguring] = useState(false);
-  const [draftQ, setDraftQ] = useState<Question[] | null>(null);
+  const [draft, setDraft] = useState<ConfigItem[] | null>(null);
   const [cible, setCible] = useState<"tous" | "nonrep">("nonrep");
   const [parEmail, setParEmail] = useState(true);
   const [dateLimite, setDateLimite] = useState("");
-  const qBak = useRef<Question[]>([]);
 
   const coproprietaires = donnees?.coproprietaires ?? [];
   const total = coproprietaires.length;
@@ -121,35 +198,39 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
   const destCount = cible === "tous" ? total : nonRep;
   const sent = enquete?.statut === "envoyee";
 
-  const questions: Question[] = draftQ ?? ((enquete?.questions as unknown as Question[]) ?? []);
-  const activeCount = questions.filter((q) => q.on).length;
+  const config: ConfigItem[] = draft ?? normalizeConfig(enquete?.questions);
+  const resolved = resolveQuestions(config);
+  const activeCount = resolved.filter((q) => q.on).length;
+  const customs = resolved.filter((q) => q.custom);
 
   const profilCounts = PROFIL_META.map((m) => ({
     ...m,
     n: (reponses ?? []).filter((r) => r.profil_mpr === m.p).length,
   }));
 
-  const setQ = (id: number, patch: Partial<Question>) =>
-    setDraftQ((prev) => (prev ?? questions).map((q) => (q.id === id ? { ...q, ...patch } : q)));
-  const removeQ = (id: number) => setDraftQ((prev) => (prev ?? questions).filter((q) => q.id !== id));
-  const addQ = () =>
-    setDraftQ((prev) => [
-      ...(prev ?? questions),
-      { id: Math.max(0, ...(prev ?? questions).map((q) => q.id)) + 1, q: "Nouvelle question", type: "Texte libre", on: true, req: false },
-    ]);
+  const toggleQ = (id: string) =>
+    setDraft((prev) => (prev ?? config).map((it) => (it.id === id ? { ...it, on: !it.on } : it)));
+  const editCustom = (id: string, text: string) =>
+    setDraft((prev) => (prev ?? config).map((it) => (it.id === id ? { ...it, q: text } : it)));
+  const removeCustom = (id: string) => setDraft((prev) => (prev ?? config).filter((it) => it.id !== id));
+  const addCustom = () =>
+    setDraft((prev) => [...(prev ?? config), { id: `custom-${crypto.randomUUID()}`, q: "", on: true, custom: true }]);
+
   const startConfig = () => {
-    qBak.current = questions.map((q) => ({ ...q }));
-    setDraftQ(questions.map((q) => ({ ...q })));
+    setDraft(config.map((it) => ({ ...it })));
     setConfiguring(true);
   };
   const saveConfig = async () => {
-    if (enquete && draftQ) await updateEnquete.mutateAsync({ id: enquete.id, questions: draftQ });
+    if (enquete && draft) {
+      const cleaned = draft.filter((it) => !it.custom || (it.q ?? "").trim() !== "");
+      await updateEnquete.mutateAsync({ id: enquete.id, questions: cleaned });
+    }
     setConfiguring(false);
-    setDraftQ(null);
+    setDraft(null);
   };
   const cancelConfig = () => {
     setConfiguring(false);
-    setDraftQ(null);
+    setDraft(null);
   };
 
   const doSend = async () => {
@@ -159,6 +240,87 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
 
   if (!enquete) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
+  // ===== Mode configuration : écran pleine largeur =====
+  if (configuring) {
+    return (
+      <div className="fade">
+        <div className="panel">
+          <div className="p-head">
+            <Icon name="settings" size={18} />
+            <h3>Configuration du questionnaire</h3>
+            <span style={{ flex: 1 }}></span>
+            <span style={{ fontSize: 13, color: "var(--fg-muted)", marginRight: 12 }}>
+              {activeCount} question{activeCount > 1 ? "s" : ""} active{activeCount > 1 ? "s" : ""} sur {resolved.length}
+            </span>
+            <div className="edit-actions">
+              <button className="se-btn se-btn-ghost btn-sm" onClick={cancelConfig}>
+                Annuler
+              </button>
+              <button className="se-btn se-btn-primary btn-sm" onClick={() => void saveConfig()} disabled={updateEnquete.isPending}>
+                <Icon name="check" size={15} />
+                Terminer
+              </button>
+            </div>
+          </div>
+          <div className="p-body">
+            <p className="se-small" style={{ marginTop: 0, marginBottom: 18, color: "var(--fg-muted)" }}>
+              Activez les questions à poser aux copropriétaires. Les questions{" "}
+              <Icon name="lock" size={11} style={{ verticalAlign: "-1px" }} /> socle sont toujours posées. Les conditions
+              indiquées s'appliquent automatiquement côté portail : une question conditionnée n'apparaît que si la réponse
+              correspondante est donnée.
+            </p>
+
+            {SECTIONS.map((section) => {
+              const qs = resolved.filter((q) => q.section === section.id && !q.custom);
+              const on = qs.filter((q) => q.on).length;
+              return (
+                <div key={section.id} className="qc-section">
+                  <div className="qc-sec-head">
+                    <div>
+                      <h4>{section.label}</h4>
+                      <span className="qc-sec-desc">{section.desc}</span>
+                    </div>
+                    <span className="qc-sec-count">
+                      {on}/{qs.length} active{on > 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  {qs.map((q) => (
+                    <ConfigRow key={q.id} q={q} scope={section.scope} onToggle={() => toggleQ(q.id)} />
+                  ))}
+                </div>
+              );
+            })}
+
+            <div className="qc-section">
+              <div className="qc-sec-head">
+                <div>
+                  <h4>Questions personnalisées</h4>
+                  <span className="qc-sec-desc">Questions libres propres à cette copropriété (réponse en texte libre).</span>
+                </div>
+                <span className="qc-sec-count">{customs.length}</span>
+              </div>
+              {customs.map((q) => (
+                <ConfigRow
+                  key={q.id}
+                  q={q}
+                  scope="coproprietaire"
+                  onToggle={() => toggleQ(q.id)}
+                  onEdit={(text) => editCustom(q.id, text)}
+                  onDelete={() => removeCustom(q.id)}
+                />
+              ))}
+              <button className="se-btn se-btn-secondary btn-sm" style={{ marginTop: 10 }} onClick={addCustom}>
+                <Icon name="plus" size={15} />
+                Ajouter une question
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== Vue normale =====
   return (
     <div className="detail-grid fade">
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -184,7 +346,7 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 6 }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                         <span style={{ width: 10, height: 10, borderRadius: "50%", background: m.color }}></span>
-                        {m.p}
+                        {m.label}
                       </span>
                       <span style={{ fontWeight: 700 }}>
                         {m.n} · {pct} %
@@ -205,7 +367,9 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
             <Icon name="edit" size={18} />
             <h3>Réponses des copropriétaires</h3>
             <span style={{ flex: 1 }}></span>
-            <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>saisie AMO · profil calculé au barème 2024</span>
+            <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
+              saisie AMO · profil calculé au barème Anah {bareme?.millesime ?? ""}
+            </span>
           </div>
           <div className="p-body">
             {total === 0 ? (
@@ -246,73 +410,38 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
         <div className="panel">
           <div className="p-head">
             <Icon name="clipboard" size={18} />
-            <h3>Questionnaire d'enquête sociale</h3>
+            <h3>Questionnaire d'enquête</h3>
             <span style={{ flex: 1 }}></span>
-            {configuring ? (
-              <div className="edit-actions">
-                <button className="se-btn se-btn-ghost btn-sm" onClick={cancelConfig}>
-                  Annuler
-                </button>
-                <button className="se-btn se-btn-primary btn-sm" onClick={() => void saveConfig()}>
-                  <Icon name="check" size={15} />
-                  Terminer
-                </button>
-              </div>
-            ) : (
-              <button className="se-btn se-btn-ghost btn-sm" onClick={startConfig}>
-                <Icon name="settings" size={14} />
-                Configurer
-              </button>
-            )}
+            <button className="se-btn se-btn-ghost btn-sm" onClick={startConfig}>
+              <Icon name="settings" size={14} />
+              Configurer
+            </button>
           </div>
           <div className="p-body">
-            <div className="q-list">
-              {questions.map((q, i) => (
-                <div key={q.id} className={"q-row" + (!q.on && !configuring ? " off" : "")}>
-                  <span className="q-num">{i + 1}</span>
-                  <div className="q-main">
-                    {configuring ? (
-                      <input className="edit-inp" value={q.q} onChange={(e) => setQ(q.id, { q: e.target.value })} />
-                    ) : (
-                      <div className="q-label">{q.q}</div>
-                    )}
-                    <div className="q-type">{q.type}</div>
-                  </div>
-                  {configuring ? (
-                    <div className="q-ctrls">
-                      <button className={"q-pill" + (q.req ? " on" : "")} onClick={() => setQ(q.id, { req: !q.req })} title="Réponse obligatoire">
-                        Oblig.
-                      </button>
-                      <button className={"q-switch" + (q.on ? " on" : "")} onClick={() => setQ(q.id, { on: !q.on })} title={q.on ? "Désactiver" : "Activer"}>
-                        <span className="knob"></span>
-                      </button>
-                      <button className="q-del" onClick={() => removeQ(q.id)} title="Supprimer">
-                        <Icon name="trash" size={15} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="q-badges">
-                      {q.req && <Badge kind="neutral">Obligatoire</Badge>}
-                      <Badge kind={q.on ? "success" : "neutral"} dot={q.on}>
-                        {q.on ? "Actif" : "Inactif"}
-                      </Badge>
-                    </div>
-                  )}
+            {SECTIONS.map((section) => {
+              const qs = resolved.filter((q) => q.section === section.id && !q.custom);
+              const on = qs.filter((q) => q.on).length;
+              return (
+                <div className="kv" key={section.id}>
+                  <span className="k">{section.label}</span>
+                  <span className="v">
+                    {on}/{qs.length} active{on > 1 ? "s" : ""}
+                  </span>
                 </div>
-              ))}
-            </div>
-            {configuring && (
-              <button className="se-btn se-btn-secondary btn-sm" style={{ marginTop: 14 }} onClick={addQ}>
-                <Icon name="plus" size={15} />
-                Ajouter une question
-              </button>
+              );
+            })}
+            {customs.length > 0 && (
+              <div className="kv">
+                <span className="k">Questions personnalisées</span>
+                <span className="v">
+                  {customs.filter((q) => q.on).length}/{customs.length} active{customs.filter((q) => q.on).length > 1 ? "s" : ""}
+                </span>
+              </div>
             )}
-            {!configuring && (
-              <p className="se-small" style={{ marginTop: 14, color: "var(--fg-muted)" }}>
-                {activeCount} question{activeCount > 1 ? "s" : ""} active{activeCount > 1 ? "s" : ""} sur {questions.length} · diffusées via le
-                portail copropriétaire (phase 2).
-              </p>
-            )}
+            <p className="se-small" style={{ marginTop: 14, marginBottom: 0, color: "var(--fg-muted)" }}>
+              {activeCount} question{activeCount > 1 ? "s" : ""} active{activeCount > 1 ? "s" : ""} sur {resolved.length} ·
+              enquête sociale et technique diffusée via le portail copropriétaire.
+            </p>
           </div>
         </div>
       </div>
@@ -387,7 +516,7 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
               </span>
             </div>
             <p className="se-small" style={{ marginTop: 14, color: "var(--fg-muted)" }}>
-              Le portail copropriétaire sera construit en phase 2, sur le même socle.
+              La saisie complète du questionnaire par les copropriétaires arrive avec la prochaine étape du portail.
             </p>
           </div>
         </div>

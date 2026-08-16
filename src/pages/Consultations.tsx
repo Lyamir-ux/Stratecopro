@@ -4,20 +4,27 @@
 // prestataires référencés du métier sont alertés par e-mail ; ils déposent
 // leur offre depuis leur espace (les candidatures hors plateforme restent
 // saisissables à la main).
-import { useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
+import { RenommageDialog } from "@/components/RenommageDialog";
 import { fmtEuro, fmtDate } from "@/lib/format";
 import { useCopros } from "@/api/copros";
 import {
+  CONSULT_OPTIONS,
   CONSULT_TYPES,
+  DIAG_SOUS_TYPES,
   consultationCible,
+  optionLabel,
+  sousTypeLabel,
+  ouvrirDocConsultation,
   ouvrirOffre,
   useAddCandidature,
   useCloseConsultation,
   useConsultations,
   usePublishConsultation,
+  useRepondreQuestion,
   useSetCandidatureStatut,
   type Consultation,
   type PublishResult,
@@ -38,8 +45,149 @@ function TypeTag({ type }: { type: Consultation["type"] }) {
   );
 }
 
+const NOTIF_LABELS: Record<string, { label: string; kind: "success" | "neutral" | "warn" }> = {
+  envoye: { label: "Envoyé", kind: "success" },
+  simule: { label: "Simulé", kind: "neutral" },
+  erreur: { label: "Erreur", kind: "warn" },
+};
+
+/** Onglet « État de la consultation » : destinataires de l'alerte, dossiers
+ *  récupérés (formulaire ouvert ou pièce téléchargée), réponses avec offres. */
+function EtatConsultation({ cs }: { cs: Consultation }) {
+  const titre = (num: string, texte: string, n: number) => (
+    <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 12.5, color: "var(--fg2)", textTransform: "uppercase", letterSpacing: "0.04em", margin: "12px 0 6px" }}>
+      {num} · {texte} <span style={{ color: "var(--fg-muted)" }}>({n})</span>
+    </div>
+  );
+  const ligne: CSSProperties = { display: "flex", alignItems: "center", gap: 10, padding: "5px 0", fontSize: 13 };
+
+  return (
+    <div className="cs-cand-list">
+      {titre("1", "Consultation envoyée à", cs.notifications.length)}
+      {cs.notifications.length === 0 && (
+        <div className="cs-cand-empty">Aucun prestataire référencé alerté (base prestataires vide pour ce métier).</div>
+      )}
+      {cs.notifications.map((n) => {
+        const s = NOTIF_LABELS[n.statut] ?? NOTIF_LABELS.simule;
+        return (
+          <div key={n.id} style={ligne}>
+            <span style={{ fontWeight: 600 }}>{n.prestataire?.raison_sociale ?? n.email}</span>
+            <span style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>{n.email}</span>
+            <span className="spacer" style={{ flex: 1 }}></span>
+            <span style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>{fmtDate(n.sent_at)}</span>
+            <Badge kind={s.kind}>{s.label}</Badge>
+          </div>
+        );
+      })}
+
+      {titre("2", "Dossier récupéré par", cs.acces.length)}
+      {cs.acces.length === 0 && (
+        <div className="cs-cand-empty">Personne n'a encore ouvert le dossier ou téléchargé une pièce.</div>
+      )}
+      {cs.acces.map((a) => (
+        <div key={a.id} style={ligne}>
+          <Icon name="eye" size={14} style={{ color: "var(--fg-muted)" }} />
+          <span style={{ fontWeight: 600 }}>{a.prestataire?.raison_sociale ?? "Entreprise"}</span>
+          <span className="spacer" style={{ flex: 1 }}></span>
+          <span style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>
+            le {fmtDate(a.first_at)}
+            {fmtDate(a.last_at) !== fmtDate(a.first_at) ? ` · revu le ${fmtDate(a.last_at)}` : ""}
+          </span>
+        </div>
+      ))}
+
+      {titre("3", "Réponses reçues", cs.candidatures.length)}
+      {cs.candidatures.length === 0 && <div className="cs-cand-empty">Aucune réponse pour le moment.</div>}
+      {cs.candidatures.map((cand) => (
+        <div key={cand.id} style={ligne}>
+          <Icon name="fileCheck" size={14} style={{ color: "var(--color-primary-700)" }} />
+          <span style={{ fontWeight: 600 }}>{cand.org_name}</span>
+          {cand.montant != null && <span style={{ fontWeight: 700 }}>{fmtEuro(cand.montant)} HT</span>}
+          <span className="spacer" style={{ flex: 1 }}></span>
+          <span style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>{fmtDate(cand.received_at)}</span>
+          {cand.fichier_path ? (
+            <button
+              className="se-btn se-btn-ghost btn-sm"
+              title={cand.fichier_name ?? "Offre jointe"}
+              onClick={() => void ouvrirOffre(cand.fichier_path!)}
+            >
+              <Icon name="download" size={13} />
+              Offre
+            </button>
+          ) : (
+            <span style={{ color: "var(--fg-muted)", fontSize: 12 }}>sans pièce</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Questions posées par les candidats avant de postuler — la réponse de
+ *  l'AMO est visible de tous les candidats de la consultation. */
+function QuestionsPanel({ cs }: { cs: Consultation }) {
+  const repondre = useRepondreQuestion();
+  const [brouillons, setBrouillons] = useState<Record<string, string>>({});
+
+  if (cs.questions.length === 0) {
+    return (
+      <div className="cs-cand-list">
+        <div className="cs-cand-empty">Aucune question de candidat pour le moment.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="cs-cand-list">
+      {cs.questions.map((q) => (
+        <div key={q.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 13 }}>
+            <span style={{ fontWeight: 700 }}>{q.prestataire?.raison_sociale ?? "Candidat"}</span>
+            <span style={{ color: "var(--fg-muted)", fontSize: 12 }}>{fmtDate(q.asked_at)}</span>
+          </div>
+          <p style={{ margin: "4px 0 6px", fontSize: 13.5 }}>{q.question}</p>
+          {q.reponse ? (
+            <p
+              style={{
+                margin: 0,
+                paddingLeft: 10,
+                borderLeft: "3px solid var(--color-primary-500)",
+                fontSize: 13.5,
+                color: "var(--fg2)",
+              }}
+            >
+              <strong>Réponse</strong>
+              {q.answered_at ? ` · ${fmtDate(q.answered_at)}` : ""} — {q.reponse}
+            </p>
+          ) : (
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                className="edit-inp"
+                style={{ flex: 1, maxWidth: "none" }}
+                placeholder="Votre réponse — visible de tous les candidats…"
+                value={brouillons[q.id] ?? ""}
+                onChange={(e) => setBrouillons((p) => ({ ...p, [q.id]: e.target.value }))}
+              />
+              <button
+                className="se-btn se-btn-secondary btn-sm"
+                disabled={!(brouillons[q.id] ?? "").trim() || repondre.isPending}
+                onClick={() => void repondre.mutateAsync({ id: q.id, reponse: brouillons[q.id] })}
+              >
+                <Icon name="send" size={14} />
+                Répondre
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Card({ cs }: { cs: Consultation }) {
   const [open, setOpen] = useState(false);
+  const [etat, setEtat] = useState(false);
+  const [qa, setQa] = useState(false);
   const [newOrg, setNewOrg] = useState("");
   const close = useCloseConsultation();
   const addCand = useAddCandidature();
@@ -48,11 +196,13 @@ function Card({ cs }: { cs: Consultation }) {
   const enLigne = cs.statut === "en_ligne";
   const cible = consultationCible(cs);
   const notifOk = cs.notifications.filter((n) => n.statut !== "erreur").length;
+  const enAttente = cs.questions.filter((q) => !q.reponse).length;
 
   return (
     <div className={"cs-card" + (!enLigne ? " closed" : "")}>
       <div className="cs-card-head">
         <TypeTag type={cs.type} />
+        {cs.sous_type && <Badge kind="primary">{sousTypeLabel(cs.sous_type)}</Badge>}
         <span className="spacer" style={{ flex: 1 }}></span>
         {enLigne ? (
           <Badge kind={jr != null && jr <= 5 ? "warn" : "success"} dot>
@@ -69,6 +219,24 @@ function Card({ cs }: { cs: Consultation }) {
         )}
       </div>
       <p className="cs-mission">{cs.mission}</p>
+      {(cs.options.length > 0 || cs.docs.length > 0) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+          {cs.options.map((o) => (
+            <Badge key={o} kind="blue">{optionLabel(o)}</Badge>
+          ))}
+          {cs.docs.map((d) => (
+            <button
+              key={d.id}
+              className="se-btn se-btn-ghost btn-sm"
+              title={d.name}
+              onClick={() => void ouvrirDocConsultation(d.path)}
+            >
+              <Icon name="fileText" size={13} />
+              {d.name.length > 28 ? d.name.slice(0, 26) + "…" : d.name}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="cs-meta">
         {cs.date_limite && (
           <span>
@@ -90,10 +258,42 @@ function Card({ cs }: { cs: Consultation }) {
         )}
       </div>
       <div className="cs-foot">
-        <button className="cs-cand-toggle" onClick={() => setOpen((o) => !o)}>
+        <button
+          className="cs-cand-toggle"
+          onClick={() => {
+            setOpen((o) => !o);
+            setEtat(false);
+            setQa(false);
+          }}
+        >
           <Icon name="users" size={15} />
           {cs.candidatures.length} candidature{cs.candidatures.length > 1 ? "s" : ""}
           <Icon name={open ? "chevronDown" : "chevronRight"} size={14} />
+        </button>
+        <button
+          className="cs-cand-toggle"
+          onClick={() => {
+            setEtat((e) => !e);
+            setOpen(false);
+            setQa(false);
+          }}
+        >
+          <Icon name="barChart" size={15} />
+          État de la consultation
+          <Icon name={etat ? "chevronDown" : "chevronRight"} size={14} />
+        </button>
+        <button
+          className="cs-cand-toggle"
+          onClick={() => {
+            setQa((v) => !v);
+            setOpen(false);
+            setEtat(false);
+          }}
+        >
+          <Icon name="message" size={15} />
+          {cs.questions.length} question{cs.questions.length > 1 ? "s" : ""}
+          {enAttente > 0 && <Badge kind="warn">{enAttente} sans réponse</Badge>}
+          <Icon name={qa ? "chevronDown" : "chevronRight"} size={14} />
         </button>
         <span className="spacer" style={{ flex: 1 }}></span>
         {enLigne && (
@@ -102,6 +302,8 @@ function Card({ cs }: { cs: Consultation }) {
           </button>
         )}
       </div>
+      {etat && <EtatConsultation cs={cs} />}
+      {qa && <QuestionsPanel cs={cs} />}
       {open && (
         <div className="cs-cand-list">
           {cs.candidatures.length === 0 && <div className="cs-cand-empty">Aucune candidature reçue pour le moment.</div>}
@@ -148,6 +350,39 @@ function Card({ cs }: { cs: Consultation }) {
                 <option value="retenue">Retenue</option>
                 <option value="non_retenue">Non retenue</option>
               </select>
+              {(cand.tarif_diag_avp != null ||
+                cand.tarif_pro_dce != null ||
+                cand.tarif_chantier != null ||
+                cand.tarif_options != null ||
+                cand.tarif_etancheite_avant != null ||
+                cand.tarif_etancheite_apres != null ||
+                cand.tarif_conception != null ||
+                cand.tarif_realisation != null) && (
+                <div style={{ flexBasis: "100%", fontSize: 12.5, color: "var(--fg2)", paddingLeft: 34 }}>
+                  {[
+                    cand.tarif_diag_avp != null ? `DIAG-AVP ${fmtEuro(cand.tarif_diag_avp)}` : null,
+                    cand.tarif_pro_dce != null
+                      ? cand.tarif_pro_dce_mode === "pourcentage"
+                        ? `PRO-DCE ${cand.tarif_pro_dce.toLocaleString("fr-FR")} % du montant des travaux`
+                        : `PRO-DCE ${fmtEuro(cand.tarif_pro_dce)}`
+                      : null,
+                    cand.tarif_chantier != null
+                      ? cand.tarif_chantier_mode === "pourcentage"
+                        ? `Suivi de chantier ${cand.tarif_chantier.toLocaleString("fr-FR")} % du montant des travaux`
+                        : `Suivi de chantier ${fmtEuro(cand.tarif_chantier)}`
+                      : null,
+                    cand.tarif_etancheite_avant != null ? `Étanchéité avant travaux ${fmtEuro(cand.tarif_etancheite_avant)}` : null,
+                    cand.tarif_etancheite_apres != null ? `Étanchéité après travaux ${fmtEuro(cand.tarif_etancheite_apres)}` : null,
+                    cand.tarif_conception != null ? `Phase conception ${fmtEuro(cand.tarif_conception)}` : null,
+                    cand.tarif_realisation != null ? `Phase réalisation ${fmtEuro(cand.tarif_realisation)}` : null,
+                    ...Object.entries((cand.tarif_options as Record<string, number> | null) ?? {}).map(
+                      ([k, v]) => `${optionLabel(k)} ${fmtEuro(v)}`
+                    ),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
+              )}
               {cand.message && (
                 <div style={{ flexBasis: "100%", fontSize: 12.5, color: "var(--fg3)", paddingLeft: 34, fontStyle: "italic" }}>
                   « {cand.message} »
@@ -192,34 +427,90 @@ export default function Consultations() {
   const [notice, setNotice] = useState<string | null>(null);
   const [draft, setDraft] = useState({
     type: "moe" as Consultation["type"],
+    sous_type: "",
     cible: "existante" as "existante" | "externe",
     copro_id: "",
     ext_nom: "",
     ext_adresse: "",
     ext_ville: "",
     ext_lots: "",
+    ext_batiments: "",
     mission: "",
     date_limite: "",
     budget: "",
+    options: [] as string[],
   });
+  const [files, setFiles] = useState<File[]>([]);
+  // Fichiers en attente de renommage assisté avant d'être joints
+  const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
+  const filesRef = useRef<HTMLInputElement>(null);
+  const coproDraft =
+    draft.cible === "existante"
+      ? ((copros ?? []).find((x) => x.id === draft.copro_id)?.name ?? null)
+      : draft.ext_nom.trim() || null;
   const set = <K extends keyof typeof draft>(k: K, v: (typeof draft)[K]) => setDraft((p) => ({ ...p, [k]: v }));
+  const toggleOption = (id: string) =>
+    setDraft((p) => ({
+      ...p,
+      options: p.options.includes(id) ? p.options.filter((o) => o !== id) : [...p.options, id],
+    }));
 
   const cibleOk = draft.cible === "existante" ? !!draft.copro_id : !!draft.ext_nom.trim();
+  const [formError, setFormError] = useState<string | null>(null);
 
   const doPublish = async () => {
-    if (!draft.mission.trim() || !cibleOk) return;
+    // validation visible : plus de clic « qui ne fait rien »
+    const manques: string[] = [];
+    if (!cibleOk) manques.push(draft.cible === "existante" ? "choisissez la copropriété" : "renseignez le nom de la copropriété");
+    if (draft.type === "diag" && !draft.sous_type) manques.push("choisissez le type de diagnostic");
+    if (!draft.mission.trim())
+      manques.push(
+        draft.sous_type === "amiante_plomb" && draft.type === "diag"
+          ? "décrivez la mission et le programme de travaux pressentis"
+          : "décrivez la mission"
+      );
+    if (manques.length > 0) {
+      setFormError("Pour publier : " + manques.join(" · ") + ".");
+      return;
+    }
+    setFormError(null);
     const externe = draft.cible === "externe";
-    const res: PublishResult = await publish.mutateAsync({
-      type: draft.type,
-      mission: draft.mission.trim(),
-      date_limite: draft.date_limite || null,
-      budget: draft.budget ? Number(draft.budget) : null,
-      copro_id: externe ? null : draft.copro_id,
-      copro_externe_nom: externe ? draft.ext_nom.trim() : null,
-      copro_externe_adresse: externe ? draft.ext_adresse.trim() || null : null,
-      copro_externe_ville: externe ? draft.ext_ville.trim() || null : null,
-      copro_externe_lots: externe && draft.ext_lots ? Number(draft.ext_lots) : null,
-    });
+    // nombres de logements et de bâtiments figés sur la consultation (les
+    // candidats ne peuvent pas lire les stats des copros de la plateforme)
+    const stats = externe ? null : (copros ?? []).find((c) => c.id === draft.copro_id)?.stats;
+    const nbLogements = externe
+      ? draft.ext_lots
+        ? Number(draft.ext_lots)
+        : null
+      : stats?.lots_hab || stats?.lots || null;
+    const nbBatiments = externe
+      ? draft.ext_batiments
+        ? Number(draft.ext_batiments)
+        : null
+      : stats?.batiments || null;
+    let res: PublishResult;
+    try {
+      res = await publish.mutateAsync({
+        type: draft.type,
+        mission: draft.mission.trim(),
+        date_limite: draft.date_limite || null,
+        budget: draft.budget ? Number(draft.budget) : null,
+        copro_id: externe ? null : draft.copro_id,
+        copro_externe_nom: externe ? draft.ext_nom.trim() : null,
+        copro_externe_adresse: externe ? draft.ext_adresse.trim() || null : null,
+        copro_externe_ville: externe ? draft.ext_ville.trim() || null : null,
+        copro_externe_lots: externe && draft.ext_lots ? Number(draft.ext_lots) : null,
+        nb_logements: nbLogements,
+        nb_batiments: nbBatiments,
+        sous_type: draft.type === "diag" && draft.sous_type ? draft.sous_type : null,
+        options: draft.options,
+        files,
+      });
+    } catch (e) {
+      // la publication a échoué : le formulaire reste ouvert avec la saisie
+      setFormError("La publication a échoué : " + String((e as Error).message ?? e));
+      return;
+    }
     if (res.notifyError) {
       setNotice("Consultation publiée, mais l'alerte e-mail a échoué : " + res.notifyError);
     } else if (res.notification) {
@@ -232,7 +523,11 @@ export default function Consultations() {
             : `Consultation publiée. ${n.envoyes} e-mail${n.envoyes > 1 ? "s" : ""} envoyé${n.envoyes > 1 ? "s" : ""}${n.erreurs ? `, ${n.erreurs} en erreur` : ""}.`
       );
     }
-    setDraft({ type: "moe", cible: "existante", copro_id: "", ext_nom: "", ext_adresse: "", ext_ville: "", ext_lots: "", mission: "", date_limite: "", budget: "" });
+    if (res.docErrors.length > 0) {
+      setNotice((prev) => (prev ? prev + " " : "") + `Attention : pièce(s) non jointe(s) — ${res.docErrors.join(", ")}.`);
+    }
+    setDraft({ type: "moe", sous_type: "", cible: "existante", copro_id: "", ext_nom: "", ext_adresse: "", ext_ville: "", ext_lots: "", ext_batiments: "", mission: "", date_limite: "", budget: "", options: [] });
+    setFiles([]);
     setForm(false);
   };
 
@@ -278,7 +573,13 @@ export default function Consultations() {
             <Icon name="megaphone" size={18} />
             <h3>Nouvelle consultation</h3>
             <span style={{ flex: 1 }}></span>
-            <button className="se-btn se-btn-ghost btn-sm" onClick={() => setForm(false)}>
+            <button
+              className="se-btn se-btn-ghost btn-sm"
+              onClick={() => {
+                setForm(false);
+                setFormError(null);
+              }}
+            >
               Annuler
             </button>
           </div>
@@ -295,6 +596,23 @@ export default function Consultations() {
                   ))}
                 </div>
               </div>
+              {draft.type === "diag" && (
+                <div className="cs-field cs-field-full">
+                  <label>Type de diagnostic</label>
+                  <div className="cs-type-pick">
+                    {DIAG_SOUS_TYPES.map((s) => (
+                      <button
+                        key={s.id}
+                        className={"cs-type-opt" + (draft.sous_type === s.id ? " on" : "")}
+                        onClick={() => set("sous_type", s.id)}
+                      >
+                        <Icon name={s.id === "etancheite" ? "gauge" : "fileCheck"} size={15} />
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="cs-field cs-field-full">
                 <label>Copropriété concernée</label>
                 <div className="cs-type-pick">
@@ -353,15 +671,28 @@ export default function Consultations() {
                     <input className="edit-inp" style={{ maxWidth: "none" }} type="number" value={draft.ext_lots}
                       placeholder="0" onChange={(e) => set("ext_lots", e.target.value)} />
                   </div>
+                  <div className="cs-field">
+                    <label>Nombre de bâtiments <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· optionnel</span></label>
+                    <input className="edit-inp" style={{ maxWidth: "none" }} type="number" value={draft.ext_batiments}
+                      placeholder="0" onChange={(e) => set("ext_batiments", e.target.value)} />
+                  </div>
                 </>
               )}
               <div className="cs-field cs-field-full">
-                <label>Description de la mission</label>
+                <label>
+                  {draft.type === "diag" && draft.sous_type === "amiante_plomb"
+                    ? "Description de la mission et programme de travaux pressentis"
+                    : "Description de la mission"}
+                </label>
                 <textarea
                   className="cs-textarea"
-                  rows={3}
+                  rows={draft.type === "diag" && draft.sous_type === "amiante_plomb" ? 5 : 3}
                   value={draft.mission}
-                  placeholder="Périmètre, attendus, contraintes particulières…"
+                  placeholder={
+                    draft.type === "diag" && draft.sous_type === "amiante_plomb"
+                      ? "Périmètre du repérage, puis programme de travaux pressentis (postes concernés : façades, menuiseries, toiture, parties communes…)"
+                      : "Périmètre, attendus, contraintes particulières…"
+                  }
                   onChange={(e) => set("mission", e.target.value)}
                 ></textarea>
               </div>
@@ -391,12 +722,112 @@ export default function Consultations() {
                   <span style={{ color: "var(--fg-muted)", fontWeight: 600 }}>€ HT</span>
                 </div>
               </div>
+              <div className="cs-field cs-field-full">
+                <label>
+                  Options demandées{" "}
+                  <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>
+                    · le candidat chiffrera chaque option cochée
+                  </span>
+                </label>
+                <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+                  {CONSULT_OPTIONS.map((o) => (
+                    <label
+                      key={o.id}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13.5, cursor: "pointer" }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={draft.options.includes(o.id)}
+                        onChange={() => toggleOption(o.id)}
+                        style={{ accentColor: "var(--accent)", width: 15, height: 15 }}
+                      />
+                      {o.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="cs-field cs-field-full">
+                <label>
+                  Documents joints{" "}
+                  <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>
+                    · cahier des charges, audit, plans… visibles des candidats
+                  </span>
+                </label>
+                <input
+                  ref={filesRef}
+                  type="file"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    // copie immédiate : la FileList est un objet vivant, vidé
+                    // par le reset de l'input avant que React n'évalue l'updater
+                    const nouveaux = Array.from(e.target.files ?? []);
+                    if (nouveaux.length) setPendingFiles(nouveaux); // renommage assisté avant d'être joints
+                    e.target.value = "";
+                  }}
+                />
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  {files.map((f, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "5px 10px",
+                        borderRadius: "var(--radius-md)",
+                        background: "var(--bg-soft)",
+                        border: "1px solid var(--border)",
+                        fontSize: 12.5,
+                      }}
+                    >
+                      <Icon name="fileText" size={13} />
+                      {f.name}
+                      <button
+                        className="icon-btn"
+                        title="Retirer"
+                        onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                        style={{ width: 18, height: 18 }}
+                      >
+                        <Icon name="x" size={12} />
+                      </button>
+                    </span>
+                  ))}
+                  <button className="se-btn se-btn-secondary btn-sm" onClick={() => filesRef.current?.click()}>
+                    <Icon name="upload" size={14} />
+                    Joindre un document
+                  </button>
+                </div>
+              </div>
             </div>
+            {pendingFiles && (
+              <RenommageDialog
+                files={pendingFiles}
+                prefixe={coproDraft}
+                onConfirm={(file) => setFiles((prev) => [...prev, file])}
+                onClose={() => setPendingFiles(null)}
+              />
+            )}
+            {formError && (
+              <p
+                style={{
+                  marginTop: 16,
+                  marginBottom: 0,
+                  padding: "10px 14px",
+                  borderRadius: "var(--radius-md)",
+                  background: "var(--color-error-50)",
+                  color: "var(--color-error-700)",
+                  fontSize: 13.5,
+                }}
+              >
+                {formError}
+              </p>
+            )}
             <button
               className="se-btn se-btn-primary"
               style={{ marginTop: 18 }}
               onClick={() => void doPublish()}
-              disabled={!draft.mission.trim() || !cibleOk || publish.isPending}
+              disabled={publish.isPending}
             >
               <Icon name="megaphone" size={16} />
               {publish.isPending ? "Publication…" : "Mettre en ligne et alerter les prestataires"}

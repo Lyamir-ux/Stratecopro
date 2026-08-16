@@ -1,26 +1,11 @@
-// Enquête sociale : questionnaire configurable + réponses (RFR — donnée sensible, RLS AMO).
+// Enquête sociale & technique : questionnaire configurable + réponses
+// (RFR — donnée sensible, RLS AMO). Le contenu des questions vit dans
+// src/lib/enqueteCatalogue.ts — la base ne stocke que la configuration.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Json, Tables } from "@/lib/database.types";
 import { determineProfil, type Bareme, type Profil } from "@/lib/finance";
-
-export interface Question {
-  id: number;
-  q: string;
-  type: string;
-  on: boolean;
-  req: boolean;
-}
-
-export const DEFAULT_QUESTIONS: Question[] = [
-  { id: 1, q: "Statut d'occupation du logement", type: "Choix · occupant / bailleur", on: true, req: true },
-  { id: 2, q: "Composition du foyer (nombre de personnes)", type: "Nombre", on: true, req: true },
-  { id: 3, q: "Revenu fiscal de référence (RFR)", type: "Montant · €", on: true, req: true },
-  { id: 4, q: "Avis d'imposition N-1", type: "Pièce jointe · PDF", on: true, req: true },
-  { id: 5, q: "Nombre de parts fiscales", type: "Nombre", on: true, req: false },
-  { id: 6, q: "Mandat de perception des aides", type: "Oui / non", on: true, req: false },
-  { id: 7, q: "Travaux privatifs envisagés", type: "Texte libre", on: false, req: false },
-];
+import { defaultConfig, type ConfigItem } from "@/lib/enqueteCatalogue";
 
 export type Enquete = Tables<"enquetes">;
 export type Reponse = Tables<"enquete_reponses"> & { coproprietaire: { nom: string } | null };
@@ -37,7 +22,7 @@ export function useEnquete(coproId: string | undefined) {
       if (data) return data;
       const { data: created, error: e2 } = await supabase
         .from("enquetes")
-        .insert({ copro_id: coproId!, questions: DEFAULT_QUESTIONS as unknown as Json })
+        .insert({ copro_id: coproId!, questions: defaultConfig() as unknown as Json })
         .select()
         .single();
       if (e2) throw e2;
@@ -54,7 +39,7 @@ export function useUpdateEnquete(coproId: string) {
       id,
       questions,
       ...patch
-    }: { id: string; questions?: Question[] } & Partial<Pick<Enquete, "statut" | "sent_at">>) => {
+    }: { id: string; questions?: ConfigItem[] } & Partial<Pick<Enquete, "statut" | "sent_at">>) => {
       const { error } = await supabase
         .from("enquetes")
         .update({ ...patch, ...(questions ? { questions: questions as unknown as Json } : {}) })

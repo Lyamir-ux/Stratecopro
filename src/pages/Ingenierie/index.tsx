@@ -78,15 +78,23 @@ export default function Ingenierie() {
   );
   const locked = !!active?.locked;
 
-  // (Re)charge le brouillon quand on change de scénario
+  // (Re)charge le brouillon quand on change de scénario.
+  // Si la clé enregistrée n'existe pas (ou plus) dans le dossier — ex. ancien
+  // « MUN » par défaut —, on se cale sur la clé par défaut du dossier.
+  const cleCodesKey = (donnees?.cles ?? []).map((k) => k.code).join("|");
   useEffect(() => {
     if (active && bareme) {
-      setDraft(readParams(active.params, bareme));
+      const p = readParams(active.params, bareme);
+      const cles = donnees?.cles ?? [];
+      if (cles.length && !cles.some((k) => k.code === p.cle)) {
+        p.cle = cles.find((k) => k.is_default)?.code ?? cles[0].code;
+      }
+      setDraft(p);
       setDirty(false);
       setPlansCount(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.id, bareme?.millesime]);
+  }, [active?.id, bareme?.millesime, cleCodesKey]);
 
   if (!c || !bareme || !active || !draft) {
     return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Préparation de l'assistant…</div>;

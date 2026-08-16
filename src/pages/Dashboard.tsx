@@ -9,7 +9,7 @@ import { Avatar, Badge, DpePair, PhaseBadge, Progress, ThumbSlot } from "@/compo
 import { PHASES, type DpeClass, type PhaseId } from "@/lib/referentiels";
 import { fmtEuro } from "@/lib/format";
 import { useUi } from "@/stores/ui";
-import { useCopros, useCreateCopro, usePhotoUrl, type CoproWithStats } from "@/api/copros";
+import { nbLogements, useCopros, useCreateCopro, usePhotoUrl, type CoproWithStats } from "@/api/copros";
 
 function TeamStack({ team }: { team: CoproWithStats["team"] }) {
   return (
@@ -35,7 +35,7 @@ function CoproCard({ c, showProgress }: { c: CoproWithStats; showProgress: boole
               <h3 className="cc-name">{c.name}</h3>
               <div className="cc-loc">
                 <Icon name="mapPin" size={14} />
-                {c.adresse || [c.city, c.quartier].filter(Boolean).join(" · ") || "Adresse à renseigner"}
+                {c.adresse || [c.code_postal, c.city].filter(Boolean).join(" ") || "Adresse à renseigner"}
               </div>
             </div>
             <DpePair before={c.energy_before as DpeClass | null} after={c.energy_after as DpeClass | null} />
@@ -58,8 +58,8 @@ function CoproCard({ c, showProgress }: { c: CoproWithStats; showProgress: boole
 
           <div className="cc-meta">
             <div className="m">
-              <span className="v">{s?.lots ?? 0}</span>
-              <span className="l">lots</span>
+              <span className="v">{nbLogements(c)}</span>
+              <span className="l">logement{nbLogements(c) > 1 ? "s" : ""}</span>
             </div>
             <div className="m">
               <span className="v">{s?.coproprietaires ?? 0}</span>
@@ -159,7 +159,7 @@ function TableView({ copros }: { copros: CoproWithStats[] }) {
             <th>Copropriété</th>
             <th>Phase</th>
             <th>DPE</th>
-            <th>Lots</th>
+            <th>Logements</th>
             <th>Copro.</th>
             <th>Montant TTC</th>
             <th>Avancement</th>
@@ -187,7 +187,7 @@ function TableView({ copros }: { copros: CoproWithStats[] }) {
               <td>
                 <DpePair before={c.energy_before as DpeClass | null} after={c.energy_after as DpeClass | null} />
               </td>
-              <td style={{ fontWeight: 600 }}>{c.stats?.lots ?? 0}</td>
+              <td style={{ fontWeight: 600 }}>{nbLogements(c)}</td>
               <td>{c.stats?.coproprietaires ?? 0}</td>
               <td style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}>{fmtEuro(c.stats?.montant_ttc)}</td>
               <td>
@@ -213,14 +213,14 @@ function TableView({ copros }: { copros: CoproWithStats[] }) {
 }
 
 function KpiStrip({ copros }: { copros: CoproWithStats[] }) {
-  const lots = copros.reduce((s, c) => s + (c.stats?.lots ?? 0), 0);
+  const logements = copros.reduce((s, c) => s + nbLogements(c), 0);
   const coproTotal = copros.reduce((s, c) => s + (c.stats?.coproprietaires ?? 0), 0);
   const montant = copros.reduce((s, c) => s + (c.stats?.montant_ttc ?? 0), 0);
   const gains = copros.filter((c) => c.gain_pct != null);
   const gainMoy = gains.length ? Math.round(gains.reduce((s, c) => s + (c.gain_pct ?? 0), 0) / gains.length) : null;
   const kpis = [
     { ico: "building" as const, label: "Dossiers actifs", val: String(copros.length), foot: <>sur les 3 phases</>, blue: false },
-    { ico: "users" as const, label: "Copropriétaires accompagnés", val: String(coproTotal), foot: <>{lots} lots au total</>, blue: true },
+    { ico: "users" as const, label: "Copropriétaires accompagnés", val: String(coproTotal), foot: <>{logements} logements au total</>, blue: true },
     {
       ico: "euro" as const,
       label: "Montant de travaux",
@@ -268,19 +268,37 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: "",
+    nb_batiments: 1,
+    batiment_adresses: [] as string[],
     city: "",
-    quartier: "",
+    code_postal: "",
     adresse: "",
     syndic_name: "",
+    gestionnaire_nom: "",
+    gestionnaire_email: "",
+    nb_logements: "" as string,
+    chef_projet: "",
     phase: "diagnostic" as PhaseId,
     energy_before: "" as string,
     fragile: false,
   });
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+  const nbBats = Math.max(1, form.nb_batiments || 1);
+  const setBatAdresse = (i: number, v: string) =>
+    setForm((f) => {
+      const adresses = [...f.batiment_adresses];
+      adresses[i] = v;
+      return { ...f, batiment_adresses: adresses };
+    });
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const copro = await create.mutateAsync({ ...form, energy_before: form.energy_before || null });
+    const copro = await create.mutateAsync({
+      ...form,
+      nb_batiments: nbBats,
+      nb_logements: form.nb_logements ? Number(form.nb_logements) : null,
+      energy_before: form.energy_before || null,
+    });
     onClose();
     navigate(`/copros/${copro.id}`);
   };
@@ -295,25 +313,125 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Nouvelle copropriété" onClose={onClose}>
       <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {field(
-          "Nom de la copropriété *",
-          <input className="login-input" required value={form.name} onChange={(e) => set({ name: e.target.value })} />
-        )}
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
+          {field(
+            "Nom de la copropriété *",
+            <input className="login-input" required value={form.name} onChange={(e) => set({ name: e.target.value })} />
+          )}
+          {field(
+            "Nombre de bâtiments *",
+            <input
+              className="login-input"
+              type="number"
+              min={1}
+              required
+              value={form.nb_batiments}
+              onChange={(e) => set({ nb_batiments: Math.max(1, Number(e.target.value) || 1) })}
+            />
+          )}
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {field("Ville", <input className="login-input" value={form.city} onChange={(e) => set({ city: e.target.value })} />)}
           {field(
-            "Quartier",
-            <input className="login-input" value={form.quartier} onChange={(e) => set({ quartier: e.target.value })} />
+            "Code postal",
+            <input
+              className="login-input"
+              inputMode="numeric"
+              autoComplete="postal-code"
+              value={form.code_postal}
+              onChange={(e) => set({ code_postal: e.target.value })}
+            />
           )}
         </div>
         {field(
-          "Adresse",
+          nbBats > 1 ? "Adresse de la copropriété" : "Adresse",
           <input className="login-input" value={form.adresse} onChange={(e) => set({ adresse: e.target.value })} />
         )}
+        {nbBats > 1 && (
+          <div
+            style={{
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-md)",
+              padding: "12px 14px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              maxHeight: 220,
+              overflowY: "auto",
+            }}
+          >
+            <span className="se-eyebrow" style={{ color: "var(--fg-muted)" }}>
+              Adresse de chaque bâtiment
+            </span>
+            {Array.from({ length: nbBats }, (_, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, width: 56, flex: "none" }}>
+                  Bât. {String(i + 1).padStart(2, "0")}
+                </span>
+                <input
+                  className="login-input"
+                  placeholder="Adresse du bâtiment"
+                  value={form.batiment_adresses[i] ?? ""}
+                  onChange={(e) => setBatAdresse(i, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
         {field(
-          "Syndic",
+          "Syndic (société en charge de la gestion)",
           <input className="login-input" value={form.syndic_name} onChange={(e) => set({ syndic_name: e.target.value })} />
         )}
+        <div
+          style={{
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)",
+            padding: "12px 14px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <span className="se-eyebrow" style={{ color: "var(--fg-muted)" }}>
+            Gestionnaire de la copropriété
+          </span>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {field(
+              "Nom du gestionnaire",
+              <input
+                className="login-input"
+                value={form.gestionnaire_nom}
+                onChange={(e) => set({ gestionnaire_nom: e.target.value })}
+              />
+            )}
+            {field(
+              "Adresse mail",
+              <input
+                className="login-input"
+                type="email"
+                value={form.gestionnaire_email}
+                onChange={(e) => set({ gestionnaire_email: e.target.value })}
+              />
+            )}
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {field(
+            "Nombre de logements",
+            <input
+              className="login-input"
+              type="number"
+              min={0}
+              placeholder="Avant l'import des lots"
+              value={form.nb_logements}
+              onChange={(e) => set({ nb_logements: e.target.value })}
+            />
+          )}
+          {field(
+            "Chef de projet",
+            <input className="login-input" value={form.chef_projet} onChange={(e) => set({ chef_projet: e.target.value })} />
+          )}
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {field(
             "Phase de départ",
@@ -369,7 +487,7 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
 }
 
 function exportCsv(copros: CoproWithStats[]) {
-  const head = ["Copropriété", "Ville", "Phase", "DPE avant", "DPE après", "Gain %", "Lots", "Copropriétaires", "Bâtiments", "Montant TTC", "Avancement %", "Syndic"];
+  const head = ["Copropriété", "Ville", "Phase", "DPE avant", "DPE après", "Gain %", "Logements", "Lots", "Copropriétaires", "Bâtiments", "Montant TTC", "Avancement %", "Syndic"];
   const lines = copros.map((c) =>
     [
       c.name,
@@ -378,6 +496,7 @@ function exportCsv(copros: CoproWithStats[]) {
       c.energy_before ?? "",
       c.energy_after ?? "",
       c.gain_pct ?? "",
+      nbLogements(c),
       c.stats?.lots ?? 0,
       c.stats?.coproprietaires ?? 0,
       c.stats?.batiments ?? 0,

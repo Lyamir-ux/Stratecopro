@@ -1,8 +1,9 @@
 // Écran de connexion — port de design-reference/project/login.jsx
 // V1 : seul l'espace AMO est actif ; les autres rôles arrivent en phase 2.
 import { useState, type FormEvent } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Icon, type IconName } from "@/components/Icon";
+import { PasswordInput } from "@/components/PasswordInput";
 import { ROLES, type RoleId } from "@/lib/referentiels";
 import { homeFor } from "@/auth/RequireRole";
 import { supabase } from "@/lib/supabase";
@@ -11,13 +12,17 @@ import { useAuth } from "@/auth/AuthProvider";
 export default function Login() {
   const { session, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [role, setRole] = useState<RoleId>("amo");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (!loading && session) return <Navigate to="/" replace />;
+  // page demandée avant la redirection vers /login (lien profond d'un e-mail)
+  const from = (location.state as { from?: string } | null)?.from;
+
+  if (!loading && session) return <Navigate to={from ?? "/"} replace />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -29,9 +34,10 @@ export default function Login() {
       setError("Identifiants incorrects. Vérifiez votre e-mail et votre mot de passe.");
       return;
     }
-    // l'espace de la tuile choisie ; RequireRole renvoie vers le bon espace
-    // si le compte n'y a pas droit (seul l'AMO accède à tous les espaces)
-    navigate(homeFor(role), { replace: true });
+    // page demandée avant connexion, sinon l'espace de la tuile choisie ;
+    // RequireRole renvoie vers le bon espace si le compte n'y a pas droit
+    // (seul l'AMO accède à tous les espaces)
+    navigate(from ?? homeFor(role), { replace: true });
   };
 
   return (
@@ -126,9 +132,7 @@ export default function Login() {
             </div>
             <div className="field" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <label style={{ fontSize: 13, fontWeight: 500, color: "var(--fg2)" }}>Mot de passe</label>
-              <input
-                className="login-input"
-                type="password"
+              <PasswordInput
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -219,8 +223,10 @@ export default function Login() {
             {busy ? "Connexion…" : "Se connecter"}
             <Icon name="arrowRight" size={18} />
           </button>
-          <p style={{ textAlign: "center", fontSize: 13, color: "var(--fg-muted)", marginTop: 16 }}>
-            Mot de passe oublié ? Contactez l'administrateur Strat Eco.
+          <p style={{ textAlign: "center", fontSize: 13, marginTop: 16 }}>
+            <Link to="/mot-de-passe-oublie" style={{ color: "var(--fg-muted)" }}>
+              Mot de passe oublié ?
+            </Link>
           </p>
         </form>
       </div>

@@ -4,10 +4,12 @@
 import { useMemo } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge, type BadgeKind } from "@/components/ui";
-import { fmtDate } from "@/lib/format";
+import { fmtDate, fmtEuroFull } from "@/lib/format";
 import { useDonnees } from "@/api/donnees";
 import { useChoixFinancementScenario } from "@/api/scenarios";
 import { useScenariosPartages, useFinancementConfig } from "@/api/portail";
+import { usePlansDefinitifs } from "@/api/planDefinitif";
+import { readPlanDefinitif, type PlanDefinitifResult } from "@/lib/finance";
 import type { Enums } from "@/lib/database.types";
 import type { SyndicCopro } from "@/api/syndic";
 
@@ -25,6 +27,12 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
   const { data: choix, isLoading: choixLoading } = useChoixFinancementScenario(scenario?.id);
   const { data: donnees, isLoading } = useDonnees(c.id);
   const { data: finConfig } = useFinancementConfig(c.id);
+  // Le PF définitif validé est automatiquement partagé avec le syndic (RLS).
+  const { data: pfPlans } = usePlansDefinitifs(c.id);
+  const planValide = (pfPlans ?? [])
+    .filter((p) => p.statut === "valide")
+    .sort((a, b) => (b.updated_at > a.updated_at ? 1 : -1))[0];
+  const pv = (planValide?.resultat ?? null) as unknown as PlanDefinitifResult | null;
 
   const coproprietaires = donnees?.coproprietaires ?? [];
   const lots = donnees?.lots ?? [];
@@ -53,7 +61,7 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
     return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
   }
 
-  if (!scenario) {
+  if (!scenario && !planValide) {
     return (
       <div className="placeholder-screen fade" style={{ minHeight: 320 }}>
         <div className="ps-ico">
@@ -61,7 +69,7 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
         </div>
         <h2>Aucun plan de financement partagé</h2>
         <p>
-          Les copropriétaires choisiront leur mode de financement dès que l'équipe Strat Eco aura partagé le
+          Les copropriétaires choisiront leur mode de financement dès que l'équipe Strat Eco aura validé le
           plan de financement du projet.
         </p>
       </div>
@@ -156,26 +164,65 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          <div className="panel">
-            <div className="p-head">
-              <Icon name="fileText" size={18} />
-              <h3>Plan de financement</h3>
-            </div>
-            <div className="p-body">
-              <div className="kv">
-                <span className="k">Scénario partagé</span>
-                <span className="v">{scenario.name}</span>
+          {planValide && pv ? (
+            <div className="panel">
+              <div className="p-head">
+                <Icon name="fileCheck" size={18} />
+                <h3>Plan de financement définitif</h3>
+                <span style={{ flex: 1 }}></span>
+                <Badge kind="success" dot>
+                  Validé
+                </Badge>
               </div>
-              <div className="kv">
-                <span className="k">Partagé le</span>
-                <span className="v">{fmtDate(scenario.updated_at)}</span>
+              <div className="p-body">
+                <div className="kv">
+                  <span className="k">Coût total de l'opération TTC</span>
+                  <span className="v">{fmtEuroFull(pv.totalOperationTtc)}</span>
+                </div>
+                <div className="kv">
+                  <span className="k">Aides mobilisées</span>
+                  <span className="v">{fmtEuroFull(pv.totalAides)}</span>
+                </div>
+                <div className="kv">
+                  <span className="k">Fonds travaux mobilisé</span>
+                  <span className="v">{fmtEuroFull(readPlanDefinitif(planValide.data).params.fondsTravaux)}</span>
+                </div>
+                <div className="kv">
+                  <span className="k">Reste à charge collectif</span>
+                  <span className="v" style={{ fontWeight: 700 }}>{fmtEuroFull(pv.resteACharge)}</span>
+                </div>
+                <div className="kv">
+                  <span className="k">Validé le</span>
+                  <span className="v">{fmtDate(planValide.updated_at)}</span>
+                </div>
+                <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
+                  Plan validé par l'équipe Strat Eco — les quotes-parts individuelles (aides déduites) sont
+                  communiquées à chaque copropriétaire.
+                </p>
               </div>
-              <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
-                Le détail du plan de financement (aides collectives et individuelles) est présenté par l'équipe
-                Strat Eco en assemblée générale.
-              </p>
             </div>
-          </div>
+          ) : scenario ? (
+            <div className="panel">
+              <div className="p-head">
+                <Icon name="fileText" size={18} />
+                <h3>Plan de financement</h3>
+              </div>
+              <div className="p-body">
+                <div className="kv">
+                  <span className="k">Scénario partagé</span>
+                  <span className="v">{scenario.name}</span>
+                </div>
+                <div className="kv">
+                  <span className="k">Partagé le</span>
+                  <span className="v">{fmtDate(scenario.updated_at)}</span>
+                </div>
+                <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
+                  Le détail du plan de financement (aides collectives et individuelles) est présenté par l'équipe
+                  Strat Eco en assemblée générale.
+                </p>
+              </div>
+            </div>
+          ) : null}
 
           <div className="panel">
             <div className="p-head">

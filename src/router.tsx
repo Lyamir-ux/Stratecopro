@@ -3,9 +3,12 @@ import { Layout } from "./components/Shell/Layout";
 import { RequireAuth } from "./auth/RequireAuth";
 import { RequireRole } from "./auth/RequireRole";
 import Login from "./pages/Login";
+import MotDePasseOublie from "./pages/MotDePasseOublie";
+import Reinitialisation from "./pages/Reinitialisation";
 import Dashboard from "./pages/Dashboard";
 import CoproDetail from "./pages/CoproDetail";
 import Ingenierie from "./pages/Ingenierie";
+import PlanDefinitifPage from "./pages/PlanDefinitif";
 import MesTaches from "./pages/MesTaches";
 import Consultations from "./pages/Consultations";
 import Prestataires from "./pages/Prestataires";
@@ -18,6 +21,8 @@ import CoproSyndic from "./pages/Syndic/CoproSyndic";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <Login /> },
+  { path: "/mot-de-passe-oublie", element: <MotDePasseOublie /> },
+  { path: "/reinitialisation", element: <Reinitialisation /> },
   {
     element: <RequireAuth />,
     children: [
@@ -29,6 +34,7 @@ export const router = createBrowserRouter([
             children: [
               { path: "/", element: <Dashboard /> },
               { path: "/copros/:id/ingenierie/:scenarioId?", element: <Ingenierie /> },
+              { path: "/copros/:id/plan-definitif/:planId", element: <PlanDefinitifPage /> },
               { path: "/copros/:id/:tab?", element: <CoproDetail /> },
               { path: "/taches", element: <MesTaches /> },
               { path: "/consultations", element: <Consultations /> },

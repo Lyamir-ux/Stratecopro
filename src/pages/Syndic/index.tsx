@@ -1,12 +1,13 @@
 // Espace syndic (portail) — même chrome que les portails copropriétaire et
 // prestataire. Le gestionnaire consulte son portefeuille en LECTURE SEULE :
 // portefeuille (bulles), tâches d'accompagnement, détail copro (5 onglets).
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon, type IconName } from "@/components/Icon";
 import { Avatar } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
-import { useCoprosSyndic } from "@/api/syndic";
+import { useOrganisations } from "@/api/organisations";
+import { useCoprosSyndic, useMonOrganisation, type SyndicCopro } from "@/api/syndic";
 import { Portefeuille } from "./Portefeuille";
 import { TachesSyndic } from "./Taches";
 
@@ -25,11 +26,67 @@ export function Loader() {
   );
 }
 
-/** Chrome commun de l'espace syndic (header + navigation). */
-export function SyndicShell({ active, children }: { active: SectionId | null; children: ReactNode }) {
+/**
+ * Sélecteur d'enseigne — aperçu AMO uniquement. Un vrai gestionnaire ne voit
+ * que son propre portefeuille : ce rail n'aurait rien à lui proposer.
+ */
+function OrgRail({
+  copros,
+  value,
+  onChange,
+}: {
+  copros: SyndicCopro[];
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const { data: organisations } = useOrganisations();
+  const horsOrg = copros.filter((c) => !c.organisation_id).length;
+  const entrees: { id: string | null; nom: string; n: number }[] = [
+    { id: null, nom: "Tous les dossiers", n: copros.length },
+    ...(organisations ?? []).map((o) => ({
+      id: o.id as string | null,
+      nom: o.nom,
+      n: copros.filter((c) => c.organisation_id === o.id).length,
+    })),
+    ...(horsOrg ? [{ id: "__sans__" as string | null, nom: "Hors organisation", n: horsOrg }] : []),
+  ];
+
+  return (
+    <aside className="org-rail">
+      <div className="se-eyebrow orl-head">Organisations</div>
+      {entrees.map((e) => (
+        <button
+          key={e.id ?? "tous"}
+          className={"orl-item" + (value === e.id ? " on" : "")}
+          onClick={() => onChange(e.id)}
+        >
+          <span className="nm">{e.nom}</span>
+          <span className="n">{e.n}</span>
+        </button>
+      ))}
+    </aside>
+  );
+}
+
+/** Chrome commun de l'espace syndic (header + navigation, rail optionnel). */
+export function SyndicShell({
+  active,
+  rail,
+  children,
+}: {
+  active: SectionId | null;
+  rail?: ReactNode;
+  children: ReactNode;
+}) {
   const { profile, signOut } = useAuth();
+  const { data: org } = useMonOrganisation();
   const navigate = useNavigate();
   if (!profile) return <Loader />;
+
+  // Sous-titre : l'enseigne et le périmètre, à défaut l'intitulé du profil.
+  const sousTitre = org
+    ? `${org.nom} · ${org.role === "directeur" ? "Direction — tout le portefeuille" : "Gestionnaire"}`
+    : profile.job_title || "Syndic";
 
   return (
     <div className="portal">
@@ -45,7 +102,7 @@ export function SyndicShell({ active, children }: { active: SectionId | null; ch
           <Avatar who={profile.initials} name={profile.full_name} />
           <span>
             <span className="nm" style={{ display: "block" }}>{profile.full_name}</span>
-            <span className="rl">{profile.job_title || "Syndic"}</span>
+            <span className="rl">{sousTitre}</span>
           </span>
           <button className="icon-btn" onClick={() => void signOut()} title="Se déconnecter">
             <Icon name="logOut" size={18} />
@@ -69,7 +126,14 @@ export function SyndicShell({ active, children }: { active: SectionId | null; ch
         ))}
       </nav>
 
-      <main className="portal-main">{children}</main>
+      {rail ? (
+        <div className="portal-body">
+          {rail}
+          <main className="portal-main">{children}</main>
+        </div>
+      ) : (
+        <main className="portal-main">{children}</main>
+      )}
     </div>
   );
 }
@@ -98,15 +162,28 @@ export function AucuneCopro() {
 export default function Syndic() {
   const { section: sectionParam } = useParams();
   const section: SectionId = sectionParam === "taches" ? "taches" : "portefeuille";
+  const { profile } = useAuth();
   const { data: copros, isLoading } = useCoprosSyndic();
+  // Filtre d'enseigne : réservé à l'aperçu AMO, qui voit tous les portefeuilles.
+  const [orgId, setOrgId] = useState<string | null>(null);
 
   if (isLoading) return <Loader />;
   if (!copros || copros.length === 0) return <AucuneCopro />;
 
+  const apercuAmo = profile?.role === "amo";
+  const visibles = !apercuAmo || orgId === null
+    ? copros
+    : orgId === "__sans__"
+      ? copros.filter((c) => !c.organisation_id)
+      : copros.filter((c) => c.organisation_id === orgId);
+
   return (
-    <SyndicShell active={section}>
-      {section === "portefeuille" && <Portefeuille copros={copros} />}
-      {section === "taches" && <TachesSyndic copros={copros} />}
+    <SyndicShell
+      active={section}
+      rail={apercuAmo ? <OrgRail copros={copros} value={orgId} onChange={setOrgId} /> : undefined}
+    >
+      {section === "portefeuille" && <Portefeuille copros={visibles} />}
+      {section === "taches" && <TachesSyndic copros={visibles} />}
     </SyndicShell>
   );
 }

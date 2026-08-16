@@ -12,11 +12,30 @@ import {
 } from "@/api/financement";
 import { fmtEuro, fmtEuroFull } from "@/lib/format";
 import type { DpeClass } from "@/lib/referentiels";
-import { computeFinance, type FinanceResult } from "@/lib/finance";
+import {
+  computeFinance,
+  computePlansIndividuelsPf,
+  itemsARepartirPf,
+  readPlanDefinitif,
+  type CoproTantiemes,
+  type FinanceResult,
+  type PlanDefinitifData,
+} from "@/lib/finance";
 import { readParams, useBareme, useChoixFinancementScenario, usePlansIndividuels, useScenarios } from "@/api/scenarios";
+import {
+  useDeletePlanDefinitif,
+  usePlansDefinitifs,
+  useUpdatePlanDefinitif,
+  useValiderPlanDefinitif,
+  type PlanDefinitif,
+} from "@/api/planDefinitif";
+import { useDonnees } from "@/api/donnees";
+import { Modal } from "@/components/Modal";
 import { fmtDate } from "@/lib/format";
 import type { CoproWithStats } from "@/api/copros";
 import { StatutPill } from "@/pages/Ingenierie/ScenarioMenu";
+import { ImportPlanDefinitifDialog } from "@/pages/PlanDefinitif/ImportPlanDefinitifDialog";
+import type { PlanDefinitifResult } from "@/lib/finance";
 
 export function FinancementTab({ c }: { c: CoproWithStats }) {
   const navigate = useNavigate();
@@ -31,6 +50,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   const { data: choix } = useChoixFinancementScenario(active?.id);
   const { data: finConfig } = useFinancementConfigAmo(c.id);
   const { data: adhesions } = useAdhesions(c.id);
+  const { data: pfPlans } = usePlansDefinitifs(c.id);
   const saveConfig = useSaveFinancementConfig(c.id);
   const [banque, setBanque] = useState<string>("CEGEE");
   const [duree, setDuree] = useState(15);
@@ -53,18 +73,40 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
 
   const openAssistant = () => navigate(`/copros/${c.id}/ingenierie${active ? `/${active.id}` : ""}`);
 
+  // Le PF définitif validé fait foi : il remplit automatiquement les panneaux
+  // de l'onglet (coût d'opération, aides, reste à charge, indicateurs).
+  const planValide = (pfPlans ?? [])
+    .filter((p) => p.statut === "valide")
+    .sort((a, b) => (b.updated_at > a.updated_at ? 1 : -1))[0];
+  const pv = (planValide?.resultat ?? null) as unknown as PlanDefinitifResult | null;
+  const pvData = planValide && pv ? readPlanDefinitif(planValide.data) : null;
+  const openPfValide = () => planValide && navigate(`/copros/${c.id}/plan-definitif/${planValide.id}`);
+
   if (!active) {
     return (
-      <div className="placeholder-screen fade">
-        <div className="ps-ico">
-          <Icon name="euro" size={28} />
-        </div>
-        <h2>Financement à venir</h2>
-        <p>Le chiffrage et le plan de financement seront établis à l'issue du diagnostic, en phase Études.</p>
-        <button className="se-btn se-btn-primary" style={{ marginTop: 22 }} onClick={openAssistant}>
-          <Icon name="barChart" size={17} />
-          Démarrer l'ingénierie financière
-        </button>
+      <div className="fade" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <PlanDefinitifPanel coproId={c.id} />
+        {planValide && pv && pvData ? (
+          <div className="detail-grid">
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+              <PanelCoutOperationPf plan={planValide} pv={pv} />
+              <PanelIngenieriePf pv={pv} fondsTravaux={pvData.params.fondsTravaux} onOpen={openPfValide} />
+            </div>
+            <PlansIndividuelsPfPanel coproId={c.id} plan={planValide} pv={pv} pvData={pvData} />
+          </div>
+        ) : (
+          <div className="placeholder-screen">
+            <div className="ps-ico">
+              <Icon name="euro" size={28} />
+            </div>
+            <h2>Financement à venir</h2>
+            <p>Le chiffrage et le plan de financement seront établis à l'issue du diagnostic, en phase Études.</p>
+            <button className="se-btn se-btn-primary" style={{ marginTop: 22 }} onClick={openAssistant}>
+              <Icon name="barChart" size={17} />
+              Démarrer l'ingénierie financière
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -73,73 +115,91 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   const d: FinanceResult =
     (active.resultat as unknown as FinanceResult | null) ??
     computeFinance(params, { lots: c.stats?.lots ?? 0, lotsHab: c.stats?.lots_hab ?? 0 }, bareme);
-  const seuilAtteint = (c.gain_pct ?? 0) >= bareme.mprCopro.seuilMin;
+  const gainPct = pv ? pv.performancePct : c.gain_pct;
+  const seuilAtteint = (gainPct ?? 0) >= bareme.mprCopro.seuilMin;
+  const seuilMajoreAtteint = (gainPct ?? 0) >= bareme.mprCopro.seuilMajore;
+  // Étiquettes : celles du PF définitif validé (initiale → projet) en priorité.
+  const lireEtiquette = (s: string | undefined): DpeClass | null => {
+    const l = (s ?? "").trim().toUpperCase().slice(0, 1);
+    return "ABCDEFG".includes(l) && l !== "" ? (l as DpeClass) : null;
+  };
+  const etiquetteAvant = lireEtiquette(pvData?.infos.etiquetteInitiale) ?? (c.energy_before as DpeClass | null);
+  const etiquetteApres = lireEtiquette(pvData?.infos.etiquetteProjet) ?? (c.energy_after as DpeClass | null);
 
   return (
     <div className="detail-grid fade">
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        <div className="panel">
-          <div className="p-head">
-            <Icon name="euro" size={18} />
-            <h3>Scénario · {active.name}</h3>
-            <span style={{ flex: 1 }}></span>
-            <StatutPill sc={active} />
-          </div>
-          <div className="p-body">
-            <div className="kv">
-              <span className="k">Travaux</span>
-              <span className="v">{fmtEuro(params.travaux)}</span>
+        <PlanDefinitifPanel coproId={c.id} />
+        {planValide && pv ? (
+          <PanelCoutOperationPf plan={planValide} pv={pv} />
+        ) : (
+          <div className="panel">
+            <div className="p-head">
+              <Icon name="euro" size={18} />
+              <h3>Scénario · {active.name}</h3>
+              <span style={{ flex: 1 }}></span>
+              <StatutPill sc={active} />
             </div>
-            <div className="kv">
-              <span className="k">Honoraires</span>
-              <span className="v">{fmtEuro(params.honoraires)}</span>
-            </div>
-            <div className="kv">
-              <span className="k">Aléas</span>
-              <span className="v">{fmtEuro(params.aleas)}</span>
-            </div>
-            <div className="kv" style={{ borderTop: "1px solid var(--border)", marginTop: 4, paddingTop: 12 }}>
-              <span className="k" style={{ fontWeight: 700, color: "var(--fg1)" }}>
-                Coût total TTC
-              </span>
-              <span className="v" style={{ fontFamily: "var(--font-display)", fontSize: 18 }}>
-                {fmtEuroFull(d.coutTotal)}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="panel">
-          <div className="p-head">
-            <Icon name="barChart" size={18} />
-            <h3>Ingénierie financière</h3>
-            <span style={{ flex: 1 }}></span>
-            <button className="se-btn se-btn-ghost btn-sm" onClick={openAssistant}>
-              Ouvrir l'assistant 7 étapes
-              <Icon name="arrowRight" size={15} />
-            </button>
-          </div>
-          <div className="p-body">
-            {[
-              { l: "Aides collectives (MPR Copro, CEE, Fonds)", v: d.aidesColl, blue: false },
-              { l: "Aides individuelles (MPR profils)", v: d.aidesIndiv, blue: true },
-              { l: "Éco-PTZ collectif mobilisé", v: d.ecoPtzMontant, blue: true },
-              { l: "Reste à charge copropriété", v: d.resteACharge, blue: false },
-            ].map((row) => (
-              <div key={row.l} style={{ marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 6 }}>
-                  <span>{row.l}</span>
-                  <span style={{ fontWeight: 700 }}>{fmtEuro(row.v)}</span>
-                </div>
-                <Progress value={d.coutTotal ? (row.v / d.coutTotal) * 100 : 0} blue={row.blue} />
+            <div className="p-body">
+              <div className="kv">
+                <span className="k">Travaux</span>
+                <span className="v">{fmtEuro(params.travaux)}</span>
               </div>
-            ))}
-            {!active.validated_at && (
-              <p className="se-small" style={{ color: "var(--fg-muted)" }}>
-                Scénario non validé — les montants sont calculés à la volée. Validez l'étape 7 pour figer les plans.
-              </p>
-            )}
+              <div className="kv">
+                <span className="k">Honoraires</span>
+                <span className="v">{fmtEuro(params.honoraires)}</span>
+              </div>
+              <div className="kv">
+                <span className="k">Aléas</span>
+                <span className="v">{fmtEuro(params.aleas)}</span>
+              </div>
+              <div className="kv" style={{ borderTop: "1px solid var(--border)", marginTop: 4, paddingTop: 12 }}>
+                <span className="k" style={{ fontWeight: 700, color: "var(--fg1)" }}>
+                  Coût total TTC
+                </span>
+                <span className="v" style={{ fontFamily: "var(--font-display)", fontSize: 18 }}>
+                  {fmtEuroFull(d.coutTotal)}
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
+        {planValide && pv && pvData ? (
+          <PanelIngenieriePf pv={pv} fondsTravaux={pvData.params.fondsTravaux} onOpen={openPfValide} />
+        ) : (
+          <div className="panel">
+            <div className="p-head">
+              <Icon name="barChart" size={18} />
+              <h3>Ingénierie financière</h3>
+              <span style={{ flex: 1 }}></span>
+              <button className="se-btn se-btn-ghost btn-sm" onClick={openAssistant}>
+                Ouvrir l'assistant 7 étapes
+                <Icon name="arrowRight" size={15} />
+              </button>
+            </div>
+            <div className="p-body">
+              {[
+                { l: "Aides collectives (MPR Copro, CEE, Fonds)", v: d.aidesColl, blue: false },
+                { l: "Aides individuelles (MPR profils)", v: d.aidesIndiv, blue: true },
+                { l: "Éco-PTZ collectif mobilisé", v: d.ecoPtzMontant, blue: true },
+                { l: "Reste à charge copropriété", v: d.resteACharge, blue: false },
+              ].map((row) => (
+                <div key={row.l} style={{ marginBottom: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 6 }}>
+                    <span>{row.l}</span>
+                    <span style={{ fontWeight: 700 }}>{fmtEuro(row.v)}</span>
+                  </div>
+                  <Progress value={d.coutTotal ? (row.v / d.coutTotal) * 100 : 0} blue={row.blue} />
+                </div>
+              ))}
+              {!active.validated_at && (
+                <p className="se-small" style={{ color: "var(--fg-muted)" }}>
+                  Scénario non validé — les montants sont calculés à la volée. Validez l'étape 7 pour figer les plans.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
         <div className="panel">
           <div className="p-head">
             <Icon name="users" size={18} />
@@ -257,7 +317,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
             <div className="kv">
               <span className="k">Gain énergétique</span>
               <span className="v" style={{ color: "var(--color-primary-700)" }}>
-                {c.gain_pct != null ? `+${c.gain_pct} %` : "—"}
+                {pv ? `+${pv.performancePct.toFixed(1).replace(".", ",")} %` : c.gain_pct != null ? `+${c.gain_pct} %` : "—"}
               </span>
             </div>
             <div className="kv">
@@ -267,17 +327,28 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
               </span>
             </div>
             <div className="kv">
+              <span className="k">Seuil {bareme.mprCopro.seuilMajore} %</span>
+              <span className="v">
+                <Badge kind={seuilMajoreAtteint ? "success" : "warn"}>
+                  {seuilMajoreAtteint ? "Atteint" : "Non atteint"}
+                </Badge>
+              </span>
+            </div>
+            <div className="kv">
               <span className="k">Taux d'aides</span>
-              <span className="v">{Math.round(d.tauxAides * 100)} %</span>
+              <span className="v">{Math.round((pv ? pv.tauxCouverture : d.tauxAides) * 100)} %</span>
             </div>
             <div className="kv">
               <span className="k">Étiquette visée</span>
               <span className="v">
-                <DpePair before={c.energy_before as DpeClass | null} after={c.energy_after as DpeClass | null} />
+                <DpePair before={etiquetteAvant} after={etiquetteApres} />
               </span>
             </div>
           </div>
         </div>
+        {planValide && pv && pvData ? (
+          <PlansIndividuelsPfPanel coproId={c.id} plan={planValide} pv={pv} pvData={pvData} />
+        ) : (
         <div className="panel">
           <div className="p-head">
             <Icon name="fileText" size={18} />
@@ -288,7 +359,8 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
           <div className="p-body" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {(plans ?? []).length === 0 ? (
               <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
-                Aucun plan généré — validez l'étape 7 de l'assistant pour créer les plans individuels.
+                Aucun plan généré — validez le plan de financement définitif : les plans individuels seront
+                répartis suivant les clés de tantièmes de la copropriété.
               </p>
             ) : (
               <>
@@ -319,6 +391,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
             )}
           </div>
         </div>
+        )}
         <div className="panel">
           <div className="p-head">
             <Icon name="users" size={18} />
@@ -367,5 +440,429 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Plans de financement définitifs (nomenclature chef de projet) : import du
+ * classeur Excel, liste des plans, ouverture de l'éditeur avec recalcul.
+ */
+function PlanDefinitifPanel({ coproId }: { coproId: string }) {
+  const navigate = useNavigate();
+  const { data: plans } = usePlansDefinitifs(coproId);
+  const del = useDeletePlanDefinitif(coproId);
+  const valider = useValiderPlanDefinitif(coproId);
+  const [importOpen, setImportOpen] = useState(false);
+
+  return (
+    <div className="panel">
+      <div className="p-head">
+        <Icon name="fileCheck" size={18} />
+        <h3>Plan de financement définitif</h3>
+        <span style={{ flex: 1 }}></span>
+        <button className="se-btn se-btn-secondary btn-sm" onClick={() => setImportOpen(true)}>
+          <Icon name="upload" size={15} />
+          Importer un classeur
+        </button>
+      </div>
+      <div className="p-body" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {(plans ?? []).length === 0 ? (
+          <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
+            Aucun plan définitif — importez le classeur Excel du chef de projet (onglets « PF définitif Eco PTZ
+            collectif / individuel » + lots avec colonne « Retenu ») : le logiciel reconnaît la nomenclature et
+            recalcule le plan à chaque modification.
+          </p>
+        ) : (
+          (plans ?? []).map((p, i, arr) => {
+            const res = p.resultat as unknown as PlanDefinitifResult | null;
+            return (
+              <div
+                key={p.id}
+                className="task-row"
+                style={{ padding: "11px 4px", borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none", cursor: "pointer" }}
+                onClick={() => navigate(`/copros/${coproId}/plan-definitif/${p.id}`)}
+              >
+                <Icon name="fileText" size={16} style={{ color: "var(--color-secondary-500)" }} />
+                <div style={{ minWidth: 0 }}>
+                  <div className="t-title" style={{ fontSize: 13 }}>
+                    {p.nom}
+                  </div>
+                  <div className="t-copro">
+                    {res
+                      ? `Opération ${fmtEuro(res.totalOperationTtc)} · aides ${fmtEuro(res.totalAides)} · reste à charge ${fmtEuro(res.resteACharge)}`
+                      : "À compléter"}
+                    {" · maj " + fmtDate(p.updated_at)}
+                  </div>
+                </div>
+                <span className="spacer"></span>
+                <Badge kind={p.statut === "valide" ? "success" : p.statut === "partage" ? "blue" : "neutral"}>
+                  {p.statut === "valide" ? "Validé" : p.statut === "partage" ? "Partagé" : "Brouillon"}
+                </Badge>
+                {p.statut === "valide" ? (
+                  <button
+                    className="se-btn se-btn-ghost btn-sm"
+                    title="Repasser ce plan en brouillon — les panneaux du financement ne seront plus remplis à partir de ce plan"
+                    disabled={valider.isPending}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      valider.mutate({ id: p.id, valider: false });
+                    }}
+                  >
+                    Repasser en brouillon
+                  </button>
+                ) : (
+                  <button
+                    className="se-btn se-btn-secondary btn-sm"
+                    title="Valider ce plan : les panneaux du financement (coût d'opération, aides, reste à charge, indicateurs) se remplissent automatiquement"
+                    disabled={valider.isPending}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      valider.mutate({ id: p.id, valider: true });
+                    }}
+                  >
+                    <Icon name="checkCircle" size={14} />
+                    Valider
+                  </button>
+                )}
+                <button
+                  className="icon-btn"
+                  title="Supprimer ce plan"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm(`Supprimer « ${p.nom} » ?`)) del.mutate(p.id);
+                  }}
+                >
+                  <Icon name="trash" size={15} />
+                </button>
+              </div>
+            );
+          })
+        )}
+      </div>
+      {importOpen && <ImportPlanDefinitifDialog coproId={coproId} onClose={() => setImportOpen(false)} />}
+    </div>
+  );
+}
+
+/** Coûts de l'opération issus du PF définitif validé (remplace le panneau scénario). */
+function PanelCoutOperationPf({ plan, pv }: { plan: PlanDefinitif; pv: PlanDefinitifResult }) {
+  return (
+    <div className="panel">
+      <div className="p-head">
+        <Icon name="fileCheck" size={18} />
+        <h3>Coût de l'opération · {plan.nom}</h3>
+        <span style={{ flex: 1 }}></span>
+        <Badge kind="success" dot>
+          PF validé
+        </Badge>
+      </div>
+      <div className="p-body">
+        <div className="kv">
+          <span className="k">Travaux TTC (imprévus inclus)</span>
+          <span className="v">{fmtEuro(pv.totalTravauxTtcImprevus)}</span>
+        </div>
+        <div className="kv">
+          <span className="k">MOE et frais annexes TTC</span>
+          <span className="v">{fmtEuro(pv.totalMoeTtc)}</span>
+        </div>
+        <div className="kv" style={{ borderTop: "1px solid var(--border)", marginTop: 4, paddingTop: 12 }}>
+          <span className="k" style={{ fontWeight: 700, color: "var(--fg1)" }}>
+            Coût total opération TTC
+          </span>
+          <span className="v" style={{ fontFamily: "var(--font-display)", fontSize: 18 }}>
+            {fmtEuroFull(pv.totalOperationTtc)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Ingénierie financière remplie automatiquement depuis le PF définitif validé. */
+function PanelIngenieriePf({
+  pv,
+  fondsTravaux,
+  onOpen,
+}: {
+  pv: PlanDefinitifResult;
+  fondsTravaux: number;
+  onOpen: () => void;
+}) {
+  const total = pv.totalPhaseTravauxTtc;
+  return (
+    <div className="panel">
+      <div className="p-head">
+        <Icon name="barChart" size={18} />
+        <h3>Ingénierie financière</h3>
+        <span style={{ flex: 1 }}></span>
+        <button className="se-btn se-btn-ghost btn-sm" onClick={onOpen}>
+          Ouvrir le PF définitif
+          <Icon name="arrowRight" size={15} />
+        </button>
+      </div>
+      <div className="p-body">
+        {[
+          { l: "Aides mobilisables (MPR, CEE, Climaxion…)", v: pv.totalAides, blue: false },
+          { l: "Fonds travaux mobilisé", v: fondsTravaux, blue: true },
+          { l: "Reste à charge définitif collectif", v: pv.resteACharge, blue: false },
+          { l: "Reste à financer (prime CEE en fin de travaux)", v: pv.collectif.resteAFinancer, blue: true },
+        ].map((row) => (
+          <div key={row.l} style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 6 }}>
+              <span>{row.l}</span>
+              <span style={{ fontWeight: 700 }}>{fmtEuro(row.v)}</span>
+            </div>
+            <Progress value={total ? (row.v / total) * 100 : 0} blue={row.blue} />
+          </div>
+        ))}
+        <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
+          Champs remplis automatiquement à partir du plan de financement définitif validé.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Plans individuels générés depuis le PF définitif validé. Une seule clé de
+ * répartition dans la copropriété → tout est réparti automatiquement avec
+ * elle ; plusieurs clés → l'AMO choisit, lot par lot et item par item, la clé
+ * à appliquer (choix conservés dans le plan).
+ */
+function PlansIndividuelsPfPanel({
+  coproId,
+  plan,
+  pv,
+  pvData,
+}: {
+  coproId: string;
+  plan: PlanDefinitif;
+  pv: PlanDefinitifResult;
+  pvData: PlanDefinitifData;
+}) {
+  const { data: donnees } = useDonnees(coproId);
+  const update = useUpdatePlanDefinitif(coproId);
+  const [configOpen, setConfigOpen] = useState(false);
+
+  const cles = donnees?.cles ?? [];
+  const items = itemsARepartirPf(pvData, pv);
+
+  // Tantièmes par copropriétaire (sommés sur ses lots) et totaux par clé.
+  const totauxCles: Record<string, number> = {};
+  const parCopro = new Map<string, CoproTantiemes>();
+  for (const lot of donnees?.lots ?? []) {
+    for (const [code, t] of Object.entries(lot.tantiemes)) totauxCles[code] = (totauxCles[code] ?? 0) + t;
+    if (!lot.coproprietaire_id) continue;
+    const co =
+      parCopro.get(lot.coproprietaire_id) ??
+      { coproprietaireId: lot.coproprietaire_id, nom: lot.coproprietaire?.nom ?? "—", tantiemes: {} };
+    for (const [code, t] of Object.entries(lot.tantiemes)) co.tantiemes[code] = (co.tantiemes[code] ?? 0) + t;
+    parCopro.set(lot.coproprietaire_id, co);
+  }
+
+  const cleUnique = cles.length === 1 ? cles[0].code : null;
+  const cleParItem: Record<string, string> = cleUnique
+    ? Object.fromEntries(items.map((it) => [it.id, cleUnique]))
+    : (pvData.repartitionCles ?? {});
+
+  const { plans, manquants } = computePlansIndividuelsPf({
+    items,
+    cleParItem,
+    copros: [...parCopro.values()],
+    totauxCles,
+    totalAides: pv.totalAides,
+    fondsTravaux: pvData.params.fondsTravaux,
+    totalPhaseTravauxTtc: pv.totalPhaseTravauxTtc,
+  });
+
+  const saveCles = (config: Record<string, string>) =>
+    update.mutate(
+      { id: plan.id, data: { ...pvData, repartitionCles: config } },
+      { onSuccess: () => setConfigOpen(false) }
+    );
+
+  return (
+    <div className="panel">
+      <div className="p-head">
+        <Icon name="fileText" size={18} />
+        <h3>Plans individuels</h3>
+        <span style={{ flex: 1 }}></span>
+        {cles.length > 1 && (
+          <button className="se-btn se-btn-ghost btn-sm" onClick={() => setConfigOpen(true)}>
+            Clés de répartition
+          </button>
+        )}
+        <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{plans.length}</span>
+      </div>
+      <div className="p-body" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {!donnees ? (
+          <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>Chargement…</p>
+        ) : cles.length === 0 ? (
+          <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
+            Importez le tableau des lots (onglet Données de la copro) : les clés de tantièmes du fichier
+            serviront à répartir le plan définitif entre les copropriétaires.
+          </p>
+        ) : manquants.length > 0 ? (
+          cleUnique ? (
+            <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
+              La clé « {cles[0].label || cles[0].code} » n'a aucun tantième — vérifiez l'import des lots
+              (onglet Données de la copro).
+            </p>
+          ) : (
+          <>
+            <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
+              La copropriété a {cles.length} clés de répartition : choisissez, lot par lot et item par item,
+              la clé à appliquer ({manquants.length} item{manquants.length > 1 ? "s" : ""} restant à affecter).
+            </p>
+            <button
+              className="se-btn se-btn-primary btn-sm"
+              style={{ marginTop: 10, alignSelf: "flex-start" }}
+              onClick={() => setConfigOpen(true)}
+            >
+              Choisir les clés de répartition
+            </button>
+          </>
+          )
+        ) : (
+          <>
+            {cleUnique && (
+              <p className="se-small" style={{ margin: "0 0 6px", color: "var(--fg-muted)" }}>
+                Répartition automatique — clé unique « {cles[0].label || cles[0].code} »
+                {" "}(total {totauxCles[cleUnique] ?? 0}).
+              </p>
+            )}
+            {plans.map((p, i, arr) => (
+              <div
+                key={p.coproprietaireId}
+                className="task-row"
+                style={{ padding: "11px 4px", borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none" }}
+              >
+                <Icon name="user" size={16} style={{ color: "var(--fg-muted)" }} />
+                <div>
+                  <div className="t-title" style={{ fontSize: 13 }}>{p.nom}</div>
+                  <div className="t-copro">
+                    Quote-part {fmtEuro(p.quotePartAvant)} · aides et fonds {fmtEuro(p.aidesEtFonds)} · reste{" "}
+                    {fmtEuro(p.reste)}
+                  </div>
+                </div>
+                <span className="spacer"></span>
+                <Icon name="fileText" size={16} style={{ color: "var(--color-secondary-500)" }} />
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+      {configOpen && (
+        <RepartitionClesDialog
+          items={items}
+          cles={cles}
+          totauxCles={totauxCles}
+          initial={cleParItem}
+          pending={update.isPending}
+          onSave={saveCles}
+          onClose={() => setConfigOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Choix de la clé de répartition, lot par lot et item par item. */
+function RepartitionClesDialog({
+  items,
+  cles,
+  totauxCles,
+  initial,
+  pending,
+  onSave,
+  onClose,
+}: {
+  items: ReturnType<typeof itemsARepartirPf>;
+  cles: { code: string; label: string | null; is_default: boolean }[];
+  totauxCles: Record<string, number>;
+  initial: Record<string, string>;
+  pending: boolean;
+  onSave: (config: Record<string, string>) => void;
+  onClose: () => void;
+}) {
+  const [config, setConfig] = useState<Record<string, string>>(() => ({ ...initial }));
+  const defaut = cles.find((k) => k.is_default)?.code ?? cles[0]?.code ?? "";
+  const [cleGlobale, setCleGlobale] = useState(defaut);
+  const manquants = items.filter((it) => !config[it.id]).length;
+  const libelleCle = (k: { code: string; label: string | null }) =>
+    `${k.code}${k.label && k.label !== k.code ? ` — ${k.label}` : ""} (total ${totauxCles[k.code] ?? 0})`;
+
+  return (
+    <Modal title="Clés de répartition des plans individuels" onClose={onClose} width={760} closeOnBackdrop={false}>
+      <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 0 }}>
+        Chaque lot de travaux (imprévus inclus) et chaque frais de la phase travaux est réparti entre les
+        copropriétaires suivant la clé choisie.
+      </p>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 13 }}>Appliquer à tous les items :</span>
+        <select className="edit-inp" value={cleGlobale} onChange={(e) => setCleGlobale(e.target.value)}>
+          {cles.map((k) => (
+            <option key={k.code} value={k.code}>
+              {libelleCle(k)}
+            </option>
+          ))}
+        </select>
+        <button
+          className="se-btn se-btn-secondary btn-sm"
+          onClick={() => setConfig(Object.fromEntries(items.map((it) => [it.id, cleGlobale])))}
+        >
+          Appliquer
+        </button>
+      </div>
+      <div className="tablewrap">
+        <table className="dossiers" style={{ fontSize: 12.5 }}>
+          <thead>
+            <tr>
+              <th>Lot / item</th>
+              <th style={{ textAlign: "right", width: 130 }}>Montant TTC</th>
+              <th style={{ width: 240 }}>Clé de répartition</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((it) => (
+              <tr key={it.id} style={{ cursor: "default" }}>
+                <td>{it.libelle}</td>
+                <td className="mono" style={{ textAlign: "right", whiteSpace: "nowrap" }}>{fmtEuroFull(it.montantTtc)}</td>
+                <td>
+                  <select
+                    className="edit-inp"
+                    style={{ width: "100%" }}
+                    value={config[it.id] ?? ""}
+                    onChange={(e) => setConfig((c2) => ({ ...c2, [it.id]: e.target.value }))}
+                  >
+                    <option value="" disabled>
+                      — choisir —
+                    </option>
+                    {cles.map((k) => (
+                      <option key={k.code} value={k.code}>
+                        {libelleCle(k)}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18 }}>
+        <button className="se-btn se-btn-ghost btn-sm" onClick={onClose}>
+          Annuler
+        </button>
+        <button
+          className="se-btn se-btn-primary btn-sm"
+          disabled={manquants > 0 || pending}
+          title={manquants > 0 ? `${manquants} item(s) sans clé` : undefined}
+          onClick={() => onSave(config)}
+        >
+          {pending ? "Enregistrement…" : "Enregistrer la répartition"}
+        </button>
+      </div>
+    </Modal>
   );
 }

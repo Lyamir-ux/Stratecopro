@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { determineProfil } from "../profil";
 import { BAREME_2024_HORS_IDF as B } from "../bareme2024";
+import { BAREME_2026_HORS_IDF, BAREME_2026_IDF } from "../bareme2026";
 
 describe("determineProfil — barème 2024 hors IDF", () => {
   it("seuils exacts pour 1 personne (bornes incluses)", () => {
@@ -35,5 +36,34 @@ describe("determineProfil — barème 2024 hors IDF", () => {
 
   it("RFR nul ou négatif → Bleu", () => {
     expect(determineProfil(2, 0, B)).toBe("Bleu");
+  });
+});
+
+describe("determineProfil — barème Anah 2026", () => {
+  it("hors Île-de-France : bornes exactes pour 1 personne", () => {
+    const b = BAREME_2026_HORS_IDF;
+    expect(determineProfil(1, 17363, b)).toBe("Bleu");
+    expect(determineProfil(1, 17364, b)).toBe("Jaune");
+    expect(determineProfil(1, 22259, b)).toBe("Jaune");
+    expect(determineProfil(1, 22260, b)).toBe("Violet");
+    expect(determineProfil(1, 31185, b)).toBe("Violet");
+    expect(determineProfil(1, 31186, b)).toBe("Rose");
+  });
+
+  it("hors Île-de-France : foyer de 5 personnes et extrapolation à 6", () => {
+    const b = BAREME_2026_HORS_IDF;
+    expect(determineProfil(5, 40835, b)).toBe("Bleu");
+    expect(determineProfil(5, 52348, b)).toBe("Jaune");
+    expect(determineProfil(5, 73907, b)).toBe("Violet");
+    expect(determineProfil(6, 40835 + 5151, b)).toBe("Bleu");
+    expect(determineProfil(6, 73907 + 9357 + 1, b)).toBe("Rose");
+  });
+
+  it("Île-de-France : bornes exactes pour 2 personnes", () => {
+    const b = BAREME_2026_IDF;
+    expect(determineProfil(2, 35270, b)).toBe("Bleu");
+    expect(determineProfil(2, 42933, b)).toBe("Jaune");
+    expect(determineProfil(2, 60051, b)).toBe("Violet");
+    expect(determineProfil(2, 60052, b)).toBe("Rose");
   });
 });

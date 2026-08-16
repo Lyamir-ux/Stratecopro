@@ -18,6 +18,17 @@ const TYPE_LABELS: Record<string, string> = {
   autre: "Autre intervenant",
 };
 
+const OPTION_LABELS: Record<string, string> = {
+  audit_reglementaire: "Audit réglementaire",
+  pppt: "PPPT",
+  memoire_climaxion: "Mémoire ClimAxion",
+};
+
+const SOUS_TYPE_LABELS: Record<string, string> = {
+  amiante_plomb: "Diagnostic amiante et plomb avant travaux",
+  etancheite: "Test d'étanchéité à l'air",
+};
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -86,10 +97,18 @@ Deno.serve(async (req: Request) => {
   const coproLieu = cs.coproprietes
     ? [cs.coproprietes.adresse, cs.coproprietes.city].filter(Boolean).join(", ")
     : [cs.copro_externe_adresse, cs.copro_externe_ville].filter(Boolean).join(", ");
-  const typeLabel = TYPE_LABELS[cs.type] ?? cs.type;
+  const typeLabel = cs.sous_type
+    ? `${TYPE_LABELS[cs.type] ?? cs.type} — ${SOUS_TYPE_LABELS[cs.sous_type] ?? cs.sous_type}`
+    : (TYPE_LABELS[cs.type] ?? cs.type);
   const dateLimite = cs.date_limite
     ? new Date(cs.date_limite).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
     : null;
+  const logements: number | null = cs.nb_logements ?? cs.copro_externe_lots ?? null;
+  const optionsLabels: string[] = ((cs.options ?? []) as string[]).map((o) => OPTION_LABELS[o] ?? o);
+  const { count: nbDocs } = await admin
+    .from("consultation_docs")
+    .select("*", { count: "exact", head: true })
+    .eq("consultation_id", consultation_id);
 
   let envoyes = 0, simules = 0, erreurs = 0;
 
@@ -98,15 +117,50 @@ Deno.serve(async (req: Request) => {
     let erreur: string | null = null;
 
     if (resendKey) {
+      const lienConsultations = `${appUrl}/prestataire/consultations`;
+      const ligne = (label: string, valeur: string) =>
+        `<tr><td style="padding:4px 14px 4px 0;color:#666;white-space:nowrap;vertical-align:top">${label}</td><td style="padding:4px 0;color:#1a1a1a">${valeur}</td></tr>`;
       const html = `
-        <p>Bonjour${p.contact_nom ? " " + p.contact_nom : ""},</p>
-        <p>Une nouvelle consultation <strong>${typeLabel}</strong> vient d'être publiée
-        sur la plateforme Strat Eco Pro pour la copropriété <strong>${coproNom}</strong>${coproLieu ? " (" + coproLieu + ")" : ""}.</p>
-        <blockquote style="border-left:3px solid #7AB52C;padding-left:12px;color:#444">${cs.mission}</blockquote>
-        ${dateLimite ? `<p>Date limite de réponse : <strong>${dateLimite}</strong>.</p>` : ""}
-        <p>Si cette mission vous intéresse, connectez-vous à votre espace prestataire pour déposer votre offre :</p>
-        <p><a href="${appUrl}/login" style="background:#7AB52C;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">Consulter et postuler</a></p>
-        <p style="color:#888;font-size:13px">Vous recevez cet e-mail car votre entreprise est référencée « ${typeLabel} » auprès de Strat Eco.</p>`;
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:14.5px;line-height:1.55;color:#1a1a1a;max-width:620px">
+          <p>Bonjour${p.contact_nom ? " " + p.contact_nom : ""},</p>
+          <p><strong>Strat Eco</strong>, assistant à maîtrise d'ouvrage, lance une consultation
+          pour laquelle votre entreprise est référencée :</p>
+          <table style="border-collapse:collapse;margin:14px 0;font-size:14.5px">
+            ${ligne("Copropriété", `<strong>${coproNom}</strong>${coproLieu ? " — " + coproLieu : ""}`)}
+            ${logements ? ligne("Taille", `${logements} logements`) : ""}
+            ${cs.nb_batiments ? ligne("Bâtiments", `${cs.nb_batiments}`) : ""}
+            ${ligne("Mission", `<strong>${typeLabel}</strong> — ${cs.mission}`)}
+            ${optionsLabels.length ? ligne("Options à chiffrer", optionsLabels.join(", ")) : ""}
+            ${dateLimite ? ligne("Date limite de réponse", `<strong>${dateLimite}</strong>`) : ""}
+          </table>
+          ${
+            nbDocs
+              ? `<p>Le dossier de consultation (${nbDocs} document${nbDocs > 1 ? "s" : ""} : cahier des charges, audit…) est à télécharger depuis votre espace prestataire.</p>`
+              : ""
+          }
+          ${
+            cs.type === "moe"
+              ? `<p>Pour cette mission de maîtrise d'œuvre, votre offre détaillera chaque phase
+                 — DIAG/AVP, PRO/DCE, suivi de chantier — ainsi que chaque option demandée.</p>`
+              : ""
+          }
+          <p style="margin:22px 0">
+            <a href="${lienConsultations}"
+               style="background:#355717;color:#fff;padding:12px 22px;border-radius:6px;text-decoration:none;font-weight:bold">
+              Consulter le dossier et déposer mon offre
+            </a>
+          </p>
+          <p>Pour y accéder, <a href="${lienConsultations}" style="color:#355717">connectez-vous à votre espace prestataire</a>
+          avec votre adresse e-mail (${p.email}).
+          Mot de passe oublié ? <a href="${appUrl}/mot-de-passe-oublie" style="color:#355717">Réinitialisez-le ici</a>.</p>
+          <p>À réception, votre candidature est transmise à l'équipe Strat Eco,
+          qui reviendra vers vous à l'issue de la consultation.</p>
+          <p>Bien cordialement,<br/><strong>L'équipe Strat Eco</strong></p>
+          <p style="color:#888;font-size:13px;border-top:1px solid #e5e5e5;padding-top:12px;margin-top:24px">
+            Vous recevez cet e-mail car votre entreprise est référencée « ${TYPE_LABELS[cs.type] ?? cs.type} » auprès de Strat Eco.
+            Pour ne plus recevoir ces alertes, répondez simplement à cet e-mail.
+          </p>
+        </div>`;
       try {
         const r = await fetch("https://api.resend.com/emails", {
           method: "POST",

@@ -2,7 +2,7 @@
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { fmtEuro } from "@/lib/format";
-import { PHASES } from "@/lib/referentiels";
+import { PHASES, PROFILS_MPR } from "@/lib/referentiels";
 import { computeIndiv, totalTantiemes, type ChoixFinancement, type Membership, type Scenario } from "@/api/portail";
 import { readParams } from "@/api/scenarios";
 import type { Bareme, Profil } from "@/lib/finance";
@@ -19,6 +19,7 @@ export function Accueil({
   piecesDone,
   piecesReq,
   choix,
+  enqueteComplete,
   go,
 }: {
   membership: Membership;
@@ -30,6 +31,7 @@ export function Accueil({
   piecesDone: number;
   piecesReq: number;
   choix: ChoixFinancement | null;
+  enqueteComplete: boolean;
   go: (s: SectionId) => void;
 }) {
   const copro = membership.copro;
@@ -50,10 +52,14 @@ export function Accueil({
   const todos: { id: SectionId; done: boolean; ico: string; title: string; sub: string }[] = [
     {
       id: "enquete",
-      done: !!profil,
+      done: enqueteComplete,
       ico: "clipboard",
-      title: "Compléter l'enquête sociale",
-      sub: profil ? "Profil déterminé : " + profil : "Pour estimer vos aides individuelles",
+      title: "Compléter l'enquête sociale & technique",
+      sub: enqueteComplete
+        ? (profil ? PROFILS_MPR[profil].menage : "Questionnaire complet")
+        : profil
+          ? "En cours — répondez à toutes les questions"
+          : "Pour estimer vos aides individuelles",
     },
     {
       id: "documents",
@@ -98,7 +104,7 @@ export function Accueil({
             <div className="t-lbl"><Icon name="euro" size={16} />Votre quote-part de travaux</div>
             <div className="t-val">{fmtEuro(indiv.quotePart)}</div>
             <div className="t-foot">
-              Tantièmes {totalTantiemes(membership.lots, bareme && scenario ? readParams(scenario.params, bareme).cle : "MUN")}/1000
+              Tantièmes {totalTantiemes(membership.lots, bareme && scenario ? readParams(scenario.params, bareme).cle : "MUN").toLocaleString("fr-FR")}
               {!indiv.exact && " · estimation"}
             </div>
           </div>

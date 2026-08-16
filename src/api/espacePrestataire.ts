@@ -10,19 +10,21 @@ import type { Tables } from "@/lib/database.types";
 
 export type CoproPublic = Pick<
   Tables<"coproprietes">,
-  "id" | "name" | "adresse" | "city" | "quartier" | "phase" | "fragile"
+  "id" | "name" | "adresse" | "city" | "code_postal" | "phase" | "fragile"
 >;
 
 export type ConsultationPresta = Tables<"consultations"> & {
   copro: CoproPublic | null;
   maCandidature: Tables<"candidatures"> | null;
+  docs: Tables<"consultation_docs">[];
+  questions: Tables<"consultation_questions">[];
 };
 
 export type CandidaturePresta = Tables<"candidatures"> & {
   consultation: (Tables<"consultations"> & { copro: CoproPublic | null }) | null;
 };
 
-const COPRO_COLS = "id, name, adresse, city, quartier, phase, fragile";
+const COPRO_COLS = "id, name, adresse, city, code_postal, phase, fragile";
 
 /** Fiche entreprise du prestataire connecté (RLS : la sienne uniquement).
  *  Désactivé pour l'AMO (qui voit toutes les entreprises → choisit un aperçu). */
@@ -49,19 +51,23 @@ export function useConsultationsPresta(presta: Tables<"prestataires">) {
     queryFn: async (): Promise<ConsultationPresta[]> => {
       const { data, error } = await supabase
         .from("consultations")
-        .select(`*, coproprietes(${COPRO_COLS}), candidatures(*)`)
+        .select(`*, coproprietes(${COPRO_COLS}), candidatures(*), consultation_docs(*), consultation_questions(*)`)
         .order("published_at", { ascending: false });
       if (error) throw error;
       return (data ?? [])
         .map((c) => {
-          const { coproprietes, candidatures, ...rest } = c as typeof c & {
+          const { coproprietes, candidatures, consultation_docs, consultation_questions, ...rest } = c as typeof c & {
             coproprietes: CoproPublic | null;
             candidatures: Tables<"candidatures">[];
+            consultation_docs: Tables<"consultation_docs">[];
+            consultation_questions: Tables<"consultation_questions">[];
           };
           return {
             ...rest,
             copro: coproprietes,
             maCandidature: (candidatures ?? []).find((k) => k.prestataire_id === presta.id) ?? null,
+            docs: consultation_docs ?? [],
+            questions: (consultation_questions ?? []).sort((a, b) => (a.asked_at < b.asked_at ? -1 : 1)),
           };
         })
         .filter((c) => c.maCandidature || presta.types.includes(c.type));
@@ -97,6 +103,64 @@ export function useMesCandidatures(prestaId: string) {
   });
 }
 
+/** Trace la récupération du dossier de consultation par le prestataire
+ *  (alimente l'onglet « État de la consultation » côté AMO). Meilleur effort :
+ *  l'échec est ignoré — l'aperçu AMO d'un espace prestataire, notamment,
+ *  n'a pas le droit d'écrire cette trace (et ne doit pas la fausser). */
+export async function marquerConsultationRecuperee(consultationId: string, prestataireId: string): Promise<void> {
+  try {
+    await supabase.from("consultation_acces").upsert(
+      { consultation_id: consultationId, prestataire_id: prestataireId, last_at: new Date().toISOString() },
+      { onConflict: "consultation_id,prestataire_id" }
+    );
+  } catch {
+    /* trace facultative */
+  }
+}
+
+/** Question posée à l'AMO sur une consultation avant de candidater.
+ *  La réponse (visible de tous les candidats) arrive depuis /consultations. */
+export function usePoserQuestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ consultationId, prestataireId, question }: {
+      consultationId: string;
+      prestataireId: string;
+      question: string;
+    }) => {
+      const { error } = await supabase.from("consultation_questions").insert({
+        consultation_id: consultationId,
+        prestataire_id: prestataireId,
+        question: question.trim(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["presta-consultations"] }),
+  });
+}
+
+/** Détail tarifaire d'une offre MOE ; `options` suit les cases cochées à la
+ *  publication de la consultation. Le PRO/DCE et le suivi de chantier se
+ *  chiffrent au forfait (€ HT) ou en pourcentage du montant des travaux —
+ *  la valeur est dans l'unité du mode. */
+export interface TarifsMoe {
+  diag_avp: number | null;
+  pro_dce: number | null;
+  pro_dce_mode: "forfait" | "pourcentage";
+  chantier: number | null;
+  chantier_mode: "forfait" | "pourcentage";
+  options: Record<string, number>;
+}
+
+/** Détail tarifaire des autres missions : test d'étanchéité à l'air
+ *  (avant / après travaux) et CT / SPS (conception / réalisation), € HT. */
+export interface TarifsSimples {
+  etancheite_avant?: number | null;
+  etancheite_apres?: number | null;
+  conception?: number | null;
+  realisation?: number | null;
+}
+
 /** Dépôt d'offre : pièce jointe optionnelle (bucket privé) + candidature. */
 export function usePostuler() {
   const qc = useQueryClient();
@@ -108,12 +172,16 @@ export function usePostuler() {
       montant,
       message,
       file,
+      tarifs,
+      tarifsSimples,
     }: {
       consultation: ConsultationPresta;
       prestataire: Tables<"prestataires">;
       montant: number | null;
       message: string;
       file: File | null;
+      tarifs: TarifsMoe | null;
+      tarifsSimples: TarifsSimples | null;
     }) => {
       if (!session) throw new Error("Session expirée");
       let fichier_path: string | null = null;
@@ -132,6 +200,16 @@ export function usePostuler() {
         message: message.trim() || null,
         fichier_path,
         fichier_name,
+        tarif_diag_avp: tarifs?.diag_avp ?? null,
+        tarif_pro_dce: tarifs?.pro_dce ?? null,
+        tarif_pro_dce_mode: tarifs?.pro_dce_mode ?? "forfait",
+        tarif_chantier: tarifs?.chantier ?? null,
+        tarif_chantier_mode: tarifs?.chantier_mode ?? "forfait",
+        tarif_options: tarifs && Object.keys(tarifs.options).length > 0 ? tarifs.options : null,
+        tarif_etancheite_avant: tarifsSimples?.etancheite_avant ?? null,
+        tarif_etancheite_apres: tarifsSimples?.etancheite_apres ?? null,
+        tarif_conception: tarifsSimples?.conception ?? null,
+        tarif_realisation: tarifsSimples?.realisation ?? null,
       });
       if (error) throw error;
     },

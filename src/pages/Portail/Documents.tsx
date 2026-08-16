@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
+import { RenommageDialog } from "@/components/RenommageDialog";
 import { fmtDate } from "@/lib/format";
 import { downloadFichier } from "@/api/fichiers";
 import {
@@ -26,6 +27,8 @@ export function Documents({ membership }: { membership: Membership }) {
   const upload = useUploadPiece(membership.copro.id, membership.coproprietaireId);
   const inputRef = useRef<HTMLInputElement>(null);
   const [pendingType, setPendingType] = useState<TypePiece | null>(null);
+  // Pièce en attente de renommage assisté avant téléversement
+  const [depot, setDepot] = useState<{ type: TypePiece; file: File } | null>(null);
 
   const req = PIECES.filter((p) => p.required);
   const done = req.filter((p) => (pieces ?? []).some((x) => x.type === p.type)).length;
@@ -36,7 +39,7 @@ export function Documents({ membership }: { membership: Membership }) {
   };
 
   const onFile = (file: File | undefined) => {
-    if (file && pendingType) upload.mutate({ type: pendingType, file });
+    if (file && pendingType) setDepot({ type: pendingType, file });
     setPendingType(null);
     if (inputRef.current) inputRef.current.value = "";
   };
@@ -122,6 +125,16 @@ export function Documents({ membership }: { membership: Membership }) {
           </div>
         </div>
       </div>
+
+      {depot && (
+        <RenommageDialog
+          files={[depot.file]}
+          prefixe={membership.nom}
+          typeInitial={depot.type}
+          onConfirm={(file) => upload.mutateAsync({ type: depot.type, file })}
+          onClose={() => setDepot(null)}
+        />
+      )}
     </div>
   );
 }

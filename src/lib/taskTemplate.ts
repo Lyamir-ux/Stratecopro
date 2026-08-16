@@ -37,7 +37,7 @@ export function buildTaskTemplate(phase: PhaseId): TemplateTask[] {
     { phase: "etudes", title: "Scénarios de travaux & chiffrage", status: st("etudes", "doing") },
     { phase: "etudes", title: "Ingénierie financière (7 étapes)", status: st("etudes", "doing"), tag: "Finance" },
     { phase: "etudes", title: "Récupération des données essentielles — CEE / MPR Copro", status: st("etudes", "todo"), tag: "CEE" },
-    { phase: "etudes", title: "Consultation & sélection des entreprises", status: st("etudes", "todo") },
+    { phase: "etudes", title: "Récupération des données des entreprises", status: st("etudes", "todo") },
     { phase: "etudes", title: "Plans de financement généraux et individuels", status: st("etudes", "todo") },
     { phase: "etudes", title: "Liasse documentaire pour AG", status: st("etudes", "todo"), jalon: "P1c" },
     { phase: "travaux", title: "Dépôt des dossiers des aides", status: st("travaux", "doing"), tag: "CEE", jalon: "P2a" },

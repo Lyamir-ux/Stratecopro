@@ -213,24 +213,36 @@ export function useMaReponse(enqueteId: string | undefined, coproprietaireId: st
   });
 }
 
+/**
+ * Enregistre le questionnaire complet (jsonb `reponses`) + les colonnes
+ * historiques (foyer / occupation / RFR) qui alimentent la vue AMO et le
+ * calcul du profil MaPrimeRénov'. Le profil est calculé depuis RFR + ménage ;
+ * s'il n'est pas calculable, l'éventuel profil déjà en base est conservé.
+ */
 export function useSaveMaReponse(enqueteId: string, coproprietaireId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
-      nbPersonnes: number;
-      statutOccupation: string;
-      rfr: number;
-      bareme: Bareme;
-    }): Promise<Profil> => {
-      const profil = determineProfil(input.nbPersonnes, input.rfr, input.bareme);
+      reponses: Json;
+      nbPersonnes: number | null;
+      statutOccupation: string | null;
+      rfr: number | null;
+      bareme: Bareme | null;
+    }): Promise<Profil | null> => {
+      const profil =
+        input.nbPersonnes != null && input.rfr != null && input.bareme
+          ? determineProfil(input.nbPersonnes, input.rfr, input.bareme)
+          : null;
       const { error } = await supabase.from("enquete_reponses").upsert(
         {
           enquete_id: enqueteId,
           coproprietaire_id: coproprietaireId,
+          reponses: input.reponses,
           nb_personnes: input.nbPersonnes,
           statut_occupation: input.statutOccupation,
           rfr: input.rfr,
-          profil_mpr: profil,
+          // ne pas écraser un profil existant (saisie AMO) quand il n'est pas calculable
+          ...(profil ? { profil_mpr: profil } : {}),
         },
         { onConflict: "enquete_id,coproprietaire_id" }
       );

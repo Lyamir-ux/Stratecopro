@@ -6,9 +6,9 @@ import { Modal } from "@/components/Modal";
 import { useImportLots } from "@/api/donnees";
 import {
   buildRows,
-  checkTotals,
   COLUMN_ROLES,
   guessMapping,
+  tantiemeColumns,
   type ColumnRole,
 } from "@/lib/importLots";
 
@@ -41,10 +41,10 @@ export function ImportLotsDialog({ coproId, hasExistingLots, onClose }: Props) {
   };
 
   const { rows, errors } = useMemo(
-    () => (data.length ? buildRows(data, mapping) : { rows: [], errors: [] }),
-    [data, mapping]
+    () => (data.length ? buildRows(data, mapping, headers) : { rows: [], errors: [] }),
+    [data, mapping, headers]
   );
-  const totalWarning = useMemo(() => checkTotals(rows), [rows]);
+  const tanCols = useMemo(() => tantiemeColumns(mapping, headers), [mapping, headers]);
   const canImport = rows.length > 0 && mapping.includes("num") && !importLots.isPending;
 
   const doImport = async () => {
@@ -69,7 +69,8 @@ export function ImportLotsDialog({ coproId, hasExistingLots, onClose }: Props) {
           <Icon name="upload" size={28} style={{ color: "var(--color-primary-500)" }} />
           <p style={{ margin: "12px 0 4px", fontWeight: 600 }}>Choisir un fichier .xlsx ou .csv</p>
           <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
-            Colonnes attendues : n° de lot, bâtiment, copropriétaire, usage, tantièmes MUN (‰), tantièmes escalier.
+            Colonnes reconnues : n° de lot, bâtiment, copropriétaire, adresse mail, téléphone, adresse postale,
+            usage, et une colonne par clé de tantièmes — l'en-tête de la colonne devient le nom de la clé.
             <br />
             La première ligne doit contenir les en-têtes.
           </p>
@@ -142,20 +143,6 @@ export function ImportLotsDialog({ coproId, hasExistingLots, onClose }: Props) {
               {errors.length > 20 && <div>… et {errors.length - 20} autres</div>}
             </div>
           )}
-          {totalWarning && (
-            <div
-              style={{
-                background: "var(--color-warning-50)",
-                borderRadius: "var(--radius-md)",
-                padding: "10px 14px",
-                fontSize: 13,
-                color: "var(--color-warning-700)",
-              }}
-            >
-              <Icon name="alert" size={14} /> {totalWarning}
-            </div>
-          )}
-
           {rows.length > 0 && (
             <div className="tablewrap" style={{ maxHeight: 220, overflowY: "auto" }}>
               <table className="dossiers" style={{ fontSize: 12.5 }}>
@@ -164,9 +151,12 @@ export function ImportLotsDialog({ coproId, hasExistingLots, onClose }: Props) {
                     <th>Lot</th>
                     <th>Bâtiment</th>
                     <th>Copropriétaire</th>
+                    <th>Mail</th>
+                    <th>Tél.</th>
                     <th>Usage</th>
-                    <th>MUN ‰</th>
-                    <th>ESC ‰</th>
+                    {tanCols.map((tc) => (
+                      <th key={tc.index}>{tc.code}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -175,9 +165,14 @@ export function ImportLotsDialog({ coproId, hasExistingLots, onClose }: Props) {
                       <td className="mono">{r.num}</td>
                       <td>{r.batiment ?? "—"}</td>
                       <td>{r.coproprietaire ?? "—"}</td>
+                      <td>{r.email ?? "—"}</td>
+                      <td className="mono">{r.telephone ?? "—"}</td>
                       <td>{r.usage}</td>
-                      <td className="mono">{r.tantiemes.MUN ?? "—"}</td>
-                      <td className="mono">{r.tantiemes.ESC ?? "—"}</td>
+                      {tanCols.map((tc) => (
+                        <td key={tc.index} className="mono">
+                          {r.tantiemes[tc.code]?.toLocaleString("fr-FR") ?? "—"}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>

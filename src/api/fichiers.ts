@@ -33,7 +33,8 @@ export function useFichiers(coproId: string | undefined) {
 export function useUploadFichier(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ file, dossier }: { file: File; dossier: string }) => {
+    // nameOriginal : nom du fichier avant renommage assisté (traçabilité)
+    mutationFn: async ({ file, dossier, nameOriginal }: { file: File; dossier: string; nameOriginal?: string }) => {
       const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const path = `${coproId}/${dossier.replace(/[^a-zA-Z0-9-]/g, "_")}/${Date.now()}-${safe}`;
       const { error: eUp } = await supabase.storage.from("copro-files").upload(path, file);
@@ -43,6 +44,7 @@ export function useUploadFichier(coproId: string) {
         copro_id: coproId,
         dossier,
         name: file.name,
+        name_original: nameOriginal && nameOriginal !== file.name ? nameOriginal : null,
         storage_path: path,
         size: file.size,
         mime: file.type || null,
@@ -79,14 +81,24 @@ export function useDeleteFichier(coproId: string) {
 }
 
 export async function downloadFichier(f: Fichier) {
-  const { data, error } = await supabase.storage.from("copro-files").createSignedUrl(f.storage_path, 300);
-  if (error) throw error;
   const a = document.createElement("a");
-  a.href = data.signedUrl;
+  a.href = await urlSigneeFichier(f.storage_path);
   a.download = f.name;
   a.target = "_blank";
   a.click();
 }
+
+/** URL signée (5 min) d'un objet du bucket privé copro-files. */
+export async function urlSigneeFichier(path: string): Promise<string> {
+  const { data, error } = await supabase.storage.from("copro-files").createSignedUrl(path, 300);
+  if (error || !data) throw error ?? new Error("URL de document indisponible");
+  return data.signedUrl;
+}
+
+/** Formats que le navigateur affiche tel quel dans un cadre (aperçu sans téléchargement). */
+const VISUALISABLES = /\.(pdf|png|jpe?g|gif|webp|svg|txt)$/i;
+
+export const estVisualisable = (nom: string) => VISUALISABLES.test(nom);
 
 // ========== Checklists de pièces ==========
 

@@ -1,29 +1,34 @@
--- Seed de démonstration — 6 copropriétés du prototype (données AMOA Pro anonymisées).
--- Idempotent : s'appuie sur les slugs. Les lots/copropriétaires détaillés arrivent en M11.
+-- Seed de démonstration — copropriété du prototype (données AMOA Pro anonymisées).
+-- Idempotent : s'appuie sur les slugs.
+--
+-- 15/08/2026 — les 5 autres copropriétés du prototype (Nouvelle Cité, Les Tilleuls,
+-- Cours Vauban, Le Belvédère, Parc des Cèdres) ont été effacées de la base : c'était
+-- du jeu d'essai, remplacé par les vrais portefeuilles. Elles sont retirées d'ici
+-- pour qu'un rejeu du seed ne les ressuscite pas. Seule Renaissance reste : elle
+-- porte les trois comptes de démo (syndic, copropriétaire, prestataire).
+-- Pour la même raison, ce seed ne touche QUE ses propres dossiers — il ne pose plus
+-- de clé MUN ni de rattachement AMO sur les copropriétés réelles (dont les clés de
+-- répartition viennent de l'en-tête du fichier des lots, pas d'un gabarit).
 
 -- ========== Copropriétés ==========
-insert into coproprietes (slug, name, city, quartier, adresse, phase, fragile, energy_before, energy_after, gain_pct, progress, syndic_name, tag)
+insert into coproprietes (slug, name, city, code_postal, adresse, phase, fragile, energy_before, energy_after, gain_pct, progress, syndic_name, tag)
 values
-  ('nouvelle-cite', 'Nouvelle Cité', 'Strasbourg', 'Hautepierre', '12 rue de Lisbonne, 67200 Strasbourg', 'travaux', true, 'F', 'C', 48, 72, 'Cabinet Niederhoffer', 'Grande copropriété'),
-  ('renaissance', 'Renaissance', 'Colmar', 'Centre', '8 rue des Clefs, 68000 Colmar', 'etudes', false, 'E', 'C', 41, 38, 'Foncia Colmar', 'Petite copropriété'),
-  ('les-tilleuls', 'Les Tilleuls', 'Mulhouse', 'Rebberg', '24 avenue du Rebberg, 68100 Mulhouse', 'diagnostic', true, 'G', null, null, 14, 'Citya Mulhouse', 'Copropriété fragile'),
-  ('cours-vauban', 'Cours Vauban', 'Metz', 'Nouvelle Ville', '5 cours Vauban, 57000 Metz', 'etudes', false, 'D', 'B', 52, 46, 'Square Habitat Metz', 'Gain > 35 %'),
-  ('le-belvedere', 'Le Belvédère', 'Nancy', 'Haussonville', '17 boulevard d''Haussonville, 54000 Nancy', 'diagnostic', false, 'E', null, null, 8, 'Nexity Nancy', 'Nouveau dossier'),
-  ('parc-des-cedres', 'Parc des Cèdres', 'Strasbourg', 'Meinau', '3 allée des Cèdres, 67100 Strasbourg', 'travaux', false, 'F', 'D', 44, 58, 'Loca Gestion', 'Grande copropriété')
+  ('renaissance', 'Renaissance', 'Colmar', '68000', '8 rue des Clefs, 68000 Colmar', 'etudes', false, 'E', 'C', 41, 38, 'Foncia Colmar', 'Petite copropriété')
 on conflict (slug) do nothing;
 
 -- ========== Clé de répartition générale (MUN) ==========
 insert into cles_repartition (copro_id, code, label, is_default)
 select c.id, 'MUN', 'Tantièmes généraux', true
 from coproprietes c
-where not exists (select 1 from cles_repartition k where k.copro_id = c.id and k.code = 'MUN');
+where c.slug = 'renaissance'
+  and not exists (select 1 from cles_repartition k where k.copro_id = c.id and k.code = 'MUN');
 
 -- ========== Rattachement de l'équipe AMO ==========
 insert into copro_members (copro_id, user_id, member_role)
 select c.id, p.user_id, 'amo_referent'
 from coproprietes c
 cross join profiles p
-where p.role = 'amo'
+where c.slug = 'renaissance' and p.role = 'amo'
 on conflict do nothing;
 
 -- ========== Plan de tâches gabarit (mêmes règles que src/lib/taskTemplate.ts) ==========
@@ -32,7 +37,7 @@ declare
   c record;
   r int;
 begin
-  for c in select id, phase from coproprietes loop
+  for c in select id, phase from coproprietes where slug = 'renaissance' loop
     if exists (select 1 from taches t where t.copro_id = c.id) then
       continue;
     end if;
@@ -57,7 +62,7 @@ begin
       ('etudes', 1, 'Scénarios de travaux & chiffrage', 'doing', null, null, null, 5),
       ('etudes', 1, 'Ingénierie financière (7 étapes)', 'doing', 'Finance', null, null, 6),
       ('etudes', 1, 'Récupération des données essentielles — CEE / MPR Copro', 'todo', 'CEE', null, null, 7),
-      ('etudes', 1, 'Consultation & sélection des entreprises', 'todo', null, null, null, 8),
+      ('etudes', 1, 'Récupération des données des entreprises', 'todo', null, null, null, 8),
       ('etudes', 1, 'Plans de financement généraux et individuels', 'todo', null, null, null, 9),
       ('etudes', 1, 'Liasse documentaire pour AG', 'todo', null, 'P1c', null, 10),
       ('travaux', 2, 'Dépôt des dossiers des aides', 'doing', 'CEE', 'P2a', null, 11),
@@ -79,10 +84,7 @@ declare
 begin
   for v in
     select * from (values
-      ('nouvelle-cite', 'Colonnes', 1190723.44, 330756.51, 132302.61, 82689.13, 66151.30, 45, true, 0.61, 612400.00),
-      ('renaissance', 'Rénovation > 35 %', 327944.81, 92156.67, 34000.00, 21366.00, 41283.00, 30, false, 0.54, 141295.00),
-      ('cours-vauban', 'Enveloppe + ENR', 869428.80, 241508.00, 96603.20, 60377.00, 48301.60, 45, false, 0.58, 421000.00),
-      ('parc-des-cedres', 'Isolation + chaufferie collective', 1469512.80, 408198.00, 163279.20, 102049.50, 81639.60, 30, true, 0.60, 798300.00)
+      ('renaissance', 'Rénovation > 35 %', 327944.81, 92156.67, 34000.00, 21366.00, 41283.00, 30, false, 0.54, 141295.00)
     ) as t(slug, name, travaux, honoraires, aleas, cee, fonds, mpr_pct, bonus, taux_aides, reste)
   loop
     select id into cid from coproprietes where slug = v.slug;

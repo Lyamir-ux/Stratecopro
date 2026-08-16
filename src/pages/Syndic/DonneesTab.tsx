@@ -16,12 +16,13 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
   const { data: donnees, isLoading } = useDonnees(c.id);
   if (isLoading || !donnees) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
-  const { batiments, coproprietaires, lots } = donnees;
+  const { batiments, coproprietaires, lots, cles } = donnees;
   const lotsByCp = new Map<string, number>();
   for (const l of lots) {
     if (l.coproprietaire_id) lotsByCp.set(l.coproprietaire_id, (lotsByCp.get(l.coproprietaire_id) ?? 0) + 1);
   }
-  const munTotal = lots.reduce((s, l) => s + (l.tantiemes.MUN ?? 0), 0);
+  const cleDefaut = cles.find((k) => k.is_default)?.code ?? cles[0]?.code;
+  const totalCle = cleDefaut ? lots.reduce((s, l) => s + (l.tantiemes[cleDefaut] ?? 0), 0) : 0;
 
   return (
     <div className="detail-grid fade">
@@ -32,7 +33,7 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
             <h3>Lots</h3>
             <span style={{ flex: 1 }}></span>
             <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
-              {lots.length} lots · {munTotal.toLocaleString("fr-FR")} ‰
+              {lots.length} lots{cleDefaut ? ` · ${totalCle.toLocaleString("fr-FR")} tantièmes ${cleDefaut}` : ""}
             </span>
           </div>
           <div className="p-body">
@@ -49,7 +50,7 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
                       <th>Bâtiment</th>
                       <th>Usage</th>
                       <th>Copropriétaire</th>
-                      <th style={{ textAlign: "right" }}>Tantièmes (‰)</th>
+                      <th style={{ textAlign: "right" }}>Tantièmes{cleDefaut ? ` ${cleDefaut}` : ""}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -60,7 +61,9 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
                         <td>{USAGE_LABEL[l.usage] ?? l.usage}</td>
                         <td>{l.coproprietaire?.nom ?? "—"}</td>
                         <td style={{ textAlign: "right" }}>
-                          {(l.tantiemes.MUN ?? 0).toLocaleString("fr-FR")}
+                          {cleDefaut != null && l.tantiemes[cleDefaut] != null
+                            ? l.tantiemes[cleDefaut].toLocaleString("fr-FR")
+                            : "—"}
                         </td>
                       </tr>
                     ))}

@@ -108,7 +108,7 @@ function ApercuSelect({
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ display: "block", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18 }}>{copro.name}</span>
                     <span style={{ display: "block", fontSize: 13, color: "var(--fg3)" }}>
-                      {[copro.city, copro.quartier].filter(Boolean).join(" · ")} · {n} copropriétaire{n > 1 ? "s" : ""}
+                      {[copro.code_postal, copro.city].filter(Boolean).join(" ")} · {n} copropriétaire{n > 1 ? "s" : ""}
                     </span>
                   </span>
                   <PhaseBadge phase={copro.phase} />
@@ -199,7 +199,7 @@ function CoproSelect({
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ display: "block", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20 }}>{m.copro.name}</span>
                   <span style={{ display: "block", fontSize: 13, color: "var(--fg3)" }}>
-                    {[m.copro.city, m.copro.quartier].filter(Boolean).join(" · ")}
+                    {[m.copro.code_postal, m.copro.city].filter(Boolean).join(" ")}
                     {m.lots.length > 0 && " · " + (m.lots.length > 1 ? m.lots.length + " lots" : "Lot n°" + m.lots[0].num)}
                   </span>
                 </span>
@@ -297,10 +297,11 @@ export default function Portail() {
 
   const copro = membership.copro;
   const profil = (reponse?.profil_mpr as Profil | null) ?? null;
+  const enqueteComplete = !!(reponse?.reponses as { complet?: boolean } | null)?.complet;
   const reqPieces = PIECES.filter((p) => p.required);
   const piecesDone = reqPieces.filter((p) => (pieces ?? []).some((x) => x.type === p.type)).length;
   const flags: Record<string, boolean> = {
-    enquete: !profil,
+    enquete: !enqueteComplete,
     pret: !choix,
     documents: piecesDone < reqPieces.length,
   };
@@ -376,6 +377,7 @@ export default function Portail() {
             piecesDone={piecesDone}
             piecesReq={reqPieces.length}
             choix={choix ?? null}
+            enqueteComplete={enqueteComplete}
           />
         )}
         {section === "plan-indiv" && <QuotesParts {...common} />}

@@ -1,5 +1,6 @@
-// Détail d'une copropriété du portefeuille syndic — hero + 5 onglets,
-// tout en lecture seule. L'onglet vit dans l'URL (/syndic/copros/:id/:tab?).
+// Détail d'une copropriété du portefeuille syndic — hero + 6 onglets.
+// Tout est en lecture seule sauf « Documents à produire » (montage bancaire), où le syndic dépose
+// les documents du dossier de prêt. L'onglet vit dans l'URL (/syndic/copros/:id/:tab?).
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Badge, DpePair, PhaseBadge, THUMB_BG } from "@/components/ui";
@@ -11,6 +12,7 @@ import { ProjetTabSyndic } from "./ProjetTab";
 import { DonneesTabSyndic } from "./DonneesTab";
 import { EnqueteTabSyndic } from "./EnqueteTab";
 import { FinancementTabSyndic } from "./FinancementTab";
+import { MontageTabSyndic } from "./MontageTab";
 import { FichiersTabSyndic } from "./FichiersTab";
 
 const TABS = [
@@ -18,6 +20,7 @@ const TABS = [
   { id: "donnees", label: "Données de la copro" },
   { id: "enquete", label: "Enquête sociale" },
   { id: "financement", label: "Financement" },
+  { id: "banque", label: "Documents à produire" },
   { id: "fichiers", label: "Fichiers" },
 ] as const;
 
@@ -89,7 +92,7 @@ export default function CoproSyndic() {
               <h1 className="dh-title">{c.name}</h1>
               <div className="dh-loc">
                 <Icon name="mapPin" size={15} />
-                {[c.city, c.quartier, c.syndic_name].filter(Boolean).join(" · ") || "À compléter"}
+                {[[c.code_postal, c.city].filter(Boolean).join(" "), c.syndic_name].filter(Boolean).join(" · ") || "À compléter"}
               </div>
             </div>
             <div className="dh-stats">
@@ -129,6 +132,7 @@ export default function CoproSyndic() {
         {tab === "donnees" && <DonneesTabSyndic c={c} />}
         {tab === "enquete" && <EnqueteTabSyndic c={c} />}
         {tab === "financement" && <FinancementTabSyndic c={c} />}
+        {tab === "banque" && <MontageTabSyndic c={c} />}
         {tab === "fichiers" && <FichiersTabSyndic c={c} />}
       </div>
     </SyndicShell>

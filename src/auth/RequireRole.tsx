@@ -18,19 +18,26 @@ export function homeFor(role: RoleId | undefined): string {
 export function RequireRole({ role }: { role: RoleId }) {
   const { profile, loading, signOut } = useAuth();
 
-  // session sans profil : compte non provisionné — déconnexion (hors rendu)
+  // session sans profil : compte non provisionné — déconnexion après un délai
+  // de grâce. L'état « session sans profil » est transitoire pendant une
+  // fraction de seconde au moment de la connexion (le profil charge encore) :
+  // déconnecter immédiatement coupait des connexions valides. Si le profil
+  // arrive entre-temps, le minuteur est annulé.
   useEffect(() => {
-    if (!loading && !profile) void signOut();
+    if (loading || profile) return;
+    const t = setTimeout(() => void signOut(), 1500);
+    return () => clearTimeout(t);
   }, [loading, profile, signOut]);
 
-  if (loading) {
+  if (loading || !profile) {
+    // profil manquant : on reste sur l'écran de chargement pendant le délai
+    // de grâce ; la déconnexion ci-dessus ramènera à /login si besoin
     return (
       <div style={{ display: "grid", placeItems: "center", minHeight: "100vh", color: "var(--fg-muted)" }}>
         Chargement…
       </div>
     );
   }
-  if (!profile) return <Navigate to="/login" replace />;
   if (profile.role !== role && profile.role !== "amo") {
     return <Navigate to={homeFor(profile.role as RoleId)} replace />;
   }

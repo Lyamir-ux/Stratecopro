@@ -1,13 +1,13 @@
 // Données de la copro : bâtiments, copropriétaires, lots, clés & tantièmes.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import type { Tables } from "@/lib/database.types";
+import type { Tables, TablesUpdate } from "@/lib/database.types";
 import type { ImportedRow } from "@/lib/importLots";
 
 export interface LotFull extends Tables<"lots"> {
   batiment: { code: string } | null;
-  coproprietaire: { nom: string } | null;
-  tantiemes: Record<string, number>; // par code de clé ('MUN', 'ESC'…)
+  coproprietaire: { nom: string; email: string | null; telephone: string | null } | null;
+  tantiemes: Record<string, number>; // par code de clé (repris du fichier importé)
 }
 
 export interface DonneesCopro {
@@ -27,7 +27,7 @@ export function useDonnees(coproId: string | undefined) {
         supabase.from("coproprietaires").select("*").eq("copro_id", coproId!).order("nom"),
         supabase
           .from("lots")
-          .select("*, batiments(code), coproprietaires(nom)")
+          .select("*, batiments(code), coproprietaires(nom, email, telephone)")
           .eq("copro_id", coproId!)
           .order("num"),
         supabase.from("cles_repartition").select("*").eq("copro_id", coproId!).order("code"),
@@ -51,12 +51,70 @@ export function useDonnees(coproId: string | undefined) {
         lots: (lots.data ?? []).map((l) => {
           const { batiments: b, coproprietaires: cp, ...rest } = l as typeof l & {
             batiments: { code: string } | null;
-            coproprietaires: { nom: string } | null;
+            coproprietaires: { nom: string; email: string | null; telephone: string | null } | null;
           };
           return { ...rest, batiment: b, coproprietaire: cp, tantiemes: tanByLot.get(l.id) ?? {} };
         }),
       };
     },
+  });
+}
+
+/**
+ * Ajuste le nombre de bâtiments du dossier (synthèse de l'onglet Données).
+ * En hausse : bâtiments déclarés ajoutés en fin de liste (codes numériques suivants).
+ * En baisse : suppression en partant de la fin, uniquement des bâtiments sans lot.
+ */
+export function useSetNbBatiments(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (target: number) => {
+      const { data: bats, error } = await supabase
+        .from("batiments")
+        .select("id, code, position, lots(count)")
+        .eq("copro_id", coproId)
+        .order("position");
+      if (error) throw error;
+      const list = bats ?? [];
+      const nbLots = (b: (typeof list)[number]) =>
+        (b.lots as unknown as { count: number }[])[0]?.count ?? 0;
+
+      if (target > list.length) {
+        const codes = new Set(list.map((b) => b.code));
+        let pos = list.reduce((a, b) => Math.max(a, b.position), -1) + 1;
+        let next = list.length + 1;
+        const rows = [];
+        for (let n = list.length; n < target; n++) {
+          let code = String(next).padStart(2, "0");
+          while (codes.has(code)) {
+            next++;
+            code = String(next).padStart(2, "0");
+          }
+          codes.add(code);
+          rows.push({ copro_id: coproId, code, position: pos++, declare_creation: true });
+          next++;
+        }
+        const { error: eIns } = await supabase.from("batiments").insert(rows);
+        if (eIns) throw eIns;
+      } else if (target < list.length) {
+        const aSupprimer = list.length - target;
+        const supprimables = [...list]
+          .reverse()
+          .filter((b) => nbLots(b) === 0)
+          .slice(0, aSupprimer);
+        if (supprimables.length < aSupprimer) {
+          throw new Error(
+            "Impossible de descendre à ce nombre : des bâtiments portent encore des lots — réaffectez-les d'abord (import)."
+          );
+        }
+        const { error: eDel } = await supabase
+          .from("batiments")
+          .delete()
+          .in("id", supprimables.map((b) => b.id));
+        if (eDel) throw eDel;
+      }
+    },
+    onSuccess: () => invalidateDonnees(qc, coproId),
   });
 }
 
@@ -98,8 +156,18 @@ export function useImportLots(coproId: string) {
         for (const b of data ?? []) batByCode.set(b.code, b.id);
       }
 
-      // Copropriétaires manquants (rapprochement par nom exact)
+      // Copropriétaires manquants (rapprochement par nom exact) + coordonnées du fichier
       const noms = Array.from(new Set(rows.map((r) => r.coproprietaire).filter((v): v is string => !!v)));
+      const contactByNom = new Map<string, { email: string | null; telephone: string | null; adresse: string | null }>();
+      for (const r of rows) {
+        if (!r.coproprietaire) continue;
+        const cur = contactByNom.get(r.coproprietaire) ?? { email: null, telephone: null, adresse: null };
+        contactByNom.set(r.coproprietaire, {
+          email: r.email ?? cur.email,
+          telephone: r.telephone ?? cur.telephone,
+          adresse: r.adresse ?? cur.adresse,
+        });
+      }
       const { data: existingCp, error: eC } = await supabase
         .from("coproprietaires")
         .select("id, nom")
@@ -110,13 +178,29 @@ export function useImportLots(coproId: string) {
       if (newCp.length) {
         const { data, error } = await supabase
           .from("coproprietaires")
-          .insert(newCp.map((nom) => ({ copro_id: coproId, nom })))
+          .insert(newCp.map((nom) => ({ copro_id: coproId, nom, ...contactByNom.get(nom) })))
           .select("id, nom");
         if (error) throw error;
         for (const c of data ?? []) cpByNom.set(c.nom, c.id);
       }
+      // Copropriétaires déjà connus : mise à jour des coordonnées présentes dans le fichier
+      const cpUpdates = (existingCp ?? []).flatMap((c) => {
+        const contact = contactByNom.get(c.nom);
+        if (!contact) return [];
+        const patch: TablesUpdate<"coproprietaires"> = {};
+        if (contact.email) patch.email = contact.email;
+        if (contact.telephone) patch.telephone = contact.telephone;
+        if (contact.adresse) patch.adresse = contact.adresse;
+        return Object.keys(patch).length ? [{ id: c.id, patch }] : [];
+      });
+      if (cpUpdates.length) {
+        const results = await Promise.all(
+          cpUpdates.map((u) => supabase.from("coproprietaires").update(u.patch).eq("id", u.id))
+        );
+        for (const r of results) if (r.error) throw r.error;
+      }
 
-      // Clés utilisées par l'import
+      // Clés utilisées par l'import — les codes viennent des en-têtes du fichier, rien n'est codé en dur
       const cleCodes = Array.from(new Set(rows.flatMap((r) => Object.keys(r.tantiemes))));
       const { data: existingCles, error: eK } = await supabase
         .from("cles_repartition")
@@ -128,7 +212,7 @@ export function useImportLots(coproId: string) {
       if (newCles.length) {
         const { data, error } = await supabase
           .from("cles_repartition")
-          .insert(newCles.map((code) => ({ copro_id: coproId, code, is_default: code === "MUN" })))
+          .insert(newCles.map((code) => ({ copro_id: coproId, code, is_default: false })))
           .select("id, code");
         if (error) throw error;
         for (const k of data ?? []) cleByCode.set(k.code, k.id);
@@ -163,6 +247,56 @@ export function useImportLots(coproId: string) {
       if (tanRows.length) {
         const { error } = await supabase.from("lot_tantiemes").upsert(tanRows, { onConflict: "lot_id,cle_id" });
         if (error) throw error;
+      }
+
+      // Ménage : les clés restées sans aucun tantième (ex. « MUN » créée à la création
+      // du dossier) sont supprimées, et une clé par défaut est garantie parmi celles du fichier.
+      if (tanRows.length) {
+        const { data: clesEtat, error: eEtat } = await supabase
+          .from("cles_repartition")
+          .select("id, code, is_default, lot_tantiemes(count)")
+          .eq("copro_id", coproId);
+        if (eEtat) throw eEtat;
+        const compte = (k: NonNullable<typeof clesEtat>[number]) =>
+          (k.lot_tantiemes as unknown as { count: number }[])[0]?.count ?? 0;
+        const vides = (clesEtat ?? []).filter((k) => compte(k) === 0);
+        if (vides.length) {
+          const { error } = await supabase
+            .from("cles_repartition")
+            .delete()
+            .in("id", vides.map((k) => k.id));
+          if (error) throw error;
+        }
+        const restantes = (clesEtat ?? []).filter((k) => compte(k) > 0);
+        if (restantes.length && !restantes.some((k) => k.is_default)) {
+          const premiere = restantes.find((k) => k.code === cleCodes[0]) ?? restantes[0];
+          const { error } = await supabase
+            .from("cles_repartition")
+            .update({ is_default: true })
+            .eq("id", premiere.id);
+          if (error) throw error;
+        }
+      }
+
+      // Même ménage pour les bâtiments créés par un import : ceux qui n'ont plus
+      // aucun lot disparaissent (ex. après un import « Remplacer »). Les bâtiments
+      // déclarés à la création du dossier font foi et sont toujours conservés.
+      {
+        const { data: batsEtat, error: eBats } = await supabase
+          .from("batiments")
+          .select("id, declare_creation, lots(count)")
+          .eq("copro_id", coproId);
+        if (eBats) throw eBats;
+        const batsVides = (batsEtat ?? []).filter(
+          (b) => !b.declare_creation && ((b.lots as unknown as { count: number }[])[0]?.count ?? 0) === 0
+        );
+        if (batsVides.length) {
+          const { error } = await supabase
+            .from("batiments")
+            .delete()
+            .in("id", batsVides.map((b) => b.id));
+          if (error) throw error;
+        }
       }
       return { lots: rows.length, batiments: newBats.length, coproprietaires: newCp.length };
     },

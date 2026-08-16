@@ -5,7 +5,7 @@ import type { Json, Tables } from "@/lib/database.types";
 import {
   computeFinance,
   computePlansIndividuels,
-  BAREME_2024_HORS_IDF,
+  BAREME_2026_HORS_IDF,
   type Bareme,
   type CoproContext,
   type FinanceParams,
@@ -28,7 +28,7 @@ export function useBareme() {
         .limit(1)
         .maybeSingle();
       if (error) throw error;
-      return data ? (data.params as unknown as Bareme) : BAREME_2024_HORS_IDF;
+      return data ? (data.params as unknown as Bareme) : BAREME_2026_HORS_IDF;
     },
   });
 }

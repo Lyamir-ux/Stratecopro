@@ -126,22 +126,28 @@ export type Database = {
       }
       batiments: {
         Row: {
+          adresse: string | null
           code: string
           copro_id: string
+          declare_creation: boolean
           id: string
           label: string | null
           position: number
         }
         Insert: {
+          adresse?: string | null
           code: string
           copro_id: string
+          declare_creation?: boolean
           id?: string
           label?: string | null
           position?: number
         }
         Update: {
+          adresse?: string | null
           code?: string
           copro_id?: string
+          declare_creation?: boolean
           id?: string
           label?: string | null
           position?: number
@@ -175,6 +181,16 @@ export type Database = {
           prestataire_id: string | null
           received_at: string
           statut: Database["public"]["Enums"]["statut_candidature"]
+          tarif_chantier: number | null
+          tarif_chantier_mode: string
+          tarif_conception: number | null
+          tarif_diag_avp: number | null
+          tarif_etancheite_apres: number | null
+          tarif_etancheite_avant: number | null
+          tarif_options: Json | null
+          tarif_pro_dce: number | null
+          tarif_pro_dce_mode: string
+          tarif_realisation: number | null
         }
         Insert: {
           consultation_id: string
@@ -187,6 +203,16 @@ export type Database = {
           prestataire_id?: string | null
           received_at?: string
           statut?: Database["public"]["Enums"]["statut_candidature"]
+          tarif_chantier?: number | null
+          tarif_chantier_mode?: string
+          tarif_conception?: number | null
+          tarif_diag_avp?: number | null
+          tarif_etancheite_apres?: number | null
+          tarif_etancheite_avant?: number | null
+          tarif_options?: Json | null
+          tarif_pro_dce?: number | null
+          tarif_pro_dce_mode?: string
+          tarif_realisation?: number | null
         }
         Update: {
           consultation_id?: string
@@ -199,6 +225,16 @@ export type Database = {
           prestataire_id?: string | null
           received_at?: string
           statut?: Database["public"]["Enums"]["statut_candidature"]
+          tarif_chantier?: number | null
+          tarif_chantier_mode?: string
+          tarif_conception?: number | null
+          tarif_diag_avp?: number | null
+          tarif_etancheite_apres?: number | null
+          tarif_etancheite_avant?: number | null
+          tarif_options?: Json | null
+          tarif_pro_dce?: number | null
+          tarif_pro_dce_mode?: string
+          tarif_realisation?: number | null
         }
         Relationships: [
           {
@@ -382,6 +418,80 @@ export type Database = {
           },
         ]
       }
+      consultation_acces: {
+        Row: {
+          consultation_id: string
+          first_at: string
+          id: string
+          last_at: string
+          prestataire_id: string
+        }
+        Insert: {
+          consultation_id: string
+          first_at?: string
+          id?: string
+          last_at?: string
+          prestataire_id: string
+        }
+        Update: {
+          consultation_id?: string
+          first_at?: string
+          id?: string
+          last_at?: string
+          prestataire_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultation_acces_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "consultations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultation_acces_prestataire_id_fkey"
+            columns: ["prestataire_id"]
+            isOneToOne: false
+            referencedRelation: "prestataires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consultation_docs: {
+        Row: {
+          consultation_id: string
+          id: string
+          name: string
+          path: string
+          size: number | null
+          uploaded_at: string
+        }
+        Insert: {
+          consultation_id: string
+          id?: string
+          name: string
+          path: string
+          size?: number | null
+          uploaded_at?: string
+        }
+        Update: {
+          consultation_id?: string
+          id?: string
+          name?: string
+          path?: string
+          size?: number | null
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultation_docs_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "consultations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consultation_notifications: {
         Row: {
           consultation_id: string
@@ -427,6 +537,51 @@ export type Database = {
           },
         ]
       }
+      consultation_questions: {
+        Row: {
+          answered_at: string | null
+          asked_at: string
+          consultation_id: string
+          id: string
+          prestataire_id: string
+          question: string
+          reponse: string | null
+        }
+        Insert: {
+          answered_at?: string | null
+          asked_at?: string
+          consultation_id: string
+          id?: string
+          prestataire_id: string
+          question: string
+          reponse?: string | null
+        }
+        Update: {
+          answered_at?: string | null
+          asked_at?: string
+          consultation_id?: string
+          id?: string
+          prestataire_id?: string
+          question?: string
+          reponse?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultation_questions_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "consultations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultation_questions_prestataire_id_fkey"
+            columns: ["prestataire_id"]
+            isOneToOne: false
+            referencedRelation: "prestataires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consultations: {
         Row: {
           budget: number | null
@@ -438,7 +593,11 @@ export type Database = {
           date_limite: string | null
           id: string
           mission: string
+          nb_batiments: number | null
+          nb_logements: number | null
+          options: string[]
           published_at: string
+          sous_type: string | null
           statut: Database["public"]["Enums"]["statut_consultation"]
           type: Database["public"]["Enums"]["type_consultation"]
         }
@@ -452,7 +611,11 @@ export type Database = {
           date_limite?: string | null
           id?: string
           mission: string
+          nb_batiments?: number | null
+          nb_logements?: number | null
+          options?: string[]
           published_at?: string
+          sous_type?: string | null
           statut?: Database["public"]["Enums"]["statut_consultation"]
           type: Database["public"]["Enums"]["type_consultation"]
         }
@@ -466,7 +629,11 @@ export type Database = {
           date_limite?: string | null
           id?: string
           mission?: string
+          nb_batiments?: number | null
+          nb_logements?: number | null
+          options?: string[]
           published_at?: string
+          sous_type?: string | null
           statut?: Database["public"]["Enums"]["statut_consultation"]
           type?: Database["public"]["Enums"]["type_consultation"]
         }
@@ -568,29 +735,35 @@ export type Database = {
       }
       coproprietaires: {
         Row: {
+          adresse: string | null
           copro_id: string
           created_at: string
           email: string | null
           id: string
           nom: string
+          telephone: string | null
           type: string | null
           user_id: string | null
         }
         Insert: {
+          adresse?: string | null
           copro_id: string
           created_at?: string
           email?: string | null
           id?: string
           nom: string
+          telephone?: string | null
           type?: string | null
           user_id?: string | null
         }
         Update: {
+          adresse?: string | null
           copro_id?: string
           created_at?: string
           email?: string | null
           id?: string
           nom?: string
+          telephone?: string | null
           type?: string | null
           user_id?: string | null
         }
@@ -621,18 +794,23 @@ export type Database = {
       coproprietes: {
         Row: {
           adresse: string | null
+          chef_projet: string | null
           city: string | null
+          code_postal: string | null
           created_at: string
           energy_after: string | null
           energy_before: string | null
           fragile: boolean
           gain_pct: number | null
+          gestionnaire_email: string | null
+          gestionnaire_nom: string | null
           id: string
           name: string
+          nb_logements: number | null
+          organisation_id: string | null
           phase: Database["public"]["Enums"]["phase_copro"]
           photo_path: string | null
           progress: number
-          quartier: string | null
           slug: string | null
           syndic_name: string | null
           tag: string | null
@@ -640,18 +818,23 @@ export type Database = {
         }
         Insert: {
           adresse?: string | null
+          chef_projet?: string | null
           city?: string | null
+          code_postal?: string | null
           created_at?: string
           energy_after?: string | null
           energy_before?: string | null
           fragile?: boolean
           gain_pct?: number | null
+          gestionnaire_email?: string | null
+          gestionnaire_nom?: string | null
           id?: string
           name: string
+          nb_logements?: number | null
+          organisation_id?: string | null
           phase?: Database["public"]["Enums"]["phase_copro"]
           photo_path?: string | null
           progress?: number
-          quartier?: string | null
           slug?: string | null
           syndic_name?: string | null
           tag?: string | null
@@ -659,24 +842,37 @@ export type Database = {
         }
         Update: {
           adresse?: string | null
+          chef_projet?: string | null
           city?: string | null
+          code_postal?: string | null
           created_at?: string
           energy_after?: string | null
           energy_before?: string | null
           fragile?: boolean
           gain_pct?: number | null
+          gestionnaire_email?: string | null
+          gestionnaire_nom?: string | null
           id?: string
           name?: string
+          nb_logements?: number | null
+          organisation_id?: string | null
           phase?: Database["public"]["Enums"]["phase_copro"]
           photo_path?: string | null
           progress?: number
-          quartier?: string | null
           slug?: string | null
           syndic_name?: string | null
           tag?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "coproprietes_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       enquete_reponses: {
         Row: {
@@ -771,6 +967,45 @@ export type Database = {
           },
         ]
       }
+      feedbacks: {
+        Row: {
+          auteur_nom: string
+          auteur_role: string
+          created_at: string
+          id: string
+          message: string
+          navigateur: string | null
+          page: string
+          statut: string
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          auteur_nom?: string
+          auteur_role?: string
+          created_at?: string
+          id?: string
+          message: string
+          navigateur?: string | null
+          page?: string
+          statut?: string
+          type?: string
+          user_id?: string | null
+        }
+        Update: {
+          auteur_nom?: string
+          auteur_role?: string
+          created_at?: string
+          id?: string
+          message?: string
+          navigateur?: string | null
+          page?: string
+          statut?: string
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       fichiers: {
         Row: {
           copro_id: string
@@ -779,6 +1014,7 @@ export type Database = {
           id: string
           mime: string | null
           name: string
+          name_original: string | null
           partage_copro: boolean
           size: number | null
           storage_path: string
@@ -791,6 +1027,7 @@ export type Database = {
           id?: string
           mime?: string | null
           name: string
+          name_original?: string | null
           partage_copro?: boolean
           size?: number | null
           storage_path: string
@@ -803,6 +1040,7 @@ export type Database = {
           id?: string
           mime?: string | null
           name?: string
+          name_original?: string | null
           partage_copro?: boolean
           size?: number | null
           storage_path?: string
@@ -924,6 +1162,105 @@ export type Database = {
           },
         ]
       }
+      montage_docs: {
+        Row: {
+          commentaire: string | null
+          copro_id: string
+          created_at: string
+          doc_key: string
+          files: Json
+          id: string
+          montage: string
+          statut: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          commentaire?: string | null
+          copro_id: string
+          created_at?: string
+          doc_key: string
+          files?: Json
+          id?: string
+          montage?: string
+          statut?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          commentaire?: string | null
+          copro_id?: string
+          created_at?: string
+          doc_key?: string
+          files?: Json
+          id?: string
+          montage?: string
+          statut?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "montage_docs_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "montage_docs_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      montage_formulaires: {
+        Row: {
+          copro_id: string
+          created_at: string
+          data: Json
+          statut: string
+          type: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          copro_id: string
+          created_at?: string
+          data?: Json
+          statut?: string
+          type: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          copro_id?: string
+          created_at?: string
+          data?: Json
+          statut?: string
+          type?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "montage_formulaires_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "montage_formulaires_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notes_projet: {
         Row: {
           author_user_id: string | null
@@ -969,6 +1306,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      organisation_membres: {
+        Row: {
+          org_role: Database["public"]["Enums"]["org_role"]
+          organisation_id: string
+          user_id: string
+        }
+        Insert: {
+          org_role?: Database["public"]["Enums"]["org_role"]
+          organisation_id: string
+          user_id: string
+        }
+        Update: {
+          org_role?: Database["public"]["Enums"]["org_role"]
+          organisation_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organisation_membres_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organisation_membres_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      organisations: {
+        Row: {
+          created_at: string
+          id: string
+          nom: string
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nom: string
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nom?: string
+          slug?: string
+        }
+        Relationships: []
       }
       pieces_justificatives: {
         Row: {
@@ -1024,6 +1415,60 @@ export type Database = {
             columns: ["coproprietaire_id"]
             isOneToOne: false
             referencedRelation: "coproprietaires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plans_definitifs: {
+        Row: {
+          copro_id: string
+          created_at: string
+          data: Json
+          id: string
+          nom: string
+          resultat: Json | null
+          source_fichier: string | null
+          statut: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          copro_id: string
+          created_at?: string
+          data?: Json
+          id?: string
+          nom?: string
+          resultat?: Json | null
+          source_fichier?: string | null
+          statut?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          copro_id?: string
+          created_at?: string
+          data?: Json
+          id?: string
+          nom?: string
+          resultat?: Json | null
+          source_fichier?: string | null
+          statut?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plans_definitifs_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plans_definitifs_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
             referencedColumns: ["id"]
           },
         ]
@@ -1317,6 +1762,18 @@ export type Database = {
     Functions: {
       a_postule: { Args: { p_consultation_id: string }; Returns: boolean }
       copro_visible_presta: { Args: { p_copro_id: string }; Returns: boolean }
+      documents_dossier: {
+        Args: { p_copro_id: string }
+        Returns: {
+          depose_le: string
+          dossier: string
+          id: string
+          name: string
+          origine: string
+          path: string
+          taille: number
+        }[]
+      }
       enquete_reponses_syndic: {
         Args: { p_copro_id: string }
         Returns: {
@@ -1329,6 +1786,7 @@ export type Database = {
       }
       is_amo: { Args: never; Returns: boolean }
       is_copro_of: { Args: { p_copro_id: string }; Returns: boolean }
+      is_directeur_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_moe_retenu_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_scenario_partage: { Args: { p_scenario_id: string }; Returns: boolean }
       is_syndic_of: { Args: { p_copro_id: string }; Returns: boolean }
@@ -1340,10 +1798,15 @@ export type Database = {
       }
       my_prestataire_id: { Args: never; Returns: string }
       peut_postuler: { Args: { p_consultation_id: string }; Returns: boolean }
+      peut_voir_consultation: {
+        Args: { p_consultation_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "amo" | "syndic" | "moe" | "copro" | "presta"
       member_role: "amo_referent" | "syndic" | "moe" | "coproprietaire"
+      org_role: "directeur" | "gestionnaire"
       phase_copro: "diagnostic" | "etudes" | "travaux"
       statut_candidature: "recue" | "retenue" | "non_retenue"
       statut_consultation: "en_ligne" | "cloturee"
@@ -1489,6 +1952,7 @@ export const Constants = {
     Enums: {
       app_role: ["amo", "syndic", "moe", "copro", "presta"],
       member_role: ["amo_referent", "syndic", "moe", "coproprietaire"],
+      org_role: ["directeur", "gestionnaire"],
       phase_copro: ["diagnostic", "etudes", "travaux"],
       statut_candidature: ["recue", "retenue", "non_retenue"],
       statut_consultation: ["en_ligne", "cloturee"],

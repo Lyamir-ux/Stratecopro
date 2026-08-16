@@ -1,104 +1,124 @@
-// Portefeuille du syndic — tableau de bord « bulles » animé
-// (port de design-reference/project/syndic.jsx, branché sur les vraies copros).
-import { useEffect, useMemo, useRef, useState } from "react";
+// Portefeuille du syndic — un « système » par gestionnaire : une bulle grise au
+// centre (ses initiales, le total de logements et le montant d'opération dont il
+// a la charge), autour de laquelle gravitent ses copropriétés. La couleur d'un
+// satellite donne la phase du dossier.
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { PhaseBadge } from "@/components/ui";
-import { PHASES } from "@/lib/referentiels";
+import { PHASES, type PhaseId } from "@/lib/referentiels";
+import { fmtEuroCourt } from "@/lib/format";
+import { nbLogements } from "@/api/copros";
 import type { SyndicCopro } from "@/api/syndic";
 
-const BUBBLE_COLOR = "#7AB52C";
+const COULEUR_PHASE: Record<PhaseId, string> = {
+  diagnostic: "var(--color-warning-500)",
+  etudes: "var(--color-secondary-500)",
+  travaux: "var(--color-primary-500)",
+};
 
-interface BubbleState {
+const SANS_GESTIONNAIRE = "__sans__";
+const R_GESTIONNAIRE = 58;
+
+/** « Claude LOBSTEIN » → « CL ». Un seul mot → ses deux premières lettres. */
+function initiales(nom: string): string {
+  const mots = nom.trim().split(/[\s-]+/).filter(Boolean);
+  if (mots.length === 0) return "?";
+  if (mots.length === 1) return mots[0].slice(0, 2).toUpperCase();
+  return (mots[0][0] + mots[mots.length - 1][0]).toUpperCase();
+}
+
+interface Satellite {
   id: string;
+  name: string;
+  phase: PhaseId;
+  fragile: boolean;
+  logements: number;
   r: number;
   x: number;
   y: number;
-  vx: number;
-  vy: number;
+}
+
+interface Systeme {
+  key: string;
+  nom: string;
+  initiales: string;
+  copros: number;
+  logements: number;
+  montant: number;
+  orbite: number;
+  taille: number;
+  satellites: Satellite[];
+}
+
+function construireSystemes(copros: SyndicCopro[]): Systeme[] {
+  const groupes = new Map<string, { nom: string; copros: SyndicCopro[] }>();
+  for (const c of copros) {
+    const cle = c.gestionnaire_email?.toLowerCase() || c.gestionnaire_nom || SANS_GESTIONNAIRE;
+    const g = groupes.get(cle) ?? { nom: c.gestionnaire_nom || "Non attribué", copros: [] };
+    g.copros.push(c);
+    groupes.set(cle, g);
+  }
+
+  return [...groupes.entries()]
+    .map(([key, g]) => {
+      const n = g.copros.length;
+      // Plus le gestionnaire a de dossiers, plus les satellites sont petits :
+      // sans cela l'orbite devient si large qu'un système ne tient plus à l'écran.
+      const rMax = n <= 6 ? 52 : n <= 10 ? 44 : n <= 16 ? 38 : 32;
+      const tailles = g.copros.map((c) => {
+        const logements = nbLogements(c);
+        // Plancher à 36 : en dessous, un nom d'un seul tenant (« STOSSWIHR »,
+        // « LAMARTINE ») ne rentre pas et se fait tronquer.
+        return { c, logements, r: Math.min(rMax, 36 + Math.min(16, logements / 10)) };
+      });
+      // Le plafond rMax borne la taille des satellites ; l'orbite se calcule sur
+      // le plus gros satellite réellement présent, sinon un gestionnaire à un
+      // seul petit dossier occuperait plus de place qu'un gestionnaire à huit.
+      const rEff = Math.max(...tailles.map((t) => t.r));
+      // Rayon d'orbite : assez grand pour dégager la bulle centrale ET pour que
+      // les satellites ne se chevauchent pas une fois répartis sur le cercle.
+      const orbite = Math.max(
+        R_GESTIONNAIRE + rEff + 18,
+        (n * (2 * rEff + 12)) / (2 * Math.PI)
+      );
+      const taille = 2 * (orbite + rEff) + 10;
+      const centre = taille / 2;
+
+      return {
+        key,
+        nom: g.nom,
+        initiales: g.nom === "Non attribué" ? "—" : initiales(g.nom),
+        copros: n,
+        logements: tailles.reduce((s, t) => s + t.logements, 0),
+        montant: g.copros.reduce((s, c) => s + (c.stats?.montant_ttc ?? 0), 0),
+        orbite,
+        taille,
+        satellites: tailles
+          .sort((a, b) => a.c.name.localeCompare(b.c.name))
+          .map(({ c, logements, r }, i) => {
+            const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+            return {
+              id: c.id,
+              name: c.name,
+              phase: c.phase,
+              fragile: c.fragile,
+              logements,
+              r,
+              x: centre + orbite * Math.cos(angle) - r,
+              y: centre + orbite * Math.sin(angle) - r,
+            };
+          }),
+      };
+    })
+    .sort((a, b) => (a.key === SANS_GESTIONNAIRE ? 1 : b.key === SANS_GESTIONNAIRE ? -1 : b.logements - a.logements));
 }
 
 export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
   const navigate = useNavigate();
   const [hoverId, setHoverId] = useState<string | null>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
-  const bubbles = useMemo(
-    () =>
-      copros.map((c) => ({
-        id: c.id,
-        name: c.name,
-        lots: c.stats?.lots ?? 0,
-        phase: c.phase,
-        fragile: c.fragile,
-        radius: 54 + Math.min(22, (c.stats?.lots ?? 0) / 10),
-      })),
-    [copros]
-  );
-
-  useEffect(() => {
-    const wrap = wrapRef.current;
-    if (!wrap) return;
-    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const bounds = () => ({ W: wrap.clientWidth, H: wrap.clientHeight });
-    let { W, H } = bounds();
-    const st: BubbleState[] = bubbles.map((b) => ({
-      id: b.id,
-      r: b.radius,
-      x: b.radius + Math.random() * Math.max(1, W - 2 * b.radius),
-      y: b.radius + Math.random() * Math.max(1, H - 2 * b.radius),
-      vx: (Math.random() * 2 - 1) * 12,
-      vy: (Math.random() * 2 - 1) * 12,
-    }));
-    const place = () =>
-      st.forEach((b) => {
-        const n = nodeRefs.current[b.id];
-        if (n) n.style.transform = "translate(" + (b.x - b.r) + "px," + (b.y - b.r) + "px)";
-      });
-    place();
-    if (reduce) return;
-
-    let last = performance.now();
-    const step = () => {
-      const now = performance.now();
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      ({ W, H } = bounds());
-      for (const b of st) {
-        b.x += b.vx * dt;
-        b.y += b.vy * dt;
-        if (b.x < b.r) { b.x = b.r; b.vx = Math.abs(b.vx); }
-        if (b.x > W - b.r) { b.x = W - b.r; b.vx = -Math.abs(b.vx); }
-        if (b.y < b.r) { b.y = b.r; b.vy = Math.abs(b.vy); }
-        if (b.y > H - b.r) { b.y = H - b.r; b.vy = -Math.abs(b.vy); }
-      }
-      for (let i = 0; i < st.length; i++) {
-        for (let j = i + 1; j < st.length; j++) {
-          const a = st[i], c = st[j];
-          const dx = c.x - a.x, dy = c.y - a.y;
-          const d = Math.hypot(dx, dy) || 0.01;
-          const min = a.r + c.r + 8;
-          if (d < min) {
-            const push = (min - d) / 2, ux = dx / d, uy = dy / d;
-            a.x -= ux * push; a.y -= uy * push;
-            c.x += ux * push; c.y += uy * push;
-            a.vx -= ux * 1.5; a.vy -= uy * 1.5;
-            c.vx += ux * 1.5; c.vy += uy * 1.5;
-          }
-        }
-      }
-      for (const b of st) {
-        const sp = Math.hypot(b.vx, b.vy), max = 20;
-        if (sp > max) { b.vx = (b.vx / sp) * max; b.vy = (b.vy / sp) * max; }
-        const n = nodeRefs.current[b.id];
-        if (n) n.style.transform = "translate(" + (b.x - b.r) + "px," + (b.y - b.r) + "px)";
-      }
-    };
-    const timer = setInterval(step, 1000 / 30);
-    return () => clearInterval(timer);
-  }, [bubbles]);
+  const systemes = useMemo(() => construireSystemes(copros), [copros]);
 
   const phaseCounts = PHASES.map((ph) => ({ ph, n: copros.filter((c) => c.phase === ph.id).length }));
+  const totalLogements = copros.reduce((s, c) => s + nbLogements(c), 0);
 
   return (
     <div className="page syndic-dash fade" style={{ padding: 0 }}>
@@ -106,52 +126,83 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
         <div>
           <h1 className="page-title">Votre portefeuille</h1>
           <p className="page-sub">
-            {copros.length} copropriété{copros.length > 1 ? "s" : ""} en rénovation énergétique suivie
-            {copros.length > 1 ? "s" : ""} avec Strat Eco
+            {copros.length} copropriété{copros.length > 1 ? "s" : ""} · {totalLogements} logements ·{" "}
+            {systemes.length} gestionnaire{systemes.length > 1 ? "s" : ""}
           </p>
         </div>
       </div>
 
-      <div className="syndic-bubble-wrap" ref={wrapRef}>
-        {bubbles.map((b) => {
-          const ph = PHASES.find((x) => x.id === b.phase);
-          return (
+      <div className="orbites">
+        {systemes.map((s, i) => (
+          <div className="orbite-cell" key={s.key}>
             <div
-              key={b.id}
-              ref={(el) => { nodeRefs.current[b.id] = el; }}
-              className={"bubble own clickable" + (hoverId === b.id ? " hover" : "")}
-              style={{
-                width: b.radius * 2,
-                height: b.radius * 2,
-                background: BUBBLE_COLOR,
-                borderColor: BUBBLE_COLOR,
-                color: "#fff",
-              }}
-              title={b.name + (ph ? " · " + ph.label : "")}
-              onMouseEnter={() => setHoverId(b.id)}
-              onMouseLeave={() => setHoverId(null)}
-              onClick={() => navigate(`/syndic/copros/${b.id}`)}
+              className="orbite-sys"
+              style={{ width: s.taille, height: s.taille, ["--orbite-duree" as string]: `${68 + (i % 3) * 14}s` }}
             >
-              <span className="b-name">{b.name}</span>
-              <span className="b-sub">{b.lots} lots{ph ? " · " + ph.short : ""}</span>
-              {b.fragile && <span className="b-flag" title="Copropriété fragile">!</span>}
+              <div className="orbite-ring">
+                {s.satellites.map((sat) => {
+                  const ph = PHASES.find((x) => x.id === sat.phase);
+                  const couleur = COULEUR_PHASE[sat.phase];
+                  return (
+                    <div
+                      key={sat.id}
+                      className={"bubble orbite-sat clickable" + (hoverId === sat.id ? " hover" : "")}
+                      style={{
+                        left: sat.x,
+                        top: sat.y,
+                        width: sat.r * 2,
+                        height: sat.r * 2,
+                        background: couleur,
+                        borderColor: couleur,
+                        color: "#fff",
+                      }}
+                      title={`${sat.name} · ${sat.logements} logements${ph ? " · " + ph.label : ""}`}
+                      onMouseEnter={() => setHoverId(sat.id)}
+                      onMouseLeave={() => setHoverId(null)}
+                      onClick={() => navigate(`/syndic/copros/${sat.id}`)}
+                    >
+                      <span className="b-name">{sat.name}</span>
+                      <span className="b-sub">{sat.logements} lgts</span>
+                      {sat.fragile && <span className="b-flag" title="Copropriété fragile">!</span>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div
+                className="bubble orbite-gest"
+                style={{ width: R_GESTIONNAIRE * 2, height: R_GESTIONNAIRE * 2 }}
+                title={`${s.nom} — ${s.copros} copropriété${s.copros > 1 ? "s" : ""}`}
+              >
+                <span className="b-init">{s.initiales}</span>
+                <span className="b-sub">{s.logements} logements</span>
+                <span className="b-sub b-montant">{fmtEuroCourt(s.montant)}</span>
+              </div>
             </div>
-          );
-        })}
+            <div className="orbite-nom">{s.nom}</div>
+          </div>
+        ))}
       </div>
 
       <div className="syndic-legend">
         <div className="leg-phases">
           {phaseCounts.map(({ ph, n }) => (
-            <span key={ph.id} className="leg-ph">
-              <PhaseBadge phase={ph.id} />
-              <b>{n}</b>
+            <span key={ph.id} className="leg-g">
+              <span className="dot" style={{ background: COULEUR_PHASE[ph.id] }}></span>
+              {ph.label}
+              <span className="leg-n">{n}</span>
             </span>
           ))}
+          <span className="leg-g">
+            <span className="dot" style={{ background: "var(--color-neutral-300)" }}></span>
+            Gestionnaire
+          </span>
         </div>
       </div>
       <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12 }}>
-        Cliquez une bulle pour ouvrir le dossier de la copropriété.
+        Chaque bulle grise est un gestionnaire, entouré des copropriétés dont il a la charge — la couleur d'un satellite
+        donne sa phase. Cliquez une copropriété pour ouvrir le dossier. Le montant est celui du scénario partagé, tant
+        qu'il y en a un.
       </p>
     </div>
   );

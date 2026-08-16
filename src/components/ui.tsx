@@ -62,9 +62,11 @@ export function AvatarStack({ team }: { team: string[] }) {
 }
 
 export function Progress({ value, blue }: { value: number; blue?: boolean }) {
+  // Largeur plancher de 2 % pour rester visible aux petites valeurs,
+  // mais rien du tout à zéro (sinon une barre fantôme apparaît).
   return (
     <div className={"prog" + (blue ? " blue" : "")}>
-      <i style={{ width: Math.max(2, value) + "%" }}></i>
+      <i style={{ width: (value > 0 ? Math.max(2, value) : 0) + "%" }}></i>
     </div>
   );
 }

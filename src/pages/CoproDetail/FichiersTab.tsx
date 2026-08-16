@@ -1,16 +1,21 @@
 // Onglet Fichiers — porté de detail.jsx (FichiersTab), branché sur Storage + checklists réelles.
+// Chaque dépôt passe par le renommage assisté (analyse documentaire + validation humaine).
 import { useRef, useState } from "react";
+import { ApercuDocument } from "@/components/ApercuDocument";
 import { Icon } from "@/components/Icon";
 import { Progress } from "@/components/ui";
+import { RenommageDialog } from "@/components/RenommageDialog";
 import {
   DOSSIERS,
   downloadFichier,
+  estVisualisable,
   useChecklists,
   useDeleteFichier,
   useFichiers,
   useToggleChecklistItem,
   useTogglePartageFichier,
   useUploadFichier,
+  type Fichier,
 } from "@/api/fichiers";
 import type { CoproWithStats } from "@/api/copros";
 
@@ -31,9 +36,27 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
   const [openFolder, setOpenFolder] = useState<string | null>(null);
   const [uploadFolder, setUploadFolder] = useState<string>(DOSSIERS[0]);
   const [openChecklist, setOpenChecklist] = useState<string | null>(null);
+  const [apercu, setApercu] = useState<Fichier | null>(null);
+  // Glissé-déposé : "panel" = zone générale, sinon nom du dossier survolé
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  // Fichiers en attente de renommage assisté avant dépôt
+  const [depot, setDepot] = useState<{ files: File[]; dossier: string } | null>(null);
+  const sending = depot != null;
 
   const byFolder = (f: string) => (fichiers ?? []).filter((x) => x.dossier === f);
   const folderFiles = openFolder ? byFolder(openFolder) : [];
+
+  // Le dépôt (input multiple ou glissé-déposé) ouvre le dialogue de renommage,
+  // qui analyse chaque document et appelle l'upload une fois le nom validé.
+  const uploadFiles = (list: FileList | File[], dossier: string) => {
+    const files = Array.from(list);
+    if (files.length) setDepot({ files, dossier });
+  };
+
+  const selectFolder = (f: string) => {
+    setOpenFolder(openFolder === f ? null : f);
+    setUploadFolder(f); // le sélecteur de dépôt suit le dossier cliqué
+  };
 
   return (
     <div className="detail-grid fade">
@@ -49,21 +72,41 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
               </option>
             ))}
           </select>
-          <button className="se-btn se-btn-secondary btn-sm" onClick={() => fileRef.current?.click()} disabled={upload.isPending}>
+          <button className="se-btn se-btn-secondary btn-sm" onClick={() => fileRef.current?.click()} disabled={sending}>
             <Icon name="plus" size={15} />
-            {upload.isPending ? "Envoi…" : "Déposer"}
+            {sending ? "Dépôt en cours…" : "Déposer"}
           </button>
           <input
             ref={fileRef}
             type="file"
+            multiple
             style={{ display: "none" }}
             onChange={(e) => {
-              if (e.target.files?.[0]) void upload.mutateAsync({ file: e.target.files[0], dossier: uploadFolder });
+              if (e.target.files?.length) void uploadFiles(e.target.files, uploadFolder);
               e.target.value = "";
             }}
           />
         </div>
-        <div className="p-body">
+        <div
+          className="p-body"
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver((d) => (d && d !== "panel" ? d : "panel"));
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(null);
+            if (e.dataTransfer.files.length) void uploadFiles(e.dataTransfer.files, uploadFolder);
+          }}
+          style={
+            dragOver === "panel"
+              ? { outline: "2px dashed var(--accent)", outlineOffset: -6, borderRadius: "var(--radius-md)" }
+              : undefined
+          }
+        >
           <div className="file-grid">
             {DOSSIERS.map((f) => {
               const n = byFolder(f).length;
@@ -71,8 +114,33 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                 <div
                   className="file-card"
                   key={f}
-                  onClick={() => setOpenFolder(openFolder === f ? null : f)}
-                  style={{ cursor: "pointer", outline: openFolder === f ? "2px solid var(--accent)" : "none" }}
+                  onClick={() => selectFolder(f)}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDragOver(f);
+                  }}
+                  onDragLeave={(e) => {
+                    e.stopPropagation();
+                    setDragOver(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDragOver(null);
+                    setUploadFolder(f);
+                    setOpenFolder(f);
+                    if (e.dataTransfer.files.length) void uploadFiles(e.dataTransfer.files, f);
+                  }}
+                  style={{
+                    cursor: "pointer",
+                    outline:
+                      dragOver === f
+                        ? "2px dashed var(--accent)"
+                        : openFolder === f
+                          ? "2px solid var(--accent)"
+                          : "none",
+                  }}
                 >
                   <Icon name="folder" size={26} className="fc-ico" />
                   <div className="fc-name">{f}</div>
@@ -83,6 +151,15 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
               );
             })}
           </div>
+          <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
+            <Icon name="upload" size={13} /> Glissez-déposez un ou plusieurs fichiers ici — directement sur une carte
+            pour choisir le dossier.
+          </p>
+          {upload.isError && (
+            <p className="se-small" style={{ marginTop: 8, marginBottom: 0, color: "var(--color-error-700)" }}>
+              Échec de l'envoi : {String((upload.error as Error)?.message ?? upload.error)}
+            </p>
+          )}
           {openFolder && (
             <div style={{ marginTop: 18 }}>
               <div className="se-eyebrow" style={{ marginBottom: 8, color: "var(--fg-muted)" }}>
@@ -102,7 +179,7 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                       </div>
                       <div className="t-copro">
                         {fmtSize(f.size)}
-                        {f.partage_copro && " · visible au portail"}
+                        {f.partage_copro && " · visible au portail copropriétaires"}
                       </div>
                     </div>
                     <span className="spacer"></span>
@@ -111,6 +188,17 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                       title={f.partage_copro ? "Ne plus partager aux copropriétaires" : "Partager aux copropriétaires (portail)"}
                       style={f.partage_copro ? { color: "var(--color-primary-700)" } : undefined}
                       onClick={() => void partage.mutateAsync({ id: f.id, partage: !f.partage_copro })}
+                    >
+                      <Icon name="share" size={16} />
+                    </button>
+                    <button
+                      className="icon-btn"
+                      title={
+                        estVisualisable(f.name)
+                          ? "Aperçu sans téléchargement"
+                          : "Ce format ne s'affiche pas dans le navigateur"
+                      }
+                      onClick={() => setApercu(f)}
                     >
                       <Icon name="eye" size={16} />
                     </button>
@@ -131,6 +219,11 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
               )}
             </div>
           )}
+          <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 14 }}>
+            <Icon name="share" size={13} /> La flèche publie le fichier sur le <b>portail des copropriétaires</b> ;
+            l'œil en donne un aperçu sans le télécharger. Le syndic, lui, co-gère le dossier : il voit l'ensemble des
+            documents déposés ici, partagés ou non.
+          </p>
         </div>
       </div>
 
@@ -179,6 +272,28 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
           })}
         </div>
       </div>
+
+      {apercu && (
+        <ApercuDocument
+          name={apercu.name}
+          path={apercu.storage_path}
+          onClose={() => setApercu(null)}
+          onTelecharger={() => void downloadFichier(apercu)}
+        />
+      )}
+
+      {depot && (
+        <RenommageDialog
+          files={depot.files}
+          prefixe={c.name}
+          dossiers={DOSSIERS}
+          dossierInitial={depot.dossier}
+          onConfirm={(file, meta) =>
+            upload.mutateAsync({ file, dossier: meta.dossier ?? depot.dossier, nameOriginal: meta.nameOriginal })
+          }
+          onClose={() => setDepot(null)}
+        />
+      )}
     </div>
   );
 }

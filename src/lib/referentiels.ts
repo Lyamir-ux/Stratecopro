@@ -39,10 +39,11 @@ export const ROLES: { id: RoleId; label: string; sub: string; icon: string; acti
   { id: "copro", label: "Copropriétaire", sub: "Votre projet de rénovation", icon: "user", active: true },
 ];
 
-/** Profils MaPrimeRénov' — infos d'affichage (portail + enquête). */
-export const PROFILS_MPR: Record<string, { color: string; label: string; desc: string; taux: string }> = {
-  Bleu: { color: "#2E6FA8", label: "Bleu", desc: "Revenus très modestes", taux: "jusqu'à 50 %" },
-  Jaune: { color: "#f2a30d", label: "Jaune", desc: "Revenus modestes", taux: "jusqu'à 35 %" },
-  Violet: { color: "#7A5AE0", label: "Violet", desc: "Revenus intermédiaires", taux: "jusqu'à 25 %" },
-  Rose: { color: "#DC6FA8", label: "Rose", desc: "Revenus supérieurs", taux: "jusqu'à 15 %" },
+/** Profils MaPrimeRénov' — infos d'affichage (portail + enquête).
+ *  `menage` = libellé grand public (les couleurs restent un code interne AMO). */
+export const PROFILS_MPR: Record<string, { color: string; label: string; desc: string; taux: string; menage: string }> = {
+  Bleu: { color: "#2E6FA8", label: "Bleu", desc: "Revenus très modestes", taux: "jusqu'à 50 %", menage: "Ménage aux revenus très modestes" },
+  Jaune: { color: "#f2a30d", label: "Jaune", desc: "Revenus modestes", taux: "jusqu'à 35 %", menage: "Ménage aux revenus modestes" },
+  Violet: { color: "#7A5AE0", label: "Violet", desc: "Revenus intermédiaires", taux: "jusqu'à 25 %", menage: "Ménage aux revenus intermédiaires" },
+  Rose: { color: "#DC6FA8", label: "Rose", desc: "Revenus supérieurs", taux: "jusqu'à 15 %", menage: "Ménage aux revenus supérieurs" },
 };

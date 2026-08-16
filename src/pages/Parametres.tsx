@@ -1,10 +1,13 @@
-// Paramètres : apparence (accent, menu latéral), barèmes des aides par millésime, registre RGPD.
+// Paramètres : apparence (accent, menu latéral), barèmes des aides par millésime,
+// registre RGPD et compilation des retours de la version test.
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
-import { Badge } from "@/components/ui";
+import { Badge, type BadgeKind } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
+import { OrganisationsPanel } from "@/components/OrganisationsPanel";
+import { useFeedbacks, useMajFeedback, useSupprimerFeedback, type Feedback } from "@/api/feedback";
 import type { Json, Tables } from "@/lib/database.types";
 import type { Bareme } from "@/lib/finance";
 import { ACCENTS, useUi } from "@/stores/ui";
@@ -126,6 +129,140 @@ function BaremeEditor({ row }: { row: Tables<"baremes"> }) {
   );
 }
 
+const FB_TYPE_BADGE: Record<string, { kind: BadgeKind; label: string }> = {
+  bug: { kind: "warn", label: "Bug" },
+  idee: { kind: "blue", label: "Idée" },
+  remarque: { kind: "neutral", label: "Remarque" },
+};
+const FB_ROLE_LABEL: Record<string, string> = {
+  amo: "Équipe AMO",
+  syndic: "Syndic",
+  copro: "Copropriétaire",
+  presta: "Prestataire",
+  moe: "MOE",
+};
+
+function FeedbackRow({ fb }: { fb: Feedback }) {
+  const maj = useMajFeedback();
+  const supprimer = useSupprimerFeedback();
+  const t = FB_TYPE_BADGE[fb.type] ?? FB_TYPE_BADGE.remarque;
+  const traite = fb.statut === "traite";
+  return (
+    <div style={{ padding: "12px 4px", borderBottom: "1px solid var(--border)", opacity: traite ? 0.55 : 1 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <Badge kind={t.kind}>{t.label}</Badge>
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>{fb.auteur_nom || "Anonyme"}</span>
+        <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
+          {FB_ROLE_LABEL[fb.auteur_role] ?? fb.auteur_role} ·{" "}
+          {new Date(fb.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+        </span>
+        <span style={{ flex: 1 }}></span>
+        <button
+          className="icon-btn"
+          style={{ width: 30, height: 30 }}
+          title={traite ? "Repasser en « nouveau »" : "Marquer comme traité"}
+          onClick={() => void maj.mutateAsync({ id: fb.id, statut: traite ? "nouveau" : "traite" })}
+        >
+          <Icon name={traite ? "clock" : "check"} size={15} />
+        </button>
+        <button
+          className="icon-btn"
+          style={{ width: 30, height: 30 }}
+          title="Supprimer ce retour"
+          onClick={() => {
+            if (window.confirm("Supprimer définitivement ce retour ?")) void supprimer.mutateAsync(fb.id);
+          }}
+        >
+          <Icon name="trash" size={15} />
+        </button>
+      </div>
+      <p style={{ margin: "7px 0 0", fontSize: 13.5, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{fb.message}</p>
+      <p style={{ margin: "5px 0 0", fontSize: 12, color: "var(--fg-muted)" }}>Page : {fb.page || "—"}</p>
+    </div>
+  );
+}
+
+/** Feedbacks restant à traiter → Markdown prêt à coller dans Claude. */
+function feedbacksToMarkdown(list: Feedback[]): string {
+  const blocs = list.map((fb) => {
+    const type = FB_TYPE_BADGE[fb.type]?.label ?? fb.type;
+    const date = new Date(fb.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+    return [
+      `## ${type} — ${fb.auteur_nom || "Anonyme"} (${FB_ROLE_LABEL[fb.auteur_role] ?? fb.auteur_role}) · ${date}`,
+      "",
+      fb.message.trim(),
+      "",
+      `Page : \`${fb.page || "—"}\``,
+    ].join("\n");
+  });
+  return [
+    `# Feedbacks à traiter — export du ${new Date().toLocaleDateString("fr-FR")} (${list.length})`,
+    "",
+    blocs.join("\n\n---\n\n"),
+    "",
+  ].join("\n");
+}
+
+function FeedbackPanel() {
+  const { data: feedbacks } = useFeedbacks();
+  const [voirTraites, setVoirTraites] = useState(false);
+  const [copie, setCopie] = useState(false);
+  const nouveaux = (feedbacks ?? []).filter((f) => f.statut !== "traite");
+  const visibles = voirTraites ? feedbacks ?? [] : nouveaux;
+
+  const exporterMd = async () => {
+    const md = feedbacksToMarkdown(nouveaux);
+    try {
+      await navigator.clipboard.writeText(md);
+      setCopie(true);
+      window.setTimeout(() => setCopie(false), 2500);
+    } catch {
+      // Presse-papiers indisponible (permissions) → téléchargement du .md à la place
+      const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "feedbacks-a-traiter.md";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  return (
+    <div className="panel">
+      <div className="p-head">
+        <Icon name="megaphone" size={18} />
+        <h3>Retours de test</h3>
+        <span style={{ flex: 1 }}></span>
+        {nouveaux.length > 0 && <Badge kind="primary" dot>{nouveaux.length} à traiter</Badge>}
+        {nouveaux.length > 0 && (
+          <button
+            className="se-btn se-btn-secondary btn-sm"
+            title="Copier les feedbacks à traiter au format Markdown, prêts à coller dans Claude"
+            onClick={() => void exporterMd()}
+          >
+            <Icon name={copie ? "check" : "copy"} size={14} />
+            {copie ? "Copié !" : "Exporter en MD"}
+          </button>
+        )}
+        <button className="se-btn se-btn-ghost btn-sm" onClick={() => setVoirTraites((v) => !v)}>
+          {voirTraites ? "Masquer les traités" : "Tout afficher"}
+        </button>
+      </div>
+      <div className="p-body">
+        {visibles.length === 0 ? (
+          <p className="se-small" style={{ color: "var(--fg-muted)" }}>
+            Aucun retour pour l'instant — les remarques envoyées via le bouton « Feedback » (en bas à droite de chaque
+            page, tous espaces confondus) s'afficheront ici.
+          </p>
+        ) : (
+          visibles.map((fb) => <FeedbackRow key={fb.id} fb={fb} />)
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Parametres() {
   useCrumbs([{ label: "Paramètres" }]);
   const { data: baremes } = useBaremes();
@@ -139,12 +276,16 @@ export default function Parametres() {
       <div className="page-head">
         <div>
           <h1 className="page-title">Paramètres</h1>
-          <p className="page-sub">Apparence, barèmes des aides et conformité</p>
+          <p className="page-sub">Apparence, organisations, barèmes des aides et conformité</p>
         </div>
       </div>
 
       <div className="detail-grid">
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <FeedbackPanel />
+
+          <OrganisationsPanel />
+
           <div className="panel">
             <div className="p-head">
               <Icon name="euro" size={18} />

@@ -89,7 +89,7 @@ export default function MesTaches() {
               </span>
               <span className="mt-copro-txt">
                 <span className="mt-copro-name">{g.c.name}</span>
-                <span className="mt-copro-loc">{g.c.adresse || [g.c.city, g.c.quartier].filter(Boolean).join(" · ")}</span>
+                <span className="mt-copro-loc">{g.c.adresse || [g.c.code_postal, g.c.city].filter(Boolean).join(" ")}</span>
               </span>
               <PhaseBadge phase={g.c.phase} />
               {g.c.fragile && <Badge kind="warn">Fragile</Badge>}

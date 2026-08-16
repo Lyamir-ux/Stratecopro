@@ -6,12 +6,14 @@ interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   width?: number;
+  /** false : un clic sur l'arrière-plan ne ferme pas (saisie en cours à protéger). */
+  closeOnBackdrop?: boolean;
 }
 
-export function Modal({ title, onClose, children, width = 560 }: ModalProps) {
+export function Modal({ title, onClose, children, width = 560, closeOnBackdrop = true }: ModalProps) {
   return (
     <div
-      onClick={onClose}
+      onClick={closeOnBackdrop ? onClose : undefined}
       style={{
         position: "fixed",
         inset: 0,

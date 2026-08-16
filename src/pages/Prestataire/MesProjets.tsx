@@ -46,7 +46,7 @@ export function MesProjets({ presta }: { presta: Tables<"prestataires"> }) {
                 <Badge kind="success" dot>MOE retenue</Badge>
               </div>
               <div style={{ fontSize: 13, color: "var(--fg3)", marginTop: 4 }}>
-                {[p.copro.adresse, p.copro.city, p.copro.quartier].filter(Boolean).join(" · ")}
+                {[p.copro.adresse, [p.copro.code_postal, p.copro.city].filter(Boolean).join(" ")].filter(Boolean).join(" · ")}
               </div>
               <p className="cs-mission" style={{ marginTop: 10 }}>{p.consultation.mission}</p>
               <div className="cs-meta" style={{ marginTop: 8 }}>

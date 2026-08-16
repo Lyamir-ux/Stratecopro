@@ -78,7 +78,10 @@ export function Step2({ s, set, c, cles }: StepProps & { cles: Tables<"cles_repa
     MUN: "Répartition au prorata des tantièmes de chaque lot (clé générale MUN).",
     ESC: "Pour les travaux spécifiques à une cage d'escalier (ascenseur, hall).",
   };
-  const list = cles.length ? cles : [{ id: "mun", code: "MUN", label: "Tantièmes généraux", is_default: true, copro_id: c.id }];
+  // Sans import de lots, le dossier n'a pas encore de clé : carte générique en attendant.
+  const list = cles.length
+    ? cles
+    : [{ id: "mun", code: "MUN", label: "Tantièmes généraux", is_default: true, copro_id: c.id }];
   return (
     <div className="fade">
       <h2 className="step-h">Clé de répartition</h2>
@@ -90,10 +93,15 @@ export function Step2({ s, set, c, cles }: StepProps & { cles: Tables<"cles_repa
         {list.map((k) => (
           <div key={k.code} className={"opt-card" + (s.cle === k.code ? " sel" : "")} onClick={() => set({ cle: k.code })}>
             <div className="oc-t">{k.label || `Clé ${k.code}`}</div>
-            <div className="oc-d">{descs[k.code] ?? `Répartition selon la clé ${k.code} du règlement de copropriété.`}</div>
+            <div className="oc-d">{descs[k.code] ?? `Répartition selon la clé « ${k.code} » du règlement de copropriété.`}</div>
           </div>
         ))}
       </div>
+      {cles.length === 0 && (
+        <p className="se-small" style={{ marginTop: 10, color: "var(--fg-muted)" }}>
+          Les clés réelles du règlement seront reprises des en-têtes du fichier importé dans l'onglet Données.
+        </p>
+      )}
       <div className="cc-next" style={{ marginTop: 22, maxWidth: 680 }}>
         <Icon name="layers" size={15} className="ico" />
         <span>

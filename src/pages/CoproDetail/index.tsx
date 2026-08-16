@@ -96,7 +96,7 @@ export default function CoproDetail() {
             <h1 className="dh-title">{c.name}</h1>
             <div className="dh-loc">
               <Icon name="mapPin" size={15} />
-              {[c.city, c.quartier, c.syndic_name].filter(Boolean).join(" · ") || "À compléter"}
+              {[[c.code_postal, c.city].filter(Boolean).join(" "), c.syndic_name].filter(Boolean).join(" · ") || "À compléter"}
             </div>
           </div>
           <div className="dh-stats">

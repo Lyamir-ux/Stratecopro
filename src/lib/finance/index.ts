@@ -1,6 +1,11 @@
 export * from "./types";
 export * from "./compute";
+export * from "./planDefinitif";
+export * from "./importPlanDefinitif";
+export * from "./exportPlanDefinitif";
 export * from "./profil";
 export * from "./repartition";
+export * from "./repartitionPf";
 export * from "./round";
 export { BAREME_2024_HORS_IDF } from "./bareme2024";
+export { BAREME_2026_HORS_IDF, BAREME_2026_IDF } from "./bareme2026";

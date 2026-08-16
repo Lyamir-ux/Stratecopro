@@ -9,13 +9,14 @@ import { fmtDate } from "@/lib/format";
 import type { Profil } from "@/lib/finance";
 import { useDonnees } from "@/api/donnees";
 import { useEnqueteSyndic, useReponsesSyndic, type SyndicCopro } from "@/api/syndic";
-import type { Question } from "@/api/enquete";
+import { TYPE_LABELS, normalizeConfig, resolveQuestions } from "@/lib/enqueteCatalogue";
 
-const PROFIL_META: { p: Profil; color: string }[] = [
-  { p: "Bleu", color: "#2E6FA8" },
-  { p: "Jaune", color: "#f2a30d" },
-  { p: "Violet", color: "#7A5AE0" },
-  { p: "Rose", color: "#DC6FA8" },
+// Libellés grand public (plafonds Anah) — les couleurs MPR restent un simple repère visuel.
+const PROFIL_META: { p: Profil; label: string; color: string }[] = [
+  { p: "Bleu", label: "Très modeste", color: "#2E6FA8" },
+  { p: "Jaune", label: "Modeste", color: "#f2a30d" },
+  { p: "Violet", label: "Intermédiaire", color: "#7A5AE0" },
+  { p: "Rose", label: "Supérieur", color: "#DC6FA8" },
 ];
 
 export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
@@ -31,7 +32,7 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
   );
   const repondants = (reponses ?? []).filter((r) => r.profil_mpr != null).length;
   const sent = enquete?.statut === "envoyee";
-  const questions: Question[] = (enquete?.questions as unknown as Question[]) ?? [];
+  const questions = enquete ? resolveQuestions(normalizeConfig(enquete.questions)) : [];
   const activeCount = questions.filter((q) => q.on).length;
 
   const profilCounts = PROFIL_META.map((m) => ({
@@ -66,7 +67,7 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 6 }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                         <span style={{ width: 10, height: 10, borderRadius: "50%", background: m.color }}></span>
-                        {m.p}
+                        {m.label}
                       </span>
                       <span style={{ fontWeight: 700 }}>
                         {m.n} · {pct} %
@@ -110,7 +111,7 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
                     {coproprietaires.map((cp) => {
                       const r = repondus.get(cp.id) ?? null;
                       const profil = (r?.profil_mpr ?? null) as Profil | null;
-                      const color = PROFIL_META.find((m) => m.p === profil)?.color;
+                      const meta = PROFIL_META.find((m) => m.p === profil);
                       return (
                         <tr key={cp.id} style={{ cursor: "default" }}>
                           <td style={{ fontWeight: 600 }}>{cp.nom}</td>
@@ -123,10 +124,10 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
                                 : "—"}
                           </td>
                           <td>
-                            {profil ? (
+                            {meta ? (
                               <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 13 }}>
-                                <span style={{ width: 10, height: 10, borderRadius: "50%", background: color }}></span>
-                                {profil}
+                                <span style={{ width: 10, height: 10, borderRadius: "50%", background: meta.color }}></span>
+                                {meta.label}
                               </span>
                             ) : (
                               <span style={{ color: "var(--fg-muted)" }}>—</span>
@@ -206,22 +207,21 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
                 Le questionnaire n'a pas encore été configuré par l'équipe Strat Eco.
               </p>
             ) : (
-              <div className="q-list">
-                {questions.map((q, i) => (
-                  <div key={q.id} className={"q-row" + (!q.on ? " off" : "")}>
-                    <span className="q-num">{i + 1}</span>
-                    <div className="q-main">
-                      <div className="q-label">{q.q}</div>
-                      <div className="q-type">{q.type}</div>
+              <div className="q-list" style={{ maxHeight: 420, overflowY: "auto" }}>
+                {questions
+                  .filter((q) => q.on)
+                  .map((q, i) => (
+                    <div key={q.id} className="q-row">
+                      <span className="q-num">{i + 1}</span>
+                      <div className="q-main">
+                        <div className="q-label">{q.q}</div>
+                        <div className="q-type">{q.tag} · {TYPE_LABELS[q.type]}</div>
+                      </div>
+                      <div className="q-badges">
+                        {q.locked && <Badge kind="neutral">Socle</Badge>}
+                      </div>
                     </div>
-                    <div className="q-badges">
-                      {q.req && <Badge kind="neutral">Obligatoire</Badge>}
-                      <Badge kind={q.on ? "success" : "neutral"} dot={q.on}>
-                        {q.on ? "Actif" : "Inactif"}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             )}
           </div>

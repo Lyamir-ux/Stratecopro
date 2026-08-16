@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge, DpePair, Progress } from "@/components/ui";
 import type { DpeClass } from "@/lib/referentiels";
-import { useDonnees } from "@/api/donnees";
+import { useDonnees, useSetNbBatiments } from "@/api/donnees";
 import { useUpdateCopro, type CoproWithStats } from "@/api/copros";
 import { ImportLotsDialog } from "./ImportLotsDialog";
 
@@ -21,7 +21,17 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
   const update = useUpdateCopro(c.id);
   const [showImport, setShowImport] = useState(false);
   const [editingSynth, setEditingSynth] = useState(false);
-  const [synth, setSynth] = useState({ adresse: "", syndic: "", city: "" });
+  const setNbBatiments = useSetNbBatiments(c.id);
+  const [synth, setSynth] = useState({
+    adresse: "",
+    syndic: "",
+    city: "",
+    gestionnaireNom: "",
+    gestionnaireEmail: "",
+    chefProjet: "",
+    nbLogements: 0,
+    nbBatiments: 0,
+  });
 
   if (isLoading || !data) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
@@ -31,10 +41,12 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
 
   // Matrice bâtiments × clés : nb de lots et Σ tantièmes par clé
   const cleCodes = cles.map((k) => k.code);
+  const cleDefaut = cles.find((k) => k.is_default)?.code ?? cleCodes[0];
   const batRows = batiments.map((b) => {
     const blots = lots.filter((l) => l.batiment?.code === b.code);
     return {
       code: b.code,
+      adresse: b.adresse,
       lots: blots.length,
       tan: Object.fromEntries(
         cleCodes.map((code) => [code, blots.reduce((a, l) => a + (l.tantiemes[code] ?? 0), 0)])
@@ -47,11 +59,36 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
   );
 
   const startSynth = () => {
-    setSynth({ adresse: c.adresse ?? "", syndic: c.syndic_name ?? "", city: c.city ?? "" });
+    setSynth({
+      adresse: c.adresse ?? "",
+      syndic: c.syndic_name ?? "",
+      city: c.city ?? "",
+      gestionnaireNom: c.gestionnaire_nom ?? "",
+      gestionnaireEmail: c.gestionnaire_email ?? "",
+      chefProjet: c.chef_projet ?? "",
+      nbLogements: c.nb_logements ?? 0,
+      nbBatiments: batiments.length,
+    });
     setEditingSynth(true);
   };
   const saveSynth = async () => {
-    await update.mutateAsync({ adresse: synth.adresse || null, syndic_name: synth.syndic || null, city: synth.city || null });
+    if (synth.nbBatiments !== batiments.length) {
+      // Peut échouer si on réduit alors que des bâtiments portent des lots — on reste en édition.
+      try {
+        await setNbBatiments.mutateAsync(Math.max(1, synth.nbBatiments));
+      } catch {
+        return;
+      }
+    }
+    await update.mutateAsync({
+      adresse: synth.adresse || null,
+      syndic_name: synth.syndic || null,
+      city: synth.city || null,
+      gestionnaire_nom: synth.gestionnaireNom || null,
+      gestionnaire_email: synth.gestionnaireEmail || null,
+      chef_projet: synth.chefProjet || null,
+      nb_logements: synth.nbLogements > 0 ? synth.nbLogements : null,
+    });
     setEditingSynth(false);
   };
 
@@ -109,17 +146,22 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                       <th>Bâtiment</th>
                       <th>Lots</th>
                       {cleCodes.map((code) => (
-                        <th key={code}>Clé {code}</th>
+                        <th key={code}>{code}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {batRows.map((b) => (
                       <tr key={b.code} style={{ cursor: "default" }}>
-                        <td style={{ fontWeight: 700, fontFamily: "var(--font-display)" }}>Bât. {b.code}</td>
+                        <td>
+                          <span style={{ fontWeight: 700, fontFamily: "var(--font-display)" }}>Bât. {b.code}</span>
+                          {b.adresse && (
+                            <span style={{ display: "block", fontSize: 12, color: "var(--fg-muted)" }}>{b.adresse}</span>
+                          )}
+                        </td>
                         <td>{b.lots}</td>
                         {cleCodes.map((code) => (
-                          <td key={code}>{b.tan[code].toLocaleString("fr-FR")} ‰</td>
+                          <td key={code}>{b.tan[code].toLocaleString("fr-FR")}</td>
                         ))}
                       </tr>
                     ))}
@@ -129,7 +171,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                         <td>{sansBat.length}</td>
                         {cleCodes.map((code) => (
                           <td key={code}>
-                            {sansBat.reduce((a, l) => a + (l.tantiemes[code] ?? 0), 0).toLocaleString("fr-FR")} ‰
+                            {sansBat.reduce((a, l) => a + (l.tantiemes[code] ?? 0), 0).toLocaleString("fr-FR")}
                           </td>
                         ))}
                       </tr>
@@ -137,20 +179,15 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                     <tr style={{ cursor: "default", fontWeight: 700 }}>
                       <td>Total</td>
                       <td>{totalLots}</td>
-                      {cleCodes.map((code) => {
-                        const tot = totalByCle[code];
-                        const ok = Math.abs(tot - 1000) <= 1 || tot === 0;
-                        return (
-                          <td key={code} style={{ color: ok ? undefined : "var(--color-error-700)" }}>
-                            {tot.toLocaleString("fr-FR")} ‰{!ok && " ⚠"}
-                          </td>
-                        );
-                      })}
+                      {cleCodes.map((code) => (
+                        <td key={code}>{totalByCle[code].toLocaleString("fr-FR")}</td>
+                      ))}
                     </tr>
                   </tbody>
                 </table>
                 <p className="se-small" style={{ marginTop: 12, color: "var(--fg-muted)" }}>
-                  Les clés sont exprimées en millièmes (‰). La somme de chaque clé doit atteindre 1 000 ‰.
+                  Les tantièmes sont repris tels quels depuis le fichier importé — chaque clé garde son propre total,
+                  les quote-parts sont calculées au prorata du total réel.
                 </p>
               </>
             )}
@@ -179,8 +216,10 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                       <th>Lot</th>
                       <th>Bâtiment</th>
                       <th>Copropriétaire</th>
+                      <th>Mail</th>
+                      <th>Tél.</th>
                       <th>Usage</th>
-                      <th>Tantièmes MUN</th>
+                      {cleDefaut && <th>Tantièmes {cleDefaut}</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -189,8 +228,16 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                         <td className="mono">n°{l.num}</td>
                         <td>{l.batiment?.code ? `Bât. ${l.batiment.code}` : "—"}</td>
                         <td>{l.coproprietaire?.nom ?? "—"}</td>
+                        <td style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {l.coproprietaire?.email ?? "—"}
+                        </td>
+                        <td className="mono">{l.coproprietaire?.telephone ?? "—"}</td>
                         <td>{l.usage}</td>
-                        <td className="mono">{l.tantiemes.MUN != null ? `${l.tantiemes.MUN.toLocaleString("fr-FR")} ‰` : "—"}</td>
+                        {cleDefaut && (
+                          <td className="mono">
+                            {l.tantiemes[cleDefaut] != null ? l.tantiemes[cleDefaut].toLocaleString("fr-FR") : "—"}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -242,12 +289,57 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
               <span className="v">{c.syndic_name ?? "—"}</span>
             )}
           </div>
+          {c.organisation && (
+            <div className="kv">
+              <span className="k">Organisation</span>
+              <span className="v">{c.organisation.nom}</span>
+            </div>
+          )}
+          <div className="kv">
+            <span className="k">Gestionnaire</span>
+            {editingSynth ? (
+              <input className="edit-inp" value={synth.gestionnaireNom} onChange={(e) => setSynth((s) => ({ ...s, gestionnaireNom: e.target.value }))} />
+            ) : (
+              <span className="v">{c.gestionnaire_nom ?? "—"}</span>
+            )}
+          </div>
+          <div className="kv">
+            <span className="k">Mail gestionnaire</span>
+            {editingSynth ? (
+              <input className="edit-inp" type="email" value={synth.gestionnaireEmail} onChange={(e) => setSynth((s) => ({ ...s, gestionnaireEmail: e.target.value }))} />
+            ) : (
+              <span className="v" style={{ textAlign: "right", overflowWrap: "anywhere" }}>{c.gestionnaire_email ?? "—"}</span>
+            )}
+          </div>
           <div className="kv">
             <span className="k">Ville</span>
             {editingSynth ? (
               <input className="edit-inp" value={synth.city} onChange={(e) => setSynth((s) => ({ ...s, city: e.target.value }))} />
             ) : (
               <span className="v">{c.city ?? "—"}</span>
+            )}
+          </div>
+          <div className="kv">
+            <span className="k">Chef de projet</span>
+            {editingSynth ? (
+              <input className="edit-inp" value={synth.chefProjet} onChange={(e) => setSynth((s) => ({ ...s, chefProjet: e.target.value }))} />
+            ) : (
+              <span className="v">{c.chef_projet ?? "—"}</span>
+            )}
+          </div>
+          <div className="kv">
+            <span className="k">Logements déclarés</span>
+            {editingSynth ? (
+              <input
+                className="edit-inp"
+                type="number"
+                min={0}
+                style={{ maxWidth: 90, textAlign: "right" }}
+                value={synth.nbLogements}
+                onChange={(e) => setSynth((s) => ({ ...s, nbLogements: Math.max(0, Number(e.target.value) || 0) }))}
+              />
+            ) : (
+              <span className="v">{c.nb_logements ?? "—"}</span>
             )}
           </div>
           <div className="kv">
@@ -260,8 +352,24 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
           </div>
           <div className="kv">
             <span className="k">Bâtiments</span>
-            <span className="v">{batiments.length}</span>
+            {editingSynth ? (
+              <input
+                className="edit-inp"
+                type="number"
+                min={1}
+                style={{ maxWidth: 90, textAlign: "right" }}
+                value={synth.nbBatiments}
+                onChange={(e) => setSynth((s) => ({ ...s, nbBatiments: Math.max(1, Number(e.target.value) || 1) }))}
+              />
+            ) : (
+              <span className="v">{batiments.length}</span>
+            )}
           </div>
+          {editingSynth && setNbBatiments.isError && (
+            <p className="se-small" style={{ color: "var(--color-error-700)", margin: "6px 0 0" }}>
+              {String((setNbBatiments.error as Error)?.message ?? setNbBatiments.error)}
+            </p>
+          )}
           <div className="kv">
             <span className="k">Étiquette</span>
             <span className="v">
