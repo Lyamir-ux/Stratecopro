@@ -1,15 +1,20 @@
 // Onglet Financement (syndic) — mode de financement du reste à charge choisi
 // par chaque copropriétaire depuis son portail : fonds propres, éco-PTZ
 // collectif ou éco-PTZ individuel. Vue de coordination pour le gestionnaire.
-import { useMemo } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge, type BadgeKind } from "@/components/ui";
 import { fmtDate, fmtEuroFull } from "@/lib/format";
 import { useDonnees } from "@/api/donnees";
 import { useChoixFinancementScenario } from "@/api/scenarios";
 import { useScenariosPartages, useFinancementConfig } from "@/api/portail";
-import { usePlansDefinitifs } from "@/api/planDefinitif";
-import { readPlanDefinitif, type PlanDefinitifResult } from "@/lib/finance";
+import { usePlansDefinitifs, type PlanDefinitif } from "@/api/planDefinitif";
+import {
+  computePlanDefinitif,
+  readPlanDefinitif,
+  regrouperAnnexes,
+  type PlanDefinitifResult,
+} from "@/lib/finance";
 import type { Enums } from "@/lib/database.types";
 import type { SyndicCopro } from "@/api/syndic";
 
@@ -20,6 +25,152 @@ const TYPE_META: Record<TypeFinancement, { label: string; kind: BadgeKind; icon:
   collectif: { label: "Éco-PTZ collectif", kind: "primary", icon: "users" },
   individuel: { label: "Éco-PTZ individuel", kind: "blue", icon: "user" },
 };
+
+interface DetailPoste {
+  libelle: string;
+  montant: number;
+}
+
+interface Poste {
+  id: string;
+  libelle: string;
+  montant: number;
+  /** Sous-lignes affichées quand le poste est déroulé (absent : poste simple). */
+  detail?: DetailPoste[];
+  strong?: boolean;
+}
+
+/** Libellés des aides publiques regroupées par dispositif (groupe du PF). */
+const GROUPE_AIDE_LABEL: Record<string, string> = {
+  ANAH: "Aide MaPrimeRénov'",
+  EMS: "Aide de l'EMS",
+  Climaxion: "Aide Climaxion",
+};
+const ORDRE_GROUPES_AIDES = ["ANAH", "EMS", "Climaxion"];
+
+/**
+ * Panneau « Plan de financement définitif » : six postes votés, chacun
+ * déroulable — travaux regroupés par entreprise, frais annexes par mission,
+ * aides de l'État par dispositif (MaPrimeRénov', EMS, Climaxion).
+ */
+function PfDefinitifPanel({ plan, pv, fondsTravaux }: { plan: PlanDefinitif; pv: PlanDefinitifResult; fondsTravaux: number }) {
+  const [ouverts, setOuverts] = useState<Set<string>>(new Set());
+  const toggle = (id: string) =>
+    setOuverts((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const postes = useMemo((): Poste[] => {
+    // Travaux regroupés par entreprise (les lots sans entreprise gardent leur titre)
+    const parEntreprise = new Map<string, number>();
+    for (const l of pv.lots) parEntreprise.set(l.entreprise ?? l.titre, (parEntreprise.get(l.entreprise ?? l.titre) ?? 0) + l.totalTtc);
+    const imprevus = pv.totalTravauxTtcImprevus - pv.totalTravauxTtc;
+    const detailTravaux: DetailPoste[] = [
+      ...[...parEntreprise.entries()].map(([libelle, montant]) => ({ libelle, montant })),
+      ...(imprevus > 0.005 ? [{ libelle: "Imprévus et aléas", montant: imprevus }] : []),
+    ];
+
+    // Aides publiques regroupées par dispositif
+    const parGroupe = new Map<string, number>();
+    for (const a of pv.aides) {
+      if (!a.publique || a.montant == null) continue;
+      parGroupe.set(a.groupe, (parGroupe.get(a.groupe) ?? 0) + a.montant);
+    }
+    const groupes = [...parGroupe.keys()].sort((a, b) => {
+      const ia = ORDRE_GROUPES_AIDES.indexOf(a);
+      const ib = ORDRE_GROUPES_AIDES.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+    const detailAides: DetailPoste[] = groupes.map((g) => ({
+      libelle: GROUPE_AIDE_LABEL[g] ?? `Aide ${g}`,
+      montant: parGroupe.get(g)!,
+    }));
+
+    return [
+      { id: "travaux", libelle: "Coût des travaux", montant: pv.totalTravauxTtcImprevus, detail: detailTravaux },
+      {
+        id: "annexes",
+        libelle: "Coût des frais annexes",
+        montant: pv.totalMoeTtc,
+        detail: regrouperAnnexes(pv.moe).map((l) => ({
+          libelle: l.entreprise ? `${l.libelle} — ${l.entreprise}` : l.libelle,
+          montant: l.montantTtc,
+        })),
+      },
+      { id: "etat", libelle: "Aide de l'État", montant: pv.totalAidesPubliques, detail: detailAides },
+      { id: "cee", libelle: "CEE", montant: pv.primeCee },
+      { id: "fonds", libelle: "Fonds travaux mobilisé", montant: fondsTravaux },
+      { id: "reste", libelle: "Reste à charge collectif", montant: pv.resteACharge, strong: true },
+    ];
+  }, [pv, fondsTravaux]);
+
+  return (
+    <div className="panel">
+      <div className="p-head">
+        <Icon name="fileCheck" size={18} />
+        <h3>Plan de financement définitif</h3>
+        <span style={{ flex: 1 }}></span>
+        <Badge kind="success" dot>
+          Validé
+        </Badge>
+      </div>
+      <div className="p-body">
+        {postes.map((p) => {
+          const aDetail = (p.detail?.length ?? 0) > 0;
+          const open = aDetail && ouverts.has(p.id);
+          return (
+            <Fragment key={p.id}>
+              <div
+                className="kv"
+                style={aDetail ? { cursor: "pointer" } : undefined}
+                onClick={aDetail ? () => toggle(p.id) : undefined}
+                title={aDetail ? (open ? "Replier le détail" : "Dérouler le détail") : undefined}
+              >
+                <span className="k" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  {aDetail ? (
+                    <Icon name={open ? "chevronDown" : "chevronRight"} size={13} />
+                  ) : (
+                    <span style={{ width: 13, flex: "none" }}></span>
+                  )}
+                  {p.libelle}
+                </span>
+                <span className="v" style={p.strong ? { fontWeight: 700 } : undefined}>
+                  {fmtEuroFull(p.montant)}
+                </span>
+              </div>
+              {open &&
+                p.detail!.map((d, i) => (
+                  <div className="kv" key={i} style={{ paddingLeft: 34 }}>
+                    <span className="k" style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>
+                      {d.libelle}
+                    </span>
+                    <span className="v" style={{ color: "var(--fg2)", fontSize: 12.5 }}>
+                      {fmtEuroFull(d.montant)}
+                    </span>
+                  </div>
+                ))}
+            </Fragment>
+          );
+        })}
+        <div className="kv">
+          <span className="k" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 13, flex: "none" }}></span>
+            Validé le
+          </span>
+          <span className="v">{fmtDate(plan.updated_at)}</span>
+        </div>
+        <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
+          Cliquez sur un poste pour dérouler son détail : travaux par entreprise, frais annexes par mission,
+          aides de l'État par dispositif. Les quotes-parts individuelles (aides déduites) sont communiquées à
+          chaque copropriétaire.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
   const { data: scenarios } = useScenariosPartages(c.id);
@@ -32,7 +183,16 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
   const planValide = (pfPlans ?? [])
     .filter((p) => p.statut === "valide")
     .sort((a, b) => (b.updated_at > a.updated_at ? 1 : -1))[0];
-  const pv = (planValide?.resultat ?? null) as unknown as PlanDefinitifResult | null;
+  // Recalcul depuis les données du plan (moteur pur) plutôt que l'instantané
+  // `resultat` : mêmes montants, mais les champs récents (entreprise des lignes
+  // MOE) sont disponibles sans réenregistrement du plan.
+  const pf = useMemo(
+    () =>
+      planValide
+        ? { data: readPlanDefinitif(planValide.data), pv: computePlanDefinitif(readPlanDefinitif(planValide.data)) }
+        : null,
+    [planValide]
+  );
 
   const coproprietaires = donnees?.coproprietaires ?? [];
   const lots = donnees?.lots ?? [];
@@ -164,43 +324,8 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          {planValide && pv ? (
-            <div className="panel">
-              <div className="p-head">
-                <Icon name="fileCheck" size={18} />
-                <h3>Plan de financement définitif</h3>
-                <span style={{ flex: 1 }}></span>
-                <Badge kind="success" dot>
-                  Validé
-                </Badge>
-              </div>
-              <div className="p-body">
-                <div className="kv">
-                  <span className="k">Coût total de l'opération TTC</span>
-                  <span className="v">{fmtEuroFull(pv.totalOperationTtc)}</span>
-                </div>
-                <div className="kv">
-                  <span className="k">Aides mobilisées</span>
-                  <span className="v">{fmtEuroFull(pv.totalAides)}</span>
-                </div>
-                <div className="kv">
-                  <span className="k">Fonds travaux mobilisé</span>
-                  <span className="v">{fmtEuroFull(readPlanDefinitif(planValide.data).params.fondsTravaux)}</span>
-                </div>
-                <div className="kv">
-                  <span className="k">Reste à charge collectif</span>
-                  <span className="v" style={{ fontWeight: 700 }}>{fmtEuroFull(pv.resteACharge)}</span>
-                </div>
-                <div className="kv">
-                  <span className="k">Validé le</span>
-                  <span className="v">{fmtDate(planValide.updated_at)}</span>
-                </div>
-                <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
-                  Plan validé par l'équipe Strat Eco — les quotes-parts individuelles (aides déduites) sont
-                  communiquées à chaque copropriétaire.
-                </p>
-              </div>
-            </div>
+          {planValide && pf ? (
+            <PfDefinitifPanel plan={planValide} pv={pf.pv} fondsTravaux={pf.data.params.fondsTravaux} />
           ) : scenario ? (
             <div className="panel">
               <div className="p-head">

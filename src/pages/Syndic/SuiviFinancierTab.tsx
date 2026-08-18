@@ -13,7 +13,7 @@ import {
   useSuiviFinancier,
   type PaiementsSuivi,
 } from "@/api/suiviFinancier";
-import { computePlanDefinitif, readPlanDefinitif } from "@/lib/finance";
+import { computePlanDefinitif, readPlanDefinitif, regrouperAnnexes } from "@/lib/finance";
 import type { SyndicCopro } from "@/api/syndic";
 
 interface LigneSuivi {
@@ -24,20 +24,6 @@ interface LigneSuivi {
   /** Montant voté TTC de la ligne (PF définitif validé). */
   vote: number;
 }
-
-/**
- * Regroupement des frais annexes par mission : une seule ligne par mission en
- * additionnant les montants (AMO, MOE, contrôle technique, CSPS, tests
- * d'étanchéité avant + après travaux) — les autres frais restent ligne à ligne.
- * La détection se fait sur la désignation saisie au PF.
- */
-const MISSIONS: { id: string; label: string; match: RegExp }[] = [
-  { id: "amo", label: "Assistance à maîtrise d'ouvrage", match: /assistance\s+ma[iî]trise|\bAMO\b/i },
-  { id: "moe", label: "Maîtrise d'œuvre", match: /ma[iî]trise\s+d.?(œ|oe)uvre|\bMOE\b/i },
-  { id: "ct", label: "Contrôle technique", match: /contr[oô]le\s+technique|\bCT\b/i },
-  { id: "csps", label: "CSPS", match: /\bC?SPS\b/i },
-  { id: "etancheite", label: "Tests d'étanchéité à l'air", match: /[ée]tanch[ée]it[ée]/i },
-];
 
 const sommeLigne = (p: PaiementsSuivi, key: string) =>
   (p[key] ?? []).reduce((s: number, v) => s + (v ?? 0), 0);
@@ -73,38 +59,13 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
       vote: l.totalTtc,
     }));
     // Une ligne par mission (montants additionnés), puis les frais restants
-    // ligne à ligne dans l'ordre du plan.
-    const parMission = new Map<string, { vote: number; entreprises: string[] }>();
-    const restants: LigneSuivi[] = [];
-    pv.moe.forEach((m, i) => {
-      if (m.montantTtc === 0) return;
-      const mission = MISSIONS.find((ms) => ms.match.test(m.designation));
-      if (mission) {
-        const acc = parMission.get(mission.id) ?? { vote: 0, entreprises: [] };
-        acc.vote += m.montantTtc;
-        if (m.entreprise && !acc.entreprises.includes(m.entreprise)) acc.entreprises.push(m.entreprise);
-        parMission.set(mission.id, acc);
-      } else {
-        restants.push({
-          key: `moe:${i}`,
-          libelle: m.designation || `Ligne MOE ${i + 1}`,
-          entreprise: m.entreprise ?? null,
-          vote: m.montantTtc,
-        });
-      }
-    });
-    const annexes: LigneSuivi[] = [
-      ...MISSIONS.filter((ms) => parMission.has(ms.id)).map((ms) => {
-        const acc = parMission.get(ms.id)!;
-        return {
-          key: `mission:${ms.id}`,
-          libelle: ms.label,
-          entreprise: acc.entreprises.length ? acc.entreprises.join(", ") : null,
-          vote: acc.vote,
-        };
-      }),
-      ...restants,
-    ];
+    // ligne à ligne dans l'ordre du plan (module partagé avec l'onglet Financement).
+    const annexes: LigneSuivi[] = regrouperAnnexes(pv.moe).map((l) => ({
+      key: l.key,
+      libelle: l.libelle,
+      entreprise: l.entreprise,
+      vote: l.montantTtc,
+    }));
     return [
       { titre: "Travaux — marchés des entreprises", lignes: travaux },
       { titre: "Maîtrise d'œuvre & frais annexes", lignes: annexes },
