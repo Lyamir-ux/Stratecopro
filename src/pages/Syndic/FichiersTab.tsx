@@ -1,12 +1,14 @@
 // Onglet Fichiers (syndic) — base documentaire du dossier : ce que l'AMO et la
 // maîtrise d'œuvre y ont déposé ET ce que le syndic a lui-même fourni depuis
-// « Documents à produire ». Aperçu sans téléchargement, ou téléchargement.
+// « Documents à produire ». Présentation alignée sur le portail AMO : cartes de
+// dossiers (avec bulles d'aide), clic pour lister les pièces. Lecture seule —
+// aperçu sans téléchargement, ou téléchargement.
 import { useState } from "react";
 import { ApercuDocument } from "@/components/ApercuDocument";
 import { Icon } from "@/components/Icon";
 import { Badge, type BadgeKind } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
-import { estVisualisable } from "@/api/fichiers";
+import { DOSSIERS, DOSSIER_AIDE, estVisualisable } from "@/api/fichiers";
 import {
   ORIGINE_LABEL,
   telechargerDocument,
@@ -28,73 +30,110 @@ const ORIGINE_BADGE: Record<OrigineDocument, BadgeKind> = {
   syndic: "blue",
 };
 
-type Filtre = "tous" | OrigineDocument;
-const FILTRES: Filtre[] = ["tous", "amo", "moe", "syndic"];
-const FILTRE_LABEL: Record<Filtre, string> = { tous: "Tous", ...ORIGINE_LABEL };
-
 export function FichiersTabSyndic({ c }: { c: SyndicCopro }) {
   const { data: documents, isLoading } = useDocumentsSyndic(c.id);
-  const [filtre, setFiltre] = useState<Filtre>("tous");
+  const [openFolder, setOpenFolder] = useState<string | null>(null);
   const [apercu, setApercu] = useState<DocumentSyndic | null>(null);
   if (isLoading) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
   const tous = documents ?? [];
-  const visibles = filtre === "tous" ? tous : tous.filter((d) => d.origine === filtre);
-  const n = (f: Filtre) => (f === "tous" ? tous.length : tous.filter((d) => d.origine === f).length);
+  // Les 7 dossiers du projet, puis les dossiers « montage bancaire » (Éco-PTZ
+  // collectif, ANAH…) qui n'apparaissent que s'ils contiennent une pièce.
+  const extras = [...new Set(tous.map((d) => d.dossier))].filter(
+    (f) => !(DOSSIERS as readonly string[]).includes(f)
+  );
+  const folders: string[] = [...DOSSIERS, ...extras.sort((a, b) => a.localeCompare(b, "fr"))];
+  const byFolder = (f: string) => tous.filter((d) => d.dossier === f);
+  const folderDocs = openFolder ? byFolder(openFolder) : [];
 
   return (
     <>
-      <div className="panel fade" style={{ maxWidth: 760 }}>
+      <div className="panel fade">
         <div className="p-head">
           <Icon name="folder" size={18} />
           <h3>Documents du projet</h3>
           <span style={{ flex: 1 }}></span>
-          <div className="opt-mini">
-            {/* on masque un filtre d'origine tant qu'aucune pièce n'en vient */}
-            {FILTRES.filter((f) => f === "tous" || n(f) > 0).map((f) => (
-              <button key={f} className={filtre === f ? "on" : ""} onClick={() => setFiltre(f)}>
-                {FILTRE_LABEL[f]} ({n(f)})
-              </button>
-            ))}
-          </div>
+          <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
+            {tous.length} document{tous.length > 1 ? "s" : ""}
+          </span>
         </div>
-        <div className="p-body" style={{ paddingTop: 6, paddingBottom: 6 }}>
-          {visibles.map((doc) => (
-            <div key={doc.id} className="doc-row">
-              <span className="d-ico">
-                <Icon name="fileText" size={18} />
-              </span>
-              <div style={{ minWidth: 0 }}>
-                <div className="d-name">{doc.name}</div>
-                <div className="d-sub">
-                  {[doc.dossier, fmtSize(doc.size), fmtDate(doc.date)].filter(Boolean).join(" · ")}
+        <div className="p-body">
+          <div className="file-grid">
+            {folders.map((f) => {
+              const n = byFolder(f).length;
+              const aide = DOSSIER_AIDE[f as keyof typeof DOSSIER_AIDE];
+              return (
+                <div
+                  className="file-card"
+                  key={f}
+                  onClick={() => setOpenFolder(openFolder === f ? null : f)}
+                  style={{
+                    position: "relative",
+                    outline: openFolder === f ? "2px solid var(--accent)" : "none",
+                  }}
+                >
+                  {/* Bulle d'aide : quels documents vont dans ce dossier */}
+                  {aide && (
+                    <span className="fc-help" tabIndex={0} onClick={(e) => e.stopPropagation()}>
+                      <Icon name="help" size={15} />
+                      <span className="fc-help-bulle" role="tooltip">
+                        {aide}
+                      </span>
+                    </span>
+                  )}
+                  <Icon name="folder" size={26} className="fc-ico" />
+                  <div className="fc-name">{f}</div>
+                  <div className="fc-sub">
+                    {n} fichier{n > 1 ? "s" : ""}
+                  </div>
                 </div>
+              );
+            })}
+          </div>
+          {openFolder && (
+            <div style={{ marginTop: 18 }}>
+              <div className="se-eyebrow" style={{ marginBottom: 8, color: "var(--fg-muted)" }}>
+                {openFolder}
               </div>
-              <span className="spacer"></span>
-              <Badge kind={ORIGINE_BADGE[doc.origine]}>{ORIGINE_LABEL[doc.origine]}</Badge>
-              <button
-                className="icon-btn"
-                title={
-                  estVisualisable(doc.name)
-                    ? "Aperçu sans téléchargement"
-                    : "Ce format ne s'affiche pas dans le navigateur"
-                }
-                onClick={() => setApercu(doc)}
-              >
-                <Icon name="eye" size={18} />
-              </button>
-              <button className="icon-btn" title="Télécharger" onClick={() => void telechargerDocument(doc)}>
-                <Icon name="download" size={18} />
-              </button>
+              {folderDocs.length === 0 ? (
+                <p className="se-small" style={{ color: "var(--fg-muted)" }}>
+                  Dossier vide pour l'instant.
+                </p>
+              ) : (
+                folderDocs.map((doc) => (
+                  <div key={doc.id} className="doc-row">
+                    <span className="d-ico">
+                      <Icon name="fileText" size={18} />
+                    </span>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="d-name">{doc.name}</div>
+                      <div className="d-sub">{[fmtSize(doc.size), fmtDate(doc.date)].filter(Boolean).join(" · ")}</div>
+                    </div>
+                    <span className="spacer"></span>
+                    <Badge kind={ORIGINE_BADGE[doc.origine]}>{ORIGINE_LABEL[doc.origine]}</Badge>
+                    <button
+                      className="icon-btn"
+                      title={
+                        estVisualisable(doc.name)
+                          ? "Aperçu sans téléchargement"
+                          : "Ce format ne s'affiche pas dans le navigateur"
+                      }
+                      onClick={() => setApercu(doc)}
+                    >
+                      <Icon name="eye" size={18} />
+                    </button>
+                    <button className="icon-btn" title="Télécharger" onClick={() => void telechargerDocument(doc)}>
+                      <Icon name="download" size={18} />
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
-          ))}
-          {visibles.length === 0 && (
-            <p className="se-small" style={{ color: "var(--fg-muted)", padding: "14px 0" }}>
-              {tous.length === 0
-                ? "Aucun document sur ce dossier pour l'instant."
-                : "Aucun document dans cette catégorie."}
-            </p>
           )}
+          <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 14, marginBottom: 0 }}>
+            <Icon name="eye" size={13} /> Cliquez sur un dossier pour consulter ses pièces : l'œil en donne un aperçu
+            sans les télécharger. Le badge indique qui a déposé chaque document (AMO, MOE ou votre équipe).
+          </p>
         </div>
       </div>
 

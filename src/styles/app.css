@@ -683,7 +683,7 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .cs-mission { font-size: 13.5px; color: var(--fg2); line-height: 1.5; margin: 0; }
 .cs-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; }
 .cs-meta span { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--fg2); }
-.cs-foot { display: flex; align-items: center; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); margin-top: 2px; }
+.cs-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding-top: 12px; border-top: 1px solid var(--border); margin-top: 2px; }
 .cs-cand-toggle { display: inline-flex; align-items: center; gap: 7px; background: none; border: none; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--fg2); padding: 0; }
 .cs-cand-toggle:hover { color: var(--accent); }
 .cs-cand-count { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg-muted); }
@@ -1347,3 +1347,25 @@ table.plans .mono { font-family: var(--font-mono); }
   color: var(--color-success-700); text-align: center;
 }
 .fb-merci p { margin: 0; font-size: 13.5px; font-weight: var(--fw-semibold); }
+
+/* ===== Suivi financier (syndic) : grille des situations de paiement ===== */
+.sf-wrap { overflow-x: auto; margin: 0 -18px; padding: 0 18px; }
+table.dossiers.sf-table { min-width: 1560px; }
+table.dossiers.sf-table tbody tr { cursor: default; }
+table.dossiers.sf-table thead th, table.dossiers.sf-table tbody td { padding: 9px 10px; white-space: nowrap; }
+table.dossiers.sf-table th.num, table.dossiers.sf-table td.num { text-align: right; }
+.sf-inp {
+  width: 88px; padding: 5px 7px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg); font-family: var(--font-body); font-size: 12.5px; text-align: right; color: var(--fg1);
+}
+.sf-inp:focus { border-color: var(--accent); box-shadow: var(--shadow-focus); outline: none; }
+.sf-inp::placeholder { color: var(--fg-muted); }
+.sf-section td {
+  background: var(--bg-soft); font-family: var(--font-display); font-weight: 700; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg2);
+}
+table.dossiers.sf-table tfoot td {
+  padding: 11px 10px; border-top: 2px solid var(--border-strong); background: var(--bg-soft);
+  font-weight: 700; white-space: nowrap; text-align: right;
+}
+table.dossiers.sf-table tfoot td:first-child { text-align: left; }

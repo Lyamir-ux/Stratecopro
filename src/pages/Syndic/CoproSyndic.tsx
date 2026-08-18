@@ -14,6 +14,7 @@ import { EnqueteTabSyndic } from "./EnqueteTab";
 import { FinancementTabSyndic } from "./FinancementTab";
 import { MontageTabSyndic } from "./MontageTab";
 import { FichiersTabSyndic } from "./FichiersTab";
+import { SuiviFinancierTabSyndic } from "./SuiviFinancierTab";
 
 const TABS = [
   { id: "projet", label: "Projet" },
@@ -22,6 +23,7 @@ const TABS = [
   { id: "financement", label: "Financement" },
   { id: "banque", label: "Documents à produire" },
   { id: "fichiers", label: "Fichiers" },
+  { id: "suivi", label: "Suivi financier" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -134,6 +136,7 @@ export default function CoproSyndic() {
         {tab === "financement" && <FinancementTabSyndic c={c} />}
         {tab === "banque" && <MontageTabSyndic c={c} />}
         {tab === "fichiers" && <FichiersTabSyndic c={c} />}
+        {tab === "suivi" && <SuiviFinancierTabSyndic c={c} />}
       </div>
     </SyndicShell>
   );

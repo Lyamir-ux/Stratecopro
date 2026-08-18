@@ -1684,6 +1684,45 @@ export type Database = {
           },
         ]
       }
+      suivi_financier: {
+        Row: {
+          copro_id: string
+          created_at: string
+          paiements: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          copro_id: string
+          created_at?: string
+          paiements?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          copro_id?: string
+          created_at?: string
+          paiements?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suivi_financier_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: true
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suivi_financier_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: true
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       taches: {
         Row: {
           assignee_user_id: string | null
