@@ -25,8 +25,9 @@ import { Enquete } from "./Enquete";
 import { Financement } from "./Financement";
 import { Documents } from "./Documents";
 import { PlanCopro } from "./PlanCopro";
+import { Faq } from "./Faq";
 
-export type SectionId = "accueil" | "plan-indiv" | "enquete" | "pret" | "documents" | "plan-copro";
+export type SectionId = "accueil" | "plan-indiv" | "enquete" | "pret" | "documents" | "plan-copro" | "faq";
 
 const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
   { id: "accueil", label: "Accueil", icon: "home" },
@@ -35,6 +36,7 @@ const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
   { id: "pret", label: "Mon financement", icon: "trendingUp" },
   { id: "documents", label: "Mes documents", icon: "folder" },
   { id: "plan-copro", label: "Plan de la copropriété", icon: "barChart" },
+  { id: "faq", label: "FAQ", icon: "help" },
 ];
 
 function Loader() {
@@ -395,6 +397,7 @@ export default function Portail() {
         {section === "pret" && <Financement {...common} choix={choix ?? null} />}
         {section === "documents" && <Documents membership={membership} />}
         {section === "plan-copro" && <PlanCopro membership={membership} scenarios={scenarios ?? []} bareme={bareme ?? null} />}
+        {section === "faq" && <Faq />}
       </main>
     </div>
   );
