@@ -91,7 +91,7 @@ export function SyndicShell({
   return (
     <div className="portal">
       <header className="portal-header">
-        <img className="ph-logo" src="/logo-strateco.svg" alt="Strat Eco" />
+        <img className="ph-logo" src="/logo-strateco-pro.png" alt="Strat Eco" />
         <span className="ph-spacer"></span>
         {profile.role === "amo" && (
           <button className="se-btn se-btn-ghost btn-sm" onClick={() => navigate("/")} title="Revenir à l'espace AMO">
@@ -144,7 +144,7 @@ export function AucuneCopro() {
   return (
     <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--bg-soft)", padding: 24 }}>
       <div style={{ textAlign: "center", maxWidth: 460 }}>
-        <img src="/logo-strateco.svg" alt="Strat Eco" style={{ height: 36, marginBottom: 22 }} />
+        <img src="/logo-strateco-pro.png" alt="Strat Eco" style={{ height: 36, marginBottom: 22 }} />
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 26, margin: "0 0 10px" }}>
           Aucune copropriété rattachée
         </h1>

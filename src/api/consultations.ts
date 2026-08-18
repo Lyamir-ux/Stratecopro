@@ -16,7 +16,8 @@ export const CONSULT_TYPES: { id: Tables<"consultations">["type"]; label: string
   { id: "autre", label: "Autre intervenant", icon: "briefcase" },
 ];
 
-/** Prestations optionnelles proposées à la publication (cases à cocher). */
+/** Prestations optionnelles proposées à la publication (cases à cocher).
+ *  Uniquement pour une recherche de maîtrise d'œuvre — sans objet pour les autres métiers. */
 export const CONSULT_OPTIONS: { id: string; label: string }[] = [
   { id: "audit_reglementaire", label: "Audit réglementaire" },
   { id: "pppt", label: "PPPT" },

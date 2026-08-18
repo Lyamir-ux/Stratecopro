@@ -503,7 +503,8 @@ export default function Consultations() {
         nb_logements: nbLogements,
         nb_batiments: nbBatiments,
         sous_type: draft.type === "diag" && draft.sous_type ? draft.sous_type : null,
-        options: draft.options,
+        // options réservées à la maîtrise d'œuvre — jamais publiées pour les autres métiers
+        options: draft.type === "moe" ? draft.options : [],
         files,
       });
     } catch (e) {
@@ -722,6 +723,8 @@ export default function Consultations() {
                   <span style={{ color: "var(--fg-muted)", fontWeight: 600 }}>€ HT</span>
                 </div>
               </div>
+              {/* Les options ne concernent que la recherche de maîtrise d'œuvre */}
+              {draft.type === "moe" && (
               <div className="cs-field cs-field-full">
                 <label>
                   Options demandées{" "}
@@ -746,6 +749,7 @@ export default function Consultations() {
                   ))}
                 </div>
               </div>
+              )}
               <div className="cs-field cs-field-full">
                 <label>
                   Documents joints{" "}

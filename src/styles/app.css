@@ -372,7 +372,9 @@ table.dossiers tbody tr:last-child td { border-bottom: none; }
 /* two-column detail content */
 .detail-grid { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
 .panel { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
-.panel .p-head { padding: 16px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+/* flex-wrap : les actions passent à la ligne au lieu de déborder du panneau
+   (ex. « Partager aux copropriétaires » dans la bulle Plans individuels) */
+.panel .p-head { padding: 16px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; row-gap: 8px; }
 .panel .p-head h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 0; }
 .panel .p-body { padding: 16px 18px; }
 .kv { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px dashed var(--border); font-size: 14px; }
@@ -503,6 +505,25 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .file-card .fc-ico { color: var(--color-secondary-500); }
 .file-card .fc-name { font-size: 14px; font-weight: 600; }
 .file-card .fc-sub { font-size: 12px; color: var(--fg-muted); }
+
+/* Bulle « ? » des dossiers : quels documents vont dans quel dossier */
+.fc-help {
+  position: absolute; top: 10px; right: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  color: var(--fg-muted); cursor: help;
+}
+.fc-help:hover, .fc-help:focus-visible { color: var(--accent); }
+.fc-help .fc-help-bulle {
+  display: none;
+  position: absolute; right: 0; top: 26px; z-index: 30;
+  width: 240px; padding: 10px 12px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.14);
+  font-size: 12.5px; font-weight: 400; line-height: 1.45; color: var(--fg2);
+  text-align: left; white-space: normal; cursor: default;
+}
+.fc-help:hover .fc-help-bulle, .fc-help:focus-visible .fc-help-bulle, .fc-help:focus-within .fc-help-bulle { display: block; }
 
 /* generic buttons reuse .se-btn from tokens; small variants */
 .btn-sm { padding: 9px 14px; font-size: 13px; }

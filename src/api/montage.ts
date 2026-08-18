@@ -598,6 +598,23 @@ async function currentUid(): Promise<string> {
   return uid;
 }
 
+/** Alerte l'équipe AMO du dossier après un dépôt du syndic — meilleure volonté :
+ *  l'échec de la notification ne doit jamais faire échouer le dépôt lui-même. */
+function notifierDepot(coproId: string, montage: MontageId, docKey: string, fileName: string) {
+  const montageLabel = MONTAGES.find((m) => m.id === montage)?.label ?? montage;
+  const docName =
+    PARCOURS[montage]?.etapes.flatMap(docsOfEtape).find((d) => d.key === docKey)?.name ?? fileName;
+  void supabase.functions
+    .invoke("notifier-depot-document", {
+      body: {
+        copro_id: coproId,
+        doc_name: docName,
+        contexte: `${montageLabel} — fichier « ${fileName} »`,
+      },
+    })
+    .catch(() => undefined);
+}
+
 /** Dépose un fichier sur un document du montage (ajout — plusieurs PV possibles). */
 export function useUploadMontageDoc(coproId: string, montage: MontageId) {
   const qc = useQueryClient();
@@ -637,6 +654,8 @@ export function useUploadMontageDoc(coproId: string, montage: MontageId) {
         { onConflict: "copro_id,montage,doc_key" }
       );
       if (eDb) throw eDb;
+      // Notifie l'équipe AMO (chef de projet) — la fonction ignore les dépôts AMO.
+      notifierDepot(coproId, montage, docKey, file.name);
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["montage", "docs", coproId, montage] }),
   });

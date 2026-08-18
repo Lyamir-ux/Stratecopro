@@ -54,7 +54,7 @@ export default function Login() {
           flexDirection: "column",
         }}
       >
-        <img src="/logo-strateco-white.svg" alt="Strat Eco" style={{ height: 44, alignSelf: "flex-start" }} />
+        <img src="/logo-strateco-pro-white.png" alt="Strat Eco" style={{ height: 44, alignSelf: "flex-start" }} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", maxWidth: 460 }}>
           <div className="se-eyebrow" style={{ color: "rgba(255,255,255,0.7)" }}>
             Espace de pilotage AMO

@@ -1,6 +1,6 @@
 // Tableau de bord AMO — porté de design-reference/project/dashboard.jsx
 // Vues Kanban / Galerie / Tableau, KPI, filtres phase & secteur fonctionnels.
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
@@ -10,6 +10,7 @@ import { PHASES, type DpeClass, type PhaseId } from "@/lib/referentiels";
 import { fmtEuro } from "@/lib/format";
 import { useUi } from "@/stores/ui";
 import { nbLogements, useCopros, useCreateCopro, usePhotoUrl, type CoproWithStats } from "@/api/copros";
+import { uploadFichierDirect } from "@/api/fichiers";
 
 function TeamStack({ team }: { team: CoproWithStats["team"] }) {
   return (
@@ -283,6 +284,9 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
     fragile: false,
   });
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+  // Documents de passation joints à la création — déposés dans le dossier « Passation »
+  const [passation, setPassation] = useState<File[]>([]);
+  const passationRef = useRef<HTMLInputElement>(null);
   const nbBats = Math.max(1, form.nb_batiments || 1);
   const setBatAdresse = (i: number, v: string) =>
     setForm((f) => {
@@ -299,6 +303,20 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
       nb_logements: form.nb_logements ? Number(form.nb_logements) : null,
       energy_before: form.energy_before || null,
     });
+    // Dépôt des documents de passation dans les fichiers du dossier créé.
+    // Le dossier existe déjà : en cas d'échec d'un dépôt on continue quand même,
+    // les pièces se redéposent depuis l'onglet Fichiers.
+    const rates: string[] = [];
+    for (const f of passation) {
+      try {
+        await uploadFichierDirect(copro.id, f, "Passation");
+      } catch {
+        rates.push(f.name);
+      }
+    }
+    if (rates.length > 0) {
+      window.alert(`Dossier créé, mais document(s) de passation non déposé(s) : ${rates.join(", ")}. Redéposez-les depuis l'onglet Fichiers (dossier Passation).`);
+    }
     onClose();
     navigate(`/copros/${copro.id}`);
   };
@@ -462,6 +480,62 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
               ))}
             </select>
           )}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label style={{ fontSize: 13, fontWeight: 500, color: "var(--fg2)" }}>
+            Documents de passation{" "}
+            <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>
+              · optionnel — déposés dans les fichiers du dossier (Passation)
+            </span>
+          </label>
+          <input
+            ref={passationRef}
+            type="file"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const nouveaux = Array.from(e.target.files ?? []);
+              if (nouveaux.length) setPassation((prev) => [...prev, ...nouveaux]);
+              e.target.value = "";
+            }}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {passation.map((f, i) => (
+              <span
+                key={i}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "5px 10px",
+                  borderRadius: "var(--radius-md)",
+                  background: "var(--bg-soft)",
+                  border: "1px solid var(--border)",
+                  fontSize: 12.5,
+                }}
+              >
+                <Icon name="fileText" size={13} />
+                {f.name}
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title="Retirer"
+                  onClick={() => setPassation((prev) => prev.filter((_, j) => j !== i))}
+                  style={{ width: 18, height: 18 }}
+                >
+                  <Icon name="x" size={12} />
+                </button>
+              </span>
+            ))}
+            <button
+              type="button"
+              className="se-btn se-btn-secondary btn-sm"
+              onClick={() => passationRef.current?.click()}
+            >
+              <Icon name="upload" size={14} />
+              Joindre les documents de passation
+            </button>
+          </div>
         </div>
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "var(--fg2)" }}>
           <input type="checkbox" checked={form.fragile} onChange={(e) => set({ fragile: e.target.checked })} />

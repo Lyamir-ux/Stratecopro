@@ -700,7 +700,7 @@ export default function PlanDefinitifPage() {
               ["Fonds travaux mobilisé (€)", "fondsTravaux"],
               ["Total tantièmes", "totalTantiemes"],
               ["Durée éco-PTZ (ans)", "dureeEcoPtzAns"],
-              ["Coefficient assurance", "coefAssurance"],
+              ["Coef. assurance non solidaire", "coefAssurance"],
               ["Coût prêt avance subventions (%)", "tauxPretAvancePct"],
               ["Aides avancées — variante individuelle (%)", "pctAvanceAides"],
             ] as const

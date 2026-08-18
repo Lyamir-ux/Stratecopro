@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui";
 import { RenommageDialog } from "@/components/RenommageDialog";
 import {
   DOSSIERS,
+  DOSSIER_AIDE,
   downloadFichier,
   estVisualisable,
   useChecklists,
@@ -133,6 +134,7 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                     if (e.dataTransfer.files.length) void uploadFiles(e.dataTransfer.files, f);
                   }}
                   style={{
+                    position: "relative",
                     cursor: "pointer",
                     outline:
                       dragOver === f
@@ -142,6 +144,13 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                           : "none",
                   }}
                 >
+                  {/* Bulle d'aide : quels documents vont dans ce dossier */}
+                  <span className="fc-help" tabIndex={0} onClick={(e) => e.stopPropagation()}>
+                    <Icon name="help" size={15} />
+                    <span className="fc-help-bulle" role="tooltip">
+                      {DOSSIER_AIDE[f]}
+                    </span>
+                  </span>
                   <Icon name="folder" size={26} className="fc-ico" />
                   <div className="fc-name">{f}</div>
                   <div className="fc-sub">

@@ -63,7 +63,7 @@ export function Sidebar({ recents, tasksCount, user, onLogout }: SidebarProps) {
     </button>
   );
 
-  const logoSrc = dark ? "/logo-strateco-white.svg" : "/logo-strateco.svg";
+  const logoSrc = dark ? "/logo-strateco-pro-white.png" : "/logo-strateco-pro.png";
 
   return (
     <aside className={"sidebar" + (dark ? " dark" : "")}>

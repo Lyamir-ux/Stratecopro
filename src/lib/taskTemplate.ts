@@ -32,7 +32,7 @@ export function buildTaskTemplate(phase: PhaseId): TemplateTask[] {
     { phase: "diagnostic", title: "Recensement des copropriétaires & lots", status: st("diagnostic", "doing"), jalon: "P1a" },
     { phase: "diagnostic", title: "Saisie des tantièmes par bâtiment", status: st("diagnostic", "todo") },
     { phase: "diagnostic", title: "Consultations diverses", status: st("diagnostic", "todo") },
-    { phase: "diagnostic", title: "Vérif. audit énergétique", status: st("diagnostic", "todo"), tag: "DPE" },
+    { phase: "diagnostic", title: "Vérif. audit énergétique", status: st("diagnostic", "todo"), tag: "Audit réglementaire" },
     { phase: "diagnostic", title: "Enquête sociale — profils MaPrimeRénov' · Fiche État", status: st("diagnostic", "todo"), tag: "MPR", jalon: "P1b" },
     { phase: "etudes", title: "Scénarios de travaux & chiffrage", status: st("etudes", "doing") },
     { phase: "etudes", title: "Ingénierie financière (7 étapes)", status: st("etudes", "doing"), tag: "Finance" },

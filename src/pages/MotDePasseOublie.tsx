@@ -62,7 +62,7 @@ export default function MotDePasseOublie() {
           padding: "36px 40px",
         }}
       >
-        <img src="/logo-strateco.svg" alt="Strat Eco" style={{ height: 36, marginBottom: 24 }} />
+        <img src="/logo-strateco-pro.png" alt="Strat Eco" style={{ height: 36, marginBottom: 24 }} />
 
         {sent ? (
           <>

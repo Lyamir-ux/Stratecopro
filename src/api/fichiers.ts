@@ -6,6 +6,7 @@ import type { Tables } from "@/lib/database.types";
 export type Fichier = Tables<"fichiers">;
 
 export const DOSSIERS = [
+  "Passation",
   "Diagnostic & audit",
   "Études techniques",
   "Plans de financement",
@@ -13,6 +14,25 @@ export const DOSSIERS = [
   "Assemblée générale",
   "Photos chantier",
 ] as const;
+
+/** Quels documents vont dans quel dossier — texte de la bulle « ? » de chaque
+ *  carte de l'onglet Fichiers. Modifiez librement les descriptions ci-dessous. */
+export const DOSSIER_AIDE: Record<(typeof DOSSIERS)[number], string> = {
+  "Passation":
+    "Documents remis à la prise en main du dossier : règlement de copropriété, derniers PV d'AG, carnet d'entretien, contrats en cours et pièces transmises par le syndic.",
+  "Diagnostic & audit":
+    "Audit énergétique réglementaire, DPE collectif, PPPT et rapports de diagnostic de la copropriété.",
+  "Études techniques":
+    "Étude thermique, test d'étanchéité à l'air, diagnostic amiante-plomb, plans, contrats AMO et MOE.",
+  "Plans de financement":
+    "Plans de financement, accords de subvention, offres de prêt, attestations CEE (sur l'honneur, cadre contribution), RIB, immatriculation au registre et justificatifs des copropriétaires.",
+  "Marchés de travaux":
+    "Devis, factures, situations de travaux, marchés signés, ordres de service, CCTP / DCE, attestations RGE et décennales, Kbis, PV de réception.",
+  "Assemblée générale":
+    "Convocations, PV d'assemblée générale et courriers adressés aux copropriétaires.",
+  "Photos chantier":
+    "Photos de l'immeuble et du chantier — avant, pendant et après les travaux.",
+};
 
 export function useFichiers(coproId: string | undefined) {
   return useQuery({
@@ -30,28 +50,33 @@ export function useFichiers(coproId: string | undefined) {
   });
 }
 
+/** Dépôt d'un fichier hors hook — sert aussi à l'import des documents de
+ *  passation à la création du dossier (NewCoproDialog). */
+export async function uploadFichierDirect(coproId: string, file: File, dossier: string, nameOriginal?: string) {
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${coproId}/${dossier.replace(/[^a-zA-Z0-9-]/g, "_")}/${Date.now()}-${safe}`;
+  const { error: eUp } = await supabase.storage.from("copro-files").upload(path, file);
+  if (eUp) throw eUp;
+  const { data: session } = await supabase.auth.getSession();
+  const { error: eDb } = await supabase.from("fichiers").insert({
+    copro_id: coproId,
+    dossier,
+    name: file.name,
+    name_original: nameOriginal && nameOriginal !== file.name ? nameOriginal : null,
+    storage_path: path,
+    size: file.size,
+    mime: file.type || null,
+    uploaded_by: session.session?.user.id ?? null,
+  });
+  if (eDb) throw eDb;
+}
+
 export function useUploadFichier(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
     // nameOriginal : nom du fichier avant renommage assisté (traçabilité)
-    mutationFn: async ({ file, dossier, nameOriginal }: { file: File; dossier: string; nameOriginal?: string }) => {
-      const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `${coproId}/${dossier.replace(/[^a-zA-Z0-9-]/g, "_")}/${Date.now()}-${safe}`;
-      const { error: eUp } = await supabase.storage.from("copro-files").upload(path, file);
-      if (eUp) throw eUp;
-      const { data: session } = await supabase.auth.getSession();
-      const { error: eDb } = await supabase.from("fichiers").insert({
-        copro_id: coproId,
-        dossier,
-        name: file.name,
-        name_original: nameOriginal && nameOriginal !== file.name ? nameOriginal : null,
-        storage_path: path,
-        size: file.size,
-        mime: file.type || null,
-        uploaded_by: session.session?.user.id ?? null,
-      });
-      if (eDb) throw eDb;
-    },
+    mutationFn: ({ file, dossier, nameOriginal }: { file: File; dossier: string; nameOriginal?: string }) =>
+      uploadFichierDirect(coproId, file, dossier, nameOriginal),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["fichiers", coproId] }),
   });
 }

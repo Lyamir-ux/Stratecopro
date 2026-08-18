@@ -76,7 +76,7 @@ function ApercuSelect({
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-soft)", display: "flex", flexDirection: "column" }}>
       <div className="portal-header">
-        <img className="ph-logo" src="/logo-strateco.svg" alt="Strat Eco" />
+        <img className="ph-logo" src="/logo-strateco-pro.png" alt="Strat Eco" />
         <span className="ph-spacer"></span>
         <button className="se-btn se-btn-ghost btn-sm" onClick={onExit}>
           <Icon name="gauge" size={15} />Espace AMO
@@ -163,7 +163,7 @@ function CoproSelect({
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-soft)", display: "flex", flexDirection: "column" }}>
       <div className="portal-header">
-        <img className="ph-logo" src="/logo-strateco.svg" alt="Strat Eco" />
+        <img className="ph-logo" src="/logo-strateco-pro.png" alt="Strat Eco" />
         <span className="ph-spacer"></span>
         <div className="ph-user">
           <Avatar who={initials} name={userName} />
@@ -263,7 +263,7 @@ export default function Portail() {
     return (
       <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--bg-soft)", padding: 24 }}>
         <div style={{ textAlign: "center", maxWidth: 460 }}>
-          <img src="/logo-strateco.svg" alt="Strat Eco" style={{ height: 36, marginBottom: 22 }} />
+          <img src="/logo-strateco-pro.png" alt="Strat Eco" style={{ height: 36, marginBottom: 22 }} />
           <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 26, margin: "0 0 10px" }}>
             Aucune copropriété rattachée
           </h1>
@@ -339,7 +339,7 @@ export default function Portail() {
         </div>
       )}
       <header className="portal-header">
-        <img className="ph-logo" src="/logo-strateco.svg" alt="Strat Eco" />
+        <img className="ph-logo" src="/logo-strateco-pro.png" alt="Strat Eco" />
         <div className="ph-copro">
           <Icon name="building" size={18} style={{ color: "var(--accent)" }} />
           <span className="nm">{copro.name}</span>

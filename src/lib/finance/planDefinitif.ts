@@ -140,7 +140,7 @@ export interface ParamsFinancement {
   tantiemesExemples: number[];
   /** Durée de l'éco-PTZ (ans) pour les mensualités d'exemple. */
   dureeEcoPtzAns: number;
-  /** Coefficient assurance emprunteur appliqué aux mensualités (1,03 = +3 %). */
+  /** Coefficient d'assurance emprunteur non solidaire appliqué aux mensualités (1,03 = +3 %). */
   coefAssurance: number;
   /** Coût du prêt avance de subventions (% des aides publiques, payé en une fois). */
   tauxPretAvancePct: number;

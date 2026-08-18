@@ -328,21 +328,6 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
             )}
           </div>
           <div className="kv">
-            <span className="k">Logements déclarés</span>
-            {editingSynth ? (
-              <input
-                className="edit-inp"
-                type="number"
-                min={0}
-                style={{ maxWidth: 90, textAlign: "right" }}
-                value={synth.nbLogements}
-                onChange={(e) => setSynth((s) => ({ ...s, nbLogements: Math.max(0, Number(e.target.value) || 0) }))}
-              />
-            ) : (
-              <span className="v">{c.nb_logements ?? "—"}</span>
-            )}
-          </div>
-          <div className="kv">
             <span className="k">Lots</span>
             <span className="v">{totalLots}</span>
           </div>

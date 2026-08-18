@@ -45,6 +45,7 @@ export const TYPES_DOCUMENT: { id: string; label: string; dossier: string }[] = 
   { id: "justificatif_domicile", label: "Justificatif de domicile", dossier: "Plans de financement" },
   { id: "taxe_fonciere", label: "Taxe foncière", dossier: "Plans de financement" },
   // Divers
+  { id: "doc_passation", label: "Document de passation", dossier: "Passation" },
   { id: "rapport", label: "Rapport", dossier: "Diagnostic & audit" },
   { id: "photo", label: "Photo", dossier: "Photos chantier" },
   { id: "plan", label: "Plan", dossier: "Études techniques" },
