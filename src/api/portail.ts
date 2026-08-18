@@ -120,8 +120,15 @@ export function useMonPlan(scenarioId: string | undefined, coproprietaireId: str
 export interface IndivBreakdown {
   quotePart: number;
   mprIndiv: number;
+  /** CEE — versés à la fin du chantier, donc hors « reste à financer avant travaux ». */
   cee: number;
+  /** Subvention collective affectée (MPR Copro + fonds travaux). */
   subvColl: number;
+  /** Part indicative du fonds travaux déjà versé incluse dans subvColl. */
+  fondsPart: number;
+  /** Ce que le copropriétaire doit financer avant le chantier (hors CEE). */
+  resteAvantTravaux: number;
+  /** Reste à charge final estimé, une fois les CEE versés après le chantier. */
   reste: number;
   /** true = calculée depuis plans_individuels (étape 7 AMO), false = estimation prorata. */
   exact: boolean;
@@ -141,6 +148,13 @@ export function computeIndiv(
   tantiemes: number,
   profil: Profil | null
 ): IndivBreakdown {
+  const params: FinanceParams = readParams(scenario.params, bareme);
+  const tauxMpr = params.mprCoproPct + (params.bonusPassoire ? bareme.mprCopro.bonusPassoire : 0);
+  const mprCopro = (params.travaux * tauxMpr) / 100;
+  // La subvention collective agrège MPR Copro + fonds travaux : on isole la
+  // part indicative du fonds au prorata de sa place dans l'agrégat.
+  const shareFonds = mprCopro + params.fonds > 0 ? params.fonds / (mprCopro + params.fonds) : 0;
+
   if (plan && Number(plan.tantiemes) > 0) {
     const f = tantiemes / Number(plan.tantiemes);
     const quotePart = Number(plan.quote_part) * f;
@@ -152,15 +166,14 @@ export function computeIndiv(
       mprIndiv,
       cee,
       subvColl,
+      fondsPart: subvColl * shareFonds,
+      resteAvantTravaux: Math.max(0, quotePart - mprIndiv - subvColl),
       reste: Math.max(0, quotePart - mprIndiv - cee - subvColl),
       exact: true,
       profilEstime: null,
     };
   }
-  const params: FinanceParams = readParams(scenario.params, bareme);
   const coutTotal = params.travaux + params.honoraires + params.aleas;
-  const tauxMpr = params.mprCoproPct + (params.bonusPassoire ? bareme.mprCopro.bonusPassoire : 0);
-  const mprCopro = (params.travaux * tauxMpr) / 100;
   const frac = tantiemes / 1000;
   const p = profil ?? "Jaune";
   const quotePart = coutTotal * frac;
@@ -172,6 +185,8 @@ export function computeIndiv(
     mprIndiv,
     cee,
     subvColl,
+    fondsPart: subvColl * shareFonds,
+    resteAvantTravaux: Math.max(0, quotePart - mprIndiv - subvColl),
     reste: Math.max(0, quotePart - mprIndiv - cee - subvColl),
     exact: false,
     profilEstime: profil ? null : "Jaune",

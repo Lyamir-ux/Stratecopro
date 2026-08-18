@@ -1,4 +1,6 @@
 // Mes quotes-parts : cascade par lot et par scénario partagé.
+// Le reste à financer avant travaux exclut les CEE (versés à la fin du
+// chantier) ; le fonds travaux déjà versé est isolé à titre indicatif.
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
@@ -15,6 +17,7 @@ import {
 import { readParams } from "@/api/scenarios";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { SectionId } from "./index";
+import { MentionsPrudence } from "./Mentions";
 
 const USAGE_LABEL: Record<string, string> = {
   habitation: "Habitation",
@@ -41,6 +44,7 @@ export function QuotesParts({
   const lots = membership.lots;
   const [lotIdx, setLotIdx] = useState(0);
   const [scnId, setScnId] = useState<string | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const scn = scenarios.find((s) => s.id === scnId) ?? scenarios[0] ?? null;
   const { data: plan } = useMonPlan(scn?.id, membership.coproprietaireId);
 
@@ -57,13 +61,33 @@ export function QuotesParts({
     );
   }
 
-  const cle = readParams(scn.params, bareme).cle;
+  const params = readParams(scn.params, bareme);
+  const cle = params.cle;
   const lot = lots[Math.min(lotIdx, Math.max(0, lots.length - 1))] ?? null;
   const lotT = lot ? lotTantiemes(lot, cle) : 0;
   const totalT = totalTantiemes(lots, cle);
 
   const indiv = computeIndiv(scn, bareme, plan ?? null, lotT, profil);
   const totalIndiv = computeIndiv(scn, bareme, plan ?? null, totalT, profil);
+
+  const telechargerPdf = async () => {
+    setPdfBusy(true);
+    try {
+      const { genererPlanIndividuelPdf, telechargerPdfBytes } = await import("@/lib/pdf/planIndividuel");
+      const bytes = await genererPlanIndividuelPdf({
+        membership,
+        scenarioName: scn.name,
+        params,
+        bareme,
+        indiv: totalIndiv,
+        profil,
+        cle,
+      });
+      telechargerPdfBytes(bytes, `Plan de financement - ${membership.nom} - ${membership.copro.name}.pdf`);
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   return (
     <div className="fade">
@@ -100,7 +124,7 @@ export function QuotesParts({
         )}
         {lots.length > 1 && (
           <div className="qp-total">
-            Reste à charge cumulé ({lots.length} lots) · <b>{fmtEuro(totalIndiv.reste)}</b>
+            À financer avant travaux, cumulé ({lots.length} lots) · <b>{fmtEuro(totalIndiv.resteAvantTravaux)}</b>
           </div>
         )}
       </div>
@@ -116,11 +140,26 @@ export function QuotesParts({
               total={{ l: lot ? "Quote-part de travaux du lot n°" + lot.num : "Quote-part de travaux", v: indiv.quotePart }}
               rows={[
                 { l: "MaPrimeRénov' individuelle" + (profil ? " (profil " + profil + ")" : ""), v: indiv.mprIndiv, k: "primary" },
-                { l: "CEE — part individuelle", v: indiv.cee, k: "blue" },
-                { l: "Subvention collective affectée", v: indiv.subvColl, k: "primary" },
+                { l: "Subvention collective affectée", v: indiv.subvColl - indiv.fondsPart, k: "primary" },
+                { l: "Fonds travaux déjà versés (à titre indicatif)", v: indiv.fondsPart, k: "blue" },
               ]}
-              reste={{ l: lot ? "Reste à charge du lot n°" + lot.num : "Reste à charge", v: indiv.reste }}
+              reste={{ l: "À financer avant travaux (hors CEE)", v: indiv.resteAvantTravaux }}
             />
+            <div className="apres-chantier">
+              <div className="ac-head">
+                <Icon name="leaf" size={15} />
+                Après le chantier
+              </div>
+              <p>
+                Vos <b>CEE — {fmtEuro(indiv.cee)}</b> sont versés <b>à la fin du chantier</b>, une fois les
+                travaux réceptionnés : ils ne réduisent pas le montant à financer avant travaux, mais viendront
+                en déduction une fois perçus.
+              </p>
+              <div className="ac-reste">
+                <span>Reste à charge final estimé (CEE déduits)</span>
+                <b>{fmtEuro(indiv.reste)}</b>
+              </div>
+            </div>
             {!profil && (
               <div className="cc-next" style={{ marginTop: 18 }}>
                 <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
@@ -178,8 +217,14 @@ export function QuotesParts({
           <button className="se-btn se-btn-secondary" onClick={() => go("pret")}>
             <Icon name="trendingUp" size={17} />Financer mon reste à charge
           </button>
+          <button className="se-btn se-btn-ghost" onClick={() => void telechargerPdf()} disabled={pdfBusy}>
+            <Icon name="download" size={17} />
+            {pdfBusy ? "Génération…" : "Télécharger mon plan (PDF)"}
+          </button>
         </div>
       </div>
+
+      <MentionsPrudence />
     </div>
   );
 }

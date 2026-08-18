@@ -1,8 +1,9 @@
-// Accueil du portail : salutation, timeline de phases, tuiles financières, à-faire.
+// Accueil du portail : salutation, timeline de phases, tuiles financières,
+// étiquette énergie visée du bâtiment, à-faire.
 import { Icon } from "@/components/Icon";
-import { Badge } from "@/components/ui";
+import { Badge, DpeChip } from "@/components/ui";
 import { fmtEuro } from "@/lib/format";
-import { PHASES, PROFILS_MPR } from "@/lib/referentiels";
+import { PHASES, PROFILS_MPR, type DpeClass } from "@/lib/referentiels";
 import { computeIndiv, totalTantiemes, type ChoixFinancement, type Membership, type Scenario } from "@/api/portail";
 import { readParams } from "@/api/scenarios";
 import type { Bareme, Profil } from "@/lib/finance";
@@ -36,6 +37,8 @@ export function Accueil({
 }) {
   const copro = membership.copro;
   const phaseIdx = PHASES.findIndex((p) => p.id === copro.phase);
+  const dpeAvant = (copro.energy_before as DpeClass | null) ?? null;
+  const dpeApres = (copro.energy_after as DpeClass | null) ?? null;
 
   const indiv =
     scenario && bareme
@@ -114,9 +117,9 @@ export function Accueil({
             <div className="t-foot">MaPrimeRénov' + CEE + collectif</div>
           </div>
           <div className="tile">
-            <div className="t-lbl"><Icon name="trendingUp" size={16} />Votre reste à charge</div>
-            <div className="t-val">{fmtEuro(indiv.reste)}</div>
-            <div className="t-foot">Avant financement par prêt</div>
+            <div className="t-lbl"><Icon name="trendingUp" size={16} />À financer avant travaux</div>
+            <div className="t-val">{fmtEuro(indiv.resteAvantTravaux)}</div>
+            <div className="t-foot">Hors CEE, versés à la fin du chantier</div>
           </div>
         </div>
       ) : (
@@ -126,6 +129,24 @@ export function Accueil({
             Le plan de financement n'a pas encore été partagé par votre AMO. Vos quotes-parts apparaîtront ici
             dès qu'un scénario sera publié.
           </span>
+        </div>
+      )}
+
+      {(dpeAvant || dpeApres) && (
+        <div className="dpe-vise" style={{ marginBottom: 26 }}>
+          <div className="dv-chips">
+            <DpeChip cls={dpeAvant} size={22} />
+            <Icon name="arrowRight" size={22} style={{ color: "var(--fg-muted)" }} />
+            <DpeChip cls={dpeApres} size={22} />
+          </div>
+          <div>
+            <div className="dv-title">Un changement d'étiquette énergie pour votre immeuble</div>
+            <p className="dv-sub">
+              Il s'agit de l'étiquette <b>visée pour l'ensemble du bâtiment</b> après travaux (DPE collectif de
+              la copropriété) — et non de l'étiquette individuelle de votre logement, qui peut différer selon
+              son étage, son exposition ou ses équipements.
+            </p>
+          </div>
         </div>
       )}
 

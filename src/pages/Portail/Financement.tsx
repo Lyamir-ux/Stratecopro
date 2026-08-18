@@ -19,6 +19,7 @@ import {
 } from "@/api/portail";
 import { readParams } from "@/api/scenarios";
 import { Adhesion } from "./Adhesion";
+import { MentionsPrudence } from "./Mentions";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Tables } from "@/lib/database.types";
 
@@ -67,7 +68,10 @@ export function Financement({
   }
 
   const cle = readParams(scenario.params, bareme).cle;
-  const montant = computeIndiv(scenario, bareme, plan, totalTantiemes(lots, cle), profil).reste;
+  // On finance le reste avant travaux : les CEE, versés à la fin du chantier,
+  // n'en font pas partie (ils arrivent après).
+  const indiv = computeIndiv(scenario, bareme, plan, totalTantiemes(lots, cle), profil);
+  const montant = indiv.resteAvantTravaux;
   const dureeCollectif = config?.duree_annees ?? 15;
   const mensualiteCollectif = montant / (dureeCollectif * 12);
   const mensualiteIndiv = montant / (Math.max(1, yearsIndiv) * 12);
@@ -152,6 +156,8 @@ export function Financement({
               </span>
             </div>
           ))}
+
+        <MentionsPrudence />
       </div>
     );
   }
@@ -164,6 +170,16 @@ export function Financement({
         Choisissez comment financer votre reste à charge de <b>{fmtEuro(montant)}</b> : prêt collectif, éco-PTZ
         individuel ou fonds propres.
       </p>
+      {indiv.cee > 0 && (
+        <div className="cc-next" style={{ marginBottom: 18 }}>
+          <Icon name="leaf" size={15} className="ico" style={{ color: "var(--color-primary-600)" }} />
+          <span>
+            Vos <b>CEE estimés ({fmtEuro(indiv.cee)})</b> sont versés <b>à la fin du chantier</b>, après
+            réception des travaux : ils ne réduisent pas le montant à financer avant travaux, mais viendront en
+            déduction une fois perçus.
+          </span>
+        </div>
+      )}
 
       <div className="loan-opts loan-opts-3">
         <div className={"loan-opt" + (type === "collectif" ? " sel" : "")} onClick={() => setType("collectif")}>
@@ -305,6 +321,8 @@ export function Financement({
           La transmission a échoué. Réessayez ou contactez votre AMO.
         </p>
       )}
+
+      <MentionsPrudence />
     </div>
   );
 }
