@@ -4,10 +4,18 @@
 // satellite donne la phase du dossier.
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Icon } from "@/components/Icon";
 import { PHASES, type PhaseId } from "@/lib/referentiels";
 import { fmtEuroCourt } from "@/lib/format";
 import { nbLogements } from "@/api/copros";
 import type { SyndicCopro } from "@/api/syndic";
+
+/** Comparaison de recherche : minuscules, sans accents. */
+const normaliser = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
 
 const COULEUR_PHASE: Record<PhaseId, string> = {
   diagnostic: "var(--color-warning-500)",
@@ -115,7 +123,17 @@ function construireSystemes(copros: SyndicCopro[]): Systeme[] {
 export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
   const navigate = useNavigate();
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [recherche, setRecherche] = useState("");
   const systemes = useMemo(() => construireSystemes(copros), [copros]);
+
+  // Recherche par gestionnaire (ou par nom de copropriété : le système du
+  // gestionnaire concerné reste affiché en entier).
+  const q = normaliser(recherche.trim());
+  const visibles = q
+    ? systemes.filter(
+        (s) => normaliser(s.nom).includes(q) || s.satellites.some((sat) => normaliser(sat.name).includes(q))
+      )
+    : systemes;
 
   const phaseCounts = PHASES.map((ph) => ({ ph, n: copros.filter((c) => c.phase === ph.id).length }));
   const totalLogements = copros.reduce((s, c) => s + nbLogements(c), 0);
@@ -130,10 +148,37 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
             {systemes.length} gestionnaire{systemes.length > 1 ? "s" : ""}
           </p>
         </div>
+        <span className="spacer"></span>
+        <div className="search" style={{ margin: 0 }}>
+          <Icon name="search" size={16} />
+          <input
+            placeholder="Rechercher un gestionnaire…"
+            value={recherche}
+            onChange={(e) => setRecherche(e.target.value)}
+          />
+          {recherche && (
+            <button
+              className="icon-btn"
+              style={{ width: 22, height: 22, flex: "none" }}
+              title="Effacer la recherche"
+              onClick={() => setRecherche("")}
+            >
+              <Icon name="x" size={13} />
+            </button>
+          )}
+        </div>
       </div>
 
+      {q && (
+        <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: -6, marginBottom: 10 }}>
+          {visibles.length === 0
+            ? "Aucun gestionnaire ni copropriété ne correspond à cette recherche."
+            : `${visibles.length} gestionnaire${visibles.length > 1 ? "s" : ""} sur ${systemes.length}`}
+        </p>
+      )}
+
       <div className="orbites">
-        {systemes.map((s, i) => (
+        {visibles.map((s, i) => (
           <div className="orbite-cell" key={s.key}>
             <div
               className="orbite-sys"
