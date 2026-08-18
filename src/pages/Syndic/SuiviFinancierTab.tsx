@@ -13,17 +13,31 @@ import {
   useSuiviFinancier,
   type PaiementsSuivi,
 } from "@/api/suiviFinancier";
-import type { PlanDefinitifResult } from "@/lib/finance";
+import { computePlanDefinitif, readPlanDefinitif } from "@/lib/finance";
 import type { SyndicCopro } from "@/api/syndic";
 
 interface LigneSuivi {
-  /** « lot:<numero> » / « moe:<index> » — clé des paiements (repartitionCles). */
+  /** « lot:<numero> » / « moe:<index> » / « mission:<id> » — clé des paiements. */
   key: string;
   libelle: string;
   entreprise: string | null;
   /** Montant voté TTC de la ligne (PF définitif validé). */
   vote: number;
 }
+
+/**
+ * Regroupement des frais annexes par mission : une seule ligne par mission en
+ * additionnant les montants (AMO, MOE, contrôle technique, CSPS, tests
+ * d'étanchéité avant + après travaux) — les autres frais restent ligne à ligne.
+ * La détection se fait sur la désignation saisie au PF.
+ */
+const MISSIONS: { id: string; label: string; match: RegExp }[] = [
+  { id: "amo", label: "Assistance à maîtrise d'ouvrage", match: /assistance\s+ma[iî]trise|\bAMO\b/i },
+  { id: "moe", label: "Maîtrise d'œuvre", match: /ma[iî]trise\s+d.?(œ|oe)uvre|\bMOE\b/i },
+  { id: "ct", label: "Contrôle technique", match: /contr[oô]le\s+technique|\bCT\b/i },
+  { id: "csps", label: "CSPS", match: /\bC?SPS\b/i },
+  { id: "etancheite", label: "Tests d'étanchéité à l'air", match: /[ée]tanch[ée]it[ée]/i },
+];
 
 const sommeLigne = (p: PaiementsSuivi, key: string) =>
   (p[key] ?? []).reduce((s: number, v) => s + (v ?? 0), 0);
@@ -35,7 +49,13 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
   const planValide = (pfPlans ?? [])
     .filter((p) => p.statut === "valide")
     .sort((a, b) => (b.updated_at > a.updated_at ? 1 : -1))[0];
-  const pv = (planValide?.resultat ?? null) as unknown as PlanDefinitifResult | null;
+  // Recalcul depuis les données (moteur pur) plutôt que l'instantané `resultat` :
+  // les champs récents (entreprise des lignes MOE) sont ainsi disponibles même
+  // si le plan n'a pas été réenregistré depuis leur ajout.
+  const pv = useMemo(
+    () => (planValide ? computePlanDefinitif(readPlanDefinitif(planValide.data)) : null),
+    [planValide]
+  );
 
   const { data: serveur, isLoading: suiviLoading } = useSuiviFinancier(c.id);
   const save = useSaveSuiviFinancier(c.id);
@@ -52,14 +72,39 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
       entreprise: l.entreprise ?? null,
       vote: l.totalTtc,
     }));
-    const annexes: LigneSuivi[] = pv.moe
-      .map((m, i) => ({
-        key: `moe:${i}`,
-        libelle: m.designation || `Ligne MOE ${i + 1}`,
-        entreprise: null,
-        vote: m.montantTtc,
-      }))
-      .filter((l) => l.vote !== 0);
+    // Une ligne par mission (montants additionnés), puis les frais restants
+    // ligne à ligne dans l'ordre du plan.
+    const parMission = new Map<string, { vote: number; entreprises: string[] }>();
+    const restants: LigneSuivi[] = [];
+    pv.moe.forEach((m, i) => {
+      if (m.montantTtc === 0) return;
+      const mission = MISSIONS.find((ms) => ms.match.test(m.designation));
+      if (mission) {
+        const acc = parMission.get(mission.id) ?? { vote: 0, entreprises: [] };
+        acc.vote += m.montantTtc;
+        if (m.entreprise && !acc.entreprises.includes(m.entreprise)) acc.entreprises.push(m.entreprise);
+        parMission.set(mission.id, acc);
+      } else {
+        restants.push({
+          key: `moe:${i}`,
+          libelle: m.designation || `Ligne MOE ${i + 1}`,
+          entreprise: m.entreprise ?? null,
+          vote: m.montantTtc,
+        });
+      }
+    });
+    const annexes: LigneSuivi[] = [
+      ...MISSIONS.filter((ms) => parMission.has(ms.id)).map((ms) => {
+        const acc = parMission.get(ms.id)!;
+        return {
+          key: `mission:${ms.id}`,
+          libelle: ms.label,
+          entreprise: acc.entreprises.length ? acc.entreprises.join(", ") : null,
+          vote: acc.vote,
+        };
+      }),
+      ...restants,
+    ];
     return [
       { titre: "Travaux — marchés des entreprises", lignes: travaux },
       { titre: "Maîtrise d'œuvre & frais annexes", lignes: annexes },

@@ -475,6 +475,9 @@ export default function PlanDefinitifPage() {
               <thead>
                 <tr>
                   <th>Désignation</th>
+                  <th style={{ width: 130 }} title="Entreprise / prestataire de la mission — reprise au suivi financier du syndic">
+                    Entreprise
+                  </th>
                   <th style={{ width: 120 }}>Phase</th>
                   <th style={{ width: 150 }}>Mode</th>
                   <th style={{ ...thR, width: 120 }}>HT / taux %</th>
@@ -498,6 +501,15 @@ export default function PlanDefinitifPage() {
                         style={{ width: "100%" }}
                         value={l.designation}
                         onChange={(e) => edit((d) => ((d.moe[i].designation = e.target.value), d))}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="edit-inp"
+                        style={{ width: "100%" }}
+                        placeholder="—"
+                        value={l.entreprise ?? ""}
+                        onChange={(e) => edit((d) => ((d.moe[i].entreprise = e.target.value || undefined), d))}
                       />
                     </td>
                     <td>

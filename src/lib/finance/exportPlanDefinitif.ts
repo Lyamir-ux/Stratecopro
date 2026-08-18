@@ -78,7 +78,13 @@ export function exportPlanDefinitif(data: PlanDefinitifData): WorkBook {
       let first = true;
       data.moe.forEach((l, i) => {
         if (l.phase !== ph.id) return;
-        push(first ? ph.label.replace(/\s/, "") : null, l.designation, null, r.moe[i].montantTtc, l.commentaire ?? null);
+        push(
+          first ? ph.label.replace(/\s/, "") : null,
+          l.entreprise ? `${l.designation} (${l.entreprise})` : l.designation,
+          null,
+          r.moe[i].montantTtc,
+          l.commentaire ?? null
+        );
         first = false;
       });
     }

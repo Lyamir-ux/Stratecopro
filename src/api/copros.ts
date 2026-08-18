@@ -23,6 +23,7 @@ export function useCopros() {
           supabase
             .from("coproprietes")
             .select("*, organisations(id, nom)")
+            .is("deleted_at", null)
             .order("updated_at", { ascending: false }),
           supabase.from("copro_stats").select("*"),
           supabase.from("copro_members").select("copro_id, user_id, profiles(initials, full_name)"),
@@ -146,7 +147,7 @@ export function useTasksCount() {
     queryKey: ["tasks-count"],
     queryFn: async () => {
       const [{ data: copros, error: e1 }, { data: taches, error: e2 }] = await Promise.all([
-        supabase.from("coproprietes").select("id, phase"),
+        supabase.from("coproprietes").select("id, phase").is("deleted_at", null),
         supabase.from("taches").select("copro_id, phase, status").neq("status", "done"),
       ]);
       if (e1) throw e1;
@@ -218,6 +219,70 @@ export function useUploadPhoto(id: string) {
       void qc.invalidateQueries({ queryKey: ["copros"] });
       void qc.invalidateQueries({ queryKey: ["photo-url"] });
     },
+  });
+}
+
+// ========== Corbeille des projets ==========
+// L'AMO ne supprime jamais un dossier d'un coup : mise à la corbeille
+// (deleted_at) d'abord — le dossier disparaît de tous les espaces (RLS) —
+// puis restauration ou suppression définitive depuis la corbeille.
+
+/** Les dossiers à la corbeille (AMO uniquement), du plus récent au plus ancien. */
+export function useCoprosCorbeille() {
+  return useQuery({
+    queryKey: ["copros-corbeille"],
+    queryFn: async (): Promise<CoproRow[]> => {
+      const { data, error } = await supabase
+        .from("coproprietes")
+        .select("*")
+        .not("deleted_at", "is", null)
+        .order("deleted_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+function useCorbeilleMutation(mutationFn: (id: string) => Promise<void>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["copros"] });
+      void qc.invalidateQueries({ queryKey: ["copros-corbeille"] });
+      void qc.invalidateQueries({ queryKey: ["tasks-count"] });
+    },
+  });
+}
+
+/** Met le dossier à la corbeille — restaurable tant qu'il n'est pas supprimé définitivement. */
+export function useMettreCorbeille() {
+  return useCorbeilleMutation(async (id) => {
+    const { error } = await supabase
+      .from("coproprietes")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) throw error;
+  });
+}
+
+/** Restaure un dossier de la corbeille : il réapparaît dans tous les espaces. */
+export function useRestaurerCopro() {
+  return useCorbeilleMutation(async (id) => {
+    const { error } = await supabase.from("coproprietes").update({ deleted_at: null }).eq("id", id);
+    if (error) throw error;
+  });
+}
+
+/**
+ * Suppression définitive : la fiche et toutes ses données liées partent en
+ * cascade (lots, enquêtes, plans, fichiers en base…). Les objets du Storage
+ * restent orphelins — ils ne sont plus référencés nulle part.
+ */
+export function useSupprimerDefinitivement() {
+  return useCorbeilleMutation(async (id) => {
+    const { error } = await supabase.from("coproprietes").delete().eq("id", id);
+    if (error) throw error;
   });
 }
 

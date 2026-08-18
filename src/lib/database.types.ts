@@ -798,6 +798,7 @@ export type Database = {
           city: string | null
           code_postal: string | null
           created_at: string
+          deleted_at: string | null
           energy_after: string | null
           energy_before: string | null
           fragile: boolean
@@ -822,6 +823,7 @@ export type Database = {
           city?: string | null
           code_postal?: string | null
           created_at?: string
+          deleted_at?: string | null
           energy_after?: string | null
           energy_before?: string | null
           fragile?: boolean
@@ -846,6 +848,7 @@ export type Database = {
           city?: string | null
           code_postal?: string | null
           created_at?: string
+          deleted_at?: string | null
           energy_after?: string | null
           energy_before?: string | null
           fragile?: boolean

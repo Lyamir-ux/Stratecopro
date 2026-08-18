@@ -54,6 +54,8 @@ export type MontantMoe =
 
 export interface LigneMoe {
   designation: string;
+  /** Entreprise / prestataire de la mission — repris au suivi financier du syndic. */
+  entreprise?: string;
   phase: PhaseMoe;
   montant: MontantMoe;
   /** TVA appliquée au HT (0 pour une prime d'assurance type dommage-ouvrage). */
@@ -180,6 +182,7 @@ export interface LotResult {
 
 export interface MoeLigneResult {
   designation: string;
+  entreprise?: string;
   phase: PhaseMoe;
   montantHt: number;
   montantTtc: number;
@@ -328,7 +331,13 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
   // MOE et frais annexes
   const moe: MoeLigneResult[] = data.moe.map((l) => {
     const ht = htLigneMoe(l.montant, totalTravauxHt, totalTravauxTtc);
-    return { designation: l.designation, phase: l.phase, montantHt: ht, montantTtc: ht * (1 + l.tvaPct / 100) };
+    return {
+      designation: l.designation,
+      entreprise: l.entreprise,
+      phase: l.phase,
+      montantHt: ht,
+      montantTtc: ht * (1 + l.tvaPct / 100),
+    };
   });
   const totalMoeTtc = moe.reduce((s, l) => s + l.montantTtc, 0);
   const totalOperationTtc = totalTravauxTtcImprevus + totalMoeTtc;

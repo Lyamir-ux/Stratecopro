@@ -9,7 +9,17 @@ import { Avatar, Badge, DpePair, PhaseBadge, Progress, ThumbSlot } from "@/compo
 import { PHASES, type DpeClass, type PhaseId } from "@/lib/referentiels";
 import { fmtEuro } from "@/lib/format";
 import { useUi } from "@/stores/ui";
-import { nbLogements, useCopros, useCreateCopro, usePhotoUrl, type CoproWithStats } from "@/api/copros";
+import {
+  nbLogements,
+  useCopros,
+  useCoprosCorbeille,
+  useCreateCopro,
+  usePhotoUrl,
+  useRestaurerCopro,
+  useSupprimerDefinitivement,
+  type CoproWithStats,
+} from "@/api/copros";
+import { fmtDate } from "@/lib/format";
 import { uploadFichierDirect } from "@/api/fichiers";
 
 function TeamStack({ team }: { team: CoproWithStats["team"] }) {
@@ -560,6 +570,79 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** Corbeille des projets : restaurer un dossier ou le supprimer définitivement. */
+function CorbeilleDialog({ onClose }: { onClose: () => void }) {
+  const { data: corbeille, isLoading } = useCoprosCorbeille();
+  const restaurer = useRestaurerCopro();
+  const supprimer = useSupprimerDefinitivement();
+  const items = corbeille ?? [];
+
+  return (
+    <Modal title="Corbeille" onClose={onClose} width={640}>
+      {isLoading ? (
+        <p style={{ color: "var(--fg-muted)" }}>Chargement…</p>
+      ) : items.length === 0 ? (
+        <p style={{ color: "var(--fg-muted)", margin: 0 }}>
+          La corbeille est vide. Les dossiers mis à la corbeille depuis leur fiche apparaissent ici — vous
+          pouvez les restaurer ou les supprimer définitivement.
+        </p>
+      ) : (
+        <>
+          {items.map((c) => (
+            <div
+              key={c.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "11px 0",
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              <Icon name="building" size={17} style={{ color: "var(--fg-muted)", flex: "none" }} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{c.name}</div>
+                <div style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
+                  {[c.city, `à la corbeille depuis le ${fmtDate(c.deleted_at)}`].filter(Boolean).join(" · ")}
+                </div>
+              </div>
+              <button
+                className="se-btn se-btn-secondary btn-sm"
+                disabled={restaurer.isPending}
+                onClick={() => void restaurer.mutateAsync(c.id)}
+              >
+                <Icon name="chevronLeft" size={13} />
+                Restaurer
+              </button>
+              <button
+                className="se-btn se-btn-ghost btn-sm"
+                style={{ color: "var(--color-error-700)" }}
+                disabled={supprimer.isPending}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Supprimer définitivement « ${c.name} » ?\n\nToutes les données du dossier (lots, enquêtes, plans de financement, fichiers…) seront effacées. Cette action est irréversible.`
+                    )
+                  ) {
+                    void supprimer.mutateAsync(c.id);
+                  }
+                }}
+              >
+                <Icon name="trash" size={13} />
+                Supprimer définitivement
+              </button>
+            </div>
+          ))}
+          <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
+            Un dossier à la corbeille n'est plus visible des syndics, copropriétaires et prestataires. La
+            restauration le remet en ligne à l'identique.
+          </p>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 function exportCsv(copros: CoproWithStats[]) {
   const head = ["Copropriété", "Ville", "Phase", "DPE avant", "DPE après", "Gain %", "Logements", "Lots", "Copropriétaires", "Bâtiments", "Montant TTC", "Avancement %", "Syndic"];
   const lines = copros.map((c) =>
@@ -597,6 +680,8 @@ export default function Dashboard() {
   const [phaseFilter, setPhaseFilter] = useState<PhaseId | "">("");
   const [cityFilter, setCityFilter] = useState<string>("");
   const [showNew, setShowNew] = useState(false);
+  const [showCorbeille, setShowCorbeille] = useState(false);
+  const { data: corbeille } = useCoprosCorbeille();
 
   const cities = useMemo(
     () => Array.from(new Set((copros ?? []).map((c) => c.city).filter((v): v is string => !!v))).sort(),
@@ -628,6 +713,14 @@ export default function Dashboard() {
           <p className="page-sub">Suivi des projets de rénovation énergétique · Grand Est</p>
         </div>
         <span className="spacer"></span>
+        <button
+          className="se-btn se-btn-ghost btn-sm"
+          title="Dossiers mis à la corbeille — restaurer ou supprimer définitivement"
+          onClick={() => setShowCorbeille(true)}
+        >
+          <Icon name="trash" size={15} />
+          Corbeille{(corbeille?.length ?? 0) > 0 ? ` (${corbeille!.length})` : ""}
+        </button>
         <button className="se-btn se-btn-secondary btn-sm" onClick={() => copros && exportCsv(copros)}>
           <Icon name="download" size={16} />
           Exporter
@@ -692,6 +785,7 @@ export default function Dashboard() {
       )}
 
       {showNew && <NewCoproDialog onClose={() => setShowNew(false)} />}
+      {showCorbeille && <CorbeilleDialog onClose={() => setShowCorbeille(false)} />}
     </div>
   );
 }

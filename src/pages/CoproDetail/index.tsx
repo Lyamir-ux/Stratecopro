@@ -6,7 +6,7 @@ import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Badge, DpePair, PhaseBadge, THUMB_BG } from "@/components/ui";
 import type { DpeClass } from "@/lib/referentiels";
-import { useCopro, usePhotoUrl, useUploadPhoto } from "@/api/copros";
+import { useCopro, useMettreCorbeille, usePhotoUrl, useUploadPhoto } from "@/api/copros";
 import { ProjetTab } from "./ProjetTab";
 import { DonneesTab } from "./DonneesTab";
 import { FinancementTab } from "./FinancementTab";
@@ -31,6 +31,7 @@ export default function CoproDetail() {
   const { data: c, isLoading } = useCopro(id);
   const { data: photoUrl } = usePhotoUrl(c?.photo_path ?? null);
   const uploadPhoto = useUploadPhoto(id ?? "");
+  const corbeille = useMettreCorbeille();
   const photoRef = useRef<HTMLInputElement>(null);
 
   const tab: TabId = TABS.some((t) => t.id === tabParam) ? (tabParam as TabId) : "projet";
@@ -72,6 +73,24 @@ export default function CoproDetail() {
           >
             <Icon name="image" size={14} />
             {uploadPhoto.isPending ? "Envoi…" : "Photo"}
+          </button>
+          <button
+            className="se-btn se-btn-secondary btn-sm"
+            style={{ position: "absolute", top: 12, right: 96 }}
+            title="Mettre le dossier à la corbeille"
+            disabled={corbeille.isPending}
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Mettre « ${c.name} » à la corbeille ?\n\nLe dossier disparaîtra des espaces syndic, copropriétaires et prestataires. Vous pourrez le restaurer à tout moment depuis la corbeille du tableau de bord.`
+                )
+              ) {
+                void corbeille.mutateAsync(c.id).then(() => navigate("/"));
+              }
+            }}
+          >
+            <Icon name="trash" size={14} />
+            {corbeille.isPending ? "…" : "Corbeille"}
           </button>
           <input
             ref={photoRef}
