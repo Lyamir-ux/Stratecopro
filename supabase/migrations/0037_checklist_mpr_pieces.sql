@@ -1,0 +1,11 @@
+-- 0037 — Feedback du 19/08 : nouvelles pièces obligatoires de la checklist
+-- MaPrimeRénov' Copropriété (liste des chefs de projet — PV d'AG travaux et
+-- représentant légal, RIB compte travaux, pièces marchés/DPGF, honoraires MOE
+-- et études, contrat MOE, convention AMO, audit réglementaire, urbanisme,
+-- fiche État de la copropriété, enquête sociale, avis d'imposition, primes
+-- individuelles, registre à jour, PF définitif Excel).
+-- Les checklists MPR existantes n'avaient AUCUNE case cochée ni fichier lié
+-- (vérifié le 19/08) : on les supprime — elles se recréent automatiquement
+-- depuis le nouveau gabarit (CHECKLIST_TEMPLATES) à l'ouverture de l'onglet
+-- Fichiers du dossier.
+delete from checklists where dispositif = 'mpr_copro_2024';

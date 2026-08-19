@@ -151,16 +151,27 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: st
     ],
   },
   {
+    // pièces obligatoires du dossier MaPrimeRénov' Copropriété (liste des
+    // chefs de projet, feedback du 19/08/2026) — la clé `dispositif` reste
+    // inchangée : c'est l'identifiant stocké en base
     dispositif: "mpr_copro_2024",
-    label: "MPR Copropriété 2024",
+    label: "MaPrimeRénov' Copropriété",
     items: [
-      "Immatriculation du registre des copropriétés à jour",
+      "PV d'AG ayant décidé de réaliser les travaux",
+      "PV d'AG nommant le représentant légal",
+      "RIB du compte travaux",
+      "Pièces marchés : devis détaillés / DPGF des travaux",
+      "Devis détaillés des honoraires de MOE et des autres études",
+      "Contrat du maître d'œuvre",
+      "Convention AMO signée",
       "Audit énergétique réglementaire",
-      "PV d'AG (vote des travaux et du plan de financement)",
-      "Devis des entreprises RGE",
-      "Contrat AMO signé",
-      "Évaluation énergétique avant/après (gain ≥ 35 %)",
-      "RIB du syndic (compte travaux)",
+      "Déclarations d'urbanisme",
+      "Fiche « État de la copropriété »",
+      "Rapport d'enquête sociale",
+      "Avis d'imposition des personnes éligibles aux aides individuelles (espace copropriétaires)",
+      "Liste des primes individuelles",
+      "Attestation de mise à jour du registre de copropriété",
+      "Plan de financement définitif de la copropriété (Excel)",
     ],
   },
   {
