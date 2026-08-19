@@ -283,6 +283,9 @@ export function importPlanDefinitif(wb: WorkBook): ImportPlanResult {
   }
   if (!pfCollectif && !pfIndividuel)
     throw new Error("Aucun onglet « PF définitif … » reconnu dans ce classeur.");
+  // Seules les variantes présentes dans le classeur sont proposées au dossier
+  // (ex. un plan « éco-PTZ collectif seul » n'affiche pas la variante individuelle).
+  data.variantes = { collectif: !!pfCollectif, individuel: !!pfIndividuel };
   const pfMain = pfCollectif ?? pfIndividuel!;
   const gridMain = toGrid(wb, pfMain);
   const cBMain = colonneLibelles(gridMain, (s) => s.includes("nom de la copropriete"));

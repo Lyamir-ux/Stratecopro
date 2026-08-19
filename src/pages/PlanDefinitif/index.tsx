@@ -752,10 +752,42 @@ export default function PlanDefinitifPage() {
         </div>
       </div>
 
-      {/* ---- résultats ---- */}
-      <div className="detail-grid">
-        <VarianteCollectif r={r} data={data} />
-        <VarianteIndividuel r={r} data={data} />
+      {/* ---- résultats : variantes de financement ----
+          Empilées (collectif au-dessus, individuel en dessous) et affichées
+          uniquement si le projet est concerné — les cases suivent les onglets
+          du classeur importé et restent modifiables ici. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap", fontSize: 13.5 }}>
+          <span style={{ fontWeight: 700, fontFamily: "var(--font-display)" }}>
+            Variantes de financement présentées :
+          </span>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={data.variantes.collectif}
+              onChange={(e) => edit((d) => ((d.variantes.collectif = e.target.checked), d))}
+            />
+            Éco-PTZ collectif + avance de subventions
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={data.variantes.individuel}
+              onChange={(e) => edit((d) => ((d.variantes.individuel = e.target.checked), d))}
+            />
+            Éco-PTZ individuel — appels de fonds
+          </label>
+          <span className="se-small" style={{ color: "var(--fg-muted)" }}>
+            Seules les variantes cochées apparaissent ici et dans l'export Excel.
+          </span>
+        </div>
+        {data.variantes.collectif && <VarianteCollectif r={r} data={data} />}
+        {data.variantes.individuel && <VarianteIndividuel r={r} data={data} />}
+        {!data.variantes.collectif && !data.variantes.individuel && (
+          <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
+            Aucune variante affichée — cochez au moins l'option de financement concernée par le projet.
+          </p>
+        )}
       </div>
 
       {/* ---- garde-fous ---- */}

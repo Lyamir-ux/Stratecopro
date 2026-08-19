@@ -78,7 +78,10 @@ function CoproCard({ c, showProgress }: { c: CoproWithStats; showProgress: boole
             </div>
             <div className="m">
               <span className="v">{s?.batiments ?? 0}</span>
-              <span className="l">bâtiment{(s?.batiments ?? 0) > 1 ? "s" : ""}</span>
+              <span className="l">
+                {c.denomination_batiments === "entree" ? "entrée" : "bâtiment"}
+                {(s?.batiments ?? 0) > 1 ? "s" : ""}
+              </span>
             </div>
           </div>
 
@@ -676,7 +679,7 @@ function exportCsv(copros: CoproWithStats[]) {
 export default function Dashboard() {
   useCrumbs([{ label: "Vos copropriétés" }]);
   const { data: copros, isLoading, error } = useCopros();
-  const { dashLayout, setDashLayout, showProgress } = useUi();
+  const { dashLayout, setDashLayout, showProgress, chefProjetFilter, setChefProjetFilter } = useUi();
   const [phaseFilter, setPhaseFilter] = useState<PhaseId | "">("");
   const [cityFilter, setCityFilter] = useState<string>("");
   const [showNew, setShowNew] = useState(false);
@@ -687,8 +690,18 @@ export default function Dashboard() {
     () => Array.from(new Set((copros ?? []).map((c) => c.city).filter((v): v is string => !!v))).sort(),
     [copros]
   );
+  const chefsProjets = useMemo(
+    () =>
+      Array.from(new Set((copros ?? []).map((c) => c.chef_projet).filter((v): v is string => !!v))).sort((a, b) =>
+        a.localeCompare(b, "fr")
+      ),
+    [copros]
+  );
   const filtered = (copros ?? []).filter(
-    (c) => (!phaseFilter || c.phase === phaseFilter) && (!cityFilter || c.city === cityFilter)
+    (c) =>
+      (!phaseFilter || c.phase === phaseFilter) &&
+      (!cityFilter || c.city === cityFilter) &&
+      (!chefProjetFilter || c.chef_projet === chefProjetFilter)
   );
 
   const views = [
@@ -763,6 +776,24 @@ export default function Dashboard() {
         >
           <option value="">Secteur : tous</option>
           {cities.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+        {/* Filtre persistant : le choix reste le défaut du chef de projet à sa prochaine visite */}
+        <select
+          className="chip-filter"
+          value={chefProjetFilter}
+          onChange={(e) => setChefProjetFilter(e.target.value)}
+          style={{ cursor: "pointer" }}
+          title="Le filtre choisi reste appliqué par défaut à votre prochaine visite"
+        >
+          <option value="">Chef de projet : tous</option>
+          {chefProjetFilter && !chefsProjets.includes(chefProjetFilter) && (
+            <option value={chefProjetFilter}>{chefProjetFilter}</option>
+          )}
+          {chefsProjets.map((v) => (
             <option key={v} value={v}>
               {v}
             </option>

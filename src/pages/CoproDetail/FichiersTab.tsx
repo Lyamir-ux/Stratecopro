@@ -2,6 +2,7 @@
 // Chaque dépôt passe par le renommage assisté (analyse documentaire + validation humaine).
 import { useRef, useState } from "react";
 import { ApercuDocument } from "@/components/ApercuDocument";
+import { DepotZipDialog, estZip } from "@/components/DepotZipDialog";
 import { Icon } from "@/components/Icon";
 import { Progress } from "@/components/ui";
 import { RenommageDialog } from "@/components/RenommageDialog";
@@ -42,16 +43,22 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
   const [dragOver, setDragOver] = useState<string | null>(null);
   // Fichiers en attente de renommage assisté avant dépôt
   const [depot, setDepot] = useState<{ files: File[]; dossier: string } | null>(null);
-  const sending = depot != null;
+  // Archives zip en attente du choix de format (extraire / conserver)
+  const [depotZip, setDepotZip] = useState<{ zips: File[]; autres: File[]; dossier: string } | null>(null);
+  const sending = depot != null || depotZip != null;
 
   const byFolder = (f: string) => (fichiers ?? []).filter((x) => x.dossier === f);
   const folderFiles = openFolder ? byFolder(openFolder) : [];
 
   // Le dépôt (input multiple ou glissé-déposé) ouvre le dialogue de renommage,
   // qui analyse chaque document et appelle l'upload une fois le nom validé.
+  // Les archives zip passent d'abord par le choix du format de dépôt.
   const uploadFiles = (list: FileList | File[], dossier: string) => {
     const files = Array.from(list);
-    if (files.length) setDepot({ files, dossier });
+    if (!files.length) return;
+    const zips = files.filter(estZip);
+    if (zips.length) setDepotZip({ zips, autres: files.filter((f) => !estZip(f)), dossier });
+    else setDepot({ files, dossier });
   };
 
   const selectFolder = (f: string) => {
@@ -162,7 +169,8 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
           </div>
           <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
             <Icon name="upload" size={13} /> Glissez-déposez un ou plusieurs fichiers ici — directement sur une carte
-            pour choisir le dossier.
+            pour choisir le dossier. Une archive <b>.zip</b> est acceptée : vous choisissez alors d'en extraire le
+            contenu (fichier par fichier) ou de la déposer telle quelle.
           </p>
           {upload.isError && (
             <p className="se-small" style={{ marginTop: 8, marginBottom: 0, color: "var(--color-error-700)" }}>
@@ -288,6 +296,19 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
           path={apercu.storage_path}
           onClose={() => setApercu(null)}
           onTelecharger={() => void downloadFichier(apercu)}
+        />
+      )}
+
+      {depotZip && (
+        <DepotZipDialog
+          zips={depotZip.zips}
+          autres={depotZip.autres}
+          onChoix={(files) => {
+            const dossier = depotZip.dossier;
+            setDepotZip(null);
+            if (files.length) setDepot({ files, dossier });
+          }}
+          onClose={() => setDepotZip(null)}
         />
       )}
 

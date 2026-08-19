@@ -175,8 +175,10 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: st
     ],
   },
   {
+    // millésime 2026 (feedback du 19/08/2026) — la clé `dispositif` reste
+    // inchangée : c'est l'identifiant stocké en base
     dispositif: "eco_ptz_2024",
-    label: "Éco-PTZ collectif 2024",
+    label: "Éco-PTZ collectif 2026",
     items: [
       "Formulaire emprunteur « copropriétés »",
       "Formulaire entreprise par action de travaux",
@@ -205,6 +207,20 @@ export function useChecklists(coproId: string | undefined) {
         .eq("copro_id", coproId!);
       if (error) throw error;
       let lists = existing ?? [];
+      // Les libellés suivent toujours le gabarit (ex. millésime 2024 → 2026) :
+      // on resynchronise ceux qui ont changé, sans toucher aux items cochés.
+      const renames = lists.flatMap((l) => {
+        const t = CHECKLIST_TEMPLATES.find((x) => x.dispositif === l.dispositif);
+        return t && t.label !== l.label ? [{ id: l.id, label: t.label }] : [];
+      });
+      if (renames.length) {
+        const results = await Promise.all(
+          renames.map((r) => supabase.from("checklists").update({ label: r.label }).eq("id", r.id))
+        );
+        for (const r of results) if (r.error) throw r.error;
+        const byId = new Map(renames.map((r) => [r.id, r.label]));
+        lists = lists.map((l) => (byId.has(l.id) ? { ...l, label: byId.get(l.id)! } : l));
+      }
       const missing = CHECKLIST_TEMPLATES.filter((t) => !lists.some((l) => l.dispositif === t.dispositif));
       if (missing.length) {
         for (const t of missing) {

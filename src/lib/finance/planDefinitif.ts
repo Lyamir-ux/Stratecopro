@@ -150,12 +150,21 @@ export interface ParamsFinancement {
   pctAvanceAides: number;
 }
 
+/** Variantes de financement présentées dans le plan : seules les variantes
+ *  concernées par le projet sont affichées (éditeur) et exportées (classeur).
+ *  À l'import, elles suivent les onglets « PF définitif … » du fichier. */
+export interface VariantesPlan {
+  collectif: boolean;
+  individuel: boolean;
+}
+
 export interface PlanDefinitifData {
   infos: InfosPlan;
   lots: LotTravaux[];
   moe: LigneMoe[];
   aides: AideDef[];
   params: ParamsFinancement;
+  variantes: VariantesPlan;
   /**
    * Clé de répartition (code) choisie par item pour les plans individuels —
    * clés « lot:<numero> » / « moe:<index> » (voir repartitionPf.ts). Inutile
@@ -626,6 +635,7 @@ export function makeDefaultPlanDefinitif(): PlanDefinitifData {
       tauxPretAvancePct: 5.45,
       pctAvanceAides: 70,
     },
+    variantes: { collectif: true, individuel: true },
   };
 }
 
@@ -639,6 +649,7 @@ export function readPlanDefinitif(json: unknown): PlanDefinitifData {
     moe: raw.moe ?? [],
     aides: raw.aides && raw.aides.length ? raw.aides : def.aides,
     params: { ...def.params, ...(raw.params ?? {}) },
+    variantes: { ...def.variantes, ...(raw.variantes ?? {}) },
     repartitionCles: raw.repartitionCles ?? {},
   };
 }

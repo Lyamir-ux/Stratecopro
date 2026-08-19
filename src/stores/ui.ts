@@ -16,12 +16,16 @@ interface UiState {
   showProgress: boolean;
   accent: Accent;
   crumbs: Crumb[];
+  /** Filtre « chef de projet » du tableau de bord — persisté : une fois choisi
+   *  par la cheffe de projet, il redevient son filtre par défaut. */
+  chefProjetFilter: string;
   toggleCollapsed: () => void;
   setSidebarTheme: (t: "clair" | "sombre") => void;
   setDashLayout: (v: "kanban" | "galerie" | "tableau") => void;
   setShowProgress: (v: boolean) => void;
   setAccent: (a: Accent) => void;
   setCrumbs: (c: Crumb[]) => void;
+  setChefProjetFilter: (v: string) => void;
 }
 
 export const useUi = create<UiState>()(
@@ -33,12 +37,14 @@ export const useUi = create<UiState>()(
       showProgress: true,
       accent: "#7AB52C",
       crumbs: [],
+      chefProjetFilter: "",
       toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed })),
       setSidebarTheme: (sidebarTheme) => set({ sidebarTheme }),
       setDashLayout: (dashLayout) => set({ dashLayout }),
       setShowProgress: (showProgress) => set({ showProgress }),
       setAccent: (accent) => set({ accent }),
       setCrumbs: (crumbs) => set({ crumbs }),
+      setChefProjetFilter: (chefProjetFilter) => set({ chefProjetFilter }),
     }),
     {
       name: "se_amo_ui_v1",
@@ -48,6 +54,7 @@ export const useUi = create<UiState>()(
         dashLayout: s.dashLayout,
         showProgress: s.showProgress,
         accent: s.accent,
+        chefProjetFilter: s.chefProjetFilter,
       }),
     }
   )

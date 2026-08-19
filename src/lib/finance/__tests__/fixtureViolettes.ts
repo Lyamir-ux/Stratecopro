@@ -5,6 +5,7 @@ import { makeAidesDefaut } from "../planDefinitif";
 
 export function makeViolettes(): PlanDefinitifData {
   return {
+    variantes: { collectif: true, individuel: true },
     infos: {
       nomCopro: "La Violette",
       adresse: "213/215 route de Mittelhausbergen - 2 rue de Reitwiller - 67200 - Strasbourg",

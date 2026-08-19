@@ -29,7 +29,13 @@ export function exportPlanDefinitif(data: PlanDefinitifData): WorkBook {
   const lotSheetNames = new Map<number, string>();
 
   // ---------- Onglets PF (collectif puis individuel) ----------
-  for (const variante of ["collectif", "individuel"] as const) {
+  // Seules les variantes retenues pour le dossier sont exportées ; à défaut de
+  // choix (les deux masquées), on exporte quand même la variante collective.
+  const variantesExport: ("collectif" | "individuel")[] = (["collectif", "individuel"] as const).filter(
+    (v) => data.variantes?.[v] !== false
+  );
+  if (variantesExport.length === 0) variantesExport.push("collectif");
+  for (const variante of variantesExport) {
     const rows: Row[] = [];
     const push = (a: string | number | null, b: string | number | null = null, c: string | number | null = null, d: string | number | null = null, e: string | number | null = null, f: string | number | null = null) =>
       rows.push([a, b, c, d, e, f]);
