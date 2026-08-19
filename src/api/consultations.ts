@@ -197,14 +197,60 @@ export function useAddCandidature() {
   });
 }
 
-export function useSetCandidatureStatut() {
+export interface DecisionResult {
+  /** Sort de l'e-mail de décision : envoye / simule / erreur / aucun_email (candidature hors plateforme). */
+  emailStatut: string | null;
+  emailErreur: string | null;
+}
+
+/** Décision de l'AMO sur une candidature : retenir / refuser (e-mail automatique
+ *  au prestataire via l'edge function `notifier-choix`), ou annuler la décision.
+ *  Une MOE retenue accède à son projet dès qu'elle confirme son engagement. */
+export function useDeciderCandidature() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, statut }: { id: string; statut: Tables<"candidatures">["statut"] }) => {
-      const { error } = await supabase.from("candidatures").update({ statut }).eq("id", id);
+    mutationFn: async ({
+      id,
+      statut,
+    }: {
+      id: string;
+      statut: Tables<"candidatures">["statut"];
+    }): Promise<DecisionResult> => {
+      const patch =
+        statut === "recue"
+          ? { statut, decision_at: null, decision_email_statut: null, engagement_at: null }
+          : { statut };
+      const { error } = await supabase.from("candidatures").update(patch).eq("id", id);
       if (error) throw error;
+      if (statut === "recue") return { emailStatut: null, emailErreur: null };
+      // alerte e-mail au prestataire — la décision reste posée même si l'envoi échoue
+      const { data, error: fnErr } = await supabase.functions.invoke("notifier-choix", {
+        body: { candidature_id: id },
+      });
+      if (fnErr) return { emailStatut: "erreur", emailErreur: String(fnErr.message ?? fnErr) };
+      const res = data as { statut: string; erreur: string | null };
+      return { emailStatut: res.statut, emailErreur: res.erreur ?? null };
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["consultations"] }),
+  });
+}
+
+/** Questions de prestataires sans réponse sur les consultations en ligne —
+ *  alimente l'alerte du menu « Consulter un intervenant » (côté AMO). */
+export function useQuestionsEnAttenteCount(enabled = true) {
+  return useQuery({
+    queryKey: ["questions-en-attente"],
+    enabled,
+    refetchInterval: 120000,
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await supabase
+        .from("consultation_questions")
+        .select("id, consultations!inner(statut)", { count: "exact", head: true })
+        .is("reponse", null)
+        .eq("consultations.statut", "en_ligne");
+      if (error) throw error;
+      return count ?? 0;
+    },
   });
 }
 
@@ -220,7 +266,10 @@ export function useRepondreQuestion() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["consultations"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["consultations"] });
+      void qc.invalidateQueries({ queryKey: ["questions-en-attente"] });
+    },
   });
 }
 

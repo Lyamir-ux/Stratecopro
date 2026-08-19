@@ -7,7 +7,7 @@ import { Icon } from "@/components/Icon";
 import { Badge, type BadgeKind } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 import { OrganisationsPanel } from "@/components/OrganisationsPanel";
-import { useFeedbacks, useMajFeedback, useSupprimerFeedback, type Feedback } from "@/api/feedback";
+import { useEditerFeedback, useFeedbacks, useMajFeedback, useSupprimerFeedback, type Feedback } from "@/api/feedback";
 import type { Json, Tables } from "@/lib/database.types";
 import type { Bareme } from "@/lib/finance";
 import { ACCENTS, useUi } from "@/stores/ui";
@@ -144,11 +144,14 @@ const FB_ROLE_LABEL: Record<string, string> = {
 
 function FeedbackRow({ fb }: { fb: Feedback }) {
   const maj = useMajFeedback();
+  const editer = useEditerFeedback();
   const supprimer = useSupprimerFeedback();
+  const [edition, setEdition] = useState(false);
+  const [brouillon, setBrouillon] = useState(fb.message);
   const t = FB_TYPE_BADGE[fb.type] ?? FB_TYPE_BADGE.remarque;
   const traite = fb.statut === "traite";
   return (
-    <div style={{ padding: "12px 4px", borderBottom: "1px solid var(--border)", opacity: traite ? 0.55 : 1 }}>
+    <div style={{ padding: "12px 4px", borderBottom: "1px solid var(--border)", opacity: traite && !edition ? 0.55 : 1 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <Badge kind={t.kind}>{t.label}</Badge>
         <span style={{ fontSize: 13.5, fontWeight: 600 }}>{fb.auteur_nom || "Anonyme"}</span>
@@ -157,6 +160,17 @@ function FeedbackRow({ fb }: { fb: Feedback }) {
           {new Date(fb.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
         </span>
         <span style={{ flex: 1 }}></span>
+        <button
+          className="icon-btn"
+          style={{ width: 30, height: 30 }}
+          title="Ouvrir et modifier ce retour"
+          onClick={() => {
+            setBrouillon(fb.message);
+            setEdition((v) => !v);
+          }}
+        >
+          <Icon name="edit" size={15} />
+        </button>
         <button
           className="icon-btn"
           style={{ width: 30, height: 30 }}
@@ -176,7 +190,33 @@ function FeedbackRow({ fb }: { fb: Feedback }) {
           <Icon name="trash" size={15} />
         </button>
       </div>
-      <p style={{ margin: "7px 0 0", fontSize: 13.5, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{fb.message}</p>
+      {edition ? (
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+          <textarea
+            className="cs-textarea"
+            rows={4}
+            value={brouillon}
+            onChange={(e) => setBrouillon(e.target.value)}
+          ></textarea>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button className="se-btn se-btn-ghost btn-sm" onClick={() => setEdition(false)}>
+              Annuler
+            </button>
+            <button
+              className="se-btn se-btn-primary btn-sm"
+              disabled={!brouillon.trim() || brouillon === fb.message || editer.isPending}
+              onClick={() => {
+                void editer.mutateAsync({ id: fb.id, message: brouillon }).then(() => setEdition(false));
+              }}
+            >
+              <Icon name="check" size={14} />
+              {editer.isPending ? "Enregistrement…" : "Enregistrer"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p style={{ margin: "7px 0 0", fontSize: 13.5, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{fb.message}</p>
+      )}
       <p style={{ margin: "5px 0 0", fontSize: 12, color: "var(--fg-muted)" }}>Page : {fb.page || "—"}</p>
     </div>
   );
@@ -205,10 +245,22 @@ function feedbacksToMarkdown(list: Feedback[]): string {
 
 function FeedbackPanel() {
   const { data: feedbacks } = useFeedbacks();
-  const [voirTraites, setVoirTraites] = useState(false);
+  // « à traiter » = retours nouveaux ; « archives » = retours déjà traités,
+  // filtrables par auteur (menu des clients)
+  const [vue, setVue] = useState<"a_traiter" | "archives">("a_traiter");
+  const [auteur, setAuteur] = useState<string>("tous");
   const [copie, setCopie] = useState(false);
   const nouveaux = (feedbacks ?? []).filter((f) => f.statut !== "traite");
-  const visibles = voirTraites ? feedbacks ?? [] : nouveaux;
+  const traites = (feedbacks ?? []).filter((f) => f.statut === "traite");
+  const auteurs = [...new Set(traites.map((f) => f.auteur_nom || "Anonyme"))].sort((a, b) =>
+    a.localeCompare(b, "fr")
+  );
+  const visibles =
+    vue === "a_traiter"
+      ? nouveaux
+      : auteur === "tous"
+        ? traites
+        : traites.filter((f) => (f.auteur_nom || "Anonyme") === auteur);
 
   const exporterMd = async () => {
     const md = feedbacksToMarkdown(nouveaux);
@@ -235,7 +287,7 @@ function FeedbackPanel() {
         <h3>Retours de test</h3>
         <span style={{ flex: 1 }}></span>
         {nouveaux.length > 0 && <Badge kind="primary" dot>{nouveaux.length} à traiter</Badge>}
-        {nouveaux.length > 0 && (
+        {vue === "a_traiter" && nouveaux.length > 0 && (
           <button
             className="se-btn se-btn-secondary btn-sm"
             title="Copier les feedbacks à traiter au format Markdown, prêts à coller dans Claude"
@@ -245,15 +297,34 @@ function FeedbackPanel() {
             {copie ? "Copié !" : "Exporter en MD"}
           </button>
         )}
-        <button className="se-btn se-btn-ghost btn-sm" onClick={() => setVoirTraites((v) => !v)}>
-          {voirTraites ? "Masquer les traités" : "Tout afficher"}
-        </button>
+        <div className="opt-mini">
+          <button className={vue === "a_traiter" ? "on" : ""} onClick={() => setVue("a_traiter")}>
+            À traiter
+          </button>
+          <button className={vue === "archives" ? "on" : ""} onClick={() => setVue("archives")}>
+            Archives · {traites.length}
+          </button>
+        </div>
       </div>
       <div className="p-body">
+        {vue === "archives" && traites.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <Icon name="users" size={15} style={{ color: "var(--fg-muted)" }} />
+            <select className="edit-sel" value={auteur} onChange={(e) => setAuteur(e.target.value)} style={{ maxWidth: 260 }}>
+              <option value="tous">Tous les auteurs ({traites.length})</option>
+              {auteurs.map((a) => (
+                <option key={a} value={a}>
+                  {a} ({traites.filter((f) => (f.auteur_nom || "Anonyme") === a).length})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {visibles.length === 0 ? (
           <p className="se-small" style={{ color: "var(--fg-muted)" }}>
-            Aucun retour pour l'instant — les remarques envoyées via le bouton « Feedback » (en bas à droite de chaque
-            page, tous espaces confondus) s'afficheront ici.
+            {vue === "archives"
+              ? "Aucun retour traité pour l'instant — les retours marqués comme traités s'archivent ici."
+              : "Aucun retour pour l'instant — les remarques envoyées via le bouton « Feedback » (en bas à droite de chaque page, tous espaces confondus) s'afficheront ici."}
           </p>
         ) : (
           visibles.map((fb) => <FeedbackRow key={fb.id} fb={fb} />)

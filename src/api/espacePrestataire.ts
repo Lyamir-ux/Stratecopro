@@ -220,6 +220,216 @@ export function usePostuler() {
   });
 }
 
+/** Retrait d'une candidature encore à l'étude (consultation en ligne, offre
+ *  « reçue ») — la pièce jointe est supprimée du bucket avec la candidature. */
+export function useRetirerCandidature() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (cand: Tables<"candidatures">) => {
+      if (cand.fichier_path) {
+        // meilleur effort : la candidature part même si le fichier résiste
+        await supabase.storage.from("offres-presta").remove([cand.fichier_path]).catch(() => undefined);
+      }
+      const { error } = await supabase.from("candidatures").delete().eq("id", cand.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["presta-consultations"] });
+      void qc.invalidateQueries({ queryKey: ["presta-candidatures"] });
+    },
+  });
+}
+
+/** Le prestataire retenu confirme son engagement sur l'opération — pour une
+ *  MOE, le projet passe alors dans « Mes projets ». */
+export function useConfirmerEngagement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (candidatureId: string) => {
+      const { error } = await supabase
+        .from("candidatures")
+        .update({ engagement_at: new Date().toISOString() })
+        .eq("id", candidatureId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["presta-candidatures"] });
+      void qc.invalidateQueries({ queryKey: ["presta-projets-moe"] });
+    },
+  });
+}
+
+// ========== Fiche entreprise (section « Mon entreprise ») ==========
+
+/** Coordonnées éditables par le prestataire — les métiers, le référencement
+ *  et la raison sociale restent pilotés par l'AMO (trigger côté base). */
+export function useMajMonPrestataire() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: Partial<
+        Pick<
+          Tables<"prestataires">,
+          "email" | "email_secondaire" | "telephone" | "adresse" | "ville" | "logo_path" | "contact_nom"
+        >
+      >;
+    }) => {
+      const { error } = await supabase.from("prestataires").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["mon-prestataire"] });
+      void qc.invalidateQueries({ queryKey: ["prestataires"] });
+    },
+  });
+}
+
+export function useContactsPresta(prestaId: string) {
+  return useQuery({
+    queryKey: ["presta-contacts", prestaId],
+    queryFn: async (): Promise<Tables<"prestataire_contacts">[]> => {
+      const { data, error } = await supabase
+        .from("prestataire_contacts")
+        .select("*")
+        .eq("prestataire_id", prestaId)
+        .order("created_at");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useAddContactPresta(prestaId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { nom: string; role: string; email: string; telephone: string }) => {
+      const { error } = await supabase.from("prestataire_contacts").insert({
+        prestataire_id: prestaId,
+        nom: input.nom.trim(),
+        role: input.role.trim() || null,
+        email: input.email.trim() || null,
+        telephone: input.telephone.trim() || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["presta-contacts", prestaId] }),
+  });
+}
+
+export function useDeleteContactPresta(prestaId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("prestataire_contacts").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["presta-contacts", prestaId] }),
+  });
+}
+
+export function useDocsPresta(prestaId: string) {
+  return useQuery({
+    queryKey: ["presta-docs", prestaId],
+    queryFn: async (): Promise<Tables<"prestataire_docs">[]> => {
+      const { data, error } = await supabase
+        .from("prestataire_docs")
+        .select("*")
+        .eq("prestataire_id", prestaId)
+        .order("uploaded_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/** Dossier de dépôt dans presta-docs : celui du compte rattaché à l'entreprise
+ *  (le prestataire garde ainsi l'accès à ses fichiers même déposés en aperçu AMO). */
+const dossierPresta = (presta: Tables<"prestataires">, sessionUid: string) =>
+  presta.user_id ?? sessionUid;
+
+/** Dépôt d'un document de certification (RGE, qualification, assurance…). */
+export function useUploadDocPresta(presta: Tables<"prestataires">) {
+  const qc = useQueryClient();
+  const { session } = useAuth();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      if (!session) throw new Error("Session expirée");
+      const path = `${dossierPresta(presta, session.user.id)}/${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
+      const { error: upErr } = await supabase.storage.from("presta-docs").upload(path, file);
+      if (upErr) throw upErr;
+      const { error } = await supabase.from("prestataire_docs").insert({
+        prestataire_id: presta.id,
+        path,
+        name: file.name,
+        size: file.size,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["presta-docs", presta.id] }),
+  });
+}
+
+export function useDeleteDocPresta(prestaId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (doc: Tables<"prestataire_docs">) => {
+      await supabase.storage.from("presta-docs").remove([doc.path]).catch(() => undefined);
+      const { error } = await supabase.from("prestataire_docs").delete().eq("id", doc.id);
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["presta-docs", prestaId] }),
+  });
+}
+
+/** Ouvre un document du bucket privé presta-docs (URL signée 60 s). */
+export async function ouvrirDocPresta(path: string): Promise<void> {
+  const { data, error } = await supabase.storage.from("presta-docs").createSignedUrl(path, 60);
+  if (error) throw error;
+  window.open(data.signedUrl, "_blank");
+}
+
+/** Dépôt du logo de l'entreprise (remplace l'ancien) + mise à jour de la fiche. */
+export function useUploadLogoPresta(presta: Tables<"prestataires">) {
+  const qc = useQueryClient();
+  const { session } = useAuth();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      if (!session) throw new Error("Session expirée");
+      const ext = file.name.split(".").pop() ?? "png";
+      const path = `${dossierPresta(presta, session.user.id)}/logo-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("presta-docs").upload(path, file);
+      if (upErr) throw upErr;
+      if (presta.logo_path) {
+        await supabase.storage.from("presta-docs").remove([presta.logo_path]).catch(() => undefined);
+      }
+      const { error } = await supabase.from("prestataires").update({ logo_path: path }).eq("id", presta.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["mon-prestataire"] });
+      void qc.invalidateQueries({ queryKey: ["prestataires"] });
+      void qc.invalidateQueries({ queryKey: ["presta-logo"] });
+    },
+  });
+}
+
+/** URL signée (5 min) du logo de l'entreprise. */
+export function useLogoPresta(logoPath: string | null) {
+  return useQuery({
+    queryKey: ["presta-logo", logoPath],
+    enabled: !!logoPath,
+    queryFn: async (): Promise<string> => {
+      const { data, error } = await supabase.storage.from("presta-docs").createSignedUrl(logoPath!, 300);
+      if (error) throw error;
+      return data.signedUrl;
+    },
+  });
+}
+
 export type ProjetMoe = {
   candidature: Tables<"candidatures">;
   consultation: Tables<"consultations">;

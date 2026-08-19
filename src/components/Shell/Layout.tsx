@@ -5,6 +5,7 @@ import { Topbar } from "./Topbar";
 import { useUi, type Accent } from "@/stores/ui";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCopros, useTasksCount } from "@/api/copros";
+import { useQuestionsEnAttenteCount } from "@/api/consultations";
 
 // Accent dynamique — repris de la maquette (app.jsx ACCENT_MAP)
 const ACCENT_MAP: Record<Accent, { hover: string; soft: string; deep: string }> = {
@@ -30,6 +31,8 @@ export function Layout() {
   const { profile, signOut } = useAuth();
   const { data: copros } = useCopros();
   const { data: tasksCount } = useTasksCount();
+  // alerte du menu « Consulter un intervenant » : questions de prestataires sans réponse
+  const { data: questionsCount } = useQuestionsEnAttenteCount();
 
   const user = {
     initials: profile?.initials ?? "–",
@@ -40,7 +43,13 @@ export function Layout() {
 
   return (
     <div className={"app" + (collapsed ? " collapsed" : "")}>
-      <Sidebar recents={recents} tasksCount={tasksCount ?? null} user={user} onLogout={() => void signOut()} />
+      <Sidebar
+        recents={recents}
+        tasksCount={tasksCount ?? null}
+        questionsCount={questionsCount || null}
+        user={user}
+        onLogout={() => void signOut()}
+      />
       <div className="main">
         <Topbar />
         <div className="content">

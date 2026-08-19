@@ -66,6 +66,22 @@ export function useMajFeedback() {
   });
 }
 
+/** Modification du texte (et du type) d'un retour — par l'équipe AMO ou par
+ *  l'auteur du retour lui-même (RLS : feedbacks_own_update, migration 0035). */
+export function useEditerFeedback() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, message, type }: { id: string; message: string; type?: FeedbackType }) => {
+      const { error } = await supabase
+        .from("feedbacks")
+        .update({ message: message.trim(), ...(type ? { type } : {}) })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["feedbacks"] }),
+  });
+}
+
 export function useSupprimerFeedback() {
   const qc = useQueryClient();
   return useMutation({

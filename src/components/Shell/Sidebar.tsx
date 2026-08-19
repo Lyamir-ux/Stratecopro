@@ -19,11 +19,13 @@ export interface RecentCopro {
 interface SidebarProps {
   recents: RecentCopro[];
   tasksCount?: number | null;
+  /** Questions de prestataires sans réponse — alerte sur « Consulter un intervenant ». */
+  questionsCount?: number | null;
   user: { initials: string; name: string; org: string };
   onLogout: () => void;
 }
 
-export function Sidebar({ recents, tasksCount, user, onLogout }: SidebarProps) {
+export function Sidebar({ recents, tasksCount, questionsCount, user, onLogout }: SidebarProps) {
   const { collapsed, toggleCollapsed, sidebarTheme } = useUi();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -32,7 +34,7 @@ export function Sidebar({ recents, tasksCount, user, onLogout }: SidebarProps) {
   const nav1: NavEntry[] = [
     { to: "/", icon: "gauge", label: "Tableau de bord" },
     { to: "/taches", icon: "clipboard", label: "Vos tâches", count: tasksCount },
-    { to: "/consultations", icon: "megaphone", label: "Consulter un intervenant" },
+    { to: "/consultations", icon: "megaphone", label: "Consulter un intervenant", count: questionsCount },
   ];
   const nav2: NavEntry[] = [
     { to: "/prestataires", icon: "briefcase", label: "Base prestataires" },

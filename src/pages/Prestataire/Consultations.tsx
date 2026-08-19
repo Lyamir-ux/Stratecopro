@@ -13,6 +13,7 @@ import {
   useConsultationsPresta,
   usePoserQuestion,
   usePostuler,
+  useRetirerCandidature,
   type ConsultationPresta,
   type TarifsMoe,
   type TarifsSimples,
@@ -545,6 +546,7 @@ function PostulerModal({
 
 export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires"> }) {
   const { data: consultations } = useConsultationsPresta(presta);
+  const retirer = useRetirerCandidature();
   const [postulerA, setPostulerA] = useState<ConsultationPresta | null>(null);
   const [questionsDe, setQuestionsDe] = useState<ConsultationPresta | null>(null);
   const [carteDe, setCarteDe] = useState<ConsultationPresta | null>(null);
@@ -685,9 +687,30 @@ export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires">
                 </button>
                 <span className="spacer" style={{ flex: 1 }}></span>
                 {cs.maCandidature ? (
-                  <span className="cs-applied">
-                    <Icon name="check" size={15} />
-                    Candidature envoyée
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <span className="cs-applied">
+                      <Icon name="check" size={15} />
+                      Candidature envoyée
+                    </span>
+                    {cs.maCandidature.statut === "recue" && (
+                      <button
+                        className="se-btn se-btn-ghost btn-sm"
+                        title="Retirer votre candidature de cette consultation"
+                        disabled={retirer.isPending}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "Retirer votre candidature ? Votre offre sera supprimée de la consultation — vous pourrez repostuler tant qu'elle est en ligne."
+                            )
+                          ) {
+                            void retirer.mutateAsync(cs.maCandidature!);
+                          }
+                        }}
+                      >
+                        <Icon name="trash" size={13} />
+                        Retirer ma candidature
+                      </button>
+                    )}
                   </span>
                 ) : (
                   <button

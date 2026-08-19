@@ -10,7 +10,10 @@ import type { Tables } from "@/lib/database.types";
 
 export function MesProjets({ presta }: { presta: Tables<"prestataires"> }) {
   const { data: projets } = useMesProjetsMoe(true, presta.id);
-  const list = projets ?? [];
+  // le projet n'entre dans « Mes projets » qu'une fois l'engagement confirmé
+  // (bouton « Je m'engage » de Mes candidatures)
+  const list = (projets ?? []).filter((p) => p.candidature.engagement_at);
+  const enAttente = (projets ?? []).length - list.length;
 
   return (
     <div className="page" style={{ padding: 0 }}>
@@ -18,17 +21,33 @@ export function MesProjets({ presta }: { presta: Tables<"prestataires"> }) {
         <div>
           <h1 className="page-title">Mes projets</h1>
           <p className="page-sub">
-            Opérations où votre candidature de maîtrise d'œuvre a été retenue — consultation des données de
-            l'opération (le pilotage détaillé des missions arrive prochainement)
+            Opérations où votre candidature de maîtrise d'œuvre a été retenue et votre engagement confirmé —
+            consultation des données de l'opération (le pilotage détaillé des missions arrive prochainement)
           </p>
         </div>
       </div>
+
+      {enAttente > 0 && (
+        <div
+          className="panel"
+          style={{ padding: "12px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10, borderLeft: "3px solid var(--color-primary-500)" }}
+        >
+          <Icon name="checkCircle" size={16} style={{ color: "var(--color-primary-700)", flex: "none" }} />
+          <span style={{ fontSize: 13.5 }}>
+            {enAttente} candidature{enAttente > 1 ? "s" : ""} retenue{enAttente > 1 ? "s" : ""} en attente de
+            votre confirmation d'engagement — rendez-vous dans « Mes candidatures » pour valider le projet.
+          </span>
+        </div>
+      )}
 
       {list.length === 0 && (
         <div className="placeholder-screen" style={{ minHeight: 320 }}>
           <div className="ps-ico"><Icon name="building" size={30} /></div>
           <h2>Aucun projet en cours</h2>
-          <p>Lorsqu'une de vos candidatures MOE est retenue par l'AMO, l'opération apparaît ici.</p>
+          <p>
+            Lorsqu'une de vos candidatures MOE est retenue par l'AMO et que vous confirmez votre engagement,
+            l'opération apparaît ici.
+          </p>
         </div>
       )}
 

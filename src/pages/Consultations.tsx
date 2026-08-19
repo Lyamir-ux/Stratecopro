@@ -25,10 +25,10 @@ import {
   useConsultations,
   usePublishConsultation,
   useRepondreQuestion,
-  useSetCandidatureStatut,
   type Consultation,
   type PublishResult,
 } from "@/api/consultations";
+import { CandidatureActions } from "@/components/CandidatureActions";
 
 function joursRestants(iso: string | null): number | null {
   if (!iso) return null;
@@ -124,8 +124,9 @@ function EtatConsultation({ cs }: { cs: Consultation }) {
 }
 
 /** Questions posées par les candidats avant de postuler — la réponse de
- *  l'AMO est visible de tous les candidats de la consultation. */
-function QuestionsPanel({ cs }: { cs: Consultation }) {
+ *  l'AMO est visible de tous les candidats de la consultation.
+ *  Réutilisé par l'onglet Prestataires du dossier copro. */
+export function QuestionsPanel({ cs }: { cs: Consultation }) {
   const repondre = useRepondreQuestion();
   const [brouillons, setBrouillons] = useState<Record<string, string>>({});
 
@@ -191,7 +192,6 @@ function Card({ cs }: { cs: Consultation }) {
   const [newOrg, setNewOrg] = useState("");
   const close = useCloseConsultation();
   const addCand = useAddCandidature();
-  const setStatut = useSetCandidatureStatut();
   const jr = joursRestants(cs.date_limite);
   const enLigne = cs.statut === "en_ligne";
   const cible = consultationCible(cs);
@@ -338,18 +338,7 @@ function Card({ cs }: { cs: Consultation }) {
                 </button>
               )}
               <span className="spacer" style={{ flex: 1 }}></span>
-              <select
-                className="edit-inp"
-                value={cand.statut}
-                onChange={(e) =>
-                  void setStatut.mutateAsync({ id: cand.id, statut: e.target.value as typeof cand.statut })
-                }
-                style={{ maxWidth: 130, fontSize: 12.5 }}
-              >
-                <option value="recue">Reçue</option>
-                <option value="retenue">Retenue</option>
-                <option value="non_retenue">Non retenue</option>
-              </select>
+              <CandidatureActions cand={cand} />
               {(cand.tarif_diag_avp != null ||
                 cand.tarif_pro_dce != null ||
                 cand.tarif_chantier != null ||

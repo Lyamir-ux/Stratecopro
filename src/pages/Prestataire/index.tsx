@@ -3,19 +3,62 @@
 // métiers et ses candidatures ; la section « Mes projets » n'existe que pour
 // une MOE (accès lecture aux copros où elle a été retenue). Les autres
 // intervenants n'ont AUCUN accès aux projets en cours.
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon, type IconName } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
-import { useMonPrestataire } from "@/api/espacePrestataire";
+import { useLogoPresta, useMesCandidatures, useMonPrestataire } from "@/api/espacePrestataire";
 import { CONSULT_TYPES } from "@/api/consultations";
 import { usePrestataires } from "@/api/prestataires";
+import { compteNonLus, useLectures, useMessagesPresta } from "@/api/messages";
 import { ConsultationsPresta } from "./Consultations";
 import { MesCandidatures } from "./MesCandidatures";
 import { MesProjets } from "./MesProjets";
+import { Messages } from "./Messages";
+import { MonEntreprise } from "./MonEntreprise";
+import type { Tables } from "@/lib/database.types";
 
-export type SectionId = "consultations" | "candidatures" | "projets";
+export type SectionId = "consultations" | "candidatures" | "projets" | "messages" | "entreprise";
+
+/** Pastille de messages non lus sur l'entrée « Messages » du menu. */
+function PastilleMessages({ presta }: { presta: Tables<"prestataires"> }) {
+  const { session } = useAuth();
+  const { data: candidatures } = useMesCandidatures(presta.id);
+  const coproIds = useMemo(
+    () =>
+      [...new Set(
+        (candidatures ?? [])
+          .filter((c) => c.statut === "retenue" && c.consultation?.copro)
+          .map((c) => c.consultation!.copro!.id)
+      )],
+    [candidatures]
+  );
+  const { data: messages } = useMessagesPresta(presta.id, coproIds);
+  const { data: lectures } = useLectures();
+  const nonLus = compteNonLus(messages, lectures, session?.user.id);
+  if (nonLus === 0) return null;
+  return (
+    <span
+      title={`${nonLus} message${nonLus > 1 ? "s" : ""} non lu${nonLus > 1 ? "s" : ""}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: 17,
+        height: 17,
+        padding: "0 5px",
+        borderRadius: 9,
+        background: "var(--accent)",
+        color: "#fff",
+        fontSize: 11,
+        fontWeight: 700,
+      }}
+    >
+      {nonLus}
+    </span>
+  );
+}
 
 function Loader() {
   return (
@@ -38,6 +81,7 @@ export default function Prestataire() {
 
   const isLoading = isAmo ? tousLoading : monLoading;
   const presta = isAmo ? (tous ?? []).find((p) => p.id === previewId) ?? null : (monPresta ?? null);
+  const { data: logoUrl } = useLogoPresta(presta?.logo_path ?? null);
 
   if (isLoading || !profile) return <Loader />;
 
@@ -111,6 +155,8 @@ export default function Prestataire() {
     { id: "consultations", label: "Consultations en cours", icon: "megaphone" },
     { id: "candidatures", label: "Mes candidatures", icon: "send" },
     ...(isMoe ? [{ id: "projets" as SectionId, label: "Mes projets", icon: "building" as IconName }] : []),
+    { id: "messages", label: "Messages", icon: "message" },
+    { id: "entreprise", label: "Mon entreprise", icon: "briefcase" },
   ];
   const section: SectionId = (sections.some((s) => s.id === sectionParam) ? sectionParam : "consultations") as SectionId;
 
@@ -141,7 +187,11 @@ export default function Prestataire() {
       <header className="portal-header">
         <img className="ph-logo" src="/logo-strateco-pro.png" alt="Strat Eco" />
         <div className="ph-copro">
-          <Icon name="briefcase" size={18} style={{ color: "var(--accent)" }} />
+          {logoUrl ? (
+            <img src={logoUrl} alt="" style={{ height: 26, maxWidth: 90, objectFit: "contain" }} />
+          ) : (
+            <Icon name="briefcase" size={18} style={{ color: "var(--accent)" }} />
+          )}
           <span className="nm">{presta.raison_sociale}</span>
         </div>
         <span className="ph-spacer"></span>
@@ -162,6 +212,7 @@ export default function Prestataire() {
           <button key={it.id} className={"pnav" + (section === it.id ? " on" : "")} onClick={() => go(it.id)}>
             <Icon name={it.icon} size={17} />
             {it.label}
+            {it.id === "messages" && <PastilleMessages presta={presta} />}
           </button>
         ))}
       </nav>
@@ -170,6 +221,8 @@ export default function Prestataire() {
         {section === "consultations" && <ConsultationsPresta presta={presta} />}
         {section === "candidatures" && <MesCandidatures presta={presta} />}
         {section === "projets" && isMoe && <MesProjets presta={presta} />}
+        {section === "messages" && <Messages presta={presta} />}
+        {section === "entreprise" && <MonEntreprise presta={presta} />}
       </main>
     </div>
   );

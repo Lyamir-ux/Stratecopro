@@ -7,7 +7,9 @@ import { Icon } from "@/components/Icon";
 import { Badge, DpePair, PhaseBadge, THUMB_BG } from "@/components/ui";
 import type { DpeClass } from "@/lib/referentiels";
 import { useCopro, useMettreCorbeille, usePhotoUrl, useUploadPhoto } from "@/api/copros";
+import { useConsultations } from "@/api/consultations";
 import { ProjetTab } from "./ProjetTab";
+import { PrestatairesTab } from "./PrestatairesTab";
 import { DonneesTab } from "./DonneesTab";
 import { FinancementTab } from "./FinancementTab";
 import { EnqueteTab } from "./EnqueteTab";
@@ -19,6 +21,7 @@ const TABS = [
   { id: "donnees", label: "Données de la copro" },
   { id: "financement", label: "Plans de financement" },
   { id: "enquete", label: "Enquête sociale" },
+  { id: "prestataires", label: "Prestataires" },
   { id: "fichiers", label: "Fichiers" },
   { id: "communications", label: "Communications" },
 ] as const;
@@ -33,6 +36,11 @@ export default function CoproDetail() {
   const uploadPhoto = useUploadPhoto(id ?? "");
   const corbeille = useMettreCorbeille();
   const photoRef = useRef<HTMLInputElement>(null);
+  // pastille de l'onglet Prestataires : questions de candidats sans réponse
+  const { data: consultations } = useConsultations();
+  const questionsEnAttente = (consultations ?? [])
+    .filter((cs) => cs.copro_id === id && cs.statut === "en_ligne")
+    .reduce((n, cs) => n + cs.questions.filter((q) => !q.reponse).length, 0);
 
   const tab: TabId = TABS.some((t) => t.id === tabParam) ? (tabParam as TabId) : "projet";
 
@@ -147,6 +155,27 @@ export default function CoproDetail() {
             onClick={() => navigate(`/copros/${c.id}/${tb.id}`, { replace: true })}
           >
             {tb.label}
+            {tb.id === "prestataires" && questionsEnAttente > 0 && (
+              <span
+                title={`${questionsEnAttente} question${questionsEnAttente > 1 ? "s" : ""} de prestataire sans réponse`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 17,
+                  height: 17,
+                  padding: "0 5px",
+                  marginLeft: 6,
+                  borderRadius: 9,
+                  background: "var(--color-warning-500, #e8a13c)",
+                  color: "#fff",
+                  fontSize: 11,
+                  fontWeight: 700,
+                }}
+              >
+                {questionsEnAttente}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -155,6 +184,7 @@ export default function CoproDetail() {
       {tab === "donnees" && <DonneesTab c={c} />}
       {tab === "financement" && <FinancementTab c={c} />}
       {tab === "enquete" && <EnqueteTab c={c} />}
+      {tab === "prestataires" && <PrestatairesTab c={c} />}
       {tab === "fichiers" && <FichiersTab c={c} />}
       {tab === "communications" && <CommunicationsTab c={c} />}
     </div>
