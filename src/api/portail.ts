@@ -18,6 +18,8 @@ export interface PortalLot {
   num: string;
   usage: string;
   batiment: string | null;
+  /** lot d'habitation auquel ce lot annexe est rattaché (bulletins, tantièmes cumulés) */
+  rattacheA: string | null;
   /** tantièmes par code de clé ('MUN'…) */
   tantiemes: Record<string, number>;
 }
@@ -37,6 +39,34 @@ export function totalTantiemes(lots: PortalLot[], cle: string): number {
   return lots.reduce((s, l) => s + lotTantiemes(l, cle), 0);
 }
 
+/** Lots annexes (garage, cave…) rattachés à ce lot d'habitation. */
+export function lotsRattaches(lots: PortalLot[], lot: PortalLot): PortalLot[] {
+  return lots.filter((l) => l.rattacheA === lot.id);
+}
+
+/** Tantièmes du lot + de ses lots annexes rattachés (affichés sur le bulletin). */
+export function tantiemesAvecRattaches(lots: PortalLot[], lot: PortalLot, cle: string): number {
+  return lotTantiemes(lot, cle) + totalTantiemes(lotsRattaches(lots, lot), cle);
+}
+
+/** Lots annexes non rattachés à un lot d'habitation — bloquent la génération
+ *  des documents d'adhésion dès que le copropriétaire a un lot d'habitation. */
+export function lotsAnnexesNonRattaches(lots: PortalLot[]): PortalLot[] {
+  return lots.filter((l) => l.usage !== "habitation" && !l.rattacheA);
+}
+
+/** Rattache (cibleId) ou détache (null) un lot annexe — RPC validée en base. */
+export function useRattacherLot() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ lotId, cibleId }: { lotId: string; cibleId: string | null }) => {
+      const { error } = await supabase.rpc("rattacher_lot", { p_lot_id: lotId, p_cible_id: cibleId });
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["portail", "mes-copros"] }),
+  });
+}
+
 /** Les rattachements du user connecté : fiche copropriétaire + copro + lots. */
 export function useMesCopros() {
   return useQuery({
@@ -45,7 +75,7 @@ export function useMesCopros() {
       const { data, error } = await supabase.from("coproprietaires").select(
         `id, nom,
          coproprietes (*),
-         lots ( id, num, usage, batiments ( code ),
+         lots ( id, num, usage, rattache_a, batiments ( code ),
                 lot_tantiemes ( tantiemes, cles_repartition ( code ) ) )`
       );
       if (error) throw error;
@@ -67,6 +97,7 @@ export function useMesCopros() {
               id: l.id,
               num: l.num,
               usage: l.usage,
+              rattacheA: l.rattache_a,
               batiment: l.batiments?.code ?? null,
               tantiemes: Object.fromEntries(
                 (l.lot_tantiemes ?? [])
@@ -475,6 +506,13 @@ export async function uploadPdfGenere(name: string, bytes: Uint8Array): Promise<
     .upload(path, new Blob([bytes as BlobPart], { type: "application/pdf" }));
   if (error) throw error;
   return path;
+}
+
+/** URL signée courte durée pour AFFICHER un document du bucket pieces-copro. */
+export async function urlSigneePiece(path: string): Promise<string> {
+  const { data, error } = await supabase.storage.from("pieces-copro").createSignedUrl(path, 300);
+  if (error) throw error;
+  return data.signedUrl;
 }
 
 export async function downloadFromPieces(path: string, filename: string) {

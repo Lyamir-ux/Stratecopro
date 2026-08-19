@@ -1123,6 +1123,7 @@ export type Database = {
           created_at: string
           id: string
           num: string
+          rattache_a: string | null
           usage: Database["public"]["Enums"]["usage_lot"]
         }
         Insert: {
@@ -1132,6 +1133,7 @@ export type Database = {
           created_at?: string
           id?: string
           num: string
+          rattache_a?: string | null
           usage?: Database["public"]["Enums"]["usage_lot"]
         }
         Update: {
@@ -1141,9 +1143,17 @@ export type Database = {
           created_at?: string
           id?: string
           num?: string
+          rattache_a?: string | null
           usage?: Database["public"]["Enums"]["usage_lot"]
         }
         Relationships: [
+          {
+            foreignKeyName: "lots_rattache_a_fkey"
+            columns: ["rattache_a"]
+            isOneToOne: false
+            referencedRelation: "lots"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "lots_batiment_id_fkey"
             columns: ["batiment_id"]
@@ -2082,6 +2092,10 @@ export type Database = {
       }
       my_prestataire_id: { Args: never; Returns: string }
       peut_postuler: { Args: { p_consultation_id: string }; Returns: boolean }
+      rattacher_lot: {
+        Args: { p_lot_id: string; p_cible_id: string | null }
+        Returns: undefined
+      }
       peut_voir_consultation: {
         Args: { p_consultation_id: string }
         Returns: boolean

@@ -22,6 +22,7 @@ import { Adhesion } from "./Adhesion";
 import { MentionsPrudence } from "./Mentions";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Tables } from "@/lib/database.types";
+import type { SectionId } from "./index";
 
 const BANQUE_LABEL: Record<string, string> = {
   CEGEE: "Caisse d'Epargne Grand Est Europe (CEGEE)",
@@ -35,6 +36,7 @@ export function Financement({
   plan,
   profil,
   choix,
+  go,
 }: {
   membership: Membership;
   scenarios: Scenario[];
@@ -43,6 +45,7 @@ export function Financement({
   plan: Tables<"plans_individuels"> | null;
   profil: Profil | null;
   choix: ChoixFinancement | null;
+  go: (s: SectionId) => void;
 }) {
   const { session } = useAuth();
   const lots = membership.lots;
@@ -146,6 +149,7 @@ export function Financement({
               bareme={bareme}
               config={config}
               email={session?.user.email ?? ""}
+              go={go}
             />
           ) : (
             <div className="cc-next" style={{ marginTop: 18 }}>

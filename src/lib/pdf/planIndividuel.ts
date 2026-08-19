@@ -268,7 +268,7 @@ export async function genererPlanIndividuelPdf(input: PlanIndividuelPdfInput): P
   }
   f.ligne(
     "Profil MaPrimeRénov'",
-    profil ? `${profil} — ${PROFILS_MPR[profil]?.menage ?? ""}` : "À déterminer (enquête sociale à compléter)"
+    profil ? PROFILS_MPR[profil]?.menage ?? "" : "À déterminer (enquête sociale à compléter)"
   );
 
   // ----- budget du projet -----
@@ -316,7 +316,11 @@ export async function genererPlanIndividuelPdf(input: PlanIndividuelPdfInput): P
   // ----- plan personnel -----
   f.titreSection("Votre plan de financement personnel");
   f.ligne("Votre quote-part de travaux T.T.C.", euro(indiv.quotePart), { bold: true });
-  f.ligne("MaPrimeRénov' individuelle" + (profil ? ` (profil ${profil})` : ""), euro(indiv.mprIndiv), { moins: true });
+  f.ligne(
+    "MaPrimeRénov' individuelle" + (profil ? ` (${(PROFILS_MPR[profil]?.desc ?? "").toLowerCase()})` : ""),
+    euro(indiv.mprIndiv),
+    { moins: true }
+  );
   f.ligne("Subvention collective affectée", euro(indiv.subvColl - indiv.fondsPart), { moins: true });
   f.ligne("Fonds travaux déjà versés (à titre indicatif)", euro(indiv.fondsPart), { moins: true });
   f.y -= 2;

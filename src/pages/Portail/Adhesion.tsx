@@ -20,8 +20,10 @@ import { checkRibConcordance } from "@/lib/pdf/ribCheck";
 import {
   downloadFromPieces,
   downloadRibBlob,
-  lotTantiemes,
+  lotsAnnexesNonRattaches,
+  tantiemesAvecRattaches,
   uploadPdfGenere,
+  urlSigneePiece,
   useMesPieces,
   useMonAdhesion,
   useSaveAdhesion,
@@ -30,8 +32,10 @@ import {
   type Scenario,
 } from "@/api/portail";
 import { readParams } from "@/api/scenarios";
+import { Modal } from "@/components/Modal";
 import type { Bareme } from "@/lib/finance";
 import type { Json } from "@/lib/database.types";
+import type { SectionId } from "./index";
 
 const SITUATIONS: { id: SituationMatrimoniale; label: string }[] = [
   { id: "mariee", label: "Marié(e)" },
@@ -111,18 +115,52 @@ function AdherentFields({ a, onChange, titre }: { a: Adherent; onChange: (a: Adh
   );
 }
 
+/** Aperçu inline d'un PDF généré (bucket pieces-copro), sans téléchargement. */
+function ApercuPdfGenere({ name, path, onClose }: { name: string; path: string; onClose: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [erreur, setErreur] = useState(false);
+  useEffect(() => {
+    let vivant = true;
+    urlSigneePiece(path)
+      .then((u) => vivant && setUrl(u))
+      .catch(() => vivant && setErreur(true));
+    return () => {
+      vivant = false;
+    };
+  }, [path]);
+  return (
+    <Modal title={name} onClose={onClose} width={980}>
+      <div style={{ height: "72vh", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", overflow: "hidden" }}>
+        {erreur ? (
+          <p className="se-small" style={{ color: "var(--color-error-700)", padding: 20, margin: 0 }}>
+            Aperçu indisponible. Téléchargez le document pour l'ouvrir.
+          </p>
+        ) : url ? (
+          <iframe src={url} title={name} style={{ width: "100%", height: "100%", border: 0 }} />
+        ) : (
+          <p className="se-small" style={{ color: "var(--fg-muted)", padding: 20, margin: 0 }}>
+            Chargement de l'aperçu…
+          </p>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 export function Adhesion({
   membership,
   scenario,
   bareme,
   config,
   email,
+  go,
 }: {
   membership: Membership;
   scenario: Scenario;
   bareme: Bareme;
   config: FinancementConfig;
   email: string;
+  go: (s: SectionId) => void;
 }) {
   const copro = membership.copro;
   const { data: adhesion, isLoading } = useMonAdhesion(copro.id, membership.coproprietaireId);
@@ -137,6 +175,7 @@ export function Adhesion({
   const [sig2, setSig2] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [apercu, setApercu] = useState<{ name: string; path: string } | null>(null);
 
   // reprise du brouillon existant
   useEffect(() => {
@@ -152,6 +191,13 @@ export function Adhesion({
     const hab = membership.lots.filter((l) => l.usage === "habitation");
     return hab.length ? hab : membership.lots;
   }, [membership.lots]);
+  // Lots annexes (garage, cave…) sans lot d'habitation de rattachement : ils
+  // bloquent la génération des documents tant qu'ils ne sont pas rattachés.
+  const aLotHab = membership.lots.some((l) => l.usage === "habitation");
+  const annexesLibres = useMemo(
+    () => (aLotHab ? lotsAnnexesNonRattaches(membership.lots) : []),
+    [membership.lots, aLotHab]
+  );
 
   const champsOk =
     form.adherent1.nomPrenom.trim() &&
@@ -168,6 +214,38 @@ export function Adhesion({
   const bicOk = isValidBic(bic);
 
   if (isLoading) return <p className="se-small" style={{ color: "var(--fg-muted)" }}>Chargement du dossier…</p>;
+
+  // ---------- Lots annexes non rattachés : génération bloquée ----------
+  if (adhesion?.statut !== "signee" && annexesLibres.length > 0) {
+    return (
+      <div className="card-xl fade" style={{ marginTop: 22 }}>
+        <div className="cx-head">
+          <Icon name="alert" size={20} style={{ color: "var(--color-warning-500)" }} />
+          <h2 style={{ fontSize: 19 }}>Rattachez d'abord vos lots annexes</h2>
+        </div>
+        <div className="cx-body">
+          <p className="se-body" style={{ marginTop: 0 }}>
+            Vos documents d'adhésion (bulletins + mandat SEPA) ne peuvent pas être générés tant que{" "}
+            {annexesLibres.length > 1 ? "ces lots ne sont pas rattachés" : "ce lot n'est pas rattaché"} à
+            l'un de vos lots d'habitation. Le bulletin ne mentionne que le lot d'habitation, avec les
+            tantièmes des lots rattachés additionnés.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+            {annexesLibres.map((l) => (
+              <div key={l.id} className="afournir-row">
+                <Icon name="alert" size={15} style={{ color: "var(--color-warning-500)" }} />
+                Lot n°{l.num} ({l.usage}){l.batiment ? " · Bât. " + l.batiment : ""} — non rattaché
+              </div>
+            ))}
+          </div>
+          <button className="se-btn se-btn-primary" onClick={() => go("plan-indiv")}>
+            <Icon name="link" size={16} />
+            Rattacher mes lots dans « Mes quotes-parts »
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ---------- Dossier signé : récapitulatif + téléchargements ----------
   if (adhesion?.statut === "signee") {
@@ -191,6 +269,13 @@ export function Adhesion({
                   <div className="d-sub">PDF pré-rempli et signé électroniquement</div>
                 </div>
                 <span className="spacer"></span>
+                <button
+                  className="icon-btn"
+                  title="Visualiser sans télécharger"
+                  onClick={() => setApercu({ name: `Bulletin d'adhésion — Lot n°${b.lotNum}`, path: b.path })}
+                >
+                  <Icon name="eye" size={16} />
+                </button>
                 <button className="se-btn se-btn-secondary btn-sm" onClick={() => void downloadFromPieces(b.path, `bulletin-lot-${b.lotNum}.pdf`)}>
                   <Icon name="download" size={15} />Télécharger
                 </button>
@@ -209,6 +294,13 @@ export function Adhesion({
                 <div className="d-sub">À imprimer et signer à la main — aucune rature</div>
               </div>
               <span className="spacer"></span>
+              <button
+                className="icon-btn"
+                title="Visualiser sans télécharger"
+                onClick={() => setApercu({ name: "Mandat SEPA pré-rempli", path: adhesion.sepa_path! })}
+              >
+                <Icon name="eye" size={16} />
+              </button>
               <button className="se-btn se-btn-secondary btn-sm" onClick={() => void downloadFromPieces(adhesion.sepa_path!, "mandat-sepa.pdf")}>
                 <Icon name="download" size={15} />Télécharger
               </button>
@@ -240,6 +332,7 @@ export function Adhesion({
             Modifier mon dossier (annule la signature)
           </button>
         </div>
+        {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}
       </div>
     );
   }
@@ -258,9 +351,11 @@ export function Adhesion({
       };
       const bulletins: { lotNum: string; path: string }[] = [];
       for (const lot of lotsHab) {
+        // seul le lot d'habitation apparaît ; ses lots annexes rattachés
+        // (garage, cave…) comptent dans les tantièmes additionnés
         const bytes = await genBulletin(
           form,
-          { ...ctxBase, lotNum: lot.num, tantiemes: String(lotTantiemes(lot, cle)) },
+          { ...ctxBase, lotNum: lot.num, tantiemes: String(tantiemesAvecRattaches(membership.lots, lot, cle)) },
           date,
           sig1,
           form.adherent2 ? sig2 : null
@@ -322,11 +417,11 @@ export function Adhesion({
             avec horodatage. Le mandat SEPA, lui, devra être signé <b>à la main</b> après téléchargement.
           </p>
           <div className="se-eyebrow" style={{ marginBottom: 6 }}>Signature — {form.adherent1.nomPrenom || "Adhérent 1"} *</div>
-          <SignaturePad onChange={setSig1} />
+          <SignaturePad onChange={setSig1} defaultName={form.adherent1.nomPrenom} />
           {form.adherent2 && (
             <>
               <div className="se-eyebrow" style={{ margin: "16px 0 6px" }}>Signature — {form.adherent2.nomPrenom || "Adhérent 2"} *</div>
-              <SignaturePad onChange={setSig2} />
+              <SignaturePad onChange={setSig2} defaultName={form.adherent2.nomPrenom} />
             </>
           )}
           <div className="cc-next" style={{ marginTop: 16 }}>
@@ -376,7 +471,8 @@ export function Adhesion({
       <div className="cx-body">
         <p className="se-body" style={{ marginTop: 0 }}>
           Ces informations remplissent automatiquement le bulletin d'adhésion {config.banque} et le mandat SEPA.
-          Un bulletin sera généré <b>pour chacun de vos {lotsHab.length > 1 ? lotsHab.length + " lots" : "lots"} d'habitation</b>.
+          Un bulletin sera généré <b>pour chacun de vos {lotsHab.length > 1 ? lotsHab.length + " lots" : "lots"} d'habitation</b>
+          {membership.lots.some((l) => l.rattacheA) ? ", tantièmes des lots rattachés (garage, cave…) additionnés" : ""}.
         </p>
 
         <div className="form-grid">

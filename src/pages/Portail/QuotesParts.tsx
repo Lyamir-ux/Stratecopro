@@ -8,13 +8,16 @@ import { Cascade } from "@/components/Cascade";
 import { fmtEuro } from "@/lib/format";
 import {
   computeIndiv,
+  lotsRattaches,
   lotTantiemes,
   totalTantiemes,
   useMonPlan,
+  useRattacherLot,
   type Membership,
   type Scenario,
 } from "@/api/portail";
 import { readParams } from "@/api/scenarios";
+import { PROFILS_MPR } from "@/lib/referentiels";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { SectionId } from "./index";
 import { MentionsPrudence } from "./Mentions";
@@ -45,6 +48,8 @@ export function QuotesParts({
   const [lotIdx, setLotIdx] = useState(0);
   const [scnId, setScnId] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [cibleId, setCibleId] = useState<string>("");
+  const rattacher = useRattacherLot();
   const scn = scenarios.find((s) => s.id === scnId) ?? scenarios[0] ?? null;
   const { data: plan } = useMonPlan(scn?.id, membership.coproprietaireId);
 
@@ -139,7 +144,7 @@ export function QuotesParts({
             <Cascade
               total={{ l: lot ? "Quote-part de travaux du lot n°" + lot.num : "Quote-part de travaux", v: indiv.quotePart }}
               rows={[
-                { l: "MaPrimeRénov' individuelle" + (profil ? " (profil " + profil + ")" : ""), v: indiv.mprIndiv, k: "primary" },
+                { l: "MaPrimeRénov' individuelle" + (profil ? " (" + PROFILS_MPR[profil].desc.toLowerCase() + ")" : ""), v: indiv.mprIndiv, k: "primary" },
                 { l: "Subvention collective affectée", v: indiv.subvColl - indiv.fondsPart, k: "primary" },
                 { l: "Fonds travaux déjà versés (à titre indicatif)", v: indiv.fondsPart, k: "blue" },
               ]}
@@ -164,7 +169,7 @@ export function QuotesParts({
               <div className="cc-next" style={{ marginTop: 18 }}>
                 <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
                 <span>
-                  Estimation basée sur le profil <b>Jaune</b>. Complétez l'enquête sociale pour affiner vos aides.
+                  Estimation basée sur un ménage aux <b>revenus modestes</b>. Complétez l'enquête sociale pour affiner vos aides.
                 </span>
               </div>
             )}
@@ -198,6 +203,16 @@ export function QuotesParts({
                     <span className="k">Tantièmes</span>
                     <span className="v">{lotT}/1000</span>
                   </div>
+                  {lot.usage === "habitation" && lotsRattaches(lots, lot).length > 0 && (
+                    <div className="kv">
+                      <span className="k">Lots rattachés</span>
+                      <span className="v">
+                        {lotsRattaches(lots, lot)
+                          .map((r) => `n°${r.num} (${(USAGE_LABEL[r.usage] ?? r.usage).toLowerCase()})`)
+                          .join(", ")}
+                      </span>
+                    </div>
+                  )}
                 </>
               ) : (
                 <p className="se-small">Aucun lot rattaché à votre compte.</p>
@@ -209,11 +224,83 @@ export function QuotesParts({
               <div className="kv">
                 <span className="k">Profil MaPrimeRénov'</span>
                 <span className="v">
-                  {profil ? <Badge kind="primary" dot>{profil}</Badge> : <span style={{ color: "var(--fg-muted)" }}>à déterminer</span>}
+                  {profil ? <Badge kind="primary" dot>{PROFILS_MPR[profil].desc}</Badge> : <span style={{ color: "var(--fg-muted)" }}>à déterminer</span>}
                 </span>
               </div>
             </div>
           </div>
+          {lot && lot.usage !== "habitation" && (() => {
+            const lotsHab = lots.filter((l) => l.usage === "habitation");
+            const cible = lots.find((l) => l.id === lot.rattacheA) ?? null;
+            return (
+              <div className="card-xl">
+                <div className="cx-head">
+                  <Icon name="link" size={18} style={{ color: "var(--accent)" }} />
+                  <h2 style={{ fontSize: 17 }}>Rattachement du lot</h2>
+                </div>
+                <div className="cx-body">
+                  {cible ? (
+                    <>
+                      <p className="se-body" style={{ marginTop: 0 }}>
+                        Ce lot est <b>rattaché au lot d'habitation n°{cible.num}</b> : sur vos documents
+                        (bulletin d'adhésion…), seul le lot n°{cible.num} apparaît, avec les tantièmes
+                        additionnés.
+                      </p>
+                      <button
+                        className="se-btn se-btn-ghost btn-sm"
+                        disabled={rattacher.isPending}
+                        onClick={() => rattacher.mutate({ lotId: lot.id, cibleId: null })}
+                      >
+                        <Icon name="x" size={14} />
+                        {rattacher.isPending ? "…" : "Détacher ce lot"}
+                      </button>
+                    </>
+                  ) : lotsHab.length === 0 ? (
+                    <p className="se-body" style={{ margin: 0 }}>
+                      Ce lot ne peut être rattaché qu'à un lot d'habitation vous appartenant — aucun n'est
+                      relié à votre compte. Contactez votre AMO.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="se-body" style={{ marginTop: 0 }}>
+                        Rattachez ce lot ({(USAGE_LABEL[lot.usage] ?? lot.usage).toLowerCase()}) à l'un de
+                        vos lots d'habitation : les documents ne mentionneront que le lot d'habitation,
+                        avec les tantièmes additionnés.
+                      </p>
+                      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                        <select
+                          className="edit-inp"
+                          value={cibleId}
+                          onChange={(e) => setCibleId(e.target.value)}
+                          style={{ flex: 1, minWidth: 160 }}
+                        >
+                          <option value="">Choisir le lot d'habitation…</option>
+                          {lotsHab.map((h) => (
+                            <option key={h.id} value={h.id}>
+                              Lot n°{h.num}{h.batiment ? " · Bât. " + h.batiment : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          className="se-btn se-btn-primary btn-sm"
+                          disabled={!cibleId || rattacher.isPending}
+                          onClick={() => cibleId && rattacher.mutate({ lotId: lot.id, cibleId }, { onSuccess: () => setCibleId("") })}
+                        >
+                          <Icon name="link" size={14} />
+                          {rattacher.isPending ? "Rattachement…" : "Rattacher"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  {rattacher.isError && (
+                    <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 10, marginBottom: 0 }}>
+                      Le rattachement a échoué. Réessayez ou contactez votre AMO.
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
           <button className="se-btn se-btn-secondary" onClick={() => go("pret")}>
             <Icon name="trendingUp" size={17} />Financer mon reste à charge
           </button>
