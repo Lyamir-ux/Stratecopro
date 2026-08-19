@@ -2,18 +2,13 @@
 // en lecture seule (l'import et l'édition restent côté AMO).
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
+import { libellesBatiments, USAGE_LOT_LABEL } from "@/lib/referentiels";
 import { useDonnees } from "@/api/donnees";
 import type { SyndicCopro } from "@/api/syndic";
 
-const USAGE_LABEL: Record<string, string> = {
-  habitation: "Habitation",
-  garage: "Garage",
-  caves: "Caves",
-  autres: "Autres",
-};
-
 export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
   const { data: donnees, isLoading } = useDonnees(c.id);
+  const lb = libellesBatiments(c.denomination_batiments);
   if (isLoading || !donnees) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
   const { batiments, coproprietaires, lots, cles } = donnees;
@@ -47,7 +42,7 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
                   <thead>
                     <tr>
                       <th>Lot</th>
-                      <th>Bâtiment</th>
+                      <th>{lb.singulier}</th>
                       <th>Usage</th>
                       <th>Copropriétaire</th>
                       <th style={{ textAlign: "right" }}>Tantièmes{cleDefaut ? ` ${cleDefaut}` : ""}</th>
@@ -58,7 +53,7 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
                       <tr key={l.id} style={{ cursor: "default" }}>
                         <td style={{ fontWeight: 600 }}>{l.num}</td>
                         <td>{l.batiment?.code ?? "—"}</td>
-                        <td>{USAGE_LABEL[l.usage] ?? l.usage}</td>
+                        <td>{USAGE_LOT_LABEL[l.usage] ?? l.usage}</td>
                         <td>{l.coproprietaire?.nom ?? "—"}</td>
                         <td style={{ textAlign: "right" }}>
                           {cleDefaut != null && l.tantiemes[cleDefaut] != null
@@ -115,7 +110,7 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
         <div className="panel">
           <div className="p-head">
             <Icon name="building" size={18} />
-            <h3>Bâtiments</h3>
+            <h3>{lb.pluriel}</h3>
             <span style={{ flex: 1 }}></span>
             <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{batiments.length}</span>
           </div>

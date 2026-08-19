@@ -1,8 +1,50 @@
 // Référentiels d'affichage (couleurs DPE, phases, rôles d'espace).
 // L'équipe AMO vient de la table `profiles` (M2) — TEAM_FALLBACK sert
 // uniquement d'affichage avant chargement / pour les initiales inconnues.
+import type { UsageLot } from "./finance/types";
 
 export type DpeClass = "A" | "B" | "C" | "D" | "E" | "F" | "G";
+
+export const DPE_CLASSES: DpeClass[] = ["A", "B", "C", "D", "E", "F", "G"];
+
+/** Usages de lot — libellés d'affichage (répartition, tableaux, portail). */
+export const USAGES_LOTS: { id: UsageLot; label: string }[] = [
+  { id: "habitation", label: "Habitation" },
+  { id: "garage", label: "Garages / parkings" },
+  { id: "caves", label: "Caves" },
+  { id: "commerces", label: "Commerces" },
+  { id: "bureaux", label: "Bureaux" },
+  { id: "autres", label: "Autres" },
+];
+
+export const USAGE_LOT_LABEL: Record<string, string> = Object.fromEntries(
+  USAGES_LOTS.map((u) => [u.id, u.label])
+);
+
+/**
+ * Dénomination des subdivisions du bâti : certaines copropriétés sont un seul
+ * bâtiment à plusieurs entrées — on affiche alors « Entrée 01 » et non
+ * « Bât. 01 ». Réglable dans la synthèse de l'onglet Données ; purement
+ * cosmétique (les codes des bâtiments ne changent pas).
+ */
+export type DenominationBatiments = "batiment" | "entree";
+
+export const DENOMINATIONS_BATIMENTS: { id: DenominationBatiments; label: string }[] = [
+  { id: "batiment", label: "Bâtiments" },
+  { id: "entree", label: "Entrées (un seul bâtiment)" },
+];
+
+export function libellesBatiments(d: string | null | undefined): {
+  singulier: string;
+  pluriel: string;
+  /** Préfixe court devant le code (« Bât. 01 » / « Entrée 01 »). */
+  court: string;
+  sans: string;
+} {
+  return d === "entree"
+    ? { singulier: "Entrée", pluriel: "Entrées", court: "Entrée", sans: "Sans entrée" }
+    : { singulier: "Bâtiment", pluriel: "Bâtiments", court: "Bât.", sans: "Sans bâtiment" };
+}
 
 export const DPE: Record<DpeClass, string> = {
   A: "#319834", B: "#52b153", C: "#a8c63a",

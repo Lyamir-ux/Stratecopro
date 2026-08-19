@@ -3,7 +3,7 @@
 // générer pour n'importe quel copropriétaire via l'aperçu du portail).
 // Généré de zéro avec pdf-lib (pas de gabarit), charte Strat Eco.
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb, type RGB } from "pdf-lib";
-import { DPE, PROFILS_MPR, type DpeClass } from "@/lib/referentiels";
+import { DPE, libellesBatiments, PROFILS_MPR, USAGE_LOT_LABEL, type DpeClass } from "@/lib/referentiels";
 import { MENTIONS_PRUDENCE } from "@/pages/Portail/Mentions";
 import type { IndivBreakdown, Membership } from "@/api/portail";
 import type { Bareme, FinanceParams, Profil } from "@/lib/finance";
@@ -259,9 +259,10 @@ export async function genererPlanIndividuelPdf(input: PlanIndividuelPdfInput): P
     "Copropriété",
     `${copro.name}${copro.city ? " — " + [copro.code_postal, copro.city].filter(Boolean).join(" ") : ""}`
   );
+  const prefixeBat = libellesBatiments(copro.denomination_batiments).court.toLowerCase();
   for (const lot of membership.lots) {
     f.ligne(
-      `Lot n°${lot.num}${lot.batiment ? " (bât. " + lot.batiment + ")" : ""} — ${lot.usage}`,
+      `Lot n°${lot.num}${lot.batiment ? ` (${prefixeBat} ` + lot.batiment + ")" : ""} — ${(USAGE_LOT_LABEL[lot.usage] ?? lot.usage).toLowerCase()}`,
       `${(lot.tantiemes[cle] ?? lot.tantiemes.MUN ?? 0).toLocaleString("fr-FR")} tantièmes (clé ${cle})`,
       { indent: 10 }
     );

@@ -32,6 +32,7 @@ import {
   type Scenario,
 } from "@/api/portail";
 import { readParams } from "@/api/scenarios";
+import { libellesBatiments, USAGE_LOT_LABEL } from "@/lib/referentiels";
 import { Modal } from "@/components/Modal";
 import type { Bareme } from "@/lib/finance";
 import type { Json } from "@/lib/database.types";
@@ -234,7 +235,8 @@ export function Adhesion({
             {annexesLibres.map((l) => (
               <div key={l.id} className="afournir-row">
                 <Icon name="alert" size={15} style={{ color: "var(--color-warning-500)" }} />
-                Lot n°{l.num} ({l.usage}){l.batiment ? " · Bât. " + l.batiment : ""} — non rattaché
+                Lot n°{l.num} ({(USAGE_LOT_LABEL[l.usage] ?? l.usage).toLowerCase()})
+                {l.batiment ? ` · ${libellesBatiments(copro.denomination_batiments).court} ` + l.batiment : ""} — non rattaché
               </div>
             ))}
           </div>

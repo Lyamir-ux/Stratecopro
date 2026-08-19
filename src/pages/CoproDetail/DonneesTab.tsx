@@ -4,17 +4,17 @@
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge, DpePair, Progress } from "@/components/ui";
-import type { DpeClass } from "@/lib/referentiels";
-import { useDonnees, useSetNbBatiments } from "@/api/donnees";
+import {
+  DENOMINATIONS_BATIMENTS,
+  DPE_CLASSES,
+  libellesBatiments,
+  USAGES_LOTS,
+  type DpeClass,
+} from "@/lib/referentiels";
+import { useDonnees, useSetNbBatiments, useSetUsageLot } from "@/api/donnees";
 import { useUpdateCopro, type CoproWithStats } from "@/api/copros";
+import type { Enums } from "@/lib/database.types";
 import { ImportLotsDialog } from "./ImportLotsDialog";
-
-const USAGE_LABELS: { key: "habitation" | "garage" | "caves" | "autres"; label: string; blue?: boolean }[] = [
-  { key: "habitation", label: "Habitation" },
-  { key: "garage", label: "Garages / parkings", blue: true },
-  { key: "caves", label: "Caves" },
-  { key: "autres", label: "Autres" },
-];
 
 export function DonneesTab({ c }: { c: CoproWithStats }) {
   const { data, isLoading } = useDonnees(c.id);
@@ -22,6 +22,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
   const [showImport, setShowImport] = useState(false);
   const [editingSynth, setEditingSynth] = useState(false);
   const setNbBatiments = useSetNbBatiments(c.id);
+  const setUsage = useSetUsageLot(c.id);
   const [synth, setSynth] = useState({
     adresse: "",
     syndic: "",
@@ -31,13 +32,23 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
     chefProjet: "",
     nbLogements: 0,
     nbBatiments: 0,
+    denomination: "batiment",
+    energyBefore: "",
+    energyAfter: "",
   });
 
   if (isLoading || !data) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
   const { lots, batiments, coproprietaires, cles } = data;
   const totalLots = lots.length;
-  const usageCounts = USAGE_LABELS.map((u) => ({ ...u, v: lots.filter((l) => l.usage === u.key).length }));
+  // Usages présents dans le dossier (l'habitation reste toujours affichée)
+  const usageCounts = USAGES_LOTS.map((u) => ({
+    ...u,
+    blue: u.id === "garage",
+    v: lots.filter((l) => l.usage === u.id).length,
+  })).filter((u) => u.v > 0 || u.id === "habitation");
+  // Dénomination des subdivisions : « Bât. 01 » ou « Entrée 01 » selon la fiche
+  const lb = libellesBatiments(c.denomination_batiments);
 
   // Matrice bâtiments × clés : nb de lots et Σ tantièmes par clé
   const cleCodes = cles.map((k) => k.code);
@@ -68,6 +79,9 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
       chefProjet: c.chef_projet ?? "",
       nbLogements: c.nb_logements ?? 0,
       nbBatiments: batiments.length,
+      denomination: c.denomination_batiments ?? "batiment",
+      energyBefore: c.energy_before ?? "",
+      energyAfter: c.energy_after ?? "",
     });
     setEditingSynth(true);
   };
@@ -88,6 +102,9 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
       gestionnaire_email: synth.gestionnaireEmail || null,
       chef_projet: synth.chefProjet || null,
       nb_logements: synth.nbLogements > 0 ? synth.nbLogements : null,
+      denomination_batiments: synth.denomination,
+      energy_before: synth.energyBefore || null,
+      energy_after: synth.energyAfter || null,
     });
     setEditingSynth(false);
   };
@@ -109,7 +126,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
               </p>
             ) : (
               usageCounts.map((u) => (
-                <div key={u.key} style={{ marginBottom: 14 }}>
+                <div key={u.id} style={{ marginBottom: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 14, marginBottom: 6 }}>
                     <span>{u.label}</span>
                     <span style={{ fontWeight: 700 }}>{u.v} lots</span>
@@ -124,7 +141,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
         <div className="panel">
           <div className="p-head">
             <Icon name="layers" size={18} />
-            <h3>Bâtiments &amp; clés de répartition</h3>
+            <h3>{lb.pluriel} &amp; clés de répartition</h3>
             <span style={{ flex: 1 }}></span>
             <div className="edit-actions">
               <button className="se-btn se-btn-secondary btn-sm" onClick={() => setShowImport(true)}>
@@ -136,14 +153,15 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
           <div className="p-body">
             {batRows.length === 0 && sansBat.length === 0 ? (
               <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
-                Les bâtiments seront créés automatiquement à l'import des lots.
+                Les {lb.pluriel.toLowerCase()} seront créé{c.denomination_batiments === "entree" ? "e" : ""}s
+                automatiquement à l'import des lots.
               </p>
             ) : (
               <>
                 <table className="dossiers" style={{ fontSize: 13 }}>
                   <thead>
                     <tr>
-                      <th>Bâtiment</th>
+                      <th>{lb.singulier}</th>
                       <th>Lots</th>
                       {cleCodes.map((code) => (
                         <th key={code}>{code}</th>
@@ -154,7 +172,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                     {batRows.map((b) => (
                       <tr key={b.code} style={{ cursor: "default" }}>
                         <td>
-                          <span style={{ fontWeight: 700, fontFamily: "var(--font-display)" }}>Bât. {b.code}</span>
+                          <span style={{ fontWeight: 700, fontFamily: "var(--font-display)" }}>{lb.court} {b.code}</span>
                           {b.adresse && (
                             <span style={{ display: "block", fontSize: 12, color: "var(--fg-muted)" }}>{b.adresse}</span>
                           )}
@@ -167,7 +185,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                     ))}
                     {sansBat.length > 0 && (
                       <tr style={{ cursor: "default" }}>
-                        <td style={{ fontStyle: "italic", color: "var(--fg-muted)" }}>Sans bâtiment</td>
+                        <td style={{ fontStyle: "italic", color: "var(--fg-muted)" }}>{lb.sans}</td>
                         <td>{sansBat.length}</td>
                         {cleCodes.map((code) => (
                           <td key={code}>
@@ -214,7 +232,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                   <thead>
                     <tr>
                       <th>Lot</th>
-                      <th>Bâtiment</th>
+                      <th>{lb.singulier}</th>
                       <th>Copropriétaire</th>
                       <th>Mail</th>
                       <th>Tél.</th>
@@ -226,13 +244,30 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                     {lots.map((l) => (
                       <tr key={l.id} style={{ cursor: "default" }}>
                         <td className="mono">n°{l.num}</td>
-                        <td>{l.batiment?.code ? `Bât. ${l.batiment.code}` : "—"}</td>
+                        <td>{l.batiment?.code ? `${lb.court} ${l.batiment.code}` : "—"}</td>
                         <td>{l.coproprietaire?.nom ?? "—"}</td>
                         <td style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>
                           {l.coproprietaire?.email ?? "—"}
                         </td>
                         <td className="mono">{l.coproprietaire?.telephone ?? "—"}</td>
-                        <td>{l.usage}</td>
+                        <td>
+                          {/* L'usage se corrige à la main (ex. « autres » → « commerces ») */}
+                          <select
+                            className="edit-inp"
+                            style={{ minWidth: 110 }}
+                            value={l.usage}
+                            disabled={setUsage.isPending}
+                            onChange={(e) =>
+                              void setUsage.mutateAsync({ lotId: l.id, usage: e.target.value as Enums<"usage_lot"> })
+                            }
+                          >
+                            {USAGES_LOTS.map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
                         {cleDefaut && (
                           <td className="mono">
                             {l.tantiemes[cleDefaut] != null ? l.tantiemes[cleDefaut].toLocaleString("fr-FR") : "—"}
@@ -336,7 +371,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
             <span className="v">{coproprietaires.length}</span>
           </div>
           <div className="kv">
-            <span className="k">Bâtiments</span>
+            <span className="k">{editingSynth ? "Bâtiments / entrées" : lb.pluriel}</span>
             {editingSynth ? (
               <input
                 className="edit-inp"
@@ -350,6 +385,23 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
               <span className="v">{batiments.length}</span>
             )}
           </div>
+          {editingSynth && (
+            // Un seul bâtiment à plusieurs entrées ? On l'affiche « Entrée 01, 02… »
+            <div className="kv">
+              <span className="k">Affichés comme</span>
+              <select
+                className="edit-inp"
+                value={synth.denomination}
+                onChange={(e) => setSynth((s) => ({ ...s, denomination: e.target.value }))}
+              >
+                {DENOMINATIONS_BATIMENTS.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {editingSynth && setNbBatiments.isError && (
             <p className="se-small" style={{ color: "var(--color-error-700)", margin: "6px 0 0" }}>
               {String((setNbBatiments.error as Error)?.message ?? setNbBatiments.error)}
@@ -357,9 +409,42 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
           )}
           <div className="kv">
             <span className="k">Étiquette</span>
-            <span className="v">
-              <DpePair before={c.energy_before as DpeClass | null} after={c.energy_after as DpeClass | null} />
-            </span>
+            {editingSynth ? (
+              // Saisie manuelle avant/visée — utile tant que l'audit n'est pas importé
+              <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <select
+                  className="edit-inp"
+                  style={{ width: 64 }}
+                  value={synth.energyBefore}
+                  onChange={(e) => setSynth((s) => ({ ...s, energyBefore: e.target.value }))}
+                >
+                  <option value="">—</option>
+                  {DPE_CLASSES.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+                <Icon name="chevronRight" size={13} style={{ color: "var(--fg-muted)" }} />
+                <select
+                  className="edit-inp"
+                  style={{ width: 64 }}
+                  value={synth.energyAfter}
+                  onChange={(e) => setSynth((s) => ({ ...s, energyAfter: e.target.value }))}
+                >
+                  <option value="">—</option>
+                  {DPE_CLASSES.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </span>
+            ) : (
+              <span className="v">
+                <DpePair before={c.energy_before as DpeClass | null} after={c.energy_after as DpeClass | null} />
+              </span>
+            )}
           </div>
           {c.fragile && (
             <div className="kv">

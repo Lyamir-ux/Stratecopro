@@ -17,17 +17,10 @@ import {
   type Scenario,
 } from "@/api/portail";
 import { readParams } from "@/api/scenarios";
-import { PROFILS_MPR } from "@/lib/referentiels";
+import { libellesBatiments, PROFILS_MPR, USAGE_LOT_LABEL as USAGE_LABEL } from "@/lib/referentiels";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { SectionId } from "./index";
 import { MentionsPrudence } from "./Mentions";
-
-const USAGE_LABEL: Record<string, string> = {
-  habitation: "Habitation",
-  garage: "Garage",
-  caves: "Caves",
-  autres: "Autres",
-};
 
 export function QuotesParts({
   membership,
@@ -45,6 +38,7 @@ export function QuotesParts({
   go: (s: SectionId) => void;
 }) {
   const lots = membership.lots;
+  const lb = libellesBatiments(membership.copro.denomination_batiments);
   const [lotIdx, setLotIdx] = useState(0);
   const [scnId, setScnId] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -193,7 +187,7 @@ export function QuotesParts({
                 <>
                   <div className="kv">
                     <span className="k">Lot</span>
-                    <span className="v">n°{lot.num}{lot.batiment ? " · Bât. " + lot.batiment : ""}</span>
+                    <span className="v">n°{lot.num}{lot.batiment ? ` · ${lb.court} ` + lot.batiment : ""}</span>
                   </div>
                   <div className="kv">
                     <span className="k">Usage</span>
@@ -277,7 +271,7 @@ export function QuotesParts({
                           <option value="">Choisir le lot d'habitation…</option>
                           {lotsHab.map((h) => (
                             <option key={h.id} value={h.id}>
-                              Lot n°{h.num}{h.batiment ? " · Bât. " + h.batiment : ""}
+                              Lot n°{h.num}{h.batiment ? ` · ${lb.court} ` + h.batiment : ""}
                             </option>
                           ))}
                         </select>

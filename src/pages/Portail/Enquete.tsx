@@ -38,6 +38,8 @@ interface ReponsesJson {
 
 /** usage importé par l'AMO (lots.usage) → option du QCM « Usage du lot » */
 const USAGE_LABEL: Record<string, string> = {
+  commerces: "Commerce",
+  bureaux: "Autre",
   habitation: "Habitation",
   garage: "Garage",
   caves: "Cave",

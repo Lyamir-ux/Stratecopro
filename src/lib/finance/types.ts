@@ -85,7 +85,7 @@ export interface FinanceResult {
   tauxAides: number;
 }
 
-export type UsageLot = "habitation" | "garage" | "caves" | "autres";
+export type UsageLot = "habitation" | "garage" | "caves" | "commerces" | "bureaux" | "autres";
 
 /** Un copropriétaire et ses lots sur la clé de répartition choisie. */
 export interface OwnerInput {

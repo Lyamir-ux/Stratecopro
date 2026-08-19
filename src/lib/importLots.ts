@@ -75,6 +75,8 @@ export function parseUsage(v: unknown): UsageLot {
   if (/(habitation|logement|appart|studio|maison)/.test(s)) return "habitation";
   if (/(garage|parking|stationnement|box)/.test(s)) return "garage";
   if (/(cave|cellier)/.test(s)) return "caves";
+  if (/(commerc|boutique|magasin)/.test(s)) return "commerces";
+  if (/bureau/.test(s)) return "bureaux";
   return s === "" ? "habitation" : "autres";
 }
 

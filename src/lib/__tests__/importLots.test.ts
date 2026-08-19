@@ -20,7 +20,10 @@ describe("parseUsage", () => {
     expect(parseUsage("Appartement T3")).toBe("habitation");
     expect(parseUsage("PARKING")).toBe("garage");
     expect(parseUsage("cave")).toBe("caves");
-    expect(parseUsage("local commercial")).toBe("autres");
+    expect(parseUsage("local commercial")).toBe("commerces");
+    expect(parseUsage("Boutique")).toBe("commerces");
+    expect(parseUsage("Bureaux")).toBe("bureaux");
+    expect(parseUsage("grenier")).toBe("autres");
     expect(parseUsage("")).toBe("habitation");
   });
 });

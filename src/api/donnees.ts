@@ -1,7 +1,7 @@
 // Données de la copro : bâtiments, copropriétaires, lots, clés & tantièmes.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import type { Tables, TablesUpdate } from "@/lib/database.types";
+import type { Enums, Tables, TablesUpdate } from "@/lib/database.types";
 import type { ImportedRow } from "@/lib/importLots";
 
 export interface LotFull extends Tables<"lots"> {
@@ -113,6 +113,19 @@ export function useSetNbBatiments(coproId: string) {
           .in("id", supprimables.map((b) => b.id));
         if (eDel) throw eDel;
       }
+    },
+    onSuccess: () => invalidateDonnees(qc, coproId),
+  });
+}
+
+/** Corrige l'usage d'un lot à la main (ex. « autres » → « commerces ») —
+ *  l'import ne reconnaît pas toujours la nature exacte des locaux. */
+export function useSetUsageLot(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ lotId, usage }: { lotId: string; usage: Enums<"usage_lot"> }) => {
+      const { error } = await supabase.from("lots").update({ usage }).eq("id", lotId);
+      if (error) throw error;
     },
     onSuccess: () => invalidateDonnees(qc, coproId),
   });

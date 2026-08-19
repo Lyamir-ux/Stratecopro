@@ -137,7 +137,7 @@ export default function CoproDetail() {
             </div>
             <div className="dh-stat">
               <div className="v">{s?.batiments ?? 0}</div>
-              <div className="l">bâtiments</div>
+              <div className="l">{c.denomination_batiments === "entree" ? "entrées" : "bâtiments"}</div>
             </div>
             <div className="dh-stat">
               <div className="v">{c.progress}%</div>

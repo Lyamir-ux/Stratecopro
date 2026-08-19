@@ -808,6 +808,7 @@ export type Database = {
           code_postal: string | null
           created_at: string
           deleted_at: string | null
+          denomination_batiments: string
           energy_after: string | null
           energy_before: string | null
           fragile: boolean
@@ -833,6 +834,7 @@ export type Database = {
           code_postal?: string | null
           created_at?: string
           deleted_at?: string | null
+          denomination_batiments?: string
           energy_after?: string | null
           energy_before?: string | null
           fragile?: boolean
@@ -858,6 +860,7 @@ export type Database = {
           code_postal?: string | null
           created_at?: string
           deleted_at?: string | null
+          denomination_batiments?: string
           energy_after?: string | null
           energy_before?: string | null
           fragile?: boolean
@@ -2121,7 +2124,7 @@ export type Database = {
         | "rib"
         | "justificatif_domicile"
         | "taxe_fonciere"
-      usage_lot: "habitation" | "garage" | "caves" | "autres"
+      usage_lot: "habitation" | "garage" | "caves" | "commerces" | "bureaux" | "autres"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2269,7 +2272,7 @@ export const Constants = {
         "justificatif_domicile",
         "taxe_fonciere",
       ],
-      usage_lot: ["habitation", "garage", "caves", "autres"],
+      usage_lot: ["habitation", "garage", "caves", "commerces", "bureaux", "autres"],
     },
   },
 } as const
