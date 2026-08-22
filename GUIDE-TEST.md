@@ -218,7 +218,7 @@ Sur **toutes les pages**, une fois connecté (quel que soit votre espace : AMO, 
 2. Décrivez ce que vous avez constaté — la **page en cours est jointe automatiquement**, inutile de la recopier
 3. **Envoyer** — c'est enregistré, vous pouvez enchaîner
 
-Tous les retours arrivent compilés dans **Paramètres → Retours de test** (avec auteur, page, date), où je les trie et les marque « traités » au fur et à mesure. Pas besoin d'e-mail ni de fichier partagé.
+Tous les retours arrivent compilés dans **Paramètres → Retours de test** (avec auteur, page, date), où je les trie et les marque « traités » au fur et à mesure. Pas besoin d'e-mail ni de fichier partagé — et dès qu'un retour est marqué « traité », **vous recevez automatiquement un e-mail de compte rendu** (à l'adresse de votre compte) : votre remarque y est citée et la correction est en ligne.
 
 Le plus utile pour corriger vite, pour chaque bug :
 

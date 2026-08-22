@@ -992,6 +992,8 @@ export type Database = {
           navigateur: string | null
           page: string
           statut: string
+          traite_email_le: string | null
+          traite_email_statut: string | null
           type: string
           user_id: string | null
         }
@@ -1004,6 +1006,8 @@ export type Database = {
           navigateur?: string | null
           page?: string
           statut?: string
+          traite_email_le?: string | null
+          traite_email_statut?: string | null
           type?: string
           user_id?: string | null
         }
@@ -1016,6 +1020,8 @@ export type Database = {
           navigateur?: string | null
           page?: string
           statut?: string
+          traite_email_le?: string | null
+          traite_email_statut?: string | null
           type?: string
           user_id?: string | null
         }

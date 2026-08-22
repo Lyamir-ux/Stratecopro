@@ -55,12 +55,28 @@ export function useFeedbacks() {
   });
 }
 
+export type FeedbackMailStatut = "envoye" | "simule" | "erreur" | "sans_email";
+
 export function useMajFeedback() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, statut }: { id: string; statut: "nouveau" | "traite" }) => {
+    mutationFn: async ({
+      id,
+      statut,
+    }: {
+      id: string;
+      statut: "nouveau" | "traite";
+    }): Promise<{ mail: FeedbackMailStatut | null }> => {
       const { error } = await supabase.from("feedbacks").update({ statut }).eq("id", id);
       if (error) throw error;
+      if (statut !== "traite") return { mail: null };
+      // Marquer « traité » notifie automatiquement l'auteur par mail (compte
+      // rendu envoyé à l'adresse de son compte) — edge notifier-feedback-traite.
+      const { data, error: fnErr } = await supabase.functions.invoke("notifier-feedback-traite", {
+        body: { feedback_id: id },
+      });
+      if (fnErr) return { mail: "erreur" };
+      return { mail: (data as { statut?: FeedbackMailStatut } | null)?.statut ?? null };
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["feedbacks"] }),
   });

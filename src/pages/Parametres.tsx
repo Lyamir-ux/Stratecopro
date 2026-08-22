@@ -174,7 +174,7 @@ function FeedbackRow({ fb }: { fb: Feedback }) {
         <button
           className="icon-btn"
           style={{ width: 30, height: 30 }}
-          title={traite ? "Repasser en « nouveau »" : "Marquer comme traité"}
+          title={traite ? "Repasser en « nouveau »" : "Marquer comme traité — l'auteur reçoit un mail de compte rendu"}
           onClick={() => void maj.mutateAsync({ id: fb.id, statut: traite ? "nouveau" : "traite" })}
         >
           <Icon name={traite ? "clock" : "check"} size={15} />
@@ -217,10 +217,28 @@ function FeedbackRow({ fb }: { fb: Feedback }) {
       ) : (
         <p style={{ margin: "7px 0 0", fontSize: 13.5, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{fb.message}</p>
       )}
-      <p style={{ margin: "5px 0 0", fontSize: 12, color: "var(--fg-muted)" }}>Page : {fb.page || "—"}</p>
+      <p style={{ margin: "5px 0 0", fontSize: 12, color: "var(--fg-muted)" }}>
+        Page : {fb.page || "—"}
+        {traite && fb.traite_email_statut && (
+          <span style={{ marginLeft: 10 }}>
+            <Icon name="mail" size={12} /> {FB_MAIL_LABEL[fb.traite_email_statut] ?? fb.traite_email_statut}
+            {fb.traite_email_statut === "envoye" && fb.traite_email_le
+              ? ` le ${new Date(fb.traite_email_le).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}`
+              : ""}
+          </span>
+        )}
+      </p>
     </div>
   );
 }
+
+/** Résultat de la notification automatique envoyée à l'auteur au traitement. */
+const FB_MAIL_LABEL: Record<string, string> = {
+  envoye: "Auteur notifié par mail",
+  simule: "Mail simulé (envoi non configuré)",
+  erreur: "Échec du mail à l'auteur",
+  sans_email: "Auteur sans adresse mail",
+};
 
 /** Feedbacks restant à traiter → Markdown prêt à coller dans Claude. */
 function feedbacksToMarkdown(list: Feedback[]): string {
