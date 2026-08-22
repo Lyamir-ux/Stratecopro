@@ -28,12 +28,27 @@ export function CandidatureActions({ cand }: { cand: Tables<"candidatures"> }) {
     }
   };
 
+  // candidature retirée par l'entreprise : plus aucune action possible
+  if (cand.retrait_at) {
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <Badge kind="neutral">Retirée par l'entreprise le {fmtDate(cand.retrait_at)}</Badge>
+        {cand.retrait_motif && (
+          <span style={{ fontSize: 11.5, color: "var(--fg-muted)", fontStyle: "italic" }}>
+            « {cand.retrait_motif} »
+          </span>
+        )}
+      </span>
+    );
+  }
+
   if (cand.statut === "retenue") {
+    const engage = !!cand.engagement_at;
     return (
       <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <Badge kind="success" dot>Retenue{cand.decision_at ? ` · ${fmtDate(cand.decision_at)}` : ""}</Badge>
-        {cand.engagement_at ? (
-          <Badge kind="primary" dot>Engagement confirmé le {fmtDate(cand.engagement_at)}</Badge>
+        {engage ? (
+          <Badge kind="primary" dot>Engagement confirmé le {fmtDate(cand.engagement_at!)}</Badge>
         ) : (
           <Badge kind="blue">En attente d'engagement</Badge>
         )}
@@ -44,11 +59,24 @@ export function CandidatureActions({ cand }: { cand: Tables<"candidatures"> }) {
         )}
         <button
           className="se-btn se-btn-ghost btn-sm"
-          title="Annuler la décision (repasse la candidature en « reçue »)"
+          title={
+            engage
+              ? "Déverrouiller le projet en cas de rétractation du prestataire (faillite, devis expiré…) : la candidature repasse en « reçue », le projet disparaît de son espace et la consultation peut être relancée"
+              : "Annuler la décision (repasse la candidature en « reçue »)"
+          }
           disabled={decider.isPending}
-          onClick={() => void decide("recue")}
+          onClick={() => {
+            if (
+              !engage ||
+              window.confirm(
+                `Déverrouiller la sélection de ${cand.org_name} ?\n\nSon engagement sera annulé, le projet disparaîtra de son espace et vous pourrez relancer la consultation (bouton « Remettre en ligne »).`
+              )
+            ) {
+              void decide("recue");
+            }
+          }}
         >
-          Annuler
+          {engage ? "Déverrouiller" : "Annuler"}
         </button>
       </span>
     );

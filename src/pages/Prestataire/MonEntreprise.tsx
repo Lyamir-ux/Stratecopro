@@ -16,6 +16,7 @@ import {
   useDeleteDocPresta,
   useDocsPresta,
   useLogoPresta,
+  useMajDocPresta,
   useMajMonPrestataire,
   useUploadDocPresta,
   useUploadLogoPresta,
@@ -36,7 +37,10 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
     email_secondaire: presta.email_secondaire ?? "",
     telephone: presta.telephone ?? "",
     adresse: presta.adresse ?? "",
+    code_postal: presta.code_postal ?? "",
     ville: presta.ville ?? "",
+    site_web: presta.site_web ?? "",
+    siret: presta.siret ?? "",
   });
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +126,10 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
           {champ("E-mail de contact principal", "email", "contact@entreprise.fr", "email")}
           {champ("E-mail de contact secondaire", "email_secondaire", "secretariat@entreprise.fr", "email")}
           {champ("Adresse", "adresse", "12 rue …")}
+          {champ("Code postal", "code_postal", "67000")}
           {champ("Ville", "ville", "Strasbourg")}
+          {champ("Site internet", "site_web", "https://www.entreprise.fr", "url")}
+          {champ("SIRET ou SIREN", "siret", "123 456 789 00012")}
         </div>
 
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12 }}>
@@ -151,7 +158,10 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
                   email_secondaire: draft.email_secondaire.trim() || null,
                   telephone: draft.telephone.trim() || null,
                   adresse: draft.adresse.trim() || null,
+                  code_postal: draft.code_postal.trim() || null,
                   ville: draft.ville.trim() || null,
+                  site_web: draft.site_web.trim() || null,
+                  siret: draft.siret.trim() || null,
                 },
               })
               .then(() => setDirty(false))
@@ -166,18 +176,41 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
   );
 }
 
+/** Alerte de validité d'un document : expiré, ou expirant sous 60 jours. */
+function ValiditeBadge({ expireLe }: { expireLe: string | null }) {
+  if (!expireLe) return null;
+  const jours = Math.ceil((new Date(expireLe + "T00:00:00").getTime() - Date.now()) / 86400000);
+  if (jours < 0) return <Badge kind="warn"><Icon name="alert" size={11} />Expiré</Badge>;
+  if (jours <= 60) return <Badge kind="warn">Expire dans {jours} j</Badge>;
+  return null;
+}
+
 function CertificationsPanel({ presta }: { presta: Tables<"prestataires"> }) {
   const { data: docs } = useDocsPresta(presta.id);
   const upload = useUploadDocPresta(presta);
+  const majDoc = useMajDocPresta(presta.id);
   const supprimer = useDeleteDocPresta(presta.id);
   const fileRef = useRef<HTMLInputElement>(null);
+  // fin de validité saisie avant le dépôt (optionnelle)
+  const [expireDraft, setExpireDraft] = useState("");
 
   return (
     <div className="panel">
-      <div className="p-head">
+      <div className="p-head" style={{ flexWrap: "wrap", gap: 8 }}>
         <Icon name="fileCheck" size={18} />
         <h3>Certifications & documents</h3>
         <span style={{ flex: 1 }}></span>
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--fg-muted)" }}>
+          Fin de validité
+          <input
+            className="edit-inp"
+            type="date"
+            value={expireDraft}
+            onChange={(e) => setExpireDraft(e.target.value)}
+            style={{ maxWidth: 150 }}
+            title="Date de fin de validité du document à déposer (agrément RGE, assurance…)"
+          />
+        </label>
         <input
           ref={fileRef}
           type="file"
@@ -185,7 +218,9 @@ function CertificationsPanel({ presta }: { presta: Tables<"prestataires"> }) {
           style={{ display: "none" }}
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) void upload.mutateAsync(f);
+            if (f) {
+              void upload.mutateAsync({ file: f, expireLe: expireDraft || null }).then(() => setExpireDraft(""));
+            }
             e.target.value = "";
           }}
         />
@@ -197,12 +232,14 @@ function CertificationsPanel({ presta }: { presta: Tables<"prestataires"> }) {
       <div className="p-body">
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 0 }}>
           Qualifications RGE, certificats, attestations d'assurance… visibles de l'équipe Strat Eco.
+          Renseignez la date de fin de validité : un rappel automatique vous est envoyé par e-mail
+          avant l'échéance pour déposer le document renouvelé.
         </p>
         {(docs ?? []).length === 0 && (
           <p className="se-small" style={{ color: "var(--fg-muted)" }}>Aucun document déposé pour l'instant.</p>
         )}
         {(docs ?? []).map((d) => (
-          <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid var(--border)", fontSize: 13.5 }}>
+          <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid var(--border)", fontSize: 13.5, flexWrap: "wrap" }}>
             <Icon name="fileText" size={15} style={{ color: "var(--fg-muted)", flex: "none" }} />
             <button
               style={{ border: "none", background: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 600, textAlign: "left" }}
@@ -212,7 +249,19 @@ function CertificationsPanel({ presta }: { presta: Tables<"prestataires"> }) {
               {d.name}
             </button>
             <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>{fmtTaille(d.size)}</span>
+            <ValiditeBadge expireLe={d.expire_le} />
             <span className="spacer" style={{ flex: 1 }}></span>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--fg-muted)" }}>
+              valide jusqu'au
+              <input
+                className="edit-inp"
+                type="date"
+                value={d.expire_le ?? ""}
+                onChange={(e) => void majDoc.mutateAsync({ id: d.id, expireLe: e.target.value || null })}
+                style={{ maxWidth: 150 }}
+                title="Date de fin de validité — sa mise à jour réarme le rappel automatique"
+              />
+            </label>
             <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>déposé le {fmtDate(d.uploaded_at)}</span>
             <button
               className="icon-btn"

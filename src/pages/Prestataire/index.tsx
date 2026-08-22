@@ -3,12 +3,12 @@
 // métiers et ses candidatures ; la section « Mes projets » n'existe que pour
 // une MOE (accès lecture aux copros où elle a été retenue). Les autres
 // intervenants n'ont AUCUN accès aux projets en cours.
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon, type IconName } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
-import { useLogoPresta, useMesCandidatures, useMonPrestataire } from "@/api/espacePrestataire";
+import { useDocsPresta, useLogoPresta, useMesCandidatures, useMonPrestataire } from "@/api/espacePrestataire";
 import { CONSULT_TYPES } from "@/api/consultations";
 import { usePrestataires } from "@/api/prestataires";
 import { compteNonLus, useLectures, useMessagesPresta } from "@/api/messages";
@@ -56,6 +56,55 @@ function PastilleMessages({ presta }: { presta: Tables<"prestataires"> }) {
       }}
     >
       {nonLus}
+    </span>
+  );
+}
+
+const pastilleStyle = (background: string): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minWidth: 17,
+  height: 17,
+  padding: "0 5px",
+  borderRadius: 9,
+  background,
+  color: "#fff",
+  fontSize: 11,
+  fontWeight: 700,
+});
+
+/** Pastille « sélectionné / refusé » : décisions pas encore vues (l'ouverture
+ *  de « Mes candidatures » en accuse réception). */
+function PastilleDecisions({ presta }: { presta: Tables<"prestataires"> }) {
+  const { data: candidatures } = useMesCandidatures(presta.id);
+  const n = (candidatures ?? []).filter(
+    (c) => !c.retrait_at && c.statut !== "recue" && !c.decision_vue_at
+  ).length;
+  if (n === 0) return null;
+  return (
+    <span
+      title={`${n} décision${n > 1 ? "s" : ""} sur vos candidatures (retenue ou refusée)`}
+      style={pastilleStyle("var(--accent)")}
+    >
+      {n}
+    </span>
+  );
+}
+
+/** Pastille « documents à renouveler » : certifications expirées ou expirant
+ *  sous 60 jours (la date se met à jour dans « Mon entreprise »). */
+function PastilleEntreprise({ presta }: { presta: Tables<"prestataires"> }) {
+  const { data: docs } = useDocsPresta(presta.id);
+  const horizon = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
+  const n = (docs ?? []).filter((d) => d.expire_le && d.expire_le <= horizon).length;
+  if (n === 0) return null;
+  return (
+    <span
+      title={`${n} document${n > 1 ? "s" : ""} expiré${n > 1 ? "s" : ""} ou en fin de validité`}
+      style={pastilleStyle("var(--color-warning-500, #e8a13c)")}
+    >
+      {n}
     </span>
   );
 }
@@ -212,7 +261,9 @@ export default function Prestataire() {
           <button key={it.id} className={"pnav" + (section === it.id ? " on" : "")} onClick={() => go(it.id)}>
             <Icon name={it.icon} size={17} />
             {it.label}
+            {it.id === "candidatures" && <PastilleDecisions presta={presta} />}
             {it.id === "messages" && <PastilleMessages presta={presta} />}
+            {it.id === "entreprise" && <PastilleEntreprise presta={presta} />}
           </button>
         ))}
       </nav>

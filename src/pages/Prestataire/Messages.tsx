@@ -18,8 +18,11 @@ import {
 import type { Tables } from "@/lib/database.types";
 
 export function Messages({ presta }: { presta: Tables<"prestataires"> }) {
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const { data: candidatures } = useMesCandidatures(presta.id);
+  // aperçu AMO : ne pas écraser le repère de lecture de l'AMO (il sert à la
+  // pastille de l'onglet Communications du dossier)
+  const isApercu = profile?.role === "amo";
 
   // opérations où l'entreprise est retenue (copros de la plateforme uniquement)
   const projets = useMemo(() => {
@@ -44,11 +47,11 @@ export function Messages({ presta }: { presta: Tables<"prestataires"> }) {
   const fil = (messages ?? []).filter((m) => m.copro_id === actif);
   const dernierRecu = fil.filter((m) => m.user_id !== session?.user.id).slice(-1)[0]?.created_at ?? null;
   useEffect(() => {
-    if (!actif || !dernierRecu) return;
+    if (!actif || !dernierRecu || isApercu) return;
     const repere = (lectures ?? []).find((l) => l.copro_id === actif)?.last_read_at;
     if (!repere || dernierRecu > repere) void marquerLu.mutateAsync(actif);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actif, dernierRecu]);
+  }, [actif, dernierRecu, isApercu]);
 
   const submit = async () => {
     const text = body.trim();

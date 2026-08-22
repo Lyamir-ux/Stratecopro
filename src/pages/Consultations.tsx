@@ -24,6 +24,7 @@ import {
   useCloseConsultation,
   useConsultations,
   usePublishConsultation,
+  useReopenConsultation,
   useRepondreQuestion,
   type Consultation,
   type PublishResult,
@@ -191,6 +192,7 @@ function Card({ cs }: { cs: Consultation }) {
   const [qa, setQa] = useState(false);
   const [newOrg, setNewOrg] = useState("");
   const close = useCloseConsultation();
+  const reopen = useReopenConsultation();
   const addCand = useAddCandidature();
   const jr = joursRestants(cs.date_limite);
   const enLigne = cs.statut === "en_ligne";
@@ -296,9 +298,19 @@ function Card({ cs }: { cs: Consultation }) {
           <Icon name={qa ? "chevronDown" : "chevronRight"} size={14} />
         </button>
         <span className="spacer" style={{ flex: 1 }}></span>
-        {enLigne && (
+        {enLigne ? (
           <button className="se-btn se-btn-ghost btn-sm" onClick={() => void close.mutateAsync(cs.id)}>
             Clôturer
+          </button>
+        ) : (
+          <button
+            className="se-btn se-btn-ghost btn-sm"
+            title="Relancer la consultation : elle redevient visible des prestataires du métier, qui peuvent de nouveau candidater"
+            disabled={reopen.isPending}
+            onClick={() => void reopen.mutateAsync(cs.id)}
+          >
+            <Icon name="megaphone" size={13} />
+            Remettre en ligne
           </button>
         )}
       </div>

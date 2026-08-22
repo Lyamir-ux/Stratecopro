@@ -65,7 +65,9 @@ export function useConsultationsPresta(presta: Tables<"prestataires">) {
           return {
             ...rest,
             copro: coproprietes,
-            maCandidature: (candidatures ?? []).find((k) => k.prestataire_id === presta.id) ?? null,
+            // une candidature retirée ne bloque pas une nouvelle candidature
+            maCandidature:
+              (candidatures ?? []).find((k) => k.prestataire_id === presta.id && !k.retrait_at) ?? null,
             docs: consultation_docs ?? [],
             questions: (consultation_questions ?? []).sort((a, b) => (a.asked_at < b.asked_at ? -1 : 1)),
           };
@@ -220,23 +222,42 @@ export function usePostuler() {
   });
 }
 
-/** Retrait d'une candidature encore à l'étude (consultation en ligne, offre
- *  « reçue ») — la pièce jointe est supprimée du bucket avec la candidature. */
+/** Retrait motivé d'une candidature encore à l'étude (consultation en ligne,
+ *  offre « reçue ») — retrait tracé (corbeille des deux côtés), l'offre jointe
+ *  reste consultable par l'équipe AMO. Re-candidature possible tant que la
+ *  consultation est en ligne. */
 export function useRetirerCandidature() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (cand: Tables<"candidatures">) => {
-      if (cand.fichier_path) {
-        // meilleur effort : la candidature part même si le fichier résiste
-        await supabase.storage.from("offres-presta").remove([cand.fichier_path]).catch(() => undefined);
-      }
-      const { error } = await supabase.from("candidatures").delete().eq("id", cand.id);
+    mutationFn: async ({ cand, motif }: { cand: Tables<"candidatures">; motif: string }) => {
+      const { error } = await supabase
+        .from("candidatures")
+        .update({ retrait_at: new Date().toISOString(), retrait_motif: motif.trim() || null })
+        .eq("id", cand.id);
       if (error) throw error;
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["presta-consultations"] });
       void qc.invalidateQueries({ queryKey: ["presta-candidatures"] });
+      // le projet lié disparaît aussi de « Mes projets » (cache aligné)
+      void qc.invalidateQueries({ queryKey: ["presta-projets-moe"] });
     },
+  });
+}
+
+/** Accusé de lecture des décisions — posé à l'ouverture de « Mes candidatures »,
+ *  éteint la pastille « sélectionné / refusé » du menu. */
+export function useMarquerDecisionsVues(prestaId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from("candidatures")
+        .update({ decision_vue_at: new Date().toISOString() })
+        .in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["presta-candidatures", prestaId] }),
   });
 }
 
@@ -274,7 +295,16 @@ export function useMajMonPrestataire() {
       patch: Partial<
         Pick<
           Tables<"prestataires">,
-          "email" | "email_secondaire" | "telephone" | "adresse" | "ville" | "logo_path" | "contact_nom"
+          | "email"
+          | "email_secondaire"
+          | "telephone"
+          | "adresse"
+          | "ville"
+          | "code_postal"
+          | "site_web"
+          | "siret"
+          | "logo_path"
+          | "contact_nom"
         >
       >;
     }) => {
@@ -351,12 +381,13 @@ export function useDocsPresta(prestaId: string) {
 const dossierPresta = (presta: Tables<"prestataires">, sessionUid: string) =>
   presta.user_id ?? sessionUid;
 
-/** Dépôt d'un document de certification (RGE, qualification, assurance…). */
+/** Dépôt d'un document de certification (RGE, qualification, assurance…),
+ *  avec sa date de fin de validité éventuelle (rappel automatique avant échéance). */
 export function useUploadDocPresta(presta: Tables<"prestataires">) {
   const qc = useQueryClient();
   const { session } = useAuth();
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async ({ file, expireLe }: { file: File; expireLe: string | null }) => {
       if (!session) throw new Error("Session expirée");
       const path = `${dossierPresta(presta, session.user.id)}/${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
       const { error: upErr } = await supabase.storage.from("presta-docs").upload(path, file);
@@ -366,10 +397,26 @@ export function useUploadDocPresta(presta: Tables<"prestataires">) {
         path,
         name: file.name,
         size: file.size,
+        expire_le: expireLe,
       });
       if (error) throw error;
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["presta-docs", presta.id] }),
+  });
+}
+
+/** Mise à jour de la fin de validité d'un document — réarme le rappel e-mail. */
+export function useMajDocPresta(prestaId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, expireLe }: { id: string; expireLe: string | null }) => {
+      const { error } = await supabase
+        .from("prestataire_docs")
+        .update({ expire_le: expireLe, rappel_envoye_at: null })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["presta-docs", prestaId] }),
   });
 }
 
@@ -477,6 +524,91 @@ export function useMesProjetsMoe(enabled: boolean, prestaId: string) {
         ...r,
         batiments: (bats ?? []).filter((b) => b.copro_id === r.copro.id),
       }));
+    },
+  });
+}
+
+// ========== Documents de projet (« Mes projets ») ==========
+// Fichiers déposés par l'entreprise retenue sur une opération (devis,
+// plannings, PV…) — visibles de l'équipe AMO dans l'onglet Prestataires
+// du dossier. Bucket presta-docs (même dossier que les certifications).
+
+export function useProjetDocs(prestaId: string) {
+  return useQuery({
+    queryKey: ["projet-docs", prestaId],
+    queryFn: async (): Promise<Tables<"projet_docs">[]> => {
+      const { data, error } = await supabase
+        .from("projet_docs")
+        .select("*")
+        .eq("prestataire_id", prestaId)
+        .order("uploaded_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useUploadProjetDoc(presta: Tables<"prestataires">) {
+  const qc = useQueryClient();
+  const { session } = useAuth();
+  return useMutation({
+    mutationFn: async ({ coproId, file }: { coproId: string; file: File }) => {
+      if (!session) throw new Error("Session expirée");
+      const path = `${dossierPresta(presta, session.user.id)}/projet-${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
+      const { error: upErr } = await supabase.storage.from("presta-docs").upload(path, file);
+      if (upErr) throw upErr;
+      const { error } = await supabase.from("projet_docs").insert({
+        copro_id: coproId,
+        prestataire_id: presta.id,
+        path,
+        name: file.name,
+        size: file.size,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["projet-docs"] });
+      void qc.invalidateQueries({ queryKey: ["projet-docs-copro"] });
+    },
+  });
+}
+
+export function useDeleteProjetDoc() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (doc: Tables<"projet_docs">) => {
+      await supabase.storage.from("presta-docs").remove([doc.path]).catch(() => undefined);
+      const { error } = await supabase.from("projet_docs").delete().eq("id", doc.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["projet-docs"] });
+      void qc.invalidateQueries({ queryKey: ["projet-docs-copro"] });
+    },
+  });
+}
+
+export type ProjetDocCopro = Tables<"projet_docs"> & {
+  prestataire: { raison_sociale: string } | null;
+};
+
+/** Côté AMO : documents déposés par les prestataires d'une copro. */
+export function useProjetDocsCopro(coproId: string) {
+  return useQuery({
+    queryKey: ["projet-docs-copro", coproId],
+    queryFn: async (): Promise<ProjetDocCopro[]> => {
+      const { data, error } = await supabase
+        .from("projet_docs")
+        .select("*, prestataires(raison_sociale)")
+        .eq("copro_id", coproId)
+        .order("uploaded_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((d) => {
+        const { prestataires, ...rest } = d as typeof d & {
+          prestataires: { raison_sociale: string } | null;
+        };
+        return { ...rest, prestataire: prestataires };
+      });
     },
   });
 }

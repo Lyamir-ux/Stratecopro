@@ -4,13 +4,20 @@
 //    aux prestataires déclenche une alerte e-mail sans le contenu du message.
 // 2. Questions/réponses des candidats sur les consultations de la copro.
 // 3. Notes internes de l'équipe AMO (historique existant).
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
 import { useAddNote, useNotes } from "@/api/notes";
 import { useAuth } from "@/auth/AuthProvider";
 import { useConsultations } from "@/api/consultations";
-import { CANAUX, useEnvoyerMessage, useMessagesCopro, type CanalMessage } from "@/api/messages";
+import {
+  CANAUX,
+  useEnvoyerMessage,
+  useLectures,
+  useMarquerLu,
+  useMessagesCopro,
+  type CanalMessage,
+} from "@/api/messages";
 import { QuestionsPanel } from "@/pages/Consultations";
 import type { CoproWithStats } from "@/api/copros";
 
@@ -34,13 +41,26 @@ const ROLE_LABELS: Record<string, string> = {
 
 /** Messagerie du projet : blocs prestataires / syndic / copropriétaires. */
 function MessageriePanel({ c }: { c: CoproWithStats }) {
+  const { session } = useAuth();
   const { data: messages } = useMessagesCopro(c.id);
   const { data: consultations } = useConsultations();
   const envoyer = useEnvoyerMessage(c.id);
+  const { data: lectures } = useLectures();
+  const marquerLu = useMarquerLu();
   const [canal, setCanal] = useState<CanalMessage>("prestataires");
   const [dest, setDest] = useState<string>("tous"); // "tous" ou prestataire_id
   const [body, setBody] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+
+  // ouvrir l'onglet = marquer le fil comme lu (éteint la pastille Communications)
+  const dernierRecu =
+    (messages ?? []).filter((m) => m.user_id !== session?.user.id).slice(-1)[0]?.created_at ?? null;
+  useEffect(() => {
+    if (!dernierRecu) return;
+    const repere = (lectures ?? []).find((l) => l.copro_id === c.id)?.last_read_at;
+    if (!repere || dernierRecu > repere) void marquerLu.mutateAsync(c.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c.id, dernierRecu]);
 
   // entreprises retenues sur une consultation de la copro (destinataires possibles)
   const retenues = useMemo(() => {

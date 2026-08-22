@@ -6,13 +6,21 @@ import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
 import { fmtEuro, fmtDate } from "@/lib/format";
-import { CONSULT_TYPES, ouvrirOffre, useConsultations, type Consultation } from "@/api/consultations";
+import {
+  CONSULT_TYPES,
+  ouvrirOffre,
+  useConsultations,
+  useReopenConsultation,
+  type Consultation,
+} from "@/api/consultations";
+import { ouvrirDocPresta, useProjetDocsCopro } from "@/api/espacePrestataire";
 import { CandidatureActions } from "@/components/CandidatureActions";
 import { QuestionsPanel } from "@/pages/Consultations";
 import type { CoproWithStats } from "@/api/copros";
 
 function ConsultationPanel({ cs }: { cs: Consultation }) {
   const type = CONSULT_TYPES.find((t) => t.id === cs.type);
+  const reopen = useReopenConsultation();
   const enLigne = cs.statut === "en_ligne";
   const enAttente = cs.questions.filter((q) => !q.reponse).length;
   const retenue = cs.candidatures.find((c) => c.statut === "retenue");
@@ -29,6 +37,17 @@ function ConsultationPanel({ cs }: { cs: Consultation }) {
           </Badge>
         )}
         <span style={{ flex: 1 }}></span>
+        {!enLigne && (
+          <button
+            className="se-btn se-btn-ghost btn-sm"
+            title="Relancer la consultation : elle redevient visible des prestataires du métier, qui peuvent de nouveau candidater"
+            disabled={reopen.isPending}
+            onClick={() => void reopen.mutateAsync(cs.id)}
+          >
+            <Icon name="megaphone" size={13} />
+            Remettre en ligne
+          </button>
+        )}
         <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
           {cs.candidatures.length} candidature{cs.candidatures.length > 1 ? "s" : ""}
         </span>
@@ -93,6 +112,43 @@ function ConsultationPanel({ cs }: { cs: Consultation }) {
   );
 }
 
+/** Documents déposés par les prestataires retenus du projet (devis, plannings,
+ *  PV…) depuis leur section « Mes projets ». */
+function ProjetDocsPanel({ c }: { c: CoproWithStats }) {
+  const { data: docs } = useProjetDocsCopro(c.id);
+  if (!docs || docs.length === 0) return null;
+  return (
+    <div className="panel">
+      <div className="p-head">
+        <Icon name="folder" size={18} />
+        <h3>Documents déposés par les prestataires</h3>
+        <span style={{ flex: 1 }}></span>
+        <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{docs.length}</span>
+      </div>
+      <div className="p-body">
+        {docs.map((d) => (
+          <div
+            key={d.id}
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid var(--border)", fontSize: 13.5, flexWrap: "wrap" }}
+          >
+            <Icon name="fileText" size={15} style={{ color: "var(--fg-muted)", flex: "none" }} />
+            <button
+              style={{ border: "none", background: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 600, textAlign: "left" }}
+              title={"Ouvrir " + d.name}
+              onClick={() => void ouvrirDocPresta(d.path)}
+            >
+              {d.name}
+            </button>
+            <Badge kind="neutral">{d.prestataire?.raison_sociale ?? "—"}</Badge>
+            <span className="spacer" style={{ flex: 1 }}></span>
+            <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>déposé le {fmtDate(d.uploaded_at)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function PrestatairesTab({ c }: { c: CoproWithStats }) {
   const navigate = useNavigate();
   const { data: consultations, isLoading } = useConsultations();
@@ -122,6 +178,8 @@ export function PrestatairesTab({ c }: { c: CoproWithStats }) {
           <p>Publiez un appel à intervenants pour cette copropriété depuis « Consulter un intervenant ».</p>
         </div>
       )}
+
+      <ProjetDocsPanel c={c} />
 
       {enLigne.map((cs) => (
         <ConsultationPanel key={cs.id} cs={cs} />

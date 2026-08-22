@@ -185,6 +185,19 @@ export function useCloseConsultation() {
   });
 }
 
+/** Remise en ligne d'une consultation clôturée — pour relancer la recherche
+ *  après la rétractation d'un prestataire retenu (faillite, devis expiré…). */
+export function useReopenConsultation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("consultations").update({ statut: "en_ligne" }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["consultations"] }),
+  });
+}
+
 /** Saisie manuelle d'une candidature reçue hors plateforme (mail, courrier…). */
 export function useAddCandidature() {
   const qc = useQueryClient();

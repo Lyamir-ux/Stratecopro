@@ -182,10 +182,11 @@ export function useRepondreMessagePresta(presta: Tables<"prestataires">) {
   });
 }
 
-/** Nombre de messages non lus (pastille du menu prestataire) : messages des
- *  autres, plus récents que le repère de lecture de leur copro. */
+/** Nombre de messages non lus (pastille du menu prestataire et de l'onglet
+ *  Communications AMO) : messages des autres, plus récents que le repère de
+ *  lecture de leur copro. */
 export function compteNonLus(
-  messages: MessagePresta[] | undefined,
+  messages: Pick<Tables<"messages_projet">, "user_id" | "copro_id" | "created_at">[] | undefined,
   lectures: Tables<"message_lectures">[] | undefined,
   monUserId: string | undefined
 ): number {

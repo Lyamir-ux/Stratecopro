@@ -6,6 +6,7 @@ import { useUi, type Accent } from "@/stores/ui";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCopros, useTasksCount } from "@/api/copros";
 import { useQuestionsEnAttenteCount } from "@/api/consultations";
+import { declencherRappelAgrements } from "@/api/prestataires";
 
 // Accent dynamique — repris de la maquette (app.jsx ACCENT_MAP)
 const ACCENT_MAP: Record<Accent, { hover: string; soft: string; deep: string }> = {
@@ -29,6 +30,10 @@ export function Layout() {
     root.setProperty("--color-primary-100", a.soft);
   }, [accent]);
   const { profile, signOut } = useAuth();
+  // rappel e-mail des agréments prestataires en fin de validité (1×/jour)
+  useEffect(() => {
+    void declencherRappelAgrements();
+  }, []);
   const { data: copros } = useCopros();
   const { data: tasksCount } = useTasksCount();
   // alerte du menu « Consulter un intervenant » : questions de prestataires sans réponse

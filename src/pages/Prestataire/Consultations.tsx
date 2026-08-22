@@ -698,12 +698,11 @@ export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires">
                         title="Retirer votre candidature de cette consultation"
                         disabled={retirer.isPending}
                         onClick={() => {
-                          if (
-                            window.confirm(
-                              "Retirer votre candidature ? Votre offre sera supprimée de la consultation — vous pourrez repostuler tant qu'elle est en ligne."
-                            )
-                          ) {
-                            void retirer.mutateAsync(cs.maCandidature!);
+                          const motif = window.prompt(
+                            "Pourquoi retirez-vous votre candidature ?\n\nVotre offre partira à la corbeille — vous pourrez repostuler tant que la consultation est en ligne."
+                          );
+                          if (motif?.trim()) {
+                            void retirer.mutateAsync({ cand: cs.maCandidature!, motif });
                           }
                         }}
                       >

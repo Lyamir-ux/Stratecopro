@@ -8,6 +8,21 @@ import type { Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 export type Prestataire = Tables<"prestataires">;
 
+/** Déclenche le rappel e-mail des agréments en fin de validité (edge function
+ *  `rappel-agrements`) — appelé une fois par jour au chargement de l'app AMO.
+ *  Meilleur effort : un échec est silencieux, le rappel repartira demain. */
+export async function declencherRappelAgrements(): Promise<void> {
+  const cle = "rappel-agrements-dernier";
+  const aujourdHui = new Date().toISOString().slice(0, 10);
+  try {
+    if (localStorage.getItem(cle) === aujourdHui) return;
+    localStorage.setItem(cle, aujourdHui);
+    await supabase.functions.invoke("rappel-agrements", { body: {} });
+  } catch {
+    /* rappel facultatif */
+  }
+}
+
 export function usePrestataires() {
   return useQuery({
     queryKey: ["prestataires"],

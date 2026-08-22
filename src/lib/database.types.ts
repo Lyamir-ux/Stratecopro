@@ -174,6 +174,7 @@ export type Database = {
           consultation_id: string
           decision_at: string | null
           decision_email_statut: string | null
+          decision_vue_at: string | null
           engagement_at: string | null
           fichier_name: string | null
           fichier_path: string | null
@@ -183,6 +184,8 @@ export type Database = {
           org_name: string
           prestataire_id: string | null
           received_at: string
+          retrait_at: string | null
+          retrait_motif: string | null
           statut: Database["public"]["Enums"]["statut_candidature"]
           tarif_chantier: number | null
           tarif_chantier_mode: string
@@ -199,6 +202,7 @@ export type Database = {
           consultation_id: string
           decision_at?: string | null
           decision_email_statut?: string | null
+          decision_vue_at?: string | null
           engagement_at?: string | null
           fichier_name?: string | null
           fichier_path?: string | null
@@ -208,6 +212,8 @@ export type Database = {
           org_name: string
           prestataire_id?: string | null
           received_at?: string
+          retrait_at?: string | null
+          retrait_motif?: string | null
           statut?: Database["public"]["Enums"]["statut_candidature"]
           tarif_chantier?: number | null
           tarif_chantier_mode?: string
@@ -224,6 +230,7 @@ export type Database = {
           consultation_id?: string
           decision_at?: string | null
           decision_email_statut?: string | null
+          decision_vue_at?: string | null
           engagement_at?: string | null
           fichier_name?: string | null
           fichier_path?: string | null
@@ -233,6 +240,8 @@ export type Database = {
           org_name?: string
           prestataire_id?: string | null
           received_at?: string
+          retrait_at?: string | null
+          retrait_motif?: string | null
           statut?: Database["public"]["Enums"]["statut_candidature"]
           tarif_chantier?: number | null
           tarif_chantier_mode?: string
@@ -1157,13 +1166,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "lots_rattache_a_fkey"
-            columns: ["rattache_a"]
-            isOneToOne: false
-            referencedRelation: "lots"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "lots_batiment_id_fkey"
             columns: ["batiment_id"]
             isOneToOne: false
@@ -1189,6 +1191,13 @@ export type Database = {
             columns: ["coproprietaire_id"]
             isOneToOne: false
             referencedRelation: "coproprietaires"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lots_rattache_a_fkey"
+            columns: ["rattache_a"]
+            isOneToOne: false
+            referencedRelation: "lots"
             referencedColumns: ["id"]
           },
         ]
@@ -1747,26 +1756,32 @@ export type Database = {
       }
       prestataire_docs: {
         Row: {
+          expire_le: string | null
           id: string
           name: string
           path: string
           prestataire_id: string
+          rappel_envoye_at: string | null
           size: number | null
           uploaded_at: string
         }
         Insert: {
+          expire_le?: string | null
           id?: string
           name: string
           path: string
           prestataire_id: string
+          rappel_envoye_at?: string | null
           size?: number | null
           uploaded_at?: string
         }
         Update: {
+          expire_le?: string | null
           id?: string
           name?: string
           path?: string
           prestataire_id?: string
+          rappel_envoye_at?: string | null
           size?: number | null
           uploaded_at?: string
         }
@@ -1784,6 +1799,7 @@ export type Database = {
         Row: {
           actif: boolean
           adresse: string | null
+          code_postal: string | null
           contact_nom: string | null
           created_at: string
           email: string
@@ -1793,6 +1809,7 @@ export type Database = {
           notes: string | null
           raison_sociale: string
           siret: string | null
+          site_web: string | null
           telephone: string | null
           types: Database["public"]["Enums"]["type_consultation"][]
           updated_at: string
@@ -1802,6 +1819,7 @@ export type Database = {
         Insert: {
           actif?: boolean
           adresse?: string | null
+          code_postal?: string | null
           contact_nom?: string | null
           created_at?: string
           email: string
@@ -1811,6 +1829,7 @@ export type Database = {
           notes?: string | null
           raison_sociale: string
           siret?: string | null
+          site_web?: string | null
           telephone?: string | null
           types?: Database["public"]["Enums"]["type_consultation"][]
           updated_at?: string
@@ -1820,6 +1839,7 @@ export type Database = {
         Update: {
           actif?: boolean
           adresse?: string | null
+          code_postal?: string | null
           contact_nom?: string | null
           created_at?: string
           email?: string
@@ -1829,6 +1849,7 @@ export type Database = {
           notes?: string | null
           raison_sociale?: string
           siret?: string | null
+          site_web?: string | null
           telephone?: string | null
           types?: Database["public"]["Enums"]["type_consultation"][]
           updated_at?: string
@@ -1869,6 +1890,58 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      projet_docs: {
+        Row: {
+          copro_id: string
+          id: string
+          name: string
+          path: string
+          prestataire_id: string
+          size: number | null
+          uploaded_at: string
+        }
+        Insert: {
+          copro_id: string
+          id?: string
+          name: string
+          path: string
+          prestataire_id: string
+          size?: number | null
+          uploaded_at?: string
+        }
+        Update: {
+          copro_id?: string
+          id?: string
+          name?: string
+          path?: string
+          prestataire_id?: string
+          size?: number | null
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projet_docs_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projet_docs_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projet_docs_prestataire_id_fkey"
+            columns: ["prestataire_id"]
+            isOneToOne: false
+            referencedRelation: "prestataires"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       scenarios_financiers: {
         Row: {
@@ -2101,13 +2174,14 @@ export type Database = {
       }
       my_prestataire_id: { Args: never; Returns: string }
       peut_postuler: { Args: { p_consultation_id: string }; Returns: boolean }
-      rattacher_lot: {
-        Args: { p_lot_id: string; p_cible_id: string | null }
-        Returns: undefined
-      }
       peut_voir_consultation: {
         Args: { p_consultation_id: string }
         Returns: boolean
+      }
+      rattacher_lot: {
+        // p_cible_id null = détacher le lot (défaut SQL non vu par le générateur)
+        Args: { p_cible_id: string | null; p_lot_id: string }
+        Returns: undefined
       }
     }
     Enums: {
@@ -2130,7 +2204,13 @@ export type Database = {
         | "rib"
         | "justificatif_domicile"
         | "taxe_fonciere"
-      usage_lot: "habitation" | "garage" | "caves" | "commerces" | "bureaux" | "autres"
+      usage_lot:
+        | "habitation"
+        | "garage"
+        | "caves"
+        | "autres"
+        | "commerces"
+        | "bureaux"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2278,7 +2358,14 @@ export const Constants = {
         "justificatif_domicile",
         "taxe_fonciere",
       ],
-      usage_lot: ["habitation", "garage", "caves", "commerces", "bureaux", "autres"],
+      usage_lot: [
+        "habitation",
+        "garage",
+        "caves",
+        "autres",
+        "commerces",
+        "bureaux",
+      ],
     },
   },
 } as const

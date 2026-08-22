@@ -6,8 +6,10 @@ import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Badge, DpePair, PhaseBadge, THUMB_BG } from "@/components/ui";
 import type { DpeClass } from "@/lib/referentiels";
+import { useAuth } from "@/auth/AuthProvider";
 import { useCopro, useMettreCorbeille, usePhotoUrl, useUploadPhoto } from "@/api/copros";
 import { useConsultations } from "@/api/consultations";
+import { compteNonLus, useLectures, useMessagesCopro } from "@/api/messages";
 import { ProjetTab } from "./ProjetTab";
 import { PrestatairesTab } from "./PrestatairesTab";
 import { DonneesTab } from "./DonneesTab";
@@ -41,6 +43,12 @@ export default function CoproDetail() {
   const questionsEnAttente = (consultations ?? [])
     .filter((cs) => cs.copro_id === id && cs.statut === "en_ligne")
     .reduce((n, cs) => n + cs.questions.filter((q) => !q.reponse).length, 0);
+  // pastille de l'onglet Communications : messages reçus depuis la dernière
+  // lecture du fil (l'ouverture de l'onglet marque le fil comme lu)
+  const { session } = useAuth();
+  const { data: messages } = useMessagesCopro(id);
+  const { data: lectures } = useLectures();
+  const messagesNonLus = compteNonLus(messages, lectures, session?.user.id);
 
   const tab: TabId = TABS.some((t) => t.id === tabParam) ? (tabParam as TabId) : "projet";
 
@@ -174,6 +182,27 @@ export default function CoproDetail() {
                 }}
               >
                 {questionsEnAttente}
+              </span>
+            )}
+            {tb.id === "communications" && messagesNonLus > 0 && (
+              <span
+                title={`${messagesNonLus} nouveau${messagesNonLus > 1 ? "x" : ""} message${messagesNonLus > 1 ? "s" : ""}`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 17,
+                  height: 17,
+                  padding: "0 5px",
+                  marginLeft: 6,
+                  borderRadius: 9,
+                  background: "var(--accent)",
+                  color: "#fff",
+                  fontSize: 11,
+                  fontWeight: 700,
+                }}
+              >
+                {messagesNonLus}
               </span>
             )}
           </button>
