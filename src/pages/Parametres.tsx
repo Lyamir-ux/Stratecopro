@@ -142,7 +142,7 @@ const FB_ROLE_LABEL: Record<string, string> = {
   moe: "MOE",
 };
 
-function FeedbackRow({ fb }: { fb: Feedback }) {
+function FeedbackRow({ fb, coche, onCocher }: { fb: Feedback; coche?: boolean; onCocher?: () => void }) {
   const maj = useMajFeedback();
   const editer = useEditerFeedback();
   const supprimer = useSupprimerFeedback();
@@ -153,6 +153,14 @@ function FeedbackRow({ fb }: { fb: Feedback }) {
   return (
     <div style={{ padding: "12px 4px", borderBottom: "1px solid var(--border)", opacity: traite && !edition ? 0.55 : 1 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        {onCocher && (
+          <input
+            type="checkbox"
+            checked={coche ?? false}
+            onChange={onCocher}
+            title="Sélectionner ce retour pour l'export — cases cochées : seuls ces retours sont copiés"
+          />
+        )}
         <Badge kind={t.kind}>{t.label}</Badge>
         <span style={{ fontSize: 13.5, fontWeight: 600 }}>{fb.auteur_nom || "Anonyme"}</span>
         <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
@@ -268,6 +276,9 @@ function FeedbackPanel() {
   const [vue, setVue] = useState<"a_traiter" | "archives">("a_traiter");
   const [auteur, setAuteur] = useState<string>("tous");
   const [copie, setCopie] = useState(false);
+  // cases cochées dans « À traiter » : sélection de la fournée à exporter,
+  // les retours non cochés restent en suspens
+  const [selection, setSelection] = useState<Set<string>>(new Set());
   const nouveaux = (feedbacks ?? []).filter((f) => f.statut !== "traite");
   const traites = (feedbacks ?? []).filter((f) => f.statut === "traite");
   const auteurs = [...new Set(traites.map((f) => f.auteur_nom || "Anonyme"))].sort((a, b) =>
@@ -280,8 +291,17 @@ function FeedbackPanel() {
         ? traites
         : traites.filter((f) => (f.auteur_nom || "Anonyme") === auteur);
 
+  const coches = nouveaux.filter((f) => selection.has(f.id));
+  const cocher = (id: string) =>
+    setSelection((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      return s;
+    });
+
   const exporterMd = async () => {
-    const md = feedbacksToMarkdown(nouveaux);
+    const md = feedbacksToMarkdown(coches.length ? coches : nouveaux);
     try {
       await navigator.clipboard.writeText(md);
       setCopie(true);
@@ -308,11 +328,15 @@ function FeedbackPanel() {
         {vue === "a_traiter" && nouveaux.length > 0 && (
           <button
             className="se-btn se-btn-secondary btn-sm"
-            title="Copier les feedbacks à traiter au format Markdown, prêts à coller dans Claude"
+            title={
+              coches.length
+                ? "Copier uniquement les retours cochés au format Markdown, prêts à coller dans Claude"
+                : "Copier tous les feedbacks à traiter au format Markdown — cochez des retours pour n'exporter qu'une sélection"
+            }
             onClick={() => void exporterMd()}
           >
             <Icon name={copie ? "check" : "copy"} size={14} />
-            {copie ? "Copié !" : "Exporter en MD"}
+            {copie ? "Copié !" : coches.length ? `Exporter la sélection (${coches.length})` : "Exporter en MD"}
           </button>
         )}
         <div className="opt-mini">
@@ -345,7 +369,14 @@ function FeedbackPanel() {
               : "Aucun retour pour l'instant — les remarques envoyées via le bouton « Feedback » (en bas à droite de chaque page, tous espaces confondus) s'afficheront ici."}
           </p>
         ) : (
-          visibles.map((fb) => <FeedbackRow key={fb.id} fb={fb} />)
+          visibles.map((fb) => (
+            <FeedbackRow
+              key={fb.id}
+              fb={fb}
+              coche={vue === "a_traiter" ? selection.has(fb.id) : undefined}
+              onCocher={vue === "a_traiter" ? () => cocher(fb.id) : undefined}
+            />
+          ))
         )}
       </div>
     </div>
