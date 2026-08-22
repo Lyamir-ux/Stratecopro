@@ -1,6 +1,8 @@
-// Espace syndic : lecture seule du périmètre géré (RLS copro_members 'syndic').
-// Le gestionnaire consulte — il n'écrit jamais. Les réponses d'enquête passent
-// par la RPC enquete_reponses_syndic qui exclut le RFR (donnée sensible).
+// Espace syndic : lecture du périmètre géré (RLS copro_members 'syndic').
+// Le gestionnaire écrit sur quelques tables ciblées : suivi financier, montage
+// bancaire, choix de financement d'un copropriétaire (useSaveChoixGestionnaire,
+// api/portail.ts). Les réponses d'enquête passent par la RPC
+// enquete_reponses_syndic qui exclut le RFR (donnée sensible).
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { urlSigneeFichier } from "@/api/fichiers";

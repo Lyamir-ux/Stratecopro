@@ -355,30 +355,36 @@ export type Database = {
           duree_annees: number | null
           id: string
           lot_ids: string[]
+          saisi_par: string
           scenario_id: string
           transmitted_at: string
           type: Database["public"]["Enums"]["type_financement"]
           updated_at: string
+          updated_by: string | null
         }
         Insert: {
           coproprietaire_id: string
           duree_annees?: number | null
           id?: string
           lot_ids?: string[]
+          saisi_par?: string
           scenario_id: string
           transmitted_at?: string
           type: Database["public"]["Enums"]["type_financement"]
           updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           coproprietaire_id?: string
           duree_annees?: number | null
           id?: string
           lot_ids?: string[]
+          saisi_par?: string
           scenario_id?: string
           transmitted_at?: string
           type?: Database["public"]["Enums"]["type_financement"]
           updated_at?: string
+          updated_by?: string | null
         }
         Relationships: [
           {

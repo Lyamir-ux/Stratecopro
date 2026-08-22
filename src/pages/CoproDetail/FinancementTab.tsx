@@ -438,6 +438,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                           ? `Prêt individuel · ${ch.lot_ids.length} lot${ch.lot_ids.length > 1 ? "s" : ""}`
                           : "Fonds propres"}
                       {" · " + fmtDate(ch.transmitted_at)}
+                      {ch.saisi_par === "syndic" ? " · saisi par le syndic" : ch.saisi_par === "amo" ? " · saisi par Strat Eco" : ""}
                     </div>
                   </div>
                   <span className="spacer"></span>

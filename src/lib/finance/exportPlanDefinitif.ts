@@ -28,19 +28,30 @@ export function exportPlanDefinitif(data: PlanDefinitifData): WorkBook {
 
   const lotSheetNames = new Map<number, string>();
 
-  // ---------- Onglets PF (collectif puis individuel) ----------
+  // ---------- Onglets PF (collectif, collectif sans avance, individuel) ----------
   // Seules les variantes retenues pour le dossier sont exportées ; à défaut de
-  // choix (les deux masquées), on exporte quand même la variante collective.
-  const variantesExport: ("collectif" | "individuel")[] = (["collectif", "individuel"] as const).filter(
-    (v) => data.variantes?.[v] !== false
-  );
+  // choix (toutes masquées), on exporte quand même la variante collective.
+  type Variante = "collectif" | "collectifSansAvance" | "individuel";
+  const VARIANTE_TITRE: Record<Variante, string> = {
+    collectif: "ECO PTZ COLLECTIF",
+    collectifSansAvance: "ECO PTZ COLLECTIF SANS AVANCE DE SUBVENTIONS",
+    individuel: "ECO PTZ INDIVIDUEL",
+  };
+  const VARIANTE_ONGLET: Record<Variante, string> = {
+    collectif: "PF définitif Eco PTZ collectif",
+    collectifSansAvance: "PF définitif sans avance",
+    individuel: "PF définitif Eco PTZ individuel",
+  };
+  const variantesExport: Variante[] = (
+    ["collectif", "collectifSansAvance", "individuel"] as const
+  ).filter((v) => data.variantes?.[v] === true || (v !== "collectifSansAvance" && data.variantes?.[v] !== false));
   if (variantesExport.length === 0) variantesExport.push("collectif");
   for (const variante of variantesExport) {
     const rows: Row[] = [];
     const push = (a: string | number | null, b: string | number | null = null, c: string | number | null = null, d: string | number | null = null, e: string | number | null = null, f: string | number | null = null) =>
       rows.push([a, b, c, d, e, f]);
 
-    push(null, `PLAN DE FINANCEMENT DEFINITIF ${data.infos.nomCopro.toUpperCase()} - ECO PTZ ${variante.toUpperCase()}`);
+    push(null, `PLAN DE FINANCEMENT DEFINITIF ${data.infos.nomCopro.toUpperCase()} - ${VARIANTE_TITRE[variante]}`);
     push(null);
     push(null, "Nom de la copropriété :", null, data.infos.nomCopro);
     push(null, "Adresse de l'immeuble :", null, data.infos.adresse);
@@ -121,39 +132,51 @@ export function exportPlanDefinitif(data: PlanDefinitifData): WorkBook {
     push(null, "Taux de couverture %", null, r.tauxCouverture, "Pourcentage du montant de l'opération TTC couvert par les aides");
     push(null, "Fonds travaux disponible", null, data.params.fondsTravaux, data.params.commentaireFondsTravaux ?? null);
     push(null, "Reste à charge définitif collectif", null, r.resteACharge);
-    if (variante === "collectif") {
-      push(null, "Reste à financer", null, r.collectif.resteAFinancer);
+    if (variante === "collectif" || variante === "collectifSansAvance") {
+      const sansAvance = variante === "collectifSansAvance";
+      const v = sansAvance ? r.collectifSansAvance : r.collectif;
+      push(null, "Reste à financer", null, v.resteAFinancer);
       push(null);
       push(null, "Coût au tantième avant aides", data.params.totalTantiemes, r.coutTantiemeAvant);
-      push(null, "Coût au tantième après déduction des aides publiques, montants déjà appelés et fonds travaux", data.params.totalTantiemes, r.collectif.coutTantiemeApres);
+      push(null, "Coût au tantième après déduction des aides publiques, montants déjà appelés et fonds travaux", data.params.totalTantiemes, v.coutTantiemeApres);
       push(null);
       push(null, "Quote part avant déduction des aides");
-      for (const e of r.collectif.exemples)
+      for (const e of v.exemples)
         push(null, `Quote part pour un appartement de (${e.tantiemes}/${data.params.totalTantiemes})`, e.tantiemes, e.quotePartAvant);
       push(null);
       push(null, "Reste à financer après déduction des aides publiques");
-      for (const e of r.collectif.exemples)
+      for (const e of v.exemples)
         push(null, `Reste à financer pour un appartement de (${e.tantiemes}/${data.params.totalTantiemes})`, e.tantiemes, e.resteAFinancer);
       push(null);
       push("Exemples", `Mensualité ECO PTZ pour une durée de ${data.params.dureeEcoPtzAns} ans`);
-      for (const e of r.collectif.exemples)
+      for (const e of v.exemples)
         push(null, `Mensualité ECO PTZ pour (${e.tantiemes}/${data.params.totalTantiemes}) pour une durée de ${data.params.dureeEcoPtzAns} ans`, e.tantiemes, e.mensualiteEcoPtz, "Exemple pris pour un prêt collectif Eco PTZ");
       push(null);
       push("Exemples", "Montant des subventions publiques");
-      for (const e of r.collectif.exemples)
-        push(null, `Montant des subventions publiques pour ${e.tantiemes} tantièmes`, e.tantiemes, e.subventionsPubliques);
+      for (const e of v.exemples)
+        push(null, `Montant des subventions publiques pour ${e.tantiemes} tantièmes`, e.tantiemes, e.subventionsPubliques, sansAvance ? "Subventions perçues directement par la copropriété, sans prêt d'avance" : null);
       push(null);
-      push("Exemples", "Le coût du prêt avance de subventions publiques");
-      for (const e of r.collectif.exemples)
-        push(null, `Le coût du prêt avance de subventions publiques : (${e.tantiemes}/${data.params.totalTantiemes})`, e.tantiemes, e.coutPretAvance, "Prêt avance de subventions publiques : à payer en une fois à la fin des travaux");
-      push(null);
+      if (!sansAvance) {
+        push("Exemples", "Le coût du prêt avance de subventions publiques");
+        for (const e of r.collectif.exemples)
+          push(null, `Le coût du prêt avance de subventions publiques : (${e.tantiemes}/${data.params.totalTantiemes})`, e.tantiemes, e.coutPretAvance, "Prêt avance de subventions publiques : à payer en une fois à la fin des travaux");
+        push(null);
+      }
       push("Exemples", "La prime des CEE");
-      for (const e of r.collectif.exemples)
+      for (const e of v.exemples)
         push(null, `La prime des CEE : (${e.tantiemes}/${data.params.totalTantiemes})`, e.tantiemes, e.primeCee, "La prime CEE est attribuée à la fin des travaux");
       push(null);
       push(null, "Récapitulatif");
-      for (const e of r.collectif.exemples)
-        push("Exemples", `Prix de revient de l'opération pour ${e.tantiemes} tantièmes`, e.tantiemes, e.prixRevient, "Prix de revient : Reste à financer + Coût du prêt avance de subvention - Prime CEE");
+      for (const e of v.exemples)
+        push(
+          "Exemples",
+          `Prix de revient de l'opération pour ${e.tantiemes} tantièmes`,
+          e.tantiemes,
+          e.prixRevient,
+          sansAvance
+            ? "Prix de revient : Reste à financer - Prime CEE (sans prêt d'avance de subventions)"
+            : "Prix de revient : Reste à financer + Coût du prêt avance de subvention - Prime CEE"
+        );
     } else {
       push(null, `Appels de fonds avec déduction de ${fmtTaux(data.params.pctAvanceAides)}% des aides`, null, r.individuel.appelsFonds);
       push(null);
@@ -194,11 +217,7 @@ export function exportPlanDefinitif(data: PlanDefinitifData): WorkBook {
 
     const ws = utils.aoa_to_sheet(rows);
     ws["!cols"] = [{ wch: 12 }, { wch: 62 }, { wch: 8 }, { wch: 16 }, { wch: 60 }, { wch: 14 }];
-    utils.book_append_sheet(
-      wb,
-      ws,
-      sheetName(`PF définitif Eco PTZ ${variante}`, used)
-    );
+    utils.book_append_sheet(wb, ws, sheetName(VARIANTE_ONGLET[variante], used));
   }
 
   // ---------- Onglets lots ----------

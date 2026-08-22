@@ -1,13 +1,16 @@
 // Onglet Financement (syndic) — mode de financement du reste à charge choisi
 // par chaque copropriétaire depuis son portail : fonds propres, éco-PTZ
-// collectif ou éco-PTZ individuel. Vue de coordination pour le gestionnaire.
+// collectif ou éco-PTZ individuel. Le gestionnaire coordonne ET peut saisir
+// le mode d'un copropriétaire quand il a l'information en direct (ex. fonds
+// propres) — saisie tracée (saisi_par), le copropriétaire garde la main.
 import { Fragment, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge, type BadgeKind } from "@/components/ui";
 import { fmtDate, fmtEuroFull } from "@/lib/format";
+import { useAuth } from "@/auth/AuthProvider";
 import { useDonnees } from "@/api/donnees";
 import { useChoixFinancementScenario } from "@/api/scenarios";
-import { useScenariosPartages, useFinancementConfig } from "@/api/portail";
+import { useScenariosPartages, useFinancementConfig, useSaveChoixGestionnaire } from "@/api/portail";
 import { usePlansDefinitifs, type PlanDefinitif } from "@/api/planDefinitif";
 import {
   computePlanDefinitif,
@@ -173,11 +176,18 @@ function PfDefinitifPanel({ plan, pv, fondsTravaux }: { plan: PlanDefinitif; pv:
 }
 
 export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
+  const { profile } = useAuth();
   const { data: scenarios } = useScenariosPartages(c.id);
   const scenario = scenarios?.[0] ?? null;
   const { data: choix, isLoading: choixLoading } = useChoixFinancementScenario(scenario?.id);
   const { data: donnees, isLoading } = useDonnees(c.id);
   const { data: finConfig } = useFinancementConfig(c.id);
+  const saveChoix = useSaveChoixGestionnaire(scenario?.id);
+  // saisie du mode d'un copropriétaire (le scénario partagé est requis)
+  const [editId, setEditId] = useState<string | null>(null);
+  const [draftType, setDraftType] = useState<TypeFinancement>("fonds");
+  const [draftDuree, setDraftDuree] = useState(15);
+  const [saveError, setSaveError] = useState<string | null>(null);
   // Le PF définitif validé est automatiquement partagé avec le syndic (RLS).
   const { data: pfPlans } = usePlansDefinitifs(c.id);
   const planValide = (pfPlans ?? [])
@@ -201,6 +211,16 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
     const m = new Map<string, number>();
     for (const l of lots) {
       if (l.coproprietaire_id) m.set(l.coproprietaire_id, (m.get(l.coproprietaire_id) ?? 0) + 1);
+    }
+    return m;
+  }, [lots]);
+
+  // lots rattachés à chaque copropriétaire — assiette de l'éco-PTZ individuel
+  // saisi par le gestionnaire (le copropriétaire peut affiner depuis son portail)
+  const lotIdsByCp = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const l of lots) {
+      if (l.coproprietaire_id) m.set(l.coproprietaire_id, [...(m.get(l.coproprietaire_id) ?? []), l.id]);
     }
     return m;
   }, [lots]);
@@ -282,12 +302,92 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                       <th>Mode de financement</th>
                       <th>Durée</th>
                       <th>Transmis le</th>
+                      {scenario && <th style={{ width: 40 }}></th>}
                     </tr>
                   </thead>
                   <tbody>
                     {coproprietaires.map((cp) => {
                       const ch = choixByCp.get(cp.id) ?? null;
                       const meta = ch ? TYPE_META[ch.type] : null;
+                      const enEdition = editId === cp.id;
+                      if (enEdition) {
+                        return (
+                          <tr key={cp.id} style={{ cursor: "default" }}>
+                            <td style={{ fontWeight: 600 }}>{cp.nom}</td>
+                            <td>{lotsByCp.get(cp.id) ?? 0}</td>
+                            <td>
+                              <select
+                                className="edit-inp"
+                                value={draftType}
+                                autoFocus
+                                onChange={(e) => setDraftType(e.target.value as TypeFinancement)}
+                                style={{ maxWidth: 180 }}
+                              >
+                                {(Object.keys(TYPE_META) as TypeFinancement[]).map((t) => (
+                                  <option key={t} value={t}>
+                                    {TYPE_META[t].label}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>
+                              {draftType === "individuel" ? (
+                                <select
+                                  className="edit-inp"
+                                  value={draftDuree}
+                                  onChange={(e) => setDraftDuree(Number(e.target.value))}
+                                  style={{ maxWidth: 90 }}
+                                  title="Durée de l'éco-PTZ individuel"
+                                >
+                                  {Array.from({ length: 18 }, (_, i) => i + 3).map((n) => (
+                                    <option key={n} value={n}>
+                                      {n} ans
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : draftType === "collectif" ? (
+                                (finConfig?.duree_annees ?? 15) + " ans"
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td colSpan={2}>
+                              <span style={{ display: "inline-flex", gap: 6 }}>
+                                <button
+                                  className="se-btn se-btn-primary btn-sm"
+                                  disabled={saveChoix.isPending}
+                                  onClick={() => {
+                                    setSaveError(null);
+                                    saveChoix
+                                      .mutateAsync({
+                                        coproprietaireId: cp.id,
+                                        type: draftType,
+                                        dureeAnnees:
+                                          draftType === "collectif"
+                                            ? (finConfig?.duree_annees ?? 15)
+                                            : draftType === "individuel"
+                                              ? draftDuree
+                                              : null,
+                                        lotIds: draftType === "individuel" ? (lotIdsByCp.get(cp.id) ?? []) : [],
+                                        saisiPar: profile?.role === "amo" ? "amo" : "syndic",
+                                      })
+                                      .then(() => setEditId(null))
+                                      .catch((e) =>
+                                        setSaveError("Enregistrement impossible : " + String((e as Error).message ?? e))
+                                      );
+                                  }}
+                                >
+                                  <Icon name="check" size={13} />
+                                  {saveChoix.isPending ? "…" : "Enregistrer"}
+                                </button>
+                                <button className="se-btn se-btn-ghost btn-sm" onClick={() => setEditId(null)}>
+                                  Annuler
+                                </button>
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      }
                       return (
                         <tr key={cp.id} style={{ cursor: "default" }}>
                           <td style={{ fontWeight: 600 }}>{cp.nom}</td>
@@ -308,7 +408,35 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                                 ? ch.duree_annees + " ans"
                                 : "—"}
                           </td>
-                          <td>{ch ? fmtDate(ch.transmitted_at) : "—"}</td>
+                          <td>
+                            {ch ? fmtDate(ch.transmitted_at) : "—"}
+                            {ch && ch.saisi_par !== "copro" && (
+                              <span style={{ display: "block", fontSize: 11.5, color: "var(--fg-muted)" }}>
+                                {ch.saisi_par === "syndic" ? "saisi par le syndic" : "saisi par Strat Eco"}
+                              </span>
+                            )}
+                          </td>
+                          {scenario && (
+                            <td>
+                              <button
+                                className="icon-btn"
+                                style={{ width: 26, height: 26 }}
+                                title={
+                                  ch
+                                    ? "Modifier le mode de financement de ce copropriétaire"
+                                    : "Enregistrer le mode de financement de ce copropriétaire"
+                                }
+                                onClick={() => {
+                                  setEditId(cp.id);
+                                  setDraftType(ch?.type ?? "fonds");
+                                  setDraftDuree(ch?.type === "individuel" ? (ch.duree_annees ?? 15) : 15);
+                                  setSaveError(null);
+                                }}
+                              >
+                                <Icon name="edit" size={13} />
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -316,9 +444,17 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                 </table>
               </div>
             )}
+            {saveError && (
+              <p style={{ marginTop: 10, padding: "8px 12px", borderRadius: "var(--radius-md)", background: "var(--color-error-50)", color: "var(--color-error-700)", fontSize: 13 }}>
+                {saveError}
+              </p>
+            )}
             <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
-              Chaque copropriétaire transmet son choix depuis son portail. Les montants individuels (quotes-parts,
-              aides, restes à charge) sont gérés par l'équipe Strat Eco.
+              Chaque copropriétaire transmet son choix depuis son portail — si vous avez l'information en direct
+              (ex. paiement sur fonds propres), vous pouvez l'enregistrer ici (✎) : la saisie est tracée et le
+              copropriétaire peut toujours la modifier depuis son portail. L'éco-PTZ individuel saisi ici porte
+              sur l'ensemble de ses lots. Les montants individuels (quotes-parts, aides, restes à charge) sont
+              gérés par l'équipe Strat Eco.
             </p>
           </div>
         </div>

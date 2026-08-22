@@ -118,6 +118,12 @@ export function Financement({
             <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 24, margin: "0 0 8px" }}>
               Votre choix est transmis
             </h2>
+            {choix.saisi_par !== "copro" && (
+              <p className="se-small" style={{ color: "var(--fg-muted)", margin: "0 0 10px" }}>
+                Ce choix a été enregistré pour vous par {choix.saisi_par === "syndic" ? "votre syndic" : "votre AMO"} —
+                vous pouvez le modifier à tout moment ci-dessous.
+              </p>
+            )}
             <p className="se-body" style={{ maxWidth: 520, margin: "0 auto 20px" }}>
               {choix.type === "fonds" ? (
                 <>Vous financez votre reste à charge de <b>{fmtEuro(montant)}</b> sur <b>fonds propres</b>, selon l'échéancier d'appels de fonds du syndic.</>

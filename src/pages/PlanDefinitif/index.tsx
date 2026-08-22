@@ -772,6 +772,14 @@ export default function PlanDefinitifPage() {
           <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
             <input
               type="checkbox"
+              checked={data.variantes.collectifSansAvance}
+              onChange={(e) => edit((d) => ((d.variantes.collectifSansAvance = e.target.checked), d))}
+            />
+            Éco-PTZ collectif sans avance de subventions
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+            <input
+              type="checkbox"
               checked={data.variantes.individuel}
               onChange={(e) => edit((d) => ((d.variantes.individuel = e.target.checked), d))}
             />
@@ -782,8 +790,9 @@ export default function PlanDefinitifPage() {
           </span>
         </div>
         {data.variantes.collectif && <VarianteCollectif r={r} data={data} />}
+        {data.variantes.collectifSansAvance && <VarianteCollectifSansAvance r={r} data={data} />}
         {data.variantes.individuel && <VarianteIndividuel r={r} data={data} />}
-        {!data.variantes.collectif && !data.variantes.individuel && (
+        {!data.variantes.collectif && !data.variantes.collectifSansAvance && !data.variantes.individuel && (
           <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
             Aucune variante affichée — cochez au moins l'option de financement concernée par le projet.
           </p>
@@ -967,6 +976,41 @@ function VarianteCollectif({ r, data }: { r: NonNullable<ReturnType<typeof compu
         />
         <p className="se-small" style={{ color: "var(--fg-muted)", margin: "8px 0 0" }}>
           Prix de revient = reste à financer + coût du prêt avance de subventions ({String(data.params.tauxPretAvancePct).replace(".", ",")} %) − prime CEE.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function VarianteCollectifSansAvance({ r, data }: { r: NonNullable<ReturnType<typeof computePlanDefinitif>>; data: PlanDefinitifData }) {
+  const v = r.collectifSansAvance;
+  return (
+    <div className="panel">
+      <div className="p-head">
+        <Icon name="users" size={18} />
+        <h3>Éco-PTZ collectif sans avance de subventions</h3>
+      </div>
+      <div className="p-body">
+        <Kv k="Taux de couverture par les aides" v={`${(r.tauxCouverture * 100).toFixed(1)} %`} />
+        <Kv k="Fonds travaux mobilisé" v={fmtEuroFull(data.params.fondsTravaux)} />
+        <Kv k="Reste à charge définitif collectif" v={fmtEuroFull(r.resteACharge)} />
+        <Kv k="Reste à financer (prime CEE en fin de travaux)" v={fmtEuroFull(v.resteAFinancer)} strong />
+        <Kv k={`Coût au tantième avant aides (/${data.params.totalTantiemes})`} v={fmtEuroFull(r.coutTantiemeAvant)} />
+        <Kv k="Coût au tantième après aides publiques et fonds" v={fmtEuroFull(v.coutTantiemeApres)} />
+        <ExemplesTable
+          head={["Tantièmes", "Quote-part avant aides", "Reste à financer", `Mensualité ${data.params.dureeEcoPtzAns} ans`, "Prime CEE", "Prix de revient"]}
+          rows={v.exemples.map((e) => [
+            `${e.tantiemes}/${data.params.totalTantiemes}`,
+            e.quotePartAvant,
+            e.resteAFinancer,
+            e.mensualiteEcoPtz,
+            e.primeCee,
+            e.prixRevient,
+          ])}
+        />
+        <p className="se-small" style={{ color: "var(--fg-muted)", margin: "8px 0 0" }}>
+          Sans prêt d'avance : les subventions publiques sont perçues directement par la copropriété —
+          aucun coût d'avance n'est facturé. Prix de revient = reste à financer − prime CEE.
         </p>
       </div>
     </div>

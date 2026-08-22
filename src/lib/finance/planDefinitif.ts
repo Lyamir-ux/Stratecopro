@@ -155,6 +155,9 @@ export interface ParamsFinancement {
  *  À l'import, elles suivent les onglets « PF définitif … » du fichier. */
 export interface VariantesPlan {
   collectif: boolean;
+  /** Éco-PTZ collectif sans prêt d'avance : les subventions ne sont pas
+   *  préfinancées, aucun coût d'avance (5,45 %) n'est facturé. */
+  collectifSansAvance: boolean;
   individuel: boolean;
 }
 
@@ -224,6 +227,16 @@ export interface ExempleCollectif extends ExempleTantieme {
   prixRevient: number;
 }
 
+export interface ExempleCollectifSansAvance extends ExempleTantieme {
+  /** Reste à financer après aides publiques (la prime CEE arrive en fin de travaux). */
+  resteAFinancer: number;
+  mensualiteEcoPtz: number;
+  subventionsPubliques: number;
+  primeCee: number;
+  /** Reste à financer − prime CEE (aucun coût d'avance). */
+  prixRevient: number;
+}
+
 export interface ExempleIndividuel extends ExempleTantieme {
   /** Prix de revient après déduction de toutes les aides et du fonds travaux. */
   prixRevient: number;
@@ -272,6 +285,13 @@ export interface PlanDefinitifResult {
     resteAFinancer: number;
     coutTantiemeApres: number;
     exemples: ExempleCollectif[];
+  };
+  /** Variante sans prêt d'avance de subventions — mêmes montants financés,
+   *  aucun coût d'avance. Absent des instantanés `resultat` antérieurs. */
+  collectifSansAvance: {
+    resteAFinancer: number;
+    coutTantiemeApres: number;
+    exemples: ExempleCollectifSansAvance[];
   };
   individuel: {
     aidesAvancees: number;
@@ -428,6 +448,28 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
     }),
   };
 
+  // Variante prêt collectif sans avance de subventions : mêmes montants
+  // financés, mais les subventions ne sont pas préfinancées — aucun coût
+  // d'avance, le prix de revient baisse d'autant
+  const collectifSansAvance = {
+    resteAFinancer,
+    coutTantiemeApres: resteAFinancer / T,
+    exemples: params.tantiemesExemples.map((t): ExempleCollectifSansAvance => {
+      const part = t / T;
+      const resteAFinancerPart = resteAFinancer * part;
+      const primeCeePart = primeCee * part;
+      return {
+        tantiemes: t,
+        quotePartAvant: totalPhaseTravauxTtc * part,
+        resteAFinancer: resteAFinancerPart,
+        mensualiteEcoPtz: mois > 0 ? (resteAFinancerPart / mois) * params.coefAssurance : 0,
+        subventionsPubliques: totalAidesPubliques * part,
+        primeCee: primeCeePart,
+        prixRevient: resteAFinancerPart - primeCeePart,
+      };
+    }),
+  };
+
   // Variante éco-PTZ individuel : appels de fonds avec avance partielle des aides
   const aidesAvancees = totalAidesPubliques * (params.pctAvanceAides / 100);
   const aidesFinChantier = totalAidesPubliques - aidesAvancees;
@@ -501,6 +543,7 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
     resteACharge,
     coutTantiemeAvant,
     collectif,
+    collectifSansAvance,
     individuel,
     gardeFous,
   };
@@ -635,7 +678,7 @@ export function makeDefaultPlanDefinitif(): PlanDefinitifData {
       tauxPretAvancePct: 5.45,
       pctAvanceAides: 70,
     },
-    variantes: { collectif: true, individuel: true },
+    variantes: { collectif: true, collectifSansAvance: false, individuel: true },
   };
 }
 

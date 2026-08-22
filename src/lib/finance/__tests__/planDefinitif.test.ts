@@ -109,6 +109,21 @@ describe("planDefinitif — variante éco-PTZ collectif + avance de subventions"
   });
 });
 
+describe("planDefinitif — variante éco-PTZ collectif sans avance de subventions", () => {
+  it("reprend les montants du collectif sans le coût d'avance", () => {
+    // mêmes montants financés que la variante avec avance…
+    expect(r.collectifSansAvance.resteAFinancer).toBeCloseTo(r.collectif.resteAFinancer, 6);
+    expect(r.collectifSansAvance.coutTantiemeApres).toBeCloseTo(r.collectif.coutTantiemeApres, 6);
+    const [s310] = r.collectifSansAvance.exemples;
+    const [e310] = r.collectif.exemples;
+    expect(s310.resteAFinancer).toBeCloseTo(e310.resteAFinancer, 6);
+    expect(s310.mensualiteEcoPtz).toBeCloseTo(e310.mensualiteEcoPtz, 6);
+    // …mais le prix de revient baisse exactement du coût du prêt d'avance (5,45 %)
+    expect(s310.prixRevient).toBeCloseTo(e310.prixRevient - e310.coutPretAvance, 6);
+    expect(s310.prixRevient).toBeCloseTo(16264.44009, 2);
+  });
+});
+
 describe("planDefinitif — variante éco-PTZ individuel (70 % / 30 %)", () => {
   it("calcule les appels de fonds avec 70 % des aides déduites", () => {
     expect(r.individuel.aidesAvancees).toBeCloseTo(289681.6063, 2);

@@ -322,6 +322,7 @@ export function useSaveChoix(scenarioId: string, coproprietaireId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { type: TypeFinancement; dureeAnnees: number | null; lotIds: string[] }) => {
+      const { data: session } = await supabase.auth.getSession();
       const { error } = await supabase.from("choix_financement").upsert(
         {
           scenario_id: scenarioId,
@@ -330,12 +331,56 @@ export function useSaveChoix(scenarioId: string, coproprietaireId: string) {
           duree_annees: input.dureeAnnees,
           lot_ids: input.lotIds,
           transmitted_at: new Date().toISOString(),
+          // le copropriétaire reprend la main sur une éventuelle saisie syndic
+          saisi_par: "copro",
+          updated_by: session.session?.user.id ?? null,
         },
         { onConflict: "scenario_id,coproprietaire_id" }
       );
       if (error) throw error;
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["portail"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["portail"] });
+      void qc.invalidateQueries({ queryKey: ["choix-financement", scenarioId] });
+    },
+  });
+}
+
+/** Saisie du mode de financement d'un copropriétaire par le syndic (ou l'AMO
+ *  en aperçu) — quand le gestionnaire a l'information en direct (ex. fonds
+ *  propres). Tracée via saisi_par pour la distinguer d'un choix du
+ *  copropriétaire, qui garde la main depuis son portail. */
+export function useSaveChoixGestionnaire(scenarioId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      coproprietaireId: string;
+      type: TypeFinancement;
+      dureeAnnees: number | null;
+      lotIds: string[];
+      saisiPar: "syndic" | "amo";
+    }) => {
+      if (!scenarioId) throw new Error("Aucun scénario partagé");
+      const { data: session } = await supabase.auth.getSession();
+      const { error } = await supabase.from("choix_financement").upsert(
+        {
+          scenario_id: scenarioId,
+          coproprietaire_id: input.coproprietaireId,
+          type: input.type,
+          duree_annees: input.dureeAnnees,
+          lot_ids: input.lotIds,
+          transmitted_at: new Date().toISOString(),
+          saisi_par: input.saisiPar,
+          updated_by: session.session?.user.id ?? null,
+        },
+        { onConflict: "scenario_id,coproprietaire_id" }
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["choix-financement", scenarioId] });
+      void qc.invalidateQueries({ queryKey: ["portail"] });
+    },
   });
 }
 

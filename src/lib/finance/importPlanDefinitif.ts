@@ -267,6 +267,7 @@ export function importPlanDefinitif(wb: WorkBook): ImportPlanResult {
   // --- Classification des onglets ---
   const lotSheets: string[] = [];
   let pfCollectif: string | null = null;
+  let pfSansAvance: string | null = null;
   let pfIndividuel: string | null = null;
   for (const name of wb.SheetNames) {
     const n = norm(name);
@@ -277,16 +278,24 @@ export function importPlanDefinitif(wb: WorkBook): ImportPlanResult {
     const grid = toGrid(wb, name);
     const titre = norm((grid[0] ?? []).map((v) => str(v)).join(" ")) + " " + n;
     if (n.startsWith("pf") || titre.includes("plan de financement")) {
+      // « sans avance » / « hors avance » avant le repli collectif, sinon
+      // l'onglet serait classé variante collective classique
       if (titre.includes("individuel")) pfIndividuel = pfIndividuel ?? name;
+      else if (titre.includes("sans avance") || titre.includes("hors avance"))
+        pfSansAvance = pfSansAvance ?? name;
       else pfCollectif = pfCollectif ?? name;
     }
   }
-  if (!pfCollectif && !pfIndividuel)
+  if (!pfCollectif && !pfSansAvance && !pfIndividuel)
     throw new Error("Aucun onglet « PF définitif … » reconnu dans ce classeur.");
   // Seules les variantes présentes dans le classeur sont proposées au dossier
   // (ex. un plan « éco-PTZ collectif seul » n'affiche pas la variante individuelle).
-  data.variantes = { collectif: !!pfCollectif, individuel: !!pfIndividuel };
-  const pfMain = pfCollectif ?? pfIndividuel!;
+  data.variantes = {
+    collectif: !!pfCollectif,
+    collectifSansAvance: !!pfSansAvance,
+    individuel: !!pfIndividuel,
+  };
+  const pfMain = pfCollectif ?? pfSansAvance ?? pfIndividuel!;
   const gridMain = toGrid(wb, pfMain);
   const cBMain = colonneLibelles(gridMain, (s) => s.includes("nom de la copropriete"));
   if (cBMain < 0) throw new Error(`Onglet « ${pfMain} » : libellé « Nom de la copropriété » introuvable.`);
@@ -431,7 +440,9 @@ export function importPlanDefinitif(wb: WorkBook): ImportPlanResult {
   ctrl("Total aides NET", pf.valD("total aides net"), r.totalAides);
   ctrl("Total aides publiques", pf.valD("total aides publiques"), r.totalAidesPubliques);
   ctrl("Reste à charge collectif", pf.valD("reste a charge definitif"), r.resteACharge);
-  if (pfCollectif) ctrl("Reste à financer", pf.valD("reste a financer"), r.collectif.resteAFinancer);
+  // le reste à financer est identique avec ou sans avance de subventions
+  if (pfCollectif || pfSansAvance)
+    ctrl("Reste à financer", pf.valD("reste a financer"), r.collectif.resteAFinancer);
   if (pfIndiv)
     ctrl(
       "Appels de fonds (70 % des aides déduits)",
