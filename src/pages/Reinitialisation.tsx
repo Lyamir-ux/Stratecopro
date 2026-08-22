@@ -1,4 +1,4 @@
-// Réinitialisation du mot de passe — page d'atterrissage du lien envoyé
+// Réinitialisation du mot de passe - page d'atterrissage du lien envoyé
 // par Supabase (resetPasswordForEmail). Le lien ouvre une session de
 // récupération ; sans session valide, le lien est expiré ou déjà utilisé.
 import { useState, type FormEvent, type ReactNode } from "react";

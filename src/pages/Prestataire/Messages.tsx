@@ -1,4 +1,4 @@
-// Messagerie interne du prestataire — un fil par opération où l'entreprise a
+// Messagerie interne du prestataire - un fil par opération où l'entreprise a
 // été retenue. Les messages de l'AMO « à tous » sont partagés avec les autres
 // entreprises du projet ; les réponses de l'entreprise restent privées avec
 // l'AMO. L'ouverture d'un fil marque ses messages comme lus (pastille du menu).
@@ -66,7 +66,7 @@ export function Messages({ presta }: { presta: Tables<"prestataires"> }) {
         <div>
           <h1 className="page-title">Messages</h1>
           <p className="page-sub">
-            Échanges avec l'équipe Strat Eco sur vos opérations — vous êtes alerté par e-mail quand un
+            Échanges avec l'équipe Strat Eco sur vos opérations - vous êtes alerté par e-mail quand un
             message vous attend ici
           </p>
         </div>

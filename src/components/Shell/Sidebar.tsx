@@ -1,4 +1,4 @@
-// Sidebar de l'espace AMO — portée depuis design-reference/project/shell.jsx
+// Sidebar de l'espace AMO - portée depuis design-reference/project/shell.jsx
 import { useLocation, useNavigate } from "react-router-dom";
 import { Icon, type IconName } from "../Icon";
 import { Avatar } from "../ui";
@@ -19,7 +19,7 @@ export interface RecentCopro {
 interface SidebarProps {
   recents: RecentCopro[];
   tasksCount?: number | null;
-  /** Questions de prestataires sans réponse — alerte sur « Consulter un intervenant ». */
+  /** Questions de prestataires sans réponse - alerte sur « Consulter un intervenant ». */
   questionsCount?: number | null;
   user: { initials: string; name: string; org: string };
   onLogout: () => void;

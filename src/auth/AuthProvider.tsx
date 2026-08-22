@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     const load = async () => {
       // deux essais : juste après la connexion, une requête peut partir avant
-      // que le jeton de session soit attaché — la RLS renvoie alors vide et
+      // que le jeton de session soit attaché - la RLS renvoie alors vide et
       // il ne faut pas conclure trop vite « compte non provisionné »
       for (let essai = 0; essai < 2; essai++) {
         const { data, error } = await supabase

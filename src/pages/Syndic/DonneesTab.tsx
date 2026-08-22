@@ -1,4 +1,4 @@
-// Onglet Données de la copro (syndic) — bâtiments, copropriétaires et lots,
+// Onglet Données de la copro (syndic) - bâtiments, copropriétaires et lots,
 // en lecture seule (l'import et l'édition restent côté AMO).
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
@@ -52,13 +52,13 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
                     {lots.map((l) => (
                       <tr key={l.id} style={{ cursor: "default" }}>
                         <td style={{ fontWeight: 600 }}>{l.num}</td>
-                        <td>{l.batiment?.code ?? "—"}</td>
+                        <td>{l.batiment?.code ?? "-"}</td>
                         <td>{USAGE_LOT_LABEL[l.usage] ?? l.usage}</td>
-                        <td>{l.coproprietaire?.nom ?? "—"}</td>
+                        <td>{l.coproprietaire?.nom ?? "-"}</td>
                         <td style={{ textAlign: "right" }}>
                           {cleDefaut != null && l.tantiemes[cleDefaut] != null
                             ? l.tantiemes[cleDefaut].toLocaleString("fr-FR")
-                            : "—"}
+                            : "-"}
                         </td>
                       </tr>
                     ))}

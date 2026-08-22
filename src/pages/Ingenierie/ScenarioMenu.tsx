@@ -1,4 +1,4 @@
-// Menu des scénarios — porté de ingenierie.jsx (ScenarioMenu / StatutPill).
+// Menu des scénarios - porté de ingenierie.jsx (ScenarioMenu / StatutPill).
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { fmtEuro } from "@/lib/format";
@@ -81,7 +81,7 @@ export function ScenarioMenu({ scenarios, activeId, onSwitch, onAdd, onDuplicate
         </div>
         <div className="sc-prov">
           <Icon name="alert" size={13} />
-          Choix non définitif — l'arbitrage est validé en assemblée générale de travaux.
+          Choix non définitif - l'arbitrage est validé en assemblée générale de travaux.
         </div>
         <div className="sc-menu-foot">
           <button className="se-btn se-btn-secondary btn-sm" onClick={onAdd}>

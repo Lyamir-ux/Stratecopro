@@ -1,4 +1,4 @@
-// Edge function « notifier-consultation » — appelée par l'AMO juste après la
+// Edge function « notifier-consultation » - appelée par l'AMO juste après la
 // publication d'une consultation. Cherche dans la base les prestataires
 // référencés ACTIFS dont les métiers (types) couvrent la prestation consultée,
 // leur envoie un e-mail d'alerte et journalise chaque envoi dans
@@ -7,7 +7,7 @@
 // Envoi réel via Resend si le secret RESEND_API_KEY est configuré
 // (supabase secrets set RESEND_API_KEY=re_xxx [RESEND_FROM="Strat Eco <consultations@strateco.fr>"] [APP_URL=https://...]).
 // Sans clé : chaque notification est journalisée avec le statut 'simule'
-// — le parcours reste testable de bout en bout sans provider.
+// - le parcours reste testable de bout en bout sans provider.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -93,12 +93,12 @@ Deno.serve(async (req: Request) => {
   const from = Deno.env.get("RESEND_FROM") ?? "Strat Eco <onboarding@resend.dev>";
   const appUrl = Deno.env.get("APP_URL") ?? "http://localhost:5173";
 
-  const coproNom = cs.coproprietes?.name ?? cs.copro_externe_nom ?? "—";
+  const coproNom = cs.coproprietes?.name ?? cs.copro_externe_nom ?? "-";
   const coproLieu = cs.coproprietes
     ? [cs.coproprietes.adresse, cs.coproprietes.city].filter(Boolean).join(", ")
     : [cs.copro_externe_adresse, cs.copro_externe_ville].filter(Boolean).join(", ");
   const typeLabel = cs.sous_type
-    ? `${TYPE_LABELS[cs.type] ?? cs.type} — ${SOUS_TYPE_LABELS[cs.sous_type] ?? cs.sous_type}`
+    ? `${TYPE_LABELS[cs.type] ?? cs.type} - ${SOUS_TYPE_LABELS[cs.sous_type] ?? cs.sous_type}`
     : (TYPE_LABELS[cs.type] ?? cs.type);
   const dateLimite = cs.date_limite
     ? new Date(cs.date_limite).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
@@ -126,10 +126,10 @@ Deno.serve(async (req: Request) => {
           <p><strong>Strat Eco</strong>, assistant à maîtrise d'ouvrage, lance une consultation
           pour laquelle votre entreprise est référencée :</p>
           <table style="border-collapse:collapse;margin:14px 0;font-size:14.5px">
-            ${ligne("Copropriété", `<strong>${coproNom}</strong>${coproLieu ? " — " + coproLieu : ""}`)}
+            ${ligne("Copropriété", `<strong>${coproNom}</strong>${coproLieu ? " - " + coproLieu : ""}`)}
             ${logements ? ligne("Taille", `${logements} logements`) : ""}
             ${cs.nb_batiments ? ligne("Bâtiments", `${cs.nb_batiments}`) : ""}
-            ${ligne("Mission", `<strong>${typeLabel}</strong> — ${cs.mission}`)}
+            ${ligne("Mission", `<strong>${typeLabel}</strong> - ${cs.mission}`)}
             ${optionsLabels.length ? ligne("Options à chiffrer", optionsLabels.join(", ")) : ""}
             ${dateLimite ? ligne("Date limite de réponse", `<strong>${dateLimite}</strong>`) : ""}
           </table>
@@ -141,7 +141,7 @@ Deno.serve(async (req: Request) => {
           ${
             cs.type === "moe"
               ? `<p>Pour cette mission de maîtrise d'œuvre, votre offre détaillera chaque phase
-                 — DIAG/AVP, PRO/DCE, suivi de chantier — ainsi que chaque option demandée.</p>`
+                 - DIAG/AVP, PRO/DCE, suivi de chantier - ainsi que chaque option demandée.</p>`
               : ""
           }
           <p style="margin:22px 0">
@@ -168,7 +168,7 @@ Deno.serve(async (req: Request) => {
           body: JSON.stringify({
             from,
             to: [p.email],
-            subject: `Nouvelle consultation ${typeLabel} — ${coproNom}`,
+            subject: `Nouvelle consultation ${typeLabel} - ${coproNom}`,
             html,
           }),
         });

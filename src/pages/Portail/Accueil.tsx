@@ -61,7 +61,7 @@ export function Accueil({
       sub: enqueteComplete
         ? (profil ? PROFILS_MPR[profil].menage : "Questionnaire complet")
         : profil
-          ? "En cours — répondez à toutes les questions"
+          ? "En cours - répondez à toutes les questions"
           : "Pour estimer vos aides individuelles",
     },
     {
@@ -143,7 +143,7 @@ export function Accueil({
             <div className="dv-title">Un changement d'étiquette énergie pour votre immeuble</div>
             <p className="dv-sub">
               Il s'agit de l'étiquette <b>visée pour l'ensemble du bâtiment</b> après travaux (DPE collectif de
-              la copropriété) — et non de l'étiquette individuelle de votre logement, qui peut différer selon
+              la copropriété) - et non de l'étiquette individuelle de votre logement, qui peut différer selon
               son étage, son exposition ou ses équipements.
             </p>
           </div>

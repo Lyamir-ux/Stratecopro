@@ -1,4 +1,4 @@
-// Base prestataires — entreprises référencées pour les consultations de
+// Base prestataires - entreprises référencées pour les consultations de
 // prestations intellectuelles (MOE, diagnostiqueur, CT, SPS…). C'est dans
 // cette base que la publication d'une consultation va chercher les adresses
 // e-mail à alerter. Le rattachement d'un compte de connexion (user_id) se
@@ -159,7 +159,7 @@ export default function Prestataires() {
         <div>
           <h1 className="page-title">Base prestataires</h1>
           <p className="page-sub">
-            Entreprises référencées pour vos consultations — chaque publication alerte par e-mail les
+            Entreprises référencées pour vos consultations - chaque publication alerte par e-mail les
             prestataires actifs du métier concerné.
           </p>
         </div>
@@ -196,7 +196,7 @@ export default function Prestataires() {
                 <span style={{ minWidth: 0, flex: "0 1 260px" }}>
                   <span style={{ display: "block", fontWeight: 600, fontSize: 14 }}>{p.raison_sociale}</span>
                   <span style={{ display: "block", fontSize: 12.5, color: "var(--fg-muted)" }}>
-                    {[p.contact_nom, p.ville].filter(Boolean).join(" · ") || "—"}
+                    {[p.contact_nom, p.ville].filter(Boolean).join(" · ") || "-"}
                   </span>
                 </span>
                 <TypeChips types={p.types} />
@@ -243,7 +243,7 @@ export default function Prestataires() {
       )}
       {editing && (
         <PrestaForm
-          title={"Modifier — " + editing.raison_sociale}
+          title={"Modifier - " + editing.raison_sociale}
           initial={{
             raison_sociale: editing.raison_sociale,
             contact_nom: editing.contact_nom ?? "",

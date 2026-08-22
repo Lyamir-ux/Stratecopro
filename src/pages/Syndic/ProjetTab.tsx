@@ -1,4 +1,4 @@
-// Onglet Projet (syndic) — vos actions par phase : assemblées, comptes d'aides,
+// Onglet Projet (syndic) - vos actions par phase : assemblées, comptes d'aides,
 // validations, registre, PV, DO. Lecture seule (repères d'accompagnement).
 import { Badge } from "@/components/ui";
 import { Icon } from "@/components/Icon";

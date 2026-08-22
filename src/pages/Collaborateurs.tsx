@@ -1,4 +1,4 @@
-// Collaborateurs — équipe Strat Eco (profils réels).
+// Collaborateurs - équipe Strat Eco (profils réels).
 // V1 : la création de compte se fait par l'administrateur (Supabase) ;
 // l'invitation par e-mail arrive avec une fonction serveur en phase 2.
 import { useState } from "react";

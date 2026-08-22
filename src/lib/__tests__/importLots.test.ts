@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildRows, cleCodeFromHeader, guessMapping, parseFrNumber, parseUsage, tantiemeColumns } from "../importLots";
 
-describe("parseFrNumber — formats français", () => {
+describe("parseFrNumber - formats français", () => {
   it("gère espaces, virgules et points de milliers", () => {
     expect(parseFrNumber("1 234,56")).toBe(1234.56);
     expect(parseFrNumber("1.234,56")).toBe(1234.56);
@@ -49,7 +49,7 @@ describe("guessMapping", () => {
   });
 });
 
-describe("tantiemeColumns — clés reprises de l'en-tête du fichier", () => {
+describe("tantiemeColumns - clés reprises de l'en-tête du fichier", () => {
   it("reprend l'en-tête tel quel comme code de clé", () => {
     const headers = ["Lot", "Tantièmes généraux", "Charges ascenseur"];
     const cols = tantiemeColumns(["num", "tantiemes", "tantiemes"], headers);

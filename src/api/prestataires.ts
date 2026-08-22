@@ -1,4 +1,4 @@
-// Base d'entreprises référencées (prestations intellectuelles) — côté AMO.
+// Base d'entreprises référencées (prestations intellectuelles) - côté AMO.
 // Chaque prestataire couvre un ou plusieurs métiers (types) ; à la publication
 // d'une consultation, l'edge function `notifier-consultation` alerte par
 // e-mail tous les prestataires actifs du métier concerné.
@@ -9,7 +9,7 @@ import type { Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
 export type Prestataire = Tables<"prestataires">;
 
 /** Déclenche le rappel e-mail des agréments en fin de validité (edge function
- *  `rappel-agrements`) — appelé une fois par jour au chargement de l'app AMO.
+ *  `rappel-agrements`) - appelé une fois par jour au chargement de l'app AMO.
  *  Meilleur effort : un échec est silencieux, le rappel repartira demain. */
 export async function declencherRappelAgrements(): Promise<void> {
   const cle = "rappel-agrements-dernier";

@@ -1,5 +1,5 @@
-// Onglet Enquête sociale (syndic) — consultation seule : profils MPR, réponses
-// (sans le RFR — donnée sensible réservée à l'AMO et à l'intéressé),
+// Onglet Enquête sociale (syndic) - consultation seule : profils MPR, réponses
+// (sans le RFR - donnée sensible réservée à l'AMO et à l'intéressé),
 // questionnaire et état de la campagne. Aucune action possible : l'enquête est
 // pilotée par l'AMO (pas de bouton d'envoi ni de saisie côté syndic).
 import { useMemo } from "react";
@@ -11,7 +11,7 @@ import { useDonnees } from "@/api/donnees";
 import { useEnqueteSyndic, useReponsesSyndic, type SyndicCopro } from "@/api/syndic";
 import { TYPE_LABELS, normalizeConfig, resolveQuestions } from "@/lib/enqueteCatalogue";
 
-// Libellés grand public (plafonds Anah) — les couleurs MPR restent un simple repère visuel.
+// Libellés grand public (plafonds Anah) - les couleurs MPR restent un simple repère visuel.
 const PROFIL_META: { p: Profil; label: string; color: string }[] = [
   { p: "Bleu", label: "Très modeste", color: "#2E6FA8" },
   { p: "Jaune", label: "Modeste", color: "#f2a30d" },
@@ -57,7 +57,7 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
           <div className="p-body">
             {repondants === 0 ? (
               <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
-                Aucune réponse pour l'instant — l'enquête est diffusée par l'équipe Strat Eco.
+                Aucune réponse pour l'instant - l'enquête est diffusée par l'équipe Strat Eco.
               </p>
             ) : (
               profilCounts.map((m) => {
@@ -115,13 +115,13 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
                       return (
                         <tr key={cp.id} style={{ cursor: "default" }}>
                           <td style={{ fontWeight: 600 }}>{cp.nom}</td>
-                          <td>{r?.nb_personnes != null ? r.nb_personnes + " pers." : "—"}</td>
+                          <td>{r?.nb_personnes != null ? r.nb_personnes + " pers." : "-"}</td>
                           <td>
                             {r?.statut_occupation === "occupant"
                               ? "Occupant"
                               : r?.statut_occupation === "bailleur"
                                 ? "Bailleur"
-                                : "—"}
+                                : "-"}
                           </td>
                           <td>
                             {meta ? (
@@ -130,7 +130,7 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
                                 {meta.label}
                               </span>
                             ) : (
-                              <span style={{ color: "var(--fg-muted)" }}>—</span>
+                              <span style={{ color: "var(--fg-muted)" }}>-</span>
                             )}
                           </td>
                           <td>
@@ -148,7 +148,7 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
               </div>
             )}
             <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
-              Les revenus fiscaux de référence ne sont pas communiqués au syndic — seuls l'AMO et le
+              Les revenus fiscaux de référence ne sont pas communiqués au syndic - seuls l'AMO et le
               copropriétaire concerné y ont accès.
             </p>
           </div>

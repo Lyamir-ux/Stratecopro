@@ -1,4 +1,4 @@
-// Topbar (fil d'ariane + recherche + actions) — portée depuis design-reference/project/shell.jsx
+// Topbar (fil d'ariane + recherche + actions) - portée depuis design-reference/project/shell.jsx
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -154,7 +154,7 @@ function GlobalSearch() {
                     <span style={{ fontWeight: 600 }}>{c.name}</span>
                     <span style={{ color: "var(--fg-muted)" }}>
                       {" "}
-                      · {[c.code_postal, c.city].filter(Boolean).join(" ") || "—"}
+                      · {[c.code_postal, c.city].filter(Boolean).join(" ") || "-"}
                     </span>
                   </span>
                 </button>
@@ -176,7 +176,7 @@ function GlobalSearch() {
                     <span style={{ fontWeight: 600 }}>{o.nom}</span>
                     <span style={{ color: "var(--fg-muted)" }}>
                       {" "}
-                      · {(o as { coproprietes: { name: string } | null }).coproprietes?.name ?? "—"}
+                      · {(o as { coproprietes: { name: string } | null }).coproprietes?.name ?? "-"}
                     </span>
                   </span>
                 </button>

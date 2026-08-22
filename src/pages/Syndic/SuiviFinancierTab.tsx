@@ -1,4 +1,4 @@
-// Onglet Suivi financier (syndic) — reprend ligne à ligne le plan de
+// Onglet Suivi financier (syndic) - reprend ligne à ligne le plan de
 // financement définitif validé (lots de travaux avec leur entreprise, MOE et
 // frais annexes) avec le montant voté. Le syndic, qui règle les situations
 // des entreprises, saisit le montant payé à chaque situation (1 à 10) :
@@ -17,7 +17,7 @@ import { computePlanDefinitif, readPlanDefinitif, regrouperAnnexes } from "@/lib
 import type { SyndicCopro } from "@/api/syndic";
 
 interface LigneSuivi {
-  /** « lot:<numero> » / « moe:<index> » / « mission:<id> » — clé des paiements. */
+  /** « lot:<numero> » / « moe:<index> » / « mission:<id> » - clé des paiements. */
   key: string;
   libelle: string;
   entreprise: string | null;
@@ -29,7 +29,7 @@ const sommeLigne = (p: PaiementsSuivi, key: string) =>
   (p[key] ?? []).reduce((s: number, v) => s + (v ?? 0), 0);
 
 export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
-  // Le PF définitif validé est partagé avec le syndic (RLS) — même source que
+  // Le PF définitif validé est partagé avec le syndic (RLS) - même source que
   // l'onglet Financement.
   const { data: pfPlans, isLoading } = usePlansDefinitifs(c.id);
   const planValide = (pfPlans ?? [])
@@ -54,7 +54,7 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
     if (!pv) return [];
     const travaux: LigneSuivi[] = pv.lots.map((l) => ({
       key: `lot:${l.numero}`,
-      libelle: `Lot ${String(l.numero).padStart(2, "0")} — ${l.titre}`,
+      libelle: `Lot ${String(l.numero).padStart(2, "0")} - ${l.titre}`,
       entreprise: l.entreprise ?? null,
       vote: l.totalTtc,
     }));
@@ -67,7 +67,7 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
       vote: l.montantTtc,
     }));
     return [
-      { titre: "Travaux — marchés des entreprises", lignes: travaux },
+      { titre: "Travaux - marchés des entreprises", lignes: travaux },
       { titre: "Maîtrise d'œuvre & frais annexes", lignes: annexes },
     ].filter((g) => g.lignes.length > 0);
   }, [pv]);
@@ -130,7 +130,7 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
       <div className="panel">
         <div className="p-head">
           <Icon name="euro" size={18} />
-          <h3>Suivi financier — {planValide.nom}</h3>
+          <h3>Suivi financier - {planValide.nom}</h3>
           <span style={{ flex: 1 }}></span>
           {save.isError && (
             <span style={{ fontSize: 12.5, color: "var(--color-error-700)" }}>
@@ -179,7 +179,7 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
                         <tr key={l.key}>
                           <td style={{ fontWeight: 600, whiteSpace: "normal", minWidth: 200 }}>{l.libelle}</td>
                           <td style={{ color: l.entreprise ? "var(--fg1)" : "var(--fg-muted)" }}>
-                            {l.entreprise ?? "—"}
+                            {l.entreprise ?? "-"}
                           </td>
                           <td className="num" style={{ fontWeight: 600 }}>
                             {fmtEuroFull(l.vote)}
@@ -191,14 +191,14 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
                                 type="number"
                                 min={0}
                                 step={0.01}
-                                placeholder="—"
+                                placeholder="-"
                                 value={paiements[l.key]?.[i] ?? ""}
                                 onChange={(e) => setCellule(l.key, i, e.target.value)}
                               />
                             </td>
                           ))}
                           <td className="num" style={{ fontWeight: 600 }}>
-                            {paye !== 0 ? fmtEuroFull(paye) : "—"}
+                            {paye !== 0 ? fmtEuroFull(paye) : "-"}
                           </td>
                           <td
                             className="num"
@@ -227,7 +227,7 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
                   <td className="num">{fmtEuroFull(totalVote)}</td>
                   {Array.from({ length: NB_SITUATIONS }, (_, i) => (
                     <td key={i} className="num">
-                      {totalSituation(i) !== 0 ? fmtEuroFull(totalSituation(i)) : "—"}
+                      {totalSituation(i) !== 0 ? fmtEuroFull(totalSituation(i)) : "-"}
                     </td>
                   ))}
                   <td className="num">{fmtEuroFull(totalPaye)}</td>
@@ -239,7 +239,7 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
             <Icon name="help" size={13} /> Les montants votés TTC reprennent le plan de financement définitif
             validé le {fmtDate(planValide.updated_at)}. Saisissez le montant réglé à chaque situation de
-            travaux (1 à 10) — total payé et restant se calculent automatiquement, puis « Enregistrer ».
+            travaux (1 à 10) - total payé et restant se calculent automatiquement, puis « Enregistrer ».
           </p>
         </div>
       </div>

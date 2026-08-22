@@ -1,4 +1,4 @@
-// Mon entreprise — le prestataire gère lui-même sa fiche : logo, e-mails de
+// Mon entreprise - le prestataire gère lui-même sa fiche : logo, e-mails de
 // contact principal et secondaire, téléphone, adresse, documents de
 // certification (RGE, qualifications, assurances…) et contacts de l'entreprise
 // avec leur rôle. Les métiers couverts et le référencement restent pilotés
@@ -134,7 +134,7 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
 
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12 }}>
           <Icon name="lock" size={12} /> Les métiers couverts, la raison sociale et le référencement sont
-          gérés par l'équipe Strat Eco — contactez-la pour les faire évoluer.
+          gérés par l'équipe Strat Eco - contactez-la pour les faire évoluer.
         </p>
 
         {error && (
@@ -259,7 +259,7 @@ function CertificationsPanel({ presta }: { presta: Tables<"prestataires"> }) {
                 value={d.expire_le ?? ""}
                 onChange={(e) => void majDoc.mutateAsync({ id: d.id, expireLe: e.target.value || null })}
                 style={{ maxWidth: 150 }}
-                title="Date de fin de validité — sa mise à jour réarme le rappel automatique"
+                title="Date de fin de validité - sa mise à jour réarme le rappel automatique"
               />
             </label>
             <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>déposé le {fmtDate(d.uploaded_at)}</span>
@@ -346,7 +346,7 @@ export function MonEntreprise({ presta }: { presta: Tables<"prestataires"> }) {
         <div>
           <h1 className="page-title">Mon entreprise</h1>
           <p className="page-sub">
-            Logo, coordonnées, certifications et contacts — ces informations sont visibles de l'équipe Strat Eco
+            Logo, coordonnées, certifications et contacts - ces informations sont visibles de l'équipe Strat Eco
           </p>
         </div>
       </div>

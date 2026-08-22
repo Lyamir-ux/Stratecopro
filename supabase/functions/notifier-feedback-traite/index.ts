@@ -1,4 +1,4 @@
-// Edge function « notifier-feedback-traite » — appelée quand un membre de
+// Edge function « notifier-feedback-traite » - appelée quand un membre de
 // l'équipe AMO clique « Traiter » sur un retour de test (page Paramètres).
 // Envoie automatiquement un mail de compte rendu à l'auteur du retour :
 // son adresse est celle de son compte (auth.users), aucune saisie nécessaire.
@@ -98,7 +98,7 @@ Deno.serve(async (req: Request) => {
       <blockquote style="margin:14px 0;padding:10px 14px;border-left:3px solid #355717;background:#f4f6f1;white-space:pre-wrap">${
         fb.message
       }</blockquote>
-      <p>La correction ou la réponse correspondante est en ligne — n'hésitez pas à
+      <p>La correction ou la réponse correspondante est en ligne - n'hésitez pas à
       vérifier lors de votre prochaine connexion et à redéposer un retour si le
       problème persiste.</p>
       <p>Merci pour votre contribution,<br/><strong>L'équipe Strat Eco</strong></p>
@@ -111,7 +111,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         from,
         to: [email],
-        subject: "Votre retour a été traité — Strat Eco",
+        subject: "Votre retour a été traité - Strat Eco",
         html,
       }),
     });

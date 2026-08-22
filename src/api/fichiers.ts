@@ -15,7 +15,7 @@ export const DOSSIERS = [
   "Photos chantier",
 ] as const;
 
-/** Quels documents vont dans quel dossier — texte de la bulle « ? » de chaque
+/** Quels documents vont dans quel dossier - texte de la bulle « ? » de chaque
  *  carte de l'onglet Fichiers. Modifiez librement les descriptions ci-dessous. */
 export const DOSSIER_AIDE: Record<(typeof DOSSIERS)[number], string> = {
   "Passation":
@@ -31,7 +31,7 @@ export const DOSSIER_AIDE: Record<(typeof DOSSIERS)[number], string> = {
   "Assemblée générale":
     "Convocations, PV d'assemblée générale et courriers adressés aux copropriétaires.",
   "Photos chantier":
-    "Photos de l'immeuble et du chantier — avant, pendant et après les travaux.",
+    "Photos de l'immeuble et du chantier - avant, pendant et après les travaux.",
 };
 
 export function useFichiers(coproId: string | undefined) {
@@ -50,7 +50,7 @@ export function useFichiers(coproId: string | undefined) {
   });
 }
 
-/** Dépôt d'un fichier hors hook — sert aussi à l'import des documents de
+/** Dépôt d'un fichier hors hook - sert aussi à l'import des documents de
  *  passation à la création du dossier (NewCoproDialog). */
 export async function uploadFichierDirect(coproId: string, file: File, dossier: string, nameOriginal?: string) {
   const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -130,7 +130,7 @@ export const estVisualisable = (nom: string) => VISUALISABLES.test(nom);
 export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: string[] }[] = [
   {
     dispositif: "cee_avant",
-    label: "CEE — Avant travaux",
+    label: "CEE - Avant travaux",
     items: [
       "Devis signé avant engagement des travaux",
       "Attestation RGE de l'entreprise",
@@ -142,7 +142,7 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: st
   },
   {
     dispositif: "cee_apres",
-    label: "CEE — Après travaux",
+    label: "CEE - Après travaux",
     items: [
       "Factures détaillées des travaux",
       "Attestation sur l'honneur (partie B) signée",
@@ -152,7 +152,7 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: st
   },
   {
     // pièces obligatoires du dossier MaPrimeRénov' Copropriété (liste des
-    // chefs de projet, feedback du 19/08/2026) — la clé `dispositif` reste
+    // chefs de projet, feedback du 19/08/2026) - la clé `dispositif` reste
     // inchangée : c'est l'identifiant stocké en base
     dispositif: "mpr_copro_2024",
     label: "MaPrimeRénov' Copropriété",
@@ -175,7 +175,7 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: st
     ],
   },
   {
-    // millésime 2026 (feedback du 19/08/2026) — la clé `dispositif` reste
+    // millésime 2026 (feedback du 19/08/2026) - la clé `dispositif` reste
     // inchangée : c'est l'identifiant stocké en base
     dispositif: "eco_ptz_2024",
     label: "Éco-PTZ collectif 2026",
@@ -194,7 +194,7 @@ export interface ChecklistWithItems extends Tables<"checklists"> {
   items: Tables<"checklist_items">[];
 }
 
-/** Checklists du dossier — créées depuis les gabarits au premier accès. */
+/** Checklists du dossier - créées depuis les gabarits au premier accès. */
 export function useChecklists(coproId: string | undefined) {
   const qc = useQueryClient();
   return useQuery({

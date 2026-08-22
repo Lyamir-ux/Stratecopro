@@ -8,7 +8,7 @@ import { useCopros, useTasksCount } from "@/api/copros";
 import { useQuestionsEnAttenteCount } from "@/api/consultations";
 import { declencherRappelAgrements } from "@/api/prestataires";
 
-// Accent dynamique — repris de la maquette (app.jsx ACCENT_MAP)
+// Accent dynamique - repris de la maquette (app.jsx ACCENT_MAP)
 const ACCENT_MAP: Record<Accent, { hover: string; soft: string; deep: string }> = {
   "#7AB52C": { hover: "#4A7A1F", soft: "#E8F1D7", deep: "#4A7A1F" },
   "#2E6FA8": { hover: "#1E4F7C", soft: "#EAF2FA", deep: "#1E4F7C" },

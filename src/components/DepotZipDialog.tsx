@@ -1,5 +1,5 @@
 // Dépôt d'une archive zip : au lieu d'imposer le dépôt pdf par pdf, l'équipe
-// choisit le format — extraire le contenu (chaque fichier passe ensuite par le
+// choisit le format - extraire le contenu (chaque fichier passe ensuite par le
 // renommage assisté, comme un dépôt classique) ou déposer l'archive telle
 // quelle (un seul fichier .zip dans le dossier).
 import { useEffect, useState } from "react";
@@ -7,7 +7,7 @@ import JSZip from "jszip";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 
-/** Types MIME des formats courants — le navigateur ne renseigne pas le type
+/** Types MIME des formats courants - le navigateur ne renseigne pas le type
  *  des fichiers extraits d'une archive. */
 const MIMES: Record<string, string> = {
   pdf: "application/pdf",
@@ -44,9 +44,9 @@ export function DepotZipDialog({
   onClose,
 }: {
   zips: File[];
-  /** Fichiers non-zip déposés en même temps — repris tels quels dans la file. */
+  /** Fichiers non-zip déposés en même temps - repris tels quels dans la file. */
   autres: File[];
-  /** Fichiers retenus (contenu extrait ou archives) — passés au renommage assisté. */
+  /** Fichiers retenus (contenu extrait ou archives) - passés au renommage assisté. */
   onChoix: (files: File[]) => void;
   onClose: () => void;
 }) {
@@ -118,8 +118,8 @@ export function DepotZipDialog({
         {autres.length > 0 && ` · ${autres.length} autre${autres.length > 1 ? "s" : ""} fichier${autres.length > 1 ? "s" : ""} déposé${autres.length > 1 ? "s" : ""} en même temps`}
       </p>
       <p className="se-body" style={{ marginTop: 0 }}>
-        Choisissez le format du dépôt : extraire le contenu de l'archive — chaque fichier passe alors par le
-        renommage assisté, un par un — ou conserver l'archive telle quelle.
+        Choisissez le format du dépôt : extraire le contenu de l'archive - chaque fichier passe alors par le
+        renommage assisté, un par un - ou conserver l'archive telle quelle.
       </p>
       {erreur && (
         <p className="se-small" style={{ color: "var(--color-error-700)" }}>
@@ -153,7 +153,7 @@ export function DepotZipDialog({
       </div>
       {entrees != null && entrees.length === 0 && !erreur && (
         <p className="se-small" style={{ marginTop: 10, marginBottom: 0, color: "var(--fg-muted)" }}>
-          L'archive ne contient aucun fichier lisible — vous pouvez la déposer telle quelle.
+          L'archive ne contient aucun fichier lisible - vous pouvez la déposer telle quelle.
         </p>
       )}
     </Modal>

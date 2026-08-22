@@ -104,7 +104,7 @@ export function useSetNbBatiments(coproId: string) {
           .slice(0, aSupprimer);
         if (supprimables.length < aSupprimer) {
           throw new Error(
-            "Impossible de descendre à ce nombre : des bâtiments portent encore des lots — réaffectez-les d'abord (import)."
+            "Impossible de descendre à ce nombre : des bâtiments portent encore des lots - réaffectez-les d'abord (import)."
           );
         }
         const { error: eDel } = await supabase
@@ -118,7 +118,7 @@ export function useSetNbBatiments(coproId: string) {
   });
 }
 
-/** Corrige l'usage d'un lot à la main (ex. « autres » → « commerces ») —
+/** Corrige l'usage d'un lot à la main (ex. « autres » → « commerces ») -
  *  l'import ne reconnaît pas toujours la nature exacte des locaux. */
 export function useSetUsageLot(coproId: string) {
   const qc = useQueryClient();
@@ -213,7 +213,7 @@ export function useImportLots(coproId: string) {
         for (const r of results) if (r.error) throw r.error;
       }
 
-      // Clés utilisées par l'import — les codes viennent des en-têtes du fichier, rien n'est codé en dur
+      // Clés utilisées par l'import - les codes viennent des en-têtes du fichier, rien n'est codé en dur
       const cleCodes = Array.from(new Set(rows.flatMap((r) => Object.keys(r.tantiemes))));
       const { data: existingCles, error: eK } = await supabase
         .from("cles_repartition")

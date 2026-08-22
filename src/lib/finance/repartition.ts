@@ -1,4 +1,4 @@
-// Répartition individuelle par tantièmes — généralisation de Step7 (design-reference/project/ingenierie.jsx).
+// Répartition individuelle par tantièmes - généralisation de Step7 (design-reference/project/ingenierie.jsx).
 // Règles (identiques au prototype, plafond éco-PTZ par logement en plus) :
 //   quote-part      = coutTotal × (tantièmes / totalClé)
 //   CEE             = cee × frac ; subv. collective = (MPR Copro + fonds) × frac

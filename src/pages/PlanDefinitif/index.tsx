@@ -1,6 +1,6 @@
 // Éditeur du plan de financement définitif (nomenclature chef de projet).
 // Toute modification (ligne de lot, « retenu », MOE, aide, paramètre) recalcule
-// immédiatement les deux variantes de financement — mêmes formules que le classeur.
+// immédiatement les deux variantes de financement - mêmes formules que le classeur.
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -236,7 +236,7 @@ export default function PlanDefinitifPage() {
       <div className="panel">
         <div className="p-head">
           <Icon name="hammer" size={18} />
-          <h3>Descriptif des travaux — lots</h3>
+          <h3>Descriptif des travaux - lots</h3>
           <span style={{ flex: 1 }}></span>
           <button
             className="se-btn se-btn-ghost btn-sm"
@@ -348,7 +348,7 @@ export default function PlanDefinitifPage() {
                             <input
                               className="edit-inp"
                               style={{ width: "100%" }}
-                              placeholder="—"
+                              placeholder="-"
                               value={l.groupe ?? ""}
                               onChange={(e) =>
                                 edit((d) => ((d.lots[li].lignes[i].groupe = e.target.value || undefined), d))
@@ -475,7 +475,7 @@ export default function PlanDefinitifPage() {
               <thead>
                 <tr>
                   <th>Désignation</th>
-                  <th style={{ width: 130 }} title="Entreprise / prestataire de la mission — reprise au suivi financier du syndic">
+                  <th style={{ width: 130 }} title="Entreprise / prestataire de la mission - reprise au suivi financier du syndic">
                     Entreprise
                   </th>
                   <th style={{ width: 120 }}>Phase</th>
@@ -507,7 +507,7 @@ export default function PlanDefinitifPage() {
                       <input
                         className="edit-inp"
                         style={{ width: "100%" }}
-                        placeholder="—"
+                        placeholder="-"
                         value={l.entreprise ?? ""}
                         onChange={(e) => edit((d) => ((d.moe[i].entreprise = e.target.value || undefined), d))}
                       />
@@ -681,7 +681,7 @@ export default function PlanDefinitifPage() {
                       />
                     </td>
                     <td className="mono" style={tdR}>
-                      {r.aides[i]?.montant == null ? "—" : fmtEuroFull(r.aides[i].montant)}
+                      {r.aides[i]?.montant == null ? "-" : fmtEuroFull(r.aides[i].montant)}
                     </td>
                     <td>
                       <button className="icon-btn" title="Supprimer" onClick={() => edit((d) => (d.aides.splice(i, 1), d))}>
@@ -714,7 +714,7 @@ export default function PlanDefinitifPage() {
               ["Durée éco-PTZ (ans)", "dureeEcoPtzAns"],
               ["Coef. assurance non solidaire", "coefAssurance"],
               ["Coût prêt avance subventions (%)", "tauxPretAvancePct"],
-              ["Aides avancées — variante individuelle (%)", "pctAvanceAides"],
+              ["Aides avancées - variante individuelle (%)", "pctAvanceAides"],
             ] as const
           ).map(([label, key]) => (
             <label key={key} style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: "var(--fg2)" }}>
@@ -754,7 +754,7 @@ export default function PlanDefinitifPage() {
 
       {/* ---- résultats : variantes de financement ----
           Empilées (collectif au-dessus, individuel en dessous) et affichées
-          uniquement si le projet est concerné — les cases suivent les onglets
+          uniquement si le projet est concerné - les cases suivent les onglets
           du classeur importé et restent modifiables ici. */}
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap", fontSize: 13.5 }}>
@@ -783,7 +783,7 @@ export default function PlanDefinitifPage() {
               checked={data.variantes.individuel}
               onChange={(e) => edit((d) => ((d.variantes.individuel = e.target.checked), d))}
             />
-            Éco-PTZ individuel — appels de fonds
+            Éco-PTZ individuel - appels de fonds
           </label>
           <span className="se-small" style={{ color: "var(--fg-muted)" }}>
             Seules les variantes cochées apparaissent ici et dans l'export Excel.
@@ -794,7 +794,7 @@ export default function PlanDefinitifPage() {
         {data.variantes.individuel && <VarianteIndividuel r={r} data={data} />}
         {!data.variantes.collectif && !data.variantes.collectifSansAvance && !data.variantes.individuel && (
           <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
-            Aucune variante affichée — cochez au moins l'option de financement concernée par le projet.
+            Aucune variante affichée - cochez au moins l'option de financement concernée par le projet.
           </p>
         )}
       </div>
@@ -1009,7 +1009,7 @@ function VarianteCollectifSansAvance({ r, data }: { r: NonNullable<ReturnType<ty
           ])}
         />
         <p className="se-small" style={{ color: "var(--fg-muted)", margin: "8px 0 0" }}>
-          Sans prêt d'avance : les subventions publiques sont perçues directement par la copropriété —
+          Sans prêt d'avance : les subventions publiques sont perçues directement par la copropriété -
           aucun coût d'avance n'est facturé. Prix de revient = reste à financer − prime CEE.
         </p>
       </div>
@@ -1023,7 +1023,7 @@ function VarianteIndividuel({ r, data }: { r: NonNullable<ReturnType<typeof comp
     <div className="panel">
       <div className="p-head">
         <Icon name="user" size={18} />
-        <h3>Éco-PTZ individuel — appels de fonds {pct} % / {100 - pct} %</h3>
+        <h3>Éco-PTZ individuel - appels de fonds {pct} % / {100 - pct} %</h3>
       </div>
       <div className="p-body">
         <Kv k={`${pct} % des aides publiques (déduites des appels)`} v={fmtEuroFull(r.individuel.aidesAvancees)} />

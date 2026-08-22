@@ -1,4 +1,4 @@
-// Onglet Projet — kanban de tâches par phase, porté de detail.jsx (ProjetTab/TaskCard).
+// Onglet Projet - kanban de tâches par phase, porté de detail.jsx (ProjetTab/TaskCard).
 // En plus de la maquette : statut cliquable (todo → doing → done), assignation
 // réelle, documents liés à l'étape (dossiers de l'onglet Fichiers) et note
 // libre par étape.
@@ -71,7 +71,7 @@ function TaskCard({ task, coproId }: { task: Tache; coproId: string }) {
             maxWidth: 90,
           }}
         >
-          <option value="">—</option>
+          <option value="">-</option>
           {(team ?? []).map((p) => (
             <option key={p.user_id} value={p.user_id}>
               {p.initials}
@@ -85,7 +85,7 @@ function TaskCard({ task, coproId }: { task: Tache; coproId: string }) {
 }
 
 /** Documents liés à l'étape (dossiers de l'onglet Fichiers rattachés à la
- *  phase) + note libre de l'étape — repliés par défaut pour garder le kanban lisible. */
+ *  phase) + note libre de l'étape - repliés par défaut pour garder le kanban lisible. */
 function PhaseExtras({
   coproId,
   phase,
@@ -136,7 +136,7 @@ function PhaseExtras({
               key={f.id}
               className="se-btn se-btn-ghost btn-sm"
               style={{ justifyContent: "flex-start", fontSize: 12, padding: "3px 6px" }}
-              title={`${f.dossier} — ouvrir ${f.name}`}
+              title={`${f.dossier} - ouvrir ${f.name}`}
               onClick={() => void downloadFichier(f)}
             >
               <Icon name="fileText" size={12} />
@@ -151,7 +151,7 @@ function PhaseExtras({
             className="cs-textarea"
             rows={3}
             style={{ fontSize: 12.5 }}
-            placeholder="Note de l'étape — points d'attention, décisions, contexte…"
+            placeholder="Note de l'étape - points d'attention, décisions, contexte…"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
           ></textarea>

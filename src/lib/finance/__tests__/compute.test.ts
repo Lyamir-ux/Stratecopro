@@ -22,7 +22,7 @@ const baseParams: FinanceParams = {
   pretComplDuree: 12,
 };
 
-describe("golden — dossier Renaissance (doc AMOA Pro)", () => {
+describe("golden - dossier Renaissance (doc AMOA Pro)", () => {
   // Scénario « Rénovation > 35 % » : gain 35-50 %, classe E (pas de bonus passoire)
   const p: FinanceParams = {
     ...baseParams,
@@ -48,7 +48,7 @@ describe("golden — dossier Renaissance (doc AMOA Pro)", () => {
 
   it("identité du doc : déductions 187 727,40 € = aides collectives + 26 694,96 € d'aides individuelles réelles", () => {
     // Les aides individuelles du dossier réel (26 694,96 €) viennent de l'enquête sociale,
-    // pas des primes forfaitaires — on vérifie l'identité comptable du document.
+    // pas des primes forfaitaires - on vérifie l'identité comptable du document.
     expect(d.aidesColl + 26694.96).toBeCloseTo(187727.4, 2);
   });
 
@@ -57,7 +57,7 @@ describe("golden — dossier Renaissance (doc AMOA Pro)", () => {
   });
 });
 
-describe("computeFinance — règles unitaires", () => {
+describe("computeFinance - règles unitaires", () => {
   it("bonus passoire : +10 points sur le taux MPR Copro", () => {
     const p = { ...baseParams, travaux: 100000, bonusPassoire: true };
     const d = computeFinance(p, { lots: 10, lotsHab: 10 }, B);

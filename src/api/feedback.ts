@@ -1,4 +1,4 @@
-// Retours de test (module Feedback flottant) — dépôt par tous les rôles,
+// Retours de test (module Feedback flottant) - dépôt par tous les rôles,
 // compilation par l'équipe AMO dans Paramètres. Voir migration 0020.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -25,7 +25,7 @@ export function useEnvoyerFeedback() {
     }) => {
       const { data: session } = await supabase.auth.getSession();
       const userId = session.session?.user.id;
-      if (!userId) throw new Error("Session expirée — reconnectez-vous.");
+      if (!userId) throw new Error("Session expirée - reconnectez-vous.");
       const { error } = await supabase.from("feedbacks").insert({
         user_id: userId,
         auteur_nom: input.auteurNom,
@@ -71,7 +71,7 @@ export function useMajFeedback() {
       if (error) throw error;
       if (statut !== "traite") return { mail: null };
       // Marquer « traité » notifie automatiquement l'auteur par mail (compte
-      // rendu envoyé à l'adresse de son compte) — edge notifier-feedback-traite.
+      // rendu envoyé à l'adresse de son compte) - edge notifier-feedback-traite.
       const { data, error: fnErr } = await supabase.functions.invoke("notifier-feedback-traite", {
         body: { feedback_id: id },
       });
@@ -82,7 +82,7 @@ export function useMajFeedback() {
   });
 }
 
-/** Modification du texte (et du type) d'un retour — par l'équipe AMO ou par
+/** Modification du texte (et du type) d'un retour - par l'équipe AMO ou par
  *  l'auteur du retour lui-même (RLS : feedbacks_own_update, migration 0035). */
 export function useEditerFeedback() {
   const qc = useQueryClient();

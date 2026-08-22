@@ -8,7 +8,7 @@ import { round2 } from "./round";
 
 /** Item du PF à répartir suivant une clé (lot de travaux ou ligne MOE phase travaux). */
 export interface ItemRepartitionPf {
-  /** « lot:<numero> » ou « moe:<index> » — sert de clé dans repartitionCles. */
+  /** « lot:<numero> » ou « moe:<index> » - sert de clé dans repartitionCles. */
   id: string;
   libelle: string;
   /** Montant TTC phase travaux de l'item (imprévus inclus pour les lots). */
@@ -20,7 +20,7 @@ export function itemsARepartirPf(data: PlanDefinitifData, r: PlanDefinitifResult
   const coefImprevus = 1 + data.params.imprevusPct / 100;
   const items: ItemRepartitionPf[] = r.lots.map((l) => ({
     id: `lot:${l.numero}`,
-    libelle: `Lot ${l.numero} — ${l.titre}`,
+    libelle: `Lot ${l.numero} - ${l.titre}`,
     montantTtc: l.totalTtc * coefImprevus,
   }));
   r.moe.forEach((m, i) => {
@@ -52,7 +52,7 @@ export interface PlanIndividuelPf {
  * Répartit chaque item suivant sa clé : part du copropriétaire =
  * tantièmes(copro, clé) / total(clé). Les aides et le fonds travaux sont
  * déduits au prorata de la quote-part. Retourne aussi les items sans clé
- * exploitable (clé non choisie ou total de clé nul) — le plan n'est complet
+ * exploitable (clé non choisie ou total de clé nul) - le plan n'est complet
  * que si `manquants` est vide.
  */
 export function computePlansIndividuelsPf(input: {

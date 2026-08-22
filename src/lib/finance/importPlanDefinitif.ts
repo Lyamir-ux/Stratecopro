@@ -229,7 +229,7 @@ function classifyMoe(
   return { montant: forfait(20), tvaPct: 20, eligibleMprEtudes: false, eligibleMprAmo: false };
 }
 
-/** Reconnaissance d'une aide d'après son libellé — repli en montant manuel si la formule standard ne colle pas. */
+/** Reconnaissance d'une aide d'après son libellé - repli en montant manuel si la formule standard ne colle pas. */
 function classifyAide(groupe: string, libelle: string, montant: number | null): AideDef {
   const n = norm(libelle);
   const publique = norm(groupe) !== "cee";
@@ -313,7 +313,7 @@ export function importPlanDefinitif(wb: WorkBook): ImportPlanResult {
     cachedLots.push({ numero: parsed.lot.numero, ...parsed.cached });
   }
   data.lots.sort((a, b) => a.numero - b.numero);
-  if (data.lots.length === 0) avert.push("Aucun onglet « Lot NN » trouvé — le descriptif des travaux est vide.");
+  if (data.lots.length === 0) avert.push("Aucun onglet « Lot NN » trouvé - le descriptif des travaux est vide.");
 
   // --- Infos générales ---
   const info = (label: string) => {
@@ -375,7 +375,7 @@ export function importPlanDefinitif(wb: WorkBook): ImportPlanResult {
       data.aides.push(aide);
     }
   } else {
-    avert.push("Section « Aides mobilisables » introuvable — catalogue par défaut appliqué.");
+    avert.push("Section « Aides mobilisables » introuvable - catalogue par défaut appliqué.");
   }
 
   // --- Paramètres de financement ---
@@ -426,9 +426,9 @@ export function importPlanDefinitif(wb: WorkBook): ImportPlanResult {
   for (const c of cachedLots) {
     const lot = r.lots.find((l) => l.numero === c.numero);
     if (!lot) continue;
-    ctrl(`Lot ${c.numero} — total HT`, c.ht, lot.totalHtApresRemise);
-    ctrl(`Lot ${c.numero} — HT retenu`, c.retenu, lot.totalHtRetenu);
-    ctrl(`Lot ${c.numero} — total TTC`, c.ttc, lot.totalTtc);
+    ctrl(`Lot ${c.numero} - total HT`, c.ht, lot.totalHtApresRemise);
+    ctrl(`Lot ${c.numero} - HT retenu`, c.retenu, lot.totalHtRetenu);
+    ctrl(`Lot ${c.numero} - total TTC`, c.ttc, lot.totalTtc);
   }
   ctrl("Total travaux HT", cachedTravauxHt || null, r.totalTravauxHt);
   ctrl("Travaux énergétiques retenus (assiette MPR)", pf.valD("energetiques et induits"), r.assietteMprTravaux);

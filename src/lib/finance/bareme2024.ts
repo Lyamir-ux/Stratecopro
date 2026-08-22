@@ -1,7 +1,7 @@
 import type { Bareme } from "./types";
 
 /**
- * Barème 2024 — hors Île-de-France (zone Grand Est du prototype).
+ * Barème 2024 - hors Île-de-France (zone Grand Est du prototype).
  * Sert de valeur par défaut et de seed pour la table `baremes` (M2).
  * Source : design-reference/project/data.js (MPR_BAREME, primes, règles MPR Copro / éco-PTZ).
  */

@@ -1,4 +1,4 @@
-// Calculs collectifs du scénario — port généralisé de computeFinance (design-reference/project/ingenierie.jsx).
+// Calculs collectifs du scénario - port généralisé de computeFinance (design-reference/project/ingenierie.jsx).
 import type { Bareme, CoproContext, FinanceParams, FinanceResult } from "./types";
 import { PROFILS } from "./types";
 

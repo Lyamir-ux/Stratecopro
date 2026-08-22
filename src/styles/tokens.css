@@ -1,32 +1,32 @@
 /* ==========================================================================
-   Strat Eco — Design Tokens
+   Strat Eco - Design Tokens
    Colors, typography, spacing, radii, shadows
    ========================================================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  /* ---------- COLOR — Primary (vert signature) ---------- */
+  /* ---------- COLOR - Primary (vert signature) ---------- */
   --color-primary-50:  #F2F8E6;
-  --color-primary-100: #E8F1D7;   /* vert pastel — fonds doux */
+  --color-primary-100: #E8F1D7;   /* vert pastel - fonds doux */
   --color-primary-200: #D1E5A8;
   --color-primary-300: #B3D472;
   --color-primary-400: #95C547;
-  --color-primary-500: #7AB52C;   /* vert signature — couleur clé du logo */
+  --color-primary-500: #7AB52C;   /* vert signature - couleur clé du logo */
   --color-primary-600: #639425;
   --color-primary-700: #4A7A1F;   /* hover, accents profonds */
   --color-primary-800: #355717;
   --color-primary-900: #213A0E;
 
-  /* ---------- COLOR — Secondary (bleu énergie) ---------- */
+  /* ---------- COLOR - Secondary (bleu énergie) ---------- */
   --color-secondary-50:  #EAF2FA;
   --color-secondary-100: #CCDDF1;
   --color-secondary-300: #7AA6D4;
-  --color-secondary-500: #2E6FA8;   /* bleu énergie — accent technique */
+  --color-secondary-500: #2E6FA8;   /* bleu énergie - accent technique */
   --color-secondary-700: #1E4F7C;
   --color-secondary-900: #112E48;
 
-  /* ---------- COLOR — Neutrals ---------- */
+  /* ---------- COLOR - Neutrals ---------- */
   --color-neutral-0:   #FFFFFF;
   --color-neutral-50:  #F8F9F6;
   --color-neutral-100: #F1F2EE;
@@ -34,12 +34,12 @@
   --color-neutral-300: #D1D4CB;
   --color-neutral-400: #A8ADA0;
   --color-neutral-500: #7C8273;
-  --color-neutral-600: #5C6470;   /* gris ardoise — taglines */
+  --color-neutral-600: #5C6470;   /* gris ardoise - taglines */
   --color-neutral-700: #3F4549;
   --color-neutral-800: #26292B;
   --color-neutral-900: #1A1A1A;   /* noir wordmark */
 
-  /* ---------- COLOR — Semantic ---------- */
+  /* ---------- COLOR - Semantic ---------- */
   --color-success-50:  #E8F5E9;
   --color-success-500: #4CAF50;
   --color-success-700: #2E7D32;
@@ -77,12 +77,12 @@
   --accent-hover: var(--color-primary-700);
   --accent-soft:  var(--color-primary-100);
 
-  /* ---------- TYPOGRAPHY — Families ---------- */
+  /* ---------- TYPOGRAPHY - Families ---------- */
   --font-display: 'Barlow Condensed', 'Oswald', 'Arial Narrow', sans-serif;
   --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono:    'JetBrains Mono', 'Menlo', 'Consolas', monospace;
 
-  /* ---------- TYPOGRAPHY — Weights ---------- */
+  /* ---------- TYPOGRAPHY - Weights ---------- */
   --fw-light:     300;
   --fw-regular:   400;
   --fw-medium:    500;
@@ -90,7 +90,7 @@
   --fw-bold:      700;
   --fw-black:     900;
 
-  /* ---------- TYPOGRAPHY — Scale ---------- */
+  /* ---------- TYPOGRAPHY - Scale ---------- */
   --fs-xs:        12px;
   --fs-sm:        14px;
   --fs-base:      16px;
@@ -103,13 +103,13 @@
   --fs-5xl:       72px;
   --fs-6xl:       96px;
 
-  /* ---------- TYPOGRAPHY — Line heights ---------- */
+  /* ---------- TYPOGRAPHY - Line heights ---------- */
   --lh-tight:     1.05;
   --lh-snug:      1.2;
   --lh-normal:    1.5;
   --lh-relaxed:   1.7;
 
-  /* ---------- TYPOGRAPHY — Tracking ---------- */
+  /* ---------- TYPOGRAPHY - Tracking ---------- */
   --tr-tight:     -0.02em;
   --tr-normal:    0;
   --tr-wide:      0.04em;
@@ -160,7 +160,7 @@
 }
 
 /* ==========================================================================
-   SEMANTIC ELEMENTS — opt-in via class .se-text or attribute selectors
+   SEMANTIC ELEMENTS - opt-in via class .se-text or attribute selectors
    Use these in HTML cards, slides, and UI kit bootstrap.
    ========================================================================== */
 
@@ -247,7 +247,7 @@
 }
 
 /* ==========================================================================
-   BUTTON BASE — used across UI kit and slides
+   BUTTON BASE - used across UI kit and slides
    ========================================================================== */
 
 .se-btn {

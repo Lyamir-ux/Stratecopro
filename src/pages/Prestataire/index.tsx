@@ -1,4 +1,4 @@
-// Espace prestataire (MOE & autres intervenants) — même chrome que le portail
+// Espace prestataire (MOE & autres intervenants) - même chrome que le portail
 // copropriétaire. Le prestataire ne voit que les consultations EN LIGNE de ses
 // métiers et ses candidatures ; la section « Mes projets » n'existe que pour
 // une MOE (accès lecture aux copros où elle a été retenue). Les autres
@@ -223,7 +223,7 @@ export default function Prestataire() {
       {isAmo && (
         <div className="syndic-preview-bar">
           <Icon name="eye" size={15} />
-          Aperçu AMO — espace de {presta.raison_sociale}
+          Aperçu AMO - espace de {presta.raison_sociale}
           <span style={{ flex: 1 }}></span>
           <button onClick={() => setPreviewId(null)}>
             <Icon name="briefcase" size={14} />Changer

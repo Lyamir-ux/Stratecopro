@@ -1,4 +1,4 @@
-// Jeu d'icônes Lucide (stroke 1.75) — porté depuis design-reference/project/icons.jsx
+// Jeu d'icônes Lucide (stroke 1.75) - porté depuis design-reference/project/icons.jsx
 import type { CSSProperties } from "react";
 
 const ICON_PATHS = {

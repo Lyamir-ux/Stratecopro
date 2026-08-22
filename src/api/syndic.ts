@@ -30,7 +30,7 @@ export function useMonOrganisation() {
     queryKey: ["syndic", "organisation"],
     queryFn: async (): Promise<MonOrganisation | null> => {
       // Filtre explicite sur l'utilisateur : l'AMO, qui gère les enseignes, lit
-      // toutes les lignes — sans ce filtre son aperçu de l'espace syndic casse.
+      // toutes les lignes - sans ce filtre son aperçu de l'espace syndic casse.
       const { data: session } = await supabase.auth.getSession();
       const uid = session.session?.user.id;
       if (!uid) return null;
@@ -80,7 +80,7 @@ export function useCoproSyndic(id: string | undefined) {
   });
 }
 
-/** L'enquête sociale du dossier — lecture pure (pas de création côté syndic). */
+/** L'enquête sociale du dossier - lecture pure (pas de création côté syndic). */
 export function useEnqueteSyndic(coproId: string | undefined) {
   return useQuery({
     queryKey: ["syndic", "enquete", coproId],
@@ -105,7 +105,7 @@ export interface ReponseSyndic {
   updated_at: string;
 }
 
-/** Réponses d'enquête vues syndic — SANS le RFR (RPC dédiée). */
+/** Réponses d'enquête vues syndic - SANS le RFR (RPC dédiée). */
 export function useReponsesSyndic(coproId: string | undefined) {
   return useQuery({
     queryKey: ["syndic", "reponses", coproId],
@@ -145,7 +145,7 @@ export const ORIGINE_LABEL: Record<OrigineDocument, string> = {
  * (montage_docs.files), avec l'origine de chaque pièce.
  *
  * Passe par la RPC documents_dossier : l'origine se déduit du rôle du déposant,
- * or un syndic ne lit que son propre profil — la jointure ne peut pas se faire
+ * or un syndic ne lit que son propre profil - la jointure ne peut pas se faire
  * côté client. Le drapeau partage_copro ne filtre PAS cette liste : il ne
  * concerne que le portail des copropriétaires.
  */

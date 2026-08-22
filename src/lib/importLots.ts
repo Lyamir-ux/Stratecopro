@@ -1,4 +1,4 @@
-// Parsing & validation de l'import Excel/CSV des lots — logique pure, testée unitairement.
+// Parsing & validation de l'import Excel/CSV des lots - logique pure, testée unitairement.
 // Les clés de tantièmes ne sont pas codées en dur : chaque colonne mappée « tantièmes »
 // crée/alimente une clé de répartition dont le code est l'en-tête de la colonne du fichier.
 import type { UsageLot } from "./finance/types";
@@ -11,7 +11,7 @@ export interface ImportedRow {
   telephone: string | null;
   adresse: string | null;
   usage: UsageLot;
-  /** Tantièmes par clé — le code de clé est l'en-tête de colonne du fichier. */
+  /** Tantièmes par clé - le code de clé est l'en-tête de colonne du fichier. */
   tantiemes: Record<string, number>;
 }
 
@@ -40,7 +40,7 @@ export const COLUMN_ROLES: { id: ColumnRole; label: string }[] = [
   { id: "adresse", label: "Adresse postale" },
   { id: "usage", label: "Usage" },
   { id: "tantiemes", label: "Tantièmes (clé du fichier)" },
-  { id: "ignore", label: "— Ignorer —" },
+  { id: "ignore", label: "- Ignorer -" },
 ];
 
 /** Code de clé de répartition tiré de l'en-tête de colonne du fichier, repris tel quel. */

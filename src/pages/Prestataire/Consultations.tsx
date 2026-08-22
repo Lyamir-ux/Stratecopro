@@ -1,4 +1,4 @@
-// Consultations ouvertes pour les métiers du prestataire connecté — porté de
+// Consultations ouvertes pour les métiers du prestataire connecté - porté de
 // design-reference/project/consultations.jsx (ConsultationsMOE), généralisé à
 // tous les intervenants. Dépôt d'offre : montant + note + pièce jointe (PDF).
 import { useRef, useState } from "react";
@@ -43,7 +43,7 @@ function cible(cs: ConsultationPresta): { nom: string; lieu: string } {
     };
   }
   return {
-    nom: cs.copro_externe_nom ?? "—",
+    nom: cs.copro_externe_nom ?? "-",
     lieu: [cs.copro_externe_adresse, cs.copro_externe_ville].filter(Boolean).join(", "),
   };
 }
@@ -60,19 +60,19 @@ function adresseMaps(cs: ConsultationPresta): string | null {
 const mapsLien = (q: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 const mapsEmbed = (q: string) => `https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=16&output=embed`;
 
-/** Plan de situation SANS quitter l'app — le lien externe reste proposé,
+/** Plan de situation SANS quitter l'app - le lien externe reste proposé,
  *  mais l'utilisateur ne perd plus la page de la consultation. */
 function CarteModal({ cs, onClose }: { cs: ConsultationPresta; onClose: () => void }) {
   const c = cible(cs);
   const adresse = adresseMaps(cs);
   if (!adresse) return null;
   return (
-    <Modal title={"Localisation — " + c.nom} onClose={onClose} width={640}>
+    <Modal title={"Localisation - " + c.nom} onClose={onClose} width={640}>
       <p className="se-small" style={{ margin: "0 0 10px", color: "var(--fg2)" }}>
         <Icon name="mapPin" size={13} /> {c.lieu}
       </p>
       <iframe
-        title={"Plan — " + c.nom}
+        title={"Plan - " + c.nom}
         src={mapsEmbed(adresse)}
         loading="lazy"
         referrerPolicy="no-referrer-when-downgrade"
@@ -125,7 +125,7 @@ function QuestionsModal({
   };
 
   return (
-    <Modal title={"Questions — " + c.nom} onClose={onClose} width={560}>
+    <Modal title={"Questions - " + c.nom} onClose={onClose} width={560}>
       <p className="se-small" style={{ marginTop: 0, color: "var(--fg-muted)" }}>
         Posez votre question à l'équipe AMO avant de candidater. Les réponses sont partagées avec
         tous les candidats de la consultation.
@@ -160,7 +160,7 @@ function QuestionsModal({
                   }}
                 >
                   <strong>Réponse de l'AMO</strong>
-                  {q.answered_at ? ` · ${fmtDate(q.answered_at)}` : ""} — {q.reponse}
+                  {q.answered_at ? ` · ${fmtDate(q.answered_at)}` : ""} - {q.reponse}
                 </p>
               ) : (
                 <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "var(--fg-muted)", fontStyle: "italic" }}>
@@ -245,7 +245,7 @@ function PostulerModal({
   const sansMontant = cs.type === "diag" && cs.sous_type === "amiante_plomb";
   const duoTotal = (duo ?? []).reduce((s, d) => s + (num(tarifs[d.key]) ?? 0), 0);
   // total en euros : les lignes en % du montant des travaux ne peuvent pas
-  // s'additionner aux forfaits — elles se cumulent entre elles (même assiette)
+  // s'additionner aux forfaits - elles se cumulent entre elles (même assiette)
   // et s'affichent à part
   const enPourcent = (k: string): boolean =>
     (k === "pro_dce" || k === "chantier") && modes[k as "pro_dce" | "chantier"] === "pourcentage";
@@ -307,7 +307,7 @@ function PostulerModal({
   const adresse = adresseMaps(cs);
 
   return (
-    <Modal title={"Postuler — " + c.nom} onClose={onClose} width={560}>
+    <Modal title={"Postuler - " + c.nom} onClose={onClose} width={560}>
       <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 8, fontSize: 13.5, color: "var(--fg2)" }}>
         {c.lieu && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -341,7 +341,7 @@ function PostulerModal({
       </div>
       {adresse && (
         <iframe
-          title={"Localisation — " + c.nom}
+          title={"Localisation - " + c.nom}
           src={mapsEmbed(adresse)}
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"
@@ -560,7 +560,7 @@ export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires">
         <div>
           <h1 className="page-title">Consultations en cours</h1>
           <p className="page-sub">
-            Appels à candidature publiés par les AMO pour vos métiers — postulez aux opérations qui vous intéressent
+            Appels à candidature publiés par les AMO pour vos métiers - postulez aux opérations qui vous intéressent
           </p>
         </div>
         <span className="spacer"></span>
@@ -575,7 +575,7 @@ export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires">
         <div className="placeholder-screen" style={{ minHeight: 320 }}>
           <div className="ps-ico"><Icon name="megaphone" size={30} /></div>
           <h2>Aucune consultation ouverte</h2>
-          <p>Les appels à candidature correspondant à vos métiers apparaîtront ici — vous serez alerté par e-mail.</p>
+          <p>Les appels à candidature correspondant à vos métiers apparaîtront ici - vous serez alerté par e-mail.</p>
         </div>
       )}
 
@@ -699,7 +699,7 @@ export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires">
                         disabled={retirer.isPending}
                         onClick={() => {
                           const motif = window.prompt(
-                            "Pourquoi retirez-vous votre candidature ?\n\nVotre offre partira à la corbeille — vous pourrez repostuler tant que la consultation est en ligne."
+                            "Pourquoi retirez-vous votre candidature ?\n\nVotre offre partira à la corbeille - vous pourrez repostuler tant que la consultation est en ligne."
                           );
                           if (motif?.trim()) {
                             void retirer.mutateAsync({ cand: cs.maCandidature!, motif });

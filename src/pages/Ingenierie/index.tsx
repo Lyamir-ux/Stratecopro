@@ -1,4 +1,4 @@
-// Assistant d'ingénierie financière en 7 étapes — porté de ingenierie.jsx (IngenierieFinanciere).
+// Assistant d'ingénierie financière en 7 étapes - porté de ingenierie.jsx (IngenierieFinanciere).
 // Multi-scénarios persistés (brouillon / partagé / importé verrouillé), synthèse live,
 // étape 7 branchée sur les lots réels (plans individuels enregistrés en base).
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -79,8 +79,8 @@ export default function Ingenierie() {
   const locked = !!active?.locked;
 
   // (Re)charge le brouillon quand on change de scénario.
-  // Si la clé enregistrée n'existe pas (ou plus) dans le dossier — ex. ancien
-  // « MUN » par défaut —, on se cale sur la clé par défaut du dossier.
+  // Si la clé enregistrée n'existe pas (ou plus) dans le dossier - ex. ancien
+  // « MUN » par défaut -, on se cale sur la clé par défaut du dossier.
   const cleCodesKey = (donnees?.cles ?? []).map((k) => k.code).join("|");
   useEffect(() => {
     if (active && bareme) {
@@ -290,7 +290,7 @@ export default function Ingenierie() {
                 <Icon name="lock" size={18} />
               </span>
               <div className="ib-txt">
-                <div className="ib-t">Chiffres importés — lecture seule</div>
+                <div className="ib-t">Chiffres importés - lecture seule</div>
                 <div className="ib-d">
                   Plan validé par des instances tierces. Dupliquez ce scénario pour ajuster les paramètres.
                 </div>

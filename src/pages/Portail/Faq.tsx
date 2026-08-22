@@ -19,7 +19,7 @@ const GROUPES: Groupe[] = [
       },
       {
         q: "L'impayé d'un autre copropriétaire peut-il me pénaliser ?",
-        a: "Non. Ces prêts collectifs sont dits « sans solidarité » : chacun ne répond que de sa propre quote-part. Si un voisin est défaillant, vous n'êtes en rien responsable — la caution gère la régularisation à votre place.",
+        a: "Non. Ces prêts collectifs sont dits « sans solidarité » : chacun ne répond que de sa propre quote-part. Si un voisin est défaillant, vous n'êtes en rien responsable - la caution gère la régularisation à votre place.",
       },
     ],
   },
@@ -39,7 +39,7 @@ const GROUPES: Groupe[] = [
     items: [
       {
         q: "L'éco-PTZ et le prêt complémentaire ont été votés : suis-je obligé d'y adhérer ?",
-        a: "Non. Le vote en AG ouvre simplement la possibilité d'y souscrire : l'adhésion reste individuelle et volontaire. Vous êtes libre d'adhérer à l'un, à l'autre, aux deux — ou de régler votre quote-part sur fonds propres.",
+        a: "Non. Le vote en AG ouvre simplement la possibilité d'y souscrire : l'adhésion reste individuelle et volontaire. Vous êtes libre d'adhérer à l'un, à l'autre, aux deux - ou de régler votre quote-part sur fonds propres.",
       },
       {
         q: "Comment adhérer à ces prêts ?",
@@ -73,7 +73,7 @@ const GROUPES: Groupe[] = [
       },
       {
         q: "Puis-je rembourser mon prêt par anticipation ?",
-        a: "Oui, à condition de rembourser en une seule fois la totalité du capital restant dû — les remboursements anticipés partiels ne sont pas possibles.",
+        a: "Oui, à condition de rembourser en une seule fois la totalité du capital restant dû - les remboursements anticipés partiels ne sont pas possibles.",
       },
     ],
   },
@@ -87,7 +87,7 @@ const GROUPES: Groupe[] = [
       },
       {
         q: "Je suis une personne âgée : la banque peut-elle me refuser ?",
-        a: "Non, il n'existe aucune limite d'âge — c'est l'un des grands avantages de ces prêts. L'âge n'entre pas dans les critères de la banque.",
+        a: "Non, il n'existe aucune limite d'âge - c'est l'un des grands avantages de ces prêts. L'âge n'entre pas dans les critères de la banque.",
       },
       {
         q: "J'ai plusieurs logements dans l'immeuble : comment ça se passe ?",
@@ -103,7 +103,7 @@ const GROUPES: Groupe[] = [
       },
       {
         q: "Je compte louer mon logement en meublé touristique (Airbnb) : suis-je éligible ?",
-        a: "Non. L'éco-PTZ est réservé aux logements occupés en résidence principale — ou destinés à le devenir dans les six mois qui suivent la déclaration de fin des travaux.",
+        a: "Non. L'éco-PTZ est réservé aux logements occupés en résidence principale - ou destinés à le devenir dans les six mois qui suivent la déclaration de fin des travaux.",
       },
       {
         q: "Mon lot est un local professionnel ou commercial : quelles solutions ?",

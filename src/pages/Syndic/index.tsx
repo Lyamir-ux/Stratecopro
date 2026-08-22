@@ -1,4 +1,4 @@
-// Espace syndic (portail) — même chrome que les portails copropriétaire et
+// Espace syndic (portail) - même chrome que les portails copropriétaire et
 // prestataire. Le gestionnaire consulte son portefeuille en LECTURE SEULE :
 // portefeuille (bulles), tâches d'accompagnement, détail copro (5 onglets).
 import { useState, type ReactNode } from "react";
@@ -27,7 +27,7 @@ export function Loader() {
 }
 
 /**
- * Sélecteur d'enseigne — aperçu AMO uniquement. Un vrai gestionnaire ne voit
+ * Sélecteur d'enseigne - aperçu AMO uniquement. Un vrai gestionnaire ne voit
  * que son propre portefeuille : ce rail n'aurait rien à lui proposer.
  */
 function OrgRail({
@@ -85,7 +85,7 @@ export function SyndicShell({
 
   // Sous-titre : l'enseigne et le périmètre, à défaut l'intitulé du profil.
   const sousTitre = org
-    ? `${org.nom} · ${org.role === "directeur" ? "Direction — tout le portefeuille" : "Gestionnaire"}`
+    ? `${org.nom} · ${org.role === "directeur" ? "Direction - tout le portefeuille" : "Gestionnaire"}`
     : profile.job_title || "Syndic";
 
   return (

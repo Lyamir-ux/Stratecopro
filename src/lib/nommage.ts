@@ -2,7 +2,7 @@
 // Format : {COPRO} - {Type} - {Objet} - {ÉMETTEUR} - {AAAA-MM-JJ}[ - {état}].ext
 // Le vocabulaire des types est contrôlé : c'est lui qui garantit qu'un devis
 // s'appelle toujours « Devis ». Saisie manuelle dans RenommageDialog à chaque
-// dépôt (l'analyse automatique par IA a été retirée — trop coûteuse à l'usage).
+// dépôt (l'analyse automatique par IA a été retirée - trop coûteuse à l'usage).
 
 /** Types de documents reconnus, avec le dossier de classement suggéré par défaut. */
 export const TYPES_DOCUMENT: { id: string; label: string; dossier: string }[] = [

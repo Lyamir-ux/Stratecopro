@@ -1,8 +1,8 @@
-// Onglet Financement (syndic) — mode de financement du reste à charge choisi
+// Onglet Financement (syndic) - mode de financement du reste à charge choisi
 // par chaque copropriétaire depuis son portail : fonds propres, éco-PTZ
 // collectif ou éco-PTZ individuel. Le gestionnaire coordonne ET peut saisir
 // le mode d'un copropriétaire quand il a l'information en direct (ex. fonds
-// propres) — saisie tracée (saisi_par), le copropriétaire garde la main.
+// propres) - saisie tracée (saisi_par), le copropriétaire garde la main.
 import { Fragment, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge, type BadgeKind } from "@/components/ui";
@@ -53,7 +53,7 @@ const ORDRE_GROUPES_AIDES = ["ANAH", "EMS", "Climaxion"];
 
 /**
  * Panneau « Plan de financement définitif » : six postes votés, chacun
- * déroulable — travaux regroupés par entreprise, frais annexes par mission,
+ * déroulable - travaux regroupés par entreprise, frais annexes par mission,
  * aides de l'État par dispositif (MaPrimeRénov', EMS, Climaxion).
  */
 function PfDefinitifPanel({ plan, pv, fondsTravaux }: { plan: PlanDefinitif; pv: PlanDefinitifResult; fondsTravaux: number }) {
@@ -99,7 +99,7 @@ function PfDefinitifPanel({ plan, pv, fondsTravaux }: { plan: PlanDefinitif; pv:
         libelle: "Coût des frais annexes",
         montant: pv.totalMoeTtc,
         detail: regrouperAnnexes(pv.moe).map((l) => ({
-          libelle: l.entreprise ? `${l.libelle} — ${l.entreprise}` : l.libelle,
+          libelle: l.entreprise ? `${l.libelle} - ${l.entreprise}` : l.libelle,
           montant: l.montantTtc,
         })),
       },
@@ -215,7 +215,7 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
     return m;
   }, [lots]);
 
-  // lots rattachés à chaque copropriétaire — assiette de l'éco-PTZ individuel
+  // lots rattachés à chaque copropriétaire - assiette de l'éco-PTZ individuel
   // saisi par le gestionnaire (le copropriétaire peut affiner depuis son portail)
   const lotIdsByCp = useMemo(() => {
     const m = new Map<string, string[]>();
@@ -348,7 +348,7 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                               ) : draftType === "collectif" ? (
                                 (finConfig?.duree_annees ?? 15) + " ans"
                               ) : (
-                                "—"
+                                "-"
                               )}
                             </td>
                             <td colSpan={2}>
@@ -403,13 +403,13 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                           </td>
                           <td>
                             {ch?.type === "collectif"
-                              ? (finConfig?.duree_annees ?? ch.duree_annees ?? "—") + " ans"
+                              ? (finConfig?.duree_annees ?? ch.duree_annees ?? "-") + " ans"
                               : ch?.type === "individuel" && ch.duree_annees
                                 ? ch.duree_annees + " ans"
-                                : "—"}
+                                : "-"}
                           </td>
                           <td>
-                            {ch ? fmtDate(ch.transmitted_at) : "—"}
+                            {ch ? fmtDate(ch.transmitted_at) : "-"}
                             {ch && ch.saisi_par !== "copro" && (
                               <span style={{ display: "block", fontSize: 11.5, color: "var(--fg-muted)" }}>
                                 {ch.saisi_par === "syndic" ? "saisi par le syndic" : "saisi par Strat Eco"}
@@ -450,7 +450,7 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
               </p>
             )}
             <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
-              Chaque copropriétaire transmet son choix depuis son portail — si vous avez l'information en direct
+              Chaque copropriétaire transmet son choix depuis son portail - si vous avez l'information en direct
               (ex. paiement sur fonds propres), vous pouvez l'enregistrer ici (✎) : la saisie est tracée et le
               copropriétaire peut toujours la modifier depuis son portail. L'éco-PTZ individuel saisi ici porte
               sur l'ensemble de ses lots. Les montants individuels (quotes-parts, aides, restes à charge) sont

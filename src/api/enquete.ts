@@ -1,6 +1,6 @@
 // Enquête sociale & technique : questionnaire configurable + réponses
-// (RFR — donnée sensible, RLS AMO). Le contenu des questions vit dans
-// src/lib/enqueteCatalogue.ts — la base ne stocke que la configuration.
+// (RFR - donnée sensible, RLS AMO). Le contenu des questions vit dans
+// src/lib/enqueteCatalogue.ts - la base ne stocke que la configuration.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Json, Tables } from "@/lib/database.types";
@@ -10,7 +10,7 @@ import { defaultConfig, type ConfigItem } from "@/lib/enqueteCatalogue";
 export type Enquete = Tables<"enquetes">;
 export type Reponse = Tables<"enquete_reponses"> & { coproprietaire: { nom: string } | null };
 
-/** L'enquête du dossier — créée avec le questionnaire par défaut si absente. */
+/** L'enquête du dossier - créée avec le questionnaire par défaut si absente. */
 export function useEnquete(coproId: string | undefined) {
   const qc = useQueryClient();
   return useQuery({

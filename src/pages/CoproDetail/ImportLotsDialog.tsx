@@ -70,7 +70,7 @@ export function ImportLotsDialog({ coproId, hasExistingLots, onClose }: Props) {
           <p style={{ margin: "12px 0 4px", fontWeight: 600 }}>Choisir un fichier .xlsx ou .csv</p>
           <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
             Colonnes reconnues : n° de lot, bâtiment, copropriétaire, adresse mail, téléphone, adresse postale,
-            usage, et une colonne par clé de tantièmes — l'en-tête de la colonne devient le nom de la clé.
+            usage, et une colonne par clé de tantièmes - l'en-tête de la colonne devient le nom de la clé.
             <br />
             La première ligne doit contenir les en-têtes.
           </p>
@@ -163,14 +163,14 @@ export function ImportLotsDialog({ coproId, hasExistingLots, onClose }: Props) {
                   {rows.slice(0, 50).map((r) => (
                     <tr key={r.num} style={{ cursor: "default" }}>
                       <td className="mono">{r.num}</td>
-                      <td>{r.batiment ?? "—"}</td>
-                      <td>{r.coproprietaire ?? "—"}</td>
-                      <td>{r.email ?? "—"}</td>
-                      <td className="mono">{r.telephone ?? "—"}</td>
+                      <td>{r.batiment ?? "-"}</td>
+                      <td>{r.coproprietaire ?? "-"}</td>
+                      <td>{r.email ?? "-"}</td>
+                      <td className="mono">{r.telephone ?? "-"}</td>
                       <td>{r.usage}</td>
                       {tanCols.map((tc) => (
                         <td key={tc.index} className="mono">
-                          {r.tantiemes[tc.code]?.toLocaleString("fr-FR") ?? "—"}
+                          {r.tantiemes[tc.code]?.toLocaleString("fr-FR") ?? "-"}
                         </td>
                       ))}
                     </tr>
@@ -179,7 +179,7 @@ export function ImportLotsDialog({ coproId, hasExistingLots, onClose }: Props) {
               </table>
               {rows.length > 50 && (
                 <p className="se-small" style={{ color: "var(--fg-muted)", padding: "6px 10px" }}>
-                  Aperçu limité aux 50 premières lignes — les {rows.length} lots seront importés.
+                  Aperçu limité aux 50 premières lignes - les {rows.length} lots seront importés.
                 </p>
               )}
             </div>

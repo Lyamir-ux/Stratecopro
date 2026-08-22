@@ -39,7 +39,7 @@ export function ImportPlanDefinitifDialog({ coproId, onClose }: Props) {
   const doImport = async () => {
     if (!result) return;
     const nom = result.data.infos.nomCopro
-      ? `PF définitif — ${result.data.infos.nomCopro}`
+      ? `PF définitif - ${result.data.infos.nomCopro}`
       : "Plan de financement définitif";
     const row = await create.mutateAsync({ nom, data: result.data, sourceFichier: fileName ?? undefined });
     onClose();

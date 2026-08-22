@@ -1,7 +1,7 @@
 import type { Bareme } from "./types";
 
 /**
- * Barèmes Anah au 1ᵉʳ janvier 2026 — plafonds de ressources MaPrimeRénov'
+ * Barèmes Anah au 1ᵉʳ janvier 2026 - plafonds de ressources MaPrimeRénov'
  * (très modeste / modeste / intermédiaire ; au-delà : supérieur).
  * Le hors Île-de-France est le barème par défaut de l'app (zone Grand Est).
  * Primes individuelles et règles MPR Copro / éco-PTZ reconduites du barème 2024

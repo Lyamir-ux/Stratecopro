@@ -1,5 +1,5 @@
 // Vérification de concordance entre l'IBAN saisi et le RIB téléversé.
-// PDF texte : extraction pdfjs (import dynamique — chargé à la demande).
+// PDF texte : extraction pdfjs (import dynamique - chargé à la demande).
 // Image ou PDF scanné sans texte : « non_verifie » (contrôle manuel AMO).
 import { isValidIban, normalizeIban } from "./adhesion";
 

@@ -1,4 +1,4 @@
-// Note libre par étape du projet (diagnostic / études / travaux) — affichée
+// Note libre par étape du projet (diagnostic / études / travaux) - affichée
 // dans les colonnes de l'onglet Projet, avec les documents liés à l'étape.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -7,7 +7,7 @@ import type { PhaseId } from "@/lib/referentiels";
 
 export type PhaseNote = Tables<"phase_notes">;
 
-/** Dossiers de l'onglet Fichiers rattachés à chaque étape du projet —
+/** Dossiers de l'onglet Fichiers rattachés à chaque étape du projet -
  *  détermine la liste « Documents liés » de chaque colonne du kanban. */
 export const DOSSIERS_PAR_PHASE: Record<PhaseId, string[]> = {
   diagnostic: ["Passation", "Diagnostic & audit"],

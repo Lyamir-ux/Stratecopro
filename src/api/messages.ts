@@ -1,4 +1,4 @@
-// Messagerie de projet (migration 0035) — un fil par copropriété et par canal
+// Messagerie de projet (migration 0035) - un fil par copropriété et par canal
 // (prestataires / syndic / copropriétaires), piloté depuis l'onglet
 // Communications du dossier côté AMO. Canal prestataires : message « à tous »
 // (prestataire_id null) ou privé avec une entreprise ; l'envoi AMO déclenche
@@ -21,7 +21,7 @@ export type MessageProjet = Tables<"messages_projet"> & {
   prestataire: { raison_sociale: string } | null;
 };
 
-/** Fil complet d'une copro (AMO — tous canaux, messages privés compris). */
+/** Fil complet d'une copro (AMO - tous canaux, messages privés compris). */
 export function useMessagesCopro(coproId: string | undefined) {
   return useQuery({
     queryKey: ["messages", coproId],
@@ -94,7 +94,7 @@ export type MessagePresta = Tables<"messages_projet"> & {
   copro: { id: string; name: string } | null;
 };
 
-/** Messages visibles du prestataire (RLS : fils de ses projets — « à tous »
+/** Messages visibles du prestataire (RLS : fils de ses projets - « à tous »
  *  + ses échanges privés). Le filtre client reproduit la RLS quand un AMO
  *  consulte l'espace en aperçu. */
 export function useMessagesPresta(prestaId: string, coproIds: string[]) {

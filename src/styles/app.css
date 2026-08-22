@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Strat Eco — Progiciel AMO · styles applicatifs
+   Strat Eco - Progiciel AMO · styles applicatifs
    S'appuie sur les tokens de colors_and_type.css
    ========================================================================== */
 
@@ -26,7 +26,7 @@ button { font-family: inherit; }
 }
 .app.collapsed { --sb-w: 76px; }
 
-/* sidebar — thème sombre (tweak) */
+/* sidebar - thème sombre (tweak) */
 .sidebar.dark { background: #1c2a10; border-right-color: #2c3f18; }
 .sidebar.dark .sb-top { border-bottom-color: #2c3f18; }
 .sidebar.dark .sb-bottom { border-top-color: #2c3f18; }
@@ -412,7 +412,7 @@ table.dossiers .edit-inp.sm { width: 74px; }
 }
 .import-note button:hover { background: rgba(0,0,0,0.06); }
 
-/* questionnaire — enquête sociale */
+/* questionnaire - enquête sociale */
 .q-list { display: flex; flex-direction: column; gap: 8px; }
 .q-row {
   display: flex; align-items: center; gap: 12px; padding: 11px 12px;
@@ -666,7 +666,7 @@ table.dossiers .edit-inp.sm { width: 74px; }
 @media (max-width: 1200px) { .moe-fin-cols { grid-template-columns: 1fr; } }
 
 /* ==========================================================================
-   CONSULTATIONS — marketplace AMO ↔ intervenants
+   CONSULTATIONS - marketplace AMO ↔ intervenants
    ========================================================================== */
 .cs-section-label { font-family: var(--font-display); font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-muted); margin: 6px 0 14px; }
 .cs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 18px; }
@@ -710,7 +710,7 @@ table.dossiers .edit-inp.sm { width: 74px; }
 @media (max-width: 720px) { .cs-form-grid { grid-template-columns: 1fr; } }
 
 /* ==========================================================================
-   ESPACE SYNDIC — tableau de bord en bulles
+   ESPACE SYNDIC - tableau de bord en bulles
    ========================================================================== */
 .tab.tab-action { color: var(--accent); font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
 .tab.tab-action:hover { color: var(--accent-hover); }
@@ -734,7 +734,7 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .orbite-ring { position: absolute; inset: 0; animation: orbite-tour var(--orbite-duree, 72s) linear infinite; }
 .orbite-sat { animation: orbite-tour-inverse var(--orbite-duree, 72s) linear infinite; }
 /* La bulle du gestionnaire ne tourne pas : elle est le centre du système.
-   Sélecteur à deux classes — .bubble, déclaré plus bas, impose top/left: 0 et
+   Sélecteur à deux classes - .bubble, déclaré plus bas, impose top/left: 0 et
    l'emporterait à spécificité égale. */
 .orbite-sys .orbite-gest {
   left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -811,7 +811,7 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .content::-webkit-scrollbar, .kanban::-webkit-scrollbar, .sb-scroll::-webkit-scrollbar { height: 10px; width: 10px; }
 .content::-webkit-scrollbar-thumb, .kanban::-webkit-scrollbar-thumb, .sb-scroll::-webkit-scrollbar-thumb { background: var(--color-neutral-300); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
 
-/* fade-in — animation purement additive sur la TRANSFORM uniquement.
+/* fade-in - animation purement additive sur la TRANSFORM uniquement.
    L'opacité reste à 1 en permanence : si l'horloge d'animation est en pause
    (iframe en arrière-plan), le contenu reste visible (au pire légèrement décalé). */
 @keyframes seFade { from { transform: translateY(8px); } to { transform: none; } }
@@ -819,7 +819,7 @@ table.dossiers .edit-inp.sm { width: 74px; }
 @media (prefers-reduced-motion: reduce) { .fade { animation: none; } }
 
 /* ==========================================================================
-   ESPACE COPROPRIÉTAIRE — portail (ton chaleureux)
+   ESPACE COPROPRIÉTAIRE - portail (ton chaleureux)
    ========================================================================== */
 .portal { min-height: 100vh; display: flex; flex-direction: column; background: var(--bg-soft); }
 
@@ -855,7 +855,7 @@ table.dossiers .edit-inp.sm { width: 74px; }
 
 .portal-main { width: 100%; max-width: 1060px; margin: 0 auto; padding: 34px 28px 72px; }
 
-/* rail de sélection d'enseigne — aperçu AMO de l'espace syndic */
+/* rail de sélection d'enseigne - aperçu AMO de l'espace syndic */
 .portal-body { display: flex; align-items: flex-start; width: 100%; max-width: 1320px; margin: 0 auto; }
 .portal-body .portal-main { margin: 0; flex: 1; min-width: 0; }
 .org-rail { flex: none; width: 228px; padding: 34px 0 72px 24px; }
@@ -957,7 +957,7 @@ table.dossiers .edit-inp.sm { width: 74px; }
 }
 .fld input:focus, .fld select:focus { border-color: var(--accent); box-shadow: var(--shadow-focus); }
 
-/* enquête portail — questionnaire dynamique */
+/* enquête portail - questionnaire dynamique */
 .eq-sec {
   font-family: var(--font-display); font-weight: 800; font-size: 13px; text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--color-primary-700); margin: 22px 0 4px;
@@ -1006,7 +1006,7 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .loan-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .loan-opts-3 { grid-template-columns: repeat(3, 1fr); }
 
-/* mes quotes-parts — sélecteurs lot & scénario */
+/* mes quotes-parts - sélecteurs lot & scénario */
 .qp-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-bottom: 20px; }
 .qp-group { display: flex; align-items: center; gap: 10px; }
 .qp-lbl { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-muted); }
@@ -1076,7 +1076,7 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .dz-action { font-size: 13px; font-weight: 600; color: var(--accent); }
 
 /* ==========================================================================
-   INGÉNIERIE FINANCIÈRE — assistant 7 étapes (AMO)
+   INGÉNIERIE FINANCIÈRE - assistant 7 étapes (AMO)
    ========================================================================== */
 .ief { display: flex; flex-direction: column; height: 100%; }
 .ief-bar {
@@ -1245,7 +1245,7 @@ table.plans tbody tr.tot td:first-child { background: var(--accent-soft); }
 table.plans .mono { font-family: var(--font-mono); }
 
 /* ==========================================================================
-   MONTAGE BANCAIRE (espace syndic) — cartes de montages, étapes, documents
+   MONTAGE BANCAIRE (espace syndic) - cartes de montages, étapes, documents
    ========================================================================== */
 .montage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; }
 .montage-card {
@@ -1303,7 +1303,7 @@ table.plans .mono { font-family: var(--font-mono); }
 .mdoc-file .fmeta { color: var(--fg-muted); font-size: 12px; flex: none; margin-left: auto; }
 
 /* ==========================================================================
-   MODULE FEEDBACK (version test) — bouton flottant + panneau en bas à droite
+   MODULE FEEDBACK (version test) - bouton flottant + panneau en bas à droite
    ========================================================================== */
 .fb-fab {
   position: fixed; right: 22px; bottom: 22px; z-index: 120;
@@ -1392,7 +1392,7 @@ table.dossiers.sf-table tfoot td:first-child { text-align: left; }
 .faq-q:hover { background: var(--bg-soft); }
 .faq-a { padding: 2px 16px 15px 41px; font-size: 14px; line-height: 1.6; color: var(--fg2); }
 
-/* Portail — bloc « après le chantier » (CEE versés à la réception) */
+/* Portail - bloc « après le chantier » (CEE versés à la réception) */
 .apres-chantier {
   margin-top: 16px; padding: 14px 16px; border-radius: var(--radius-md);
   background: var(--color-primary-50); border: 1px dashed var(--color-primary-300);
@@ -1410,12 +1410,12 @@ table.dossiers.sf-table tfoot td:first-child { text-align: left; }
 }
 .apres-chantier .ac-reste b { font-family: var(--font-display); font-size: 17px; color: var(--color-primary-700); }
 
-/* Portail — mentions de prudence (simulation, offre de prêt, crédit) */
+/* Portail - mentions de prudence (simulation, offre de prêt, crédit) */
 .mentions-prudence { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--border); }
 .mentions-prudence p { margin: 0 0 6px; font-size: 12px; line-height: 1.55; color: var(--fg-muted); }
 .mentions-prudence .mp-credit { font-weight: 700; color: var(--fg3); }
 
-/* Portail — étiquette énergie visée du bâtiment (accueil) */
+/* Portail - étiquette énergie visée du bâtiment (accueil) */
 .dpe-vise {
   display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
   background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg);

@@ -1,4 +1,4 @@
-// Vos tâches (syndic) — assemblées, comptes d'aides, validations, registre & PV,
+// Vos tâches (syndic) - assemblées, comptes d'aides, validations, registre & PV,
 // par copropriété et phase (port de SyndicMissions, design-reference/project/syndic.jsx).
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
@@ -30,7 +30,7 @@ export function TachesSyndic({ copros }: { copros: SyndicCopro[] }) {
       <div className="page-head">
         <div>
           <h1 className="page-title">Vos tâches</h1>
-          <p className="page-sub">Assemblées, comptes d'aides, validations, registre & PV — par copropriété et phase</p>
+          <p className="page-sub">Assemblées, comptes d'aides, validations, registre & PV - par copropriété et phase</p>
         </div>
         <span className="spacer"></span>
         <div className="mt-tally">

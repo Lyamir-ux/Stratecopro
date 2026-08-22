@@ -16,7 +16,7 @@ interface UiState {
   showProgress: boolean;
   accent: Accent;
   crumbs: Crumb[];
-  /** Filtre « chef de projet » du tableau de bord — persisté : une fois choisi
+  /** Filtre « chef de projet » du tableau de bord - persisté : une fois choisi
    *  par la cheffe de projet, il redevient son filtre par défaut. */
   chefProjetFilter: string;
   toggleCollapsed: () => void;

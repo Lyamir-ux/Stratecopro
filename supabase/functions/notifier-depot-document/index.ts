@@ -1,11 +1,11 @@
-// Edge function « notifier-depot-document » — appelée après un dépôt de
+// Edge function « notifier-depot-document » - appelée après un dépôt de
 // document par le syndic (montage bancaire). Alerte par e-mail l'équipe AMO
 // rattachée au dossier (copro_members), au premier chef le chef de projet,
 // pour qu'aucun dépôt ne passe inaperçu.
 //
 // Envoi réel via Resend si le secret RESEND_API_KEY est configuré
 // (voir notifier-consultation) ; sans clé, l'envoi est simulé et la réponse
-// l'indique — le parcours reste testable sans provider.
+// l'indique - le parcours reste testable sans provider.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const cors = {
@@ -105,7 +105,7 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({
           from,
           to: [email],
-          subject: `Dépôt syndic — ${doc_name} · ${copro.name}`,
+          subject: `Dépôt syndic - ${doc_name} · ${copro.name}`,
           html,
         }),
       });

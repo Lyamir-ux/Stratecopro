@@ -18,7 +18,7 @@ export function homeFor(role: RoleId | undefined): string {
 export function RequireRole({ role }: { role: RoleId }) {
   const { profile, loading, signOut } = useAuth();
 
-  // session sans profil : compte non provisionné — déconnexion après un délai
+  // session sans profil : compte non provisionné - déconnexion après un délai
   // de grâce. L'état « session sans profil » est transitoire pendant une
   // fraction de seconde au moment de la connexion (le profil charge encore) :
   // déconnecter immédiatement coupait des connexions valides. Si le profil

@@ -1,4 +1,4 @@
-// Écran de connexion — port de design-reference/project/login.jsx
+// Écran de connexion - port de design-reference/project/login.jsx
 // V1 : seul l'espace AMO est actif ; les autres rôles arrivent en phase 2.
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";

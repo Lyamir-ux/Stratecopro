@@ -1,6 +1,6 @@
 // Regroupement des lignes « MOE et frais annexes » du PF définitif par mission :
 // une seule ligne par mission en additionnant les montants (AMO, MOE, contrôle
-// technique, CSPS, tests d'étanchéité avant + après travaux) — les autres frais
+// technique, CSPS, tests d'étanchéité avant + après travaux) - les autres frais
 // restent ligne à ligne. La détection se fait sur la désignation saisie au PF.
 // Utilisé par le suivi financier ET le panneau PF de l'onglet Financement (syndic).
 import type { MoeLigneResult } from "./planDefinitif";

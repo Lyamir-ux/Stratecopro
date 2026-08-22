@@ -4,7 +4,7 @@ export const round2 = (n: number): number => Math.round(n * 100) / 100;
 /**
  * Arrondit une liste de montants au centime en préservant la somme :
  * l'écart d'arrondi résiduel est imputé à la plus grosse ligne
- * (technique classique de répartition — jamais de centime perdu).
+ * (technique classique de répartition - jamais de centime perdu).
  */
 export function roundAllocate(values: number[]): number[] {
   if (values.length === 0) return [];

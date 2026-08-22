@@ -1,4 +1,4 @@
-// Onglet Données de la copro — porté de detail.jsx (DonneesTab), branché sur les vraies tables.
+// Onglet Données de la copro - porté de detail.jsx (DonneesTab), branché sur les vraies tables.
 // Répartition des lots et matrice bâtiments × clés dérivées des lots réels ;
 // synthèse éditable (fiche copropriété) ; import Excel réel des lots.
 import { useState } from "react";
@@ -87,7 +87,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
   };
   const saveSynth = async () => {
     if (synth.nbBatiments !== batiments.length) {
-      // Peut échouer si on réduit alors que des bâtiments portent des lots — on reste en édition.
+      // Peut échouer si on réduit alors que des bâtiments portent des lots - on reste en édition.
       try {
         await setNbBatiments.mutateAsync(Math.max(1, synth.nbBatiments));
       } catch {
@@ -122,7 +122,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
           <div className="p-body">
             {totalLots === 0 ? (
               <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
-                Aucun lot enregistré — importez le tableau des lots et tantièmes pour démarrer.
+                Aucun lot enregistré - importez le tableau des lots et tantièmes pour démarrer.
               </p>
             ) : (
               usageCounts.map((u) => (
@@ -204,7 +204,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                   </tbody>
                 </table>
                 <p className="se-small" style={{ marginTop: 12, color: "var(--fg-muted)" }}>
-                  Les tantièmes sont repris tels quels depuis le fichier importé — chaque clé garde son propre total,
+                  Les tantièmes sont repris tels quels depuis le fichier importé - chaque clé garde son propre total,
                   les quote-parts sont calculées au prorata du total réel.
                 </p>
               </>
@@ -244,12 +244,12 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                     {lots.map((l) => (
                       <tr key={l.id} style={{ cursor: "default" }}>
                         <td className="mono">n°{l.num}</td>
-                        <td>{l.batiment?.code ? `${lb.court} ${l.batiment.code}` : "—"}</td>
-                        <td>{l.coproprietaire?.nom ?? "—"}</td>
+                        <td>{l.batiment?.code ? `${lb.court} ${l.batiment.code}` : "-"}</td>
+                        <td>{l.coproprietaire?.nom ?? "-"}</td>
                         <td style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {l.coproprietaire?.email ?? "—"}
+                          {l.coproprietaire?.email ?? "-"}
                         </td>
-                        <td className="mono">{l.coproprietaire?.telephone ?? "—"}</td>
+                        <td className="mono">{l.coproprietaire?.telephone ?? "-"}</td>
                         <td>
                           {/* L'usage se corrige à la main (ex. « autres » → « commerces ») */}
                           <select
@@ -270,7 +270,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                         </td>
                         {cleDefaut && (
                           <td className="mono">
-                            {l.tantiemes[cleDefaut] != null ? l.tantiemes[cleDefaut].toLocaleString("fr-FR") : "—"}
+                            {l.tantiemes[cleDefaut] != null ? l.tantiemes[cleDefaut].toLocaleString("fr-FR") : "-"}
                           </td>
                         )}
                       </tr>
@@ -313,7 +313,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
             {editingSynth ? (
               <input className="edit-inp" value={synth.adresse} onChange={(e) => setSynth((s) => ({ ...s, adresse: e.target.value }))} />
             ) : (
-              <span className="v" style={{ textAlign: "right" }}>{c.adresse ?? "—"}</span>
+              <span className="v" style={{ textAlign: "right" }}>{c.adresse ?? "-"}</span>
             )}
           </div>
           <div className="kv">
@@ -321,7 +321,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
             {editingSynth ? (
               <input className="edit-inp" value={synth.syndic} onChange={(e) => setSynth((s) => ({ ...s, syndic: e.target.value }))} />
             ) : (
-              <span className="v">{c.syndic_name ?? "—"}</span>
+              <span className="v">{c.syndic_name ?? "-"}</span>
             )}
           </div>
           {c.organisation && (
@@ -335,7 +335,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
             {editingSynth ? (
               <input className="edit-inp" value={synth.gestionnaireNom} onChange={(e) => setSynth((s) => ({ ...s, gestionnaireNom: e.target.value }))} />
             ) : (
-              <span className="v">{c.gestionnaire_nom ?? "—"}</span>
+              <span className="v">{c.gestionnaire_nom ?? "-"}</span>
             )}
           </div>
           <div className="kv">
@@ -343,7 +343,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
             {editingSynth ? (
               <input className="edit-inp" type="email" value={synth.gestionnaireEmail} onChange={(e) => setSynth((s) => ({ ...s, gestionnaireEmail: e.target.value }))} />
             ) : (
-              <span className="v" style={{ textAlign: "right", overflowWrap: "anywhere" }}>{c.gestionnaire_email ?? "—"}</span>
+              <span className="v" style={{ textAlign: "right", overflowWrap: "anywhere" }}>{c.gestionnaire_email ?? "-"}</span>
             )}
           </div>
           <div className="kv">
@@ -351,7 +351,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
             {editingSynth ? (
               <input className="edit-inp" value={synth.city} onChange={(e) => setSynth((s) => ({ ...s, city: e.target.value }))} />
             ) : (
-              <span className="v">{c.city ?? "—"}</span>
+              <span className="v">{c.city ?? "-"}</span>
             )}
           </div>
           <div className="kv">
@@ -359,7 +359,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
             {editingSynth ? (
               <input className="edit-inp" value={synth.chefProjet} onChange={(e) => setSynth((s) => ({ ...s, chefProjet: e.target.value }))} />
             ) : (
-              <span className="v">{c.chef_projet ?? "—"}</span>
+              <span className="v">{c.chef_projet ?? "-"}</span>
             )}
           </div>
           <div className="kv">
@@ -410,7 +410,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
           <div className="kv">
             <span className="k">Étiquette</span>
             {editingSynth ? (
-              // Saisie manuelle avant/visée — utile tant que l'audit n'est pas importé
+              // Saisie manuelle avant/visée - utile tant que l'audit n'est pas importé
               <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <select
                   className="edit-inp"
@@ -418,7 +418,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                   value={synth.energyBefore}
                   onChange={(e) => setSynth((s) => ({ ...s, energyBefore: e.target.value }))}
                 >
-                  <option value="">—</option>
+                  <option value="">-</option>
                   {DPE_CLASSES.map((d) => (
                     <option key={d} value={d}>
                       {d}
@@ -432,7 +432,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                   value={synth.energyAfter}
                   onChange={(e) => setSynth((s) => ({ ...s, energyAfter: e.target.value }))}
                 >
-                  <option value="">—</option>
+                  <option value="">-</option>
                   {DPE_CLASSES.map((d) => (
                     <option key={d} value={d}>
                       {d}

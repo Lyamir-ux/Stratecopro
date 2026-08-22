@@ -1,4 +1,4 @@
-// Montage bancaire — préparation des dossiers de financement et d'assurance
+// Montage bancaire - préparation des dossiers de financement et d'assurance
 // par le syndic. Catalogues déclaratifs des documents attendus par chaque
 // organisme (CEGEE pour l'éco-PTZ collectif, ROEDERER pour la dommages-
 // ouvrage) + hooks de dépôt/suivi. Les fichiers vivent dans le bucket
@@ -22,7 +22,7 @@ export interface MontageFile {
   size: number | null;
   mime: string | null;
   uploaded_at: string;
-  /** Auteur du dépôt — sert à afficher son origine (absent avant août 2026). */
+  /** Auteur du dépôt - sert à afficher son origine (absent avant août 2026). */
   uploaded_by?: string | null;
 }
 
@@ -42,14 +42,14 @@ export const MONTAGES: {
   {
     id: "ecoptz",
     label: "Éco-PTZ collectif",
-    sub: "CEGEE — Caisse d'Épargne Grand Est Europe",
+    sub: "CEGEE - Caisse d'Épargne Grand Est Europe",
     icon: "users",
     dispo: true,
   },
-  { id: "anah", label: "ANAH — MaPrimeRénov' Copro", sub: "Subvention collective de l'Anah", icon: "fileCheck", dispo: false },
+  { id: "anah", label: "ANAH - MaPrimeRénov' Copro", sub: "Subvention collective de l'Anah", icon: "fileCheck", dispo: false },
   { id: "cee", label: "CEE", sub: "Certificats d'économies d'énergie", icon: "zap", dispo: false },
   { id: "climaxion", label: "Climaxion", sub: "Eurométropole de Strasbourg / Région Grand Est", icon: "leaf", dispo: false },
-  { id: "do", label: "Dommages-ouvrage", sub: "ROEDERER — assurances de chantier", icon: "hammer", dispo: true },
+  { id: "do", label: "Dommages-ouvrage", sub: "ROEDERER - assurances de chantier", icon: "hammer", dispo: true },
 ];
 
 // ========== Catalogue documentaire de l'éco-PTZ collectif (CEGEE) ==========
@@ -98,7 +98,7 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
       {
         type: "fiche_avant_ag",
         name: "Fiche de renseignements avant AG",
-        hint: "Pré-remplie avec les données du projet — complétez les champs manquants",
+        hint: "Pré-remplie avec les données du projet - complétez les champs manquants",
       },
     ],
     groupes: [
@@ -107,7 +107,7 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
           {
             key: "attestation_impayes",
             name: "Attestation du taux d'impayés",
-            hint: "En-tête du cabinet, cachet + signature. Tantièmes des copropriétaires en retard de plus de 2 trimestres de charges courantes / tantièmes généraux × 100 — limite : 15 %.",
+            hint: "En-tête du cabinet, cachet + signature. Tantièmes des copropriétaires en retard de plus de 2 trimestres de charges courantes / tantièmes généraux × 100 - limite : 15 %.",
             fournisseur: "syndic",
             modele: "attestation-taux-impayes-cegee.docx",
           },
@@ -144,14 +144,14 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
           {
             key: "avis_sirene",
             name: "Avis de situation SIRENE",
-            hint: "Daté de moins de 3 mois — téléchargeable gratuitement sur le site de l'Insee",
+            hint: "Daté de moins de 3 mois - téléchargeable gratuitement sur le site de l'Insee",
             fournisseur: "syndic",
             lien: { label: "avis-situation-sirene.insee.fr", url: "https://avis-situation-sirene.insee.fr/" },
           },
           {
             key: "attestation_impayes",
             name: "Attestation du taux d'impayés",
-            hint: "La même qu'à l'étape 1 — déposée une seule fois",
+            hint: "La même qu'à l'étape 1 - déposée une seule fois",
             fournisseur: "syndic",
             modele: "attestation-taux-impayes-cegee.docx",
           },
@@ -162,13 +162,13 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
           },
           {
             key: "pv_ag_mandat",
-            name: "PV d'AG — mandat du syndic",
+            name: "PV d'AG - mandat du syndic",
             hint: "Signé(s), cacheté(s) et certifié(s) conforme(s) : désignation et renouvellement du mandat pour la période en cours",
             fournisseur: "syndic",
           },
           {
             key: "pv_ag_travaux",
-            name: "PV d'AG — vote des travaux et de la résolution d'emprunt",
+            name: "PV d'AG - vote des travaux et de la résolution d'emprunt",
             hint: "Signé(s), cacheté(s) et certifié(s) conforme(s)",
             fournisseur: "syndic",
           },
@@ -198,7 +198,7 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
           {
             key: "delegation_pouvoir",
             name: "Délégation de pouvoirs",
-            hint: "Sur papier à en-tête du syndic — signée par le délégant et le délégataire",
+            hint: "Sur papier à en-tête du syndic - signée par le délégant et le délégataire",
             fournisseur: "syndic",
             modele: "delegation-pouvoirs-cegee.docx",
             conditionnel: true,
@@ -231,7 +231,7 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
     formulaires: [
       {
         type: "demande_pret",
-        name: "Demande de prêt CEGEE — onglet 1",
+        name: "Demande de prêt CEGEE - onglet 1",
         hint: "Renseignez les informations du syndic pour que Strat Eco produise le classeur Excel",
       },
     ],
@@ -249,25 +249,25 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
           {
             key: "audit_energetique",
             name: "Audit énergétique",
-            hint: "Si éco-PTZ « amélioration de la performance globale » — fourni par la maîtrise d'œuvre",
+            hint: "Si éco-PTZ « amélioration de la performance globale » - fourni par la maîtrise d'œuvre",
             fournisseur: "moe",
           },
           {
             key: "devis_travaux",
             name: "Devis des travaux ou ordres de service",
-            hint: "Datés de moins d'un an, correspondant aux montants votés en AG — fournis par la maîtrise d'œuvre",
+            hint: "Datés de moins d'un an, correspondant aux montants votés en AG - fournis par la maîtrise d'œuvre",
             fournisseur: "moe",
           },
           {
             key: "rib_entreprises",
             name: "RIB des entreprises intervenantes",
-            hint: "Format IBAN-BIC — fournis par la maîtrise d'œuvre",
+            hint: "Format IBAN-BIC - fournis par la maîtrise d'œuvre",
             fournisseur: "moe",
           },
           {
             key: "cerfa_emprunteur",
             name: "Formulaire réglementaire éco-PTZ « Emprunteur »",
-            hint: "Fourni par Strat Eco — complété, tamponné et signé par le syndic",
+            hint: "Fourni par Strat Eco - complété, tamponné et signé par le syndic",
             fournisseur: "amo",
           },
           {
@@ -284,7 +284,7 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
           },
           {
             key: "annexe_2bis_cegc",
-            name: "Annexe 2 bis — attestation pour la demande de cautionnement CEGC",
+            name: "Annexe 2 bis - attestation pour la demande de cautionnement CEGC",
             hint: "Signée et tamponnée par le syndic",
             fournisseur: "syndic",
             modele: "attestation-caution-cegc-annexe-2bis.docx",
@@ -303,7 +303,7 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
           {
             key: "fiche_etat_anah",
             name: "Fiche « État » adressée à l'ANAH",
-            hint: "Mentionne le taux d'impayés rapporté au budget de l'année n-1 — fournie par Strat Eco",
+            hint: "Mentionne le taux d'impayés rapporté au budget de l'année n-1 - fournie par Strat Eco",
             fournisseur: "amo",
           },
           {
@@ -315,7 +315,7 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
           {
             key: "mail_beneficiaire_compte",
             name: "Confirmation d'enregistrement du compte travaux en bénéficiaire",
-            hint: "Mail des organismes subventionneurs — fourni par Strat Eco",
+            hint: "Mail des organismes subventionneurs - fourni par Strat Eco",
             fournisseur: "amo",
           },
         ],
@@ -327,7 +327,7 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
 // ========== Catalogue documentaire de la dommages-ouvrage (ROEDERER) ==========
 // Source : « Questionnaire de présentation Assurances de chantier » + liste
 // récapitulative des documents à transmettre (ROEDERER, Département Assurances
-// Construction — construction@roederer.fr). Les rôles reprennent les
+// Construction - construction@roederer.fr). Les rôles reprennent les
 // annotations du dossier : MOE, AMO (Strat Eco) ou syndic.
 
 export const DO_ETAPES: EtapeDef[] = [
@@ -343,14 +343,14 @@ export const DO_ETAPES: EtapeDef[] = [
           {
             key: "questionnaire_chantier",
             name: "Questionnaire « Assurances de chantier » complété",
-            hint: "Proposant, opération, maîtrise d'œuvre, étude de sol, contrôle technique, caractéristiques et intervenants — complété par la maîtrise d'œuvre",
+            hint: "Proposant, opération, maîtrise d'œuvre, étude de sol, contrôle technique, caractéristiques et intervenants - complété par la maîtrise d'œuvre",
             fournisseur: "moe",
             modele: "questionnaire-chantier-roederer.docx",
           },
           {
             key: "cout_previsionnel",
             name: "Détail du coût total prévisionnel des travaux (plan de financement)",
-            hint: "Y compris honoraires techniques — le descriptif sommaire des travaux y figure. Fourni par Strat Eco.",
+            hint: "Y compris honoraires techniques - le descriptif sommaire des travaux y figure. Fourni par Strat Eco.",
             fournisseur: "amo",
           },
           {
@@ -366,13 +366,13 @@ export const DO_ETAPES: EtapeDef[] = [
           {
             key: "rapport_ct_initial",
             name: "Rapport initial du contrôleur technique",
-            hint: "Sans avis défavorable — mission minimum L ou LP (+ LE en cas de travaux sur existants)",
+            hint: "Sans avis défavorable - mission minimum L ou LP (+ LE en cas de travaux sur existants)",
             fournisseur: "moe",
           },
           {
             key: "convention_moe",
             name: "Convention de maîtrise d'œuvre",
-            hint: "Mission complète : conception, direction et suivi des travaux — fournie par Strat Eco",
+            hint: "Mission complète : conception, direction et suivi des travaux - fournie par Strat Eco",
             fournisseur: "amo",
           },
           {
@@ -383,7 +383,7 @@ export const DO_ETAPES: EtapeDef[] = [
           {
             key: "etude_sol",
             name: "Rapport d'étude de sol",
-            hint: "Le cas échéant — G2PRO minimum en cas de travaux neufs ou d'extension",
+            hint: "Le cas échéant - G2PRO minimum en cas de travaux neufs ou d'extension",
             fournisseur: "moe",
             conditionnel: true,
           },
@@ -410,7 +410,7 @@ export const DO_ETAPES: EtapeDef[] = [
           {
             key: "intervenants_designes",
             name: "Liste des intervenants désignés et attestations RC décennale",
-            hint: "Au minimum : maîtrise d'œuvre et entreprises de clos/couvert — attestations valables à la date d'ouverture du chantier",
+            hint: "Au minimum : maîtrise d'œuvre et entreprises de clos/couvert - attestations valables à la date d'ouverture du chantier",
             fournisseur: "moe",
           },
         ],
@@ -421,19 +421,19 @@ export const DO_ETAPES: EtapeDef[] = [
           {
             key: "convention_ct",
             name: "Convention de contrôle technique",
-            hint: "Déjà versée au dossier projet — suivie par Strat Eco",
+            hint: "Déjà versée au dossier projet - suivie par Strat Eco",
             fournisseur: "amo",
           },
           {
             key: "honoraires_bet",
             name: "Conventions ou notes d'honoraires des BET de l'opération",
-            hint: "Déjà versées au dossier projet — suivies par Strat Eco",
+            hint: "Déjà versées au dossier projet - suivies par Strat Eco",
             fournisseur: "amo",
           },
           {
             key: "liste_intervenants_lots",
             name: "Liste de l'ensemble des intervenants prévus, ventilée par lot",
-            hint: "CCTP, DPGF ou devis — vaut aussi devis descriptifs des travaux et cahiers des clauses techniques particulières",
+            hint: "CCTP, DPGF ou devis - vaut aussi devis descriptifs des travaux et cahiers des clauses techniques particulières",
             fournisseur: "moe",
           },
           {
@@ -445,7 +445,7 @@ export const DO_ETAPES: EtapeDef[] = [
           {
             key: "marches_travaux",
             name: "Marchés de travaux signés avec les entreprises",
-            hint: "Le cas échéant — à déposer par le syndic",
+            hint: "Le cas échéant - à déposer par le syndic",
             fournisseur: "syndic",
             conditionnel: true,
           },
@@ -521,15 +521,15 @@ export interface ParcoursDef {
 
 export const PARCOURS: Partial<Record<MontageId, ParcoursDef>> = {
   ecoptz: {
-    titre: "Éco-PTZ collectif — CEGEE",
+    titre: "Éco-PTZ collectif - CEGEE",
     intro:
-      "Prêt collectif souscrit par le syndicat des copropriétaires auprès de la Caisse d'Épargne Grand Est Europe. Préparez les trois étapes dans l'ordre — l'équipe Strat Eco est notifiée de vos dépôts.",
+      "Prêt collectif souscrit par le syndicat des copropriétaires auprès de la Caisse d'Épargne Grand Est Europe. Préparez les trois étapes dans l'ordre - l'équipe Strat Eco est notifiée de vos dépôts.",
     etapes: ECOPTZ_ETAPES,
   },
   do: {
-    titre: "Assurance dommages-ouvrage — ROEDERER",
+    titre: "Assurance dommages-ouvrage - ROEDERER",
     intro:
-      "Assurance obligatoire du maître d'ouvrage (art. L.242-1 du Code des assurances) : elle préfinance, pendant les dix ans suivant la réception, la réparation des dommages de nature décennale sans recherche de responsabilité. Dossier monté avec le courtier ROEDERER (Département Assurances Construction, Schiltigheim — construction@roederer.fr, 03 88 76 75 20).",
+      "Assurance obligatoire du maître d'ouvrage (art. L.242-1 du Code des assurances) : elle préfinance, pendant les dix ans suivant la réception, la réparation des dommages de nature décennale sans recherche de responsabilité. Dossier monté avec le courtier ROEDERER (Département Assurances Construction, Schiltigheim - construction@roederer.fr, 03 88 76 75 20).",
     etapes: DO_ETAPES,
   },
 };
@@ -598,7 +598,7 @@ async function currentUid(): Promise<string> {
   return uid;
 }
 
-/** Alerte l'équipe AMO du dossier après un dépôt du syndic — meilleure volonté :
+/** Alerte l'équipe AMO du dossier après un dépôt du syndic - meilleure volonté :
  *  l'échec de la notification ne doit jamais faire échouer le dépôt lui-même. */
 function notifierDepot(coproId: string, montage: MontageId, docKey: string, fileName: string) {
   const montageLabel = MONTAGES.find((m) => m.id === montage)?.label ?? montage;
@@ -609,13 +609,13 @@ function notifierDepot(coproId: string, montage: MontageId, docKey: string, file
       body: {
         copro_id: coproId,
         doc_name: docName,
-        contexte: `${montageLabel} — fichier « ${fileName} »`,
+        contexte: `${montageLabel} - fichier « ${fileName} »`,
       },
     })
     .catch(() => undefined);
 }
 
-/** Dépose un fichier sur un document du montage (ajout — plusieurs PV possibles). */
+/** Dépose un fichier sur un document du montage (ajout - plusieurs PV possibles). */
 export function useUploadMontageDoc(coproId: string, montage: MontageId) {
   const qc = useQueryClient();
   return useMutation({
@@ -654,7 +654,7 @@ export function useUploadMontageDoc(coproId: string, montage: MontageId) {
         { onConflict: "copro_id,montage,doc_key" }
       );
       if (eDb) throw eDb;
-      // Notifie l'équipe AMO (chef de projet) — la fonction ignore les dépôts AMO.
+      // Notifie l'équipe AMO (chef de projet) - la fonction ignore les dépôts AMO.
       notifierDepot(coproId, montage, docKey, file.name);
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["montage", "docs", coproId, montage] }),

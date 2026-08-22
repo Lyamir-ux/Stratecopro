@@ -22,8 +22,8 @@ import {
 } from "@/api/organisations";
 
 const ROLE_LABEL: Record<OrgRole, string> = {
-  directeur: "Direction — tout le portefeuille",
-  gestionnaire: "Gestionnaire — ses dossiers",
+  directeur: "Direction - tout le portefeuille",
+  gestionnaire: "Gestionnaire - ses dossiers",
 };
 
 const EYEBROW: React.CSSProperties = { color: "var(--fg-muted)", margin: "14px 0 8px" };
@@ -44,7 +44,7 @@ function Membres({ org }: { org: Organisation }) {
       </div>
       {(membres ?? []).length === 0 ? (
         <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
-          Aucun membre — personne ne voit encore ce portefeuille.
+          Aucun membre - personne ne voit encore ce portefeuille.
         </p>
       ) : (
         (membres ?? []).map((m) => (
@@ -116,7 +116,7 @@ function Membres({ org }: { org: Organisation }) {
       </div>
       {(libres ?? []).length === 0 && (
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 8 }}>
-          Aucun compte syndic disponible — un compte n'appartient qu'à une seule enseigne, et la création d'un compte
+          Aucun compte syndic disponible - un compte n'appartient qu'à une seule enseigne, et la création d'un compte
           passe encore par le tableau de bord Supabase.
         </p>
       )}
@@ -227,7 +227,7 @@ export function OrganisationsPanel() {
       <div className="p-body">
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 0 }}>
           Enseignes de gestion (cabinets de syndic). La direction accède à tous les dossiers de son enseigne, les
-          gestionnaires aux seuls dossiers dont ils ont la charge — en lecture seule dans les deux cas.
+          gestionnaires aux seuls dossiers dont ils ont la charge - en lecture seule dans les deux cas.
         </p>
 
         {creation && (
@@ -249,7 +249,7 @@ export function OrganisationsPanel() {
 
         {(organisations ?? []).length === 0 && !creation && (
           <p className="se-small" style={{ color: "var(--fg-muted)" }}>
-            Aucune organisation — créez-en une pour donner à une direction de cabinet la vue sur tout son portefeuille.
+            Aucune organisation - créez-en une pour donner à une direction de cabinet la vue sur tout son portefeuille.
           </p>
         )}
 

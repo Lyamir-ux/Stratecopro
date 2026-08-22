@@ -1,9 +1,9 @@
-// Edge function « notifier-choix » — appelée par l'AMO quand il retient ou
+// Edge function « notifier-choix » - appelée par l'AMO quand il retient ou
 // refuse une candidature. Envoie l'e-mail de décision au prestataire (via
 // Resend si RESEND_API_KEY est configuré, sinon statut 'simule') et trace la
 // décision sur la candidature (decision_at, decision_email_statut).
 // Candidature saisie à la main (hors plateforme, sans prestataire) : aucun
-// e-mail possible — la décision est tracée quand même.
+// e-mail possible - la décision est tracée quand même.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -79,7 +79,7 @@ Deno.serve(async (req: Request) => {
   const from = Deno.env.get("RESEND_FROM") ?? "Strat Eco <onboarding@resend.dev>";
   const appUrl = Deno.env.get("APP_URL") ?? "http://localhost:5173";
 
-  const coproNom = cs?.coproprietes?.name ?? cs?.copro_externe_nom ?? "—";
+  const coproNom = cs?.coproprietes?.name ?? cs?.copro_externe_nom ?? "-";
   const typeLabel = TYPE_LABELS[cs?.type ?? ""] ?? cs?.type ?? "";
   const lienEspace = `${appUrl}/prestataire/candidatures`;
   const estMoe = cs?.type === "moe";
@@ -95,7 +95,7 @@ Deno.serve(async (req: Request) => {
           <p>Bonne nouvelle : votre candidature <strong>${typeLabel}</strong> pour la copropriété
           <strong>${coproNom}</strong> a été <strong>retenue</strong> par l'équipe Strat Eco.</p>
           <p>Prochaine étape : connectez-vous à votre espace prestataire et
-          <strong>confirmez votre engagement</strong> sur l'opération${estMoe ? " — le projet apparaîtra alors dans votre section « Mes projets » avec l'accès aux données de l'opération" : ""}.</p>
+          <strong>confirmez votre engagement</strong> sur l'opération${estMoe ? " - le projet apparaîtra alors dans votre section « Mes projets » avec l'accès aux données de l'opération" : ""}.</p>
           <p style="margin:22px 0">
             <a href="${lienEspace}"
                style="background:#355717;color:#fff;padding:12px 22px;border-radius:6px;text-decoration:none;font-weight:bold">
@@ -122,8 +122,8 @@ Deno.serve(async (req: Request) => {
           from,
           to: [presta.email],
           subject: retenue
-            ? `Candidature retenue — ${coproNom}`
-            : `Consultation ${typeLabel} — ${coproNom} : réponse`,
+            ? `Candidature retenue - ${coproNom}`
+            : `Consultation ${typeLabel} - ${coproNom} : réponse`,
           html,
         }),
       });

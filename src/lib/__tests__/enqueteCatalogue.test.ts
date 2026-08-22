@@ -104,7 +104,7 @@ describe("resolveQuestions", () => {
 describe("affichage", () => {
   it("describeType résume type et options", () => {
     expect(describeType({ type: "nombre" })).toBe("Nombre");
-    expect(describeType({ type: "choix", options: ["Oui", "Non"] })).toBe("Choix unique — Oui · Non");
+    expect(describeType({ type: "choix", options: ["Oui", "Non"] })).toBe("Choix unique - Oui · Non");
   });
 
   it("condTexts rend les conditions lisibles", () => {

@@ -1,4 +1,4 @@
-// Portefeuille du syndic — un « système » par gestionnaire : une bulle grise au
+// Portefeuille du syndic - un « système » par gestionnaire : une bulle grise au
 // centre (ses initiales, le total de logements et le montant d'opération dont il
 // a la charge), autour de laquelle gravitent ses copropriétés. La couleur d'un
 // satellite donne la phase du dossier.
@@ -94,7 +94,7 @@ function construireSystemes(copros: SyndicCopro[]): Systeme[] {
       return {
         key,
         nom: g.nom,
-        initiales: g.nom === "Non attribué" ? "—" : initiales(g.nom),
+        initiales: g.nom === "Non attribué" ? "-" : initiales(g.nom),
         copros: n,
         logements: tailles.reduce((s, t) => s + t.logements, 0),
         montant: g.copros.reduce((s, c) => s + (c.stats?.montant_ttc ?? 0), 0),
@@ -217,7 +217,7 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
               <div
                 className="bubble orbite-gest"
                 style={{ width: R_GESTIONNAIRE * 2, height: R_GESTIONNAIRE * 2 }}
-                title={`${s.nom} — ${s.copros} copropriété${s.copros > 1 ? "s" : ""}`}
+                title={`${s.nom} - ${s.copros} copropriété${s.copros > 1 ? "s" : ""}`}
               >
                 <span className="b-init">{s.initiales}</span>
                 <span className="b-sub">{s.logements} logements</span>
@@ -245,7 +245,7 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
         </div>
       </div>
       <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12 }}>
-        Chaque bulle grise est un gestionnaire, entouré des copropriétés dont il a la charge — la couleur d'un satellite
+        Chaque bulle grise est un gestionnaire, entouré des copropriétés dont il a la charge - la couleur d'un satellite
         donne sa phase. Cliquez une copropriété pour ouvrir le dossier. Le montant est celui du scénario partagé, tant
         qu'il y en a un.
       </p>

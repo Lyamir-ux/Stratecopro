@@ -1,4 +1,4 @@
-// Étape 7 — Validation & plans de financement individuels (table réelle par copropriétaire).
+// Étape 7 - Validation & plans de financement individuels (table réelle par copropriétaire).
 import { useMemo } from "react";
 import { Icon } from "@/components/Icon";
 import { fmtEuro } from "@/lib/format";
@@ -30,7 +30,7 @@ export function buildOwners(
     if (!o) {
       o = {
         id: lot.coproprietaire_id,
-        nom: lot.coproprietaire?.nom ?? "—",
+        nom: lot.coproprietaire?.nom ?? "-",
         profil: profils?.get(lot.coproprietaire_id) ?? null,
         lots: [],
       };
@@ -90,7 +90,7 @@ export function Step7({ s, d, c, bareme, donnees, profils, validated, validating
         <div className="import-note" style={{ marginBottom: 16 }}>
           <Icon name="alert" size={16} />
           <span>
-            {built.nonAttribues.toLocaleString("fr-FR")} ‰ portés par des lots sans copropriétaire — non répartis dans
+            {built.nonAttribues.toLocaleString("fr-FR")} ‰ portés par des lots sans copropriétaire - non répartis dans
             les plans.
           </span>
         </div>

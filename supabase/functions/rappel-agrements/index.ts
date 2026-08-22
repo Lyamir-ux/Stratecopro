@@ -1,9 +1,9 @@
-// Edge function « rappel-agrements » — rappelle par e-mail aux prestataires
+// Edge function « rappel-agrements » - rappelle par e-mail aux prestataires
 // que l'un de leurs documents de certification (agrément RGE, assurance…)
 // expire bientôt (sous 30 jours) ou est déjà expiré. Un seul rappel par
 // document (rappel_envoye_at) ; la mise à jour de la date de fin de validité
 // dans « Mon entreprise » réarme le rappel.
-// Déclenchée depuis l'app AMO (une fois par jour au premier chargement) —
+// Déclenchée depuis l'app AMO (une fois par jour au premier chargement) -
 // idempotente : sans document à rappeler, elle ne fait rien.
 // Envoi réel via Resend si RESEND_API_KEY est configuré, sinon 'simule'
 // (dans ce cas rien n'est marqué, pour ne pas consommer les rappels).
@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
     const lignes = liste
       .map((d) => {
         const expire = d.expire_le < aujourdHui;
-        return `<li><strong>${d.name}</strong> — ${expire ? "expiré depuis le" : "expire le"} ${fmtDate(d.expire_le)}</li>`;
+        return `<li><strong>${d.name}</strong> - ${expire ? "expiré depuis le" : "expire le"} ${fmtDate(d.expire_le)}</li>`;
       })
       .join("");
     const html = `
@@ -101,7 +101,7 @@ Deno.serve(async (req: Request) => {
         arrivent en fin de validité :</p>
         <ul>${lignes}</ul>
         <p>Merci de déposer le document renouvelé (et sa nouvelle date de fin de validité)
-        dans votre espace prestataire — cela conditionne votre référencement sur nos consultations.</p>
+        dans votre espace prestataire - cela conditionne votre référencement sur nos consultations.</p>
         <p style="margin:22px 0">
           <a href="${lien}"
              style="background:#355717;color:#fff;padding:12px 22px;border-radius:6px;text-decoration:none;font-weight:bold">
@@ -118,7 +118,7 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({
           from,
           to,
-          subject: `Documents à renouveler — ${presta.raison_sociale}`,
+          subject: `Documents à renouveler - ${presta.raison_sociale}`,
           html,
         }),
       });

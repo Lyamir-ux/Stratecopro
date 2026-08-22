@@ -49,7 +49,7 @@ export function FeedbackWidget() {
         <div className="fb-panel" role="dialog" aria-label="Feedback version test">
           <div className="fb-head">
             <Icon name="megaphone" size={16} />
-            <span>Feedback — version test</span>
+            <span>Feedback - version test</span>
             <span style={{ flex: 1 }}></span>
             <button className="icon-btn" style={{ width: 30, height: 30 }} onClick={() => setOpen(false)} title="Fermer">
               <Icon name="x" size={15} />
@@ -86,7 +86,7 @@ export function FeedbackWidget() {
                 autoFocus
               />
               {envoyer.isError && (
-                <p className="fb-error">Échec de l'envoi — réessayez ({(envoyer.error as Error).message}).</p>
+                <p className="fb-error">Échec de l'envoi - réessayez ({(envoyer.error as Error).message}).</p>
               )}
               <button
                 className="se-btn se-btn-primary btn-sm"

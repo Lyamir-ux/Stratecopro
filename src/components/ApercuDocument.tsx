@@ -45,7 +45,7 @@ export function ApercuDocument({
       >
         {!affichable ? (
           <p className="se-small" style={{ color: "var(--fg-muted)", padding: 20, margin: 0 }}>
-            Ce format ne s'affiche pas dans le navigateur — téléchargez le document pour l'ouvrir dans votre logiciel.
+            Ce format ne s'affiche pas dans le navigateur - téléchargez le document pour l'ouvrir dans votre logiciel.
           </p>
         ) : erreur ? (
           <p className="se-small" style={{ color: "var(--color-error-700)", padding: 20, margin: 0 }}>

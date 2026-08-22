@@ -1,4 +1,4 @@
-// Gabarit de tâches AMO — porté de makeTasks (design-reference/project/data.js).
+// Gabarit de tâches AMO - porté de makeTasks (design-reference/project/data.js).
 // À la création d'un dossier, on génère le plan de tâches complet ; les statuts
 // initiaux dépendent de la phase de départ du dossier.
 import type { PhaseId } from "./referentiels";
@@ -33,10 +33,10 @@ export function buildTaskTemplate(phase: PhaseId): TemplateTask[] {
     { phase: "diagnostic", title: "Saisie des tantièmes par bâtiment", status: st("diagnostic", "todo") },
     { phase: "diagnostic", title: "Consultations diverses", status: st("diagnostic", "todo") },
     { phase: "diagnostic", title: "Vérif. audit énergétique", status: st("diagnostic", "todo"), tag: "Audit réglementaire" },
-    { phase: "diagnostic", title: "Enquête sociale — profils MaPrimeRénov' · Fiche État", status: st("diagnostic", "todo"), tag: "MPR", jalon: "P1b" },
+    { phase: "diagnostic", title: "Enquête sociale - profils MaPrimeRénov' · Fiche État", status: st("diagnostic", "todo"), tag: "MPR", jalon: "P1b" },
     { phase: "etudes", title: "Scénarios de travaux & chiffrage", status: st("etudes", "doing") },
     { phase: "etudes", title: "Ingénierie financière (7 étapes)", status: st("etudes", "doing"), tag: "Finance" },
-    { phase: "etudes", title: "Récupération des données essentielles — CEE / MPR Copro", status: st("etudes", "todo"), tag: "CEE" },
+    { phase: "etudes", title: "Récupération des données essentielles - CEE / MPR Copro", status: st("etudes", "todo"), tag: "CEE" },
     { phase: "etudes", title: "Récupération des données des entreprises", status: st("etudes", "todo") },
     { phase: "etudes", title: "Plans de financement généraux et individuels", status: st("etudes", "todo") },
     { phase: "etudes", title: "Liasse documentaire pour AG", status: st("etudes", "todo"), jalon: "P1c" },

@@ -1,4 +1,4 @@
-// Export PDF du plan de financement individuel — document indicatif remis au
+// Export PDF du plan de financement individuel - document indicatif remis au
 // copropriétaire (téléchargeable depuis « Mes quotes-parts » ; l'AMO peut le
 // générer pour n'importe quel copropriétaire via l'aperçu du portail).
 // Généré de zéro avec pdf-lib (pas de gabarit), charte Strat Eco.
@@ -42,7 +42,7 @@ const txt = (s: string): string =>
     .replace(/[   ]/g, " ")
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
-    .replace(/[—–]/g, "-")
+    .replace(/[-–]/g, "-")
     .replace(/→/g, "->")
     .replace(/[^\x20-\xFF€]/g, "?");
 
@@ -82,7 +82,7 @@ class Flux {
       thickness: 0.5,
       color: GRIS_CLAIR,
     });
-    this.page.drawText(txt(`Document indicatif généré le ${this.genereLe} — Strat Eco`), {
+    this.page.drawText(txt(`Document indicatif généré le ${this.genereLe} - Strat Eco`), {
       x: MARGE,
       y: 28,
       size: 8,
@@ -248,7 +248,7 @@ export async function genererPlanIndividuelPdf(input: PlanIndividuelPdfInput): P
     font: bold,
     color: rgb(1, 1, 1),
   });
-  const sousTitre = txt(`${copro.name} — scénario « ${scenarioName} »`);
+  const sousTitre = txt(`${copro.name} - scénario « ${scenarioName} »`);
   f.page.drawText(sousTitre, { x: MARGE, y: A4.h - 77, size: 9.5, font, color: rgb(1, 1, 1) });
   f.y = A4.h - bandeauH - 10;
 
@@ -257,12 +257,12 @@ export async function genererPlanIndividuelPdf(input: PlanIndividuelPdfInput): P
   f.ligne("Copropriétaire", membership.nom, { bold: true });
   f.ligne(
     "Copropriété",
-    `${copro.name}${copro.city ? " — " + [copro.code_postal, copro.city].filter(Boolean).join(" ") : ""}`
+    `${copro.name}${copro.city ? " - " + [copro.code_postal, copro.city].filter(Boolean).join(" ") : ""}`
   );
   const prefixeBat = libellesBatiments(copro.denomination_batiments).court.toLowerCase();
   for (const lot of membership.lots) {
     f.ligne(
-      `Lot n°${lot.num}${lot.batiment ? ` (${prefixeBat} ` + lot.batiment + ")" : ""} — ${(USAGE_LOT_LABEL[lot.usage] ?? lot.usage).toLowerCase()}`,
+      `Lot n°${lot.num}${lot.batiment ? ` (${prefixeBat} ` + lot.batiment + ")" : ""} - ${(USAGE_LOT_LABEL[lot.usage] ?? lot.usage).toLowerCase()}`,
       `${(lot.tantiemes[cle] ?? lot.tantiemes.MUN ?? 0).toLocaleString("fr-FR")} tantièmes (clé ${cle})`,
       { indent: 10 }
     );
@@ -309,7 +309,7 @@ export async function genererPlanIndividuelPdf(input: PlanIndividuelPdfInput): P
     carre(apres, MARGE + 54);
     f.y -= 34;
     f.paragraphe(
-      "Il s'agit de l'étiquette visée pour l'ensemble du bâtiment après travaux (DPE collectif de la copropriété) — et non de l'étiquette individuelle de votre logement, qui peut différer selon son étage, son exposition ou ses équipements.",
+      "Il s'agit de l'étiquette visée pour l'ensemble du bâtiment après travaux (DPE collectif de la copropriété) - et non de l'étiquette individuelle de votre logement, qui peut différer selon son étage, son exposition ou ses équipements.",
       { size: 9, color: GRIS }
     );
   }
@@ -336,7 +336,7 @@ export async function genererPlanIndividuelPdf(input: PlanIndividuelPdfInput): P
   // ----- options de financement -----
   f.titreSection("Financer votre reste à charge");
   f.paragraphe(
-    "Prêt collectif (éco-PTZ souscrit par la copropriété) : vous adhérez pour votre seule quote-part, sans démarche bancaire individuelle. L'adhésion est volontaire — le vote en AG ouvre simplement la possibilité d'y souscrire.",
+    "Prêt collectif (éco-PTZ souscrit par la copropriété) : vous adhérez pour votre seule quote-part, sans démarche bancaire individuelle. L'adhésion est volontaire - le vote en AG ouvre simplement la possibilité d'y souscrire.",
     { size: 9.5 }
   );
   f.y -= 4;

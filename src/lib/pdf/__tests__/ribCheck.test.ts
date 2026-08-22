@@ -31,7 +31,7 @@ describe("isValidBic", () => {
 
 describe("extractIbans", () => {
   it("trouve l'IBAN dans un texte de RIB, même suivi du mot BIC", () => {
-    // cas réel : la regex gourmande avalait « BIC » comme groupe — la clé de
+    // cas réel : la regex gourmande avalait « BIC » comme groupe - la clé de
     // contrôle doit ramener le candidat à l'IBAN exact
     const text = "IBAN : FR76 3000 1007 9412 3456 7890 185 BIC : CEPAFRPP513";
     expect(extractIbans(text)).toEqual([IBAN]);

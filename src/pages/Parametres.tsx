@@ -106,7 +106,7 @@ function BaremeEditor({ row }: { row: Tables<"baremes"> }) {
       {num("Durée maximale", p.ecoPtz.dureeMax, (v) => setP({ ...p, ecoPtz: { ...p.ecoPtz, dureeMax: v } }), "ans")}
 
       <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12 }}>
-        Les seuils de revenu fiscal (profils MPR) se modifient lors du passage au millésime suivant — dupliquez le
+        Les seuils de revenu fiscal (profils MPR) se modifient lors du passage au millésime suivant - dupliquez le
         barème pour préparer l'année à venir.
       </p>
 
@@ -122,7 +122,7 @@ function BaremeEditor({ row }: { row: Tables<"baremes"> }) {
         {save.isPending ? "Enregistrement…" : dirty ? "Enregistrer le barème" : "Enregistré"}
       </button>
       <p className="se-small" style={{ color: "var(--color-warning-700)", marginTop: 10 }}>
-        <Icon name="alert" size={13} /> Les scénarios déjà validés conservent leur snapshot — une modification de
+        <Icon name="alert" size={13} /> Les scénarios déjà validés conservent leur snapshot - une modification de
         barème ne s'applique qu'aux prochains calculs.
       </p>
     </div>
@@ -158,7 +158,7 @@ function FeedbackRow({ fb, coche, onCocher }: { fb: Feedback; coche?: boolean; o
             type="checkbox"
             checked={coche ?? false}
             onChange={onCocher}
-            title="Sélectionner ce retour pour l'export — cases cochées : seuls ces retours sont copiés"
+            title="Sélectionner ce retour pour l'export - cases cochées : seuls ces retours sont copiés"
           />
         )}
         <Badge kind={t.kind}>{t.label}</Badge>
@@ -182,7 +182,7 @@ function FeedbackRow({ fb, coche, onCocher }: { fb: Feedback; coche?: boolean; o
         <button
           className="icon-btn"
           style={{ width: 30, height: 30 }}
-          title={traite ? "Repasser en « nouveau »" : "Marquer comme traité — l'auteur reçoit un mail de compte rendu"}
+          title={traite ? "Repasser en « nouveau »" : "Marquer comme traité - l'auteur reçoit un mail de compte rendu"}
           onClick={() => void maj.mutateAsync({ id: fb.id, statut: traite ? "nouveau" : "traite" })}
         >
           <Icon name={traite ? "clock" : "check"} size={15} />
@@ -226,7 +226,7 @@ function FeedbackRow({ fb, coche, onCocher }: { fb: Feedback; coche?: boolean; o
         <p style={{ margin: "7px 0 0", fontSize: 13.5, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{fb.message}</p>
       )}
       <p style={{ margin: "5px 0 0", fontSize: 12, color: "var(--fg-muted)" }}>
-        Page : {fb.page || "—"}
+        Page : {fb.page || "-"}
         {traite && fb.traite_email_statut && (
           <span style={{ marginLeft: 10 }}>
             <Icon name="mail" size={12} /> {FB_MAIL_LABEL[fb.traite_email_statut] ?? fb.traite_email_statut}
@@ -254,15 +254,15 @@ function feedbacksToMarkdown(list: Feedback[]): string {
     const type = FB_TYPE_BADGE[fb.type]?.label ?? fb.type;
     const date = new Date(fb.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
     return [
-      `## ${type} — ${fb.auteur_nom || "Anonyme"} (${FB_ROLE_LABEL[fb.auteur_role] ?? fb.auteur_role}) · ${date}`,
+      `## ${type} - ${fb.auteur_nom || "Anonyme"} (${FB_ROLE_LABEL[fb.auteur_role] ?? fb.auteur_role}) · ${date}`,
       "",
       fb.message.trim(),
       "",
-      `Page : \`${fb.page || "—"}\``,
+      `Page : \`${fb.page || "-"}\``,
     ].join("\n");
   });
   return [
-    `# Feedbacks à traiter — export du ${new Date().toLocaleDateString("fr-FR")} (${list.length})`,
+    `# Feedbacks à traiter - export du ${new Date().toLocaleDateString("fr-FR")} (${list.length})`,
     "",
     blocs.join("\n\n---\n\n"),
     "",
@@ -331,7 +331,7 @@ function FeedbackPanel() {
             title={
               coches.length
                 ? "Copier uniquement les retours cochés au format Markdown, prêts à coller dans Claude"
-                : "Copier tous les feedbacks à traiter au format Markdown — cochez des retours pour n'exporter qu'une sélection"
+                : "Copier tous les feedbacks à traiter au format Markdown - cochez des retours pour n'exporter qu'une sélection"
             }
             onClick={() => void exporterMd()}
           >
@@ -365,8 +365,8 @@ function FeedbackPanel() {
         {visibles.length === 0 ? (
           <p className="se-small" style={{ color: "var(--fg-muted)" }}>
             {vue === "archives"
-              ? "Aucun retour traité pour l'instant — les retours marqués comme traités s'archivent ici."
-              : "Aucun retour pour l'instant — les remarques envoyées via le bouton « Feedback » (en bas à droite de chaque page, tous espaces confondus) s'afficheront ici."}
+              ? "Aucun retour traité pour l'instant - les retours marqués comme traités s'archivent ici."
+              : "Aucun retour pour l'instant - les remarques envoyées via le bouton « Feedback » (en bas à droite de chaque page, tous espaces confondus) s'afficheront ici."}
           </p>
         ) : (
           visibles.map((fb) => (
@@ -490,7 +490,7 @@ export default function Parametres() {
               </div>
               <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10 }}>
                 Pour effacer les données d'un copropriétaire (droit à l'effacement), supprimez sa fiche dans l'onglet
-                Données de la copro — ses réponses d'enquête sont supprimées en cascade.
+                Données de la copro - ses réponses d'enquête sont supprimées en cascade.
               </p>
             </div>
           </div>

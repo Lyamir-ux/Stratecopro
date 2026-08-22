@@ -1,4 +1,4 @@
-// Plan de financement définitif — nomenclature « chef de projet » (classeur Excel).
+// Plan de financement définitif - nomenclature « chef de projet » (classeur Excel).
 // Module pur : reproduit chaque formule du classeur de référence (Les Violettes)
 // pour que toute modification saisie dans le logiciel recalcule le plan à l'identique.
 //
@@ -54,7 +54,7 @@ export type MontantMoe =
 
 export interface LigneMoe {
   designation: string;
-  /** Entreprise / prestataire de la mission — repris au suivi financier du syndic. */
+  /** Entreprise / prestataire de la mission - repris au suivi financier du syndic. */
   entreprise?: string;
   phase: PhaseMoe;
   montant: MontantMoe;
@@ -62,7 +62,7 @@ export interface LigneMoe {
   tvaPct: number;
   /** Entre dans l'assiette MaPrimeRénov' « partie études » (45 % au prorata énergétique). */
   eligibleMprEtudes: boolean;
-  /** Prestation AMO — assiette MaPrimeRénov' AMO (50 % du HT). */
+  /** Prestation AMO - assiette MaPrimeRénov' AMO (50 % du HT). */
   eligibleMprAmo: boolean;
   commentaire?: string;
 }
@@ -70,7 +70,7 @@ export interface LigneMoe {
 // ---------- Aides ----------
 
 /**
- * Mode de calcul d'une aide — chaque mode correspond à une formule du classeur :
+ * Mode de calcul d'une aide - chaque mode correspond à une formule du classeur :
  *  - parM2Shab        : CEE coup de pouce (27 €/m² × coef de prudence 0,9)
  *  - pctAssietteTravaux: MPR travaux (45 % de l'assiette retenue × 0,9)
  *  - pctEtudes        : MPR études (45 % du HT des lignes éligibles × 0,9 × prorata énergétique)
@@ -96,7 +96,7 @@ export interface AideDef {
   groupe: string;
   libelle: string;
   calcul: ModeAide;
-  /** false pour la prime CEE (aide privée) — exclue du « Total aides publiques ». */
+  /** false pour la prime CEE (aide privée) - exclue du « Total aides publiques ». */
   publique: boolean;
   commentaire?: string;
 }
@@ -169,7 +169,7 @@ export interface PlanDefinitifData {
   params: ParamsFinancement;
   variantes: VariantesPlan;
   /**
-   * Clé de répartition (code) choisie par item pour les plans individuels —
+   * Clé de répartition (code) choisie par item pour les plans individuels -
    * clés « lot:<numero> » / « moe:<index> » (voir repartitionPf.ts). Inutile
    * quand la copropriété n'a qu'une seule clé (tout est réparti avec elle).
    */
@@ -286,7 +286,7 @@ export interface PlanDefinitifResult {
     coutTantiemeApres: number;
     exemples: ExempleCollectif[];
   };
-  /** Variante sans prêt d'avance de subventions — mêmes montants financés,
+  /** Variante sans prêt d'avance de subventions - mêmes montants financés,
    *  aucun coût d'avance. Absent des instantanés `resultat` antérieurs. */
   collectifSansAvance: {
     resteAFinancer: number;
@@ -449,7 +449,7 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
   };
 
   // Variante prêt collectif sans avance de subventions : mêmes montants
-  // financés, mais les subventions ne sont pas préfinancées — aucun coût
+  // financés, mais les subventions ne sont pas préfinancées - aucun coût
   // d'avance, le prix de revient baisse d'autant
   const collectifSansAvance = {
     resteAFinancer,
@@ -551,7 +551,7 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
 
 // ---------- Valeurs par défaut (nomenclature Strat Eco) ----------
 
-/** Catalogue d'aides par défaut — formules du classeur de référence. */
+/** Catalogue d'aides par défaut - formules du classeur de référence. */
 export function makeAidesDefaut(): AideDef[] {
   return [
     {

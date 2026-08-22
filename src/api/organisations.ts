@@ -1,4 +1,4 @@
-// Organisations (enseignes de gestion) — administration côté AMO.
+// Organisations (enseignes de gestion) - administration côté AMO.
 // Un directeur voit tout le portefeuille de son enseigne, un gestionnaire ses
 // seules copropriétés (rattachement copro_members, géré ailleurs). Les policies
 // organisations_amo_all / org_membres_amo_all autorisent ces écritures.
@@ -74,7 +74,7 @@ export function useMembresOrganisation(orgId: string | undefined) {
         .map((m) => ({
           user_id: m.user_id,
           org_role: m.org_role,
-          full_name: m.profiles?.full_name ?? "—",
+          full_name: m.profiles?.full_name ?? "-",
           initials: m.profiles?.initials ?? "?",
           job_title: m.profiles?.job_title ?? null,
         }))
@@ -84,7 +84,7 @@ export function useMembresOrganisation(orgId: string | undefined) {
 }
 
 /**
- * Comptes syndic encore rattachés à aucune enseigne — un compte n'appartient
+ * Comptes syndic encore rattachés à aucune enseigne - un compte n'appartient
  * qu'à une seule organisation (contrainte d'unicité en base).
  */
 export function useProfilsSyndicLibres() {

@@ -1,4 +1,4 @@
-// Espace copropriétaire (portail) — port de design-reference/project/copro.jsx.
+// Espace copropriétaire (portail) - port de design-reference/project/copro.jsx.
 // Sélection de copro (si plusieurs rattachements), en-tête, navigation, sections.
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -330,7 +330,7 @@ export default function Portail() {
       {isAmo && (
         <div className="syndic-preview-bar">
           <Icon name="eye" size={15} />
-          Aperçu AMO — portail de {membership.nom} · {copro.name}
+          Aperçu AMO - portail de {membership.nom} · {copro.name}
           <span style={{ flex: 1 }}></span>
           <button onClick={() => setCpId(null)}>
             <Icon name="users" size={14} />Changer

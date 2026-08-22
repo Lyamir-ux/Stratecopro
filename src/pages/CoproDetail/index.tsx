@@ -1,4 +1,4 @@
-// Détail d'un dossier copropriété — porté de detail.jsx (CoproDetail).
+// Détail d'un dossier copropriété - porté de detail.jsx (CoproDetail).
 // Hero photo (upload réel vers Storage) + 6 onglets ; l'onglet vit dans l'URL.
 import { useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -77,7 +77,7 @@ export default function CoproDetail() {
               }}
             >
               <Icon name="image" size={18} />
-              Photo — {c.name}
+              Photo - {c.name}
             </div>
           )}
           <div className="dh-overlay"></div>

@@ -51,7 +51,7 @@ export function useCopros() {
 /**
  * Nombre de logements d'un dossier : les lots à usage d'habitation une fois le
  * tableau des lots importé, sinon le nombre déclaré au portefeuille. Les caves,
- * garages et parkings ne comptent pas — un dossier se raisonne en logements.
+ * garages et parkings ne comptent pas - un dossier se raisonne en logements.
  */
 export function nbLogements(c: {
   nb_logements: number | null;
@@ -65,7 +65,7 @@ export interface NewCoproInput {
   city: string;
   code_postal: string;
   adresse: string;
-  /** Nombre de bâtiments déclaré — fait foi même si l'import des lots en référence d'autres. */
+  /** Nombre de bâtiments déclaré - fait foi même si l'import des lots en référence d'autres. */
   nb_batiments: number;
   /** Adresse de chaque bâtiment (utilisé quand nb_batiments > 1). */
   batiment_adresses: string[];
@@ -74,7 +74,7 @@ export interface NewCoproInput {
   gestionnaire_email: string;
   /** Nombre de logements déclaré au portefeuille, avant l'import des lots. */
   nb_logements: number | null;
-  /** Chef de projet AMO en clair — il n'a pas forcément de compte sur le progiciel. */
+  /** Chef de projet AMO en clair - il n'a pas forcément de compte sur le progiciel. */
   chef_projet: string;
   phase: PhaseId;
   energy_before: string | null;
@@ -108,7 +108,7 @@ export function useCreateCopro() {
       const { data: copro, error } = await supabase.from("coproprietes").insert(insert).select().single();
       if (error) throw error;
 
-      // Bâtiments déclarés à la création — ils font foi et ne sont pas supprimés
+      // Bâtiments déclarés à la création - ils font foi et ne sont pas supprimés
       // par le ménage de l'import des lots, même si le fichier en référence d'autres.
       const nbBats = Math.max(1, Math.floor(input.nb_batiments) || 1);
       const { error: eBats } = await supabase.from("batiments").insert(
@@ -224,7 +224,7 @@ export function useUploadPhoto(id: string) {
 
 // ========== Corbeille des projets ==========
 // L'AMO ne supprime jamais un dossier d'un coup : mise à la corbeille
-// (deleted_at) d'abord — le dossier disparaît de tous les espaces (RLS) —
+// (deleted_at) d'abord - le dossier disparaît de tous les espaces (RLS) -
 // puis restauration ou suppression définitive depuis la corbeille.
 
 /** Les dossiers à la corbeille (AMO uniquement), du plus récent au plus ancien. */
@@ -255,7 +255,7 @@ function useCorbeilleMutation(mutationFn: (id: string) => Promise<void>) {
   });
 }
 
-/** Met le dossier à la corbeille — restaurable tant qu'il n'est pas supprimé définitivement. */
+/** Met le dossier à la corbeille - restaurable tant qu'il n'est pas supprimé définitivement. */
 export function useMettreCorbeille() {
   return useCorbeilleMutation(async (id) => {
     const { error } = await supabase
@@ -277,7 +277,7 @@ export function useRestaurerCopro() {
 /**
  * Suppression définitive : la fiche et toutes ses données liées partent en
  * cascade (lots, enquêtes, plans, fichiers en base…). Les objets du Storage
- * restent orphelins — ils ne sont plus référencés nulle part.
+ * restent orphelins - ils ne sont plus référencés nulle part.
  */
 export function useSupprimerDefinitivement() {
   return useCorbeilleMutation(async (id) => {

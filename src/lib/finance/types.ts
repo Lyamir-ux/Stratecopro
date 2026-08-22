@@ -1,4 +1,4 @@
-// Types du moteur financier — module pur, aucune dépendance UI/Supabase.
+// Types du moteur financier - module pur, aucune dépendance UI/Supabase.
 
 export type Profil = "Bleu" | "Jaune" | "Violet" | "Rose";
 
@@ -11,7 +11,7 @@ export interface MprSeuils {
   parPers: [number, number, number];
 }
 
-/** Barème versionné (stocké en base, injecté dans le moteur — jamais de constantes en dur). */
+/** Barème versionné (stocké en base, injecté dans le moteur - jamais de constantes en dur). */
 export interface Bareme {
   millesime: number;
   zone: "hors_idf" | "idf";

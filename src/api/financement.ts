@@ -62,7 +62,7 @@ export function useAdhesions(coproId: string | undefined) {
   });
 }
 
-/** Télécharge un document généré (bulletin signé / mandat) — accès AMO au bucket. */
+/** Télécharge un document généré (bulletin signé / mandat) - accès AMO au bucket. */
 export async function downloadAdhesionDoc(path: string, filename: string) {
   const { data, error } = await supabase.storage.from("pieces-copro").createSignedUrl(path, 300);
   if (error) throw error;

@@ -1,4 +1,4 @@
-// Onglet « Montage bancaire » (syndic) — préparation du dossier de la
+// Onglet « Montage bancaire » (syndic) - préparation du dossier de la
 // copropriété pour la banque et les assureurs, montage par montage. Chaque
 // montage disponible (éco-PTZ collectif CEGEE, dommages-ouvrage ROEDERER) est
 // un parcours en étapes décrit dans le registre PARCOURS. Chaque étape liste
@@ -139,7 +139,7 @@ function MontageParcours({
   };
   const onDrop = (docKey: string, file: File) => {
     if (!extensionOk(file.name)) {
-      setDropError(`« ${file.name} » n'est pas accepté — formats attendus : PDF, image, Word ou Excel.`);
+      setDropError(`« ${file.name} » n'est pas accepté - formats attendus : PDF, image, Word ou Excel.`);
       return;
     }
     setDropError(null);

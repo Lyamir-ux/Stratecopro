@@ -1,4 +1,4 @@
-// Pad de signature — deux modes : tracé (souris / doigt / stylet) ou
+// Pad de signature - deux modes : tracé (souris / doigt / stylet) ou
 // signature simple saisie au clavier (nom-prénom rendu en écriture manuscrite).
 // Dans les deux cas, restitue un PNG transparent via onChange.
 import { useEffect, useRef, useState } from "react";
@@ -84,7 +84,7 @@ export function SignaturePad({
     try {
       canvasRef.current?.setPointerCapture(e.pointerId);
     } catch {
-      // capture indisponible (navigateur ancien / événement synthétique) — le tracé fonctionne sans
+      // capture indisponible (navigateur ancien / événement synthétique) - le tracé fonctionne sans
     }
     drawing.current = true;
     const ctx = canvasRef.current!.getContext("2d")!;
@@ -196,7 +196,7 @@ export function SignaturePad({
               </span>
             ) : (
               <span className="se-small" style={{ color: "var(--fg-muted)" }}>
-                Saisissez votre nom et prénom — il sera apposé comme signature.
+                Saisissez votre nom et prénom - il sera apposé comme signature.
               </span>
             )}
           </div>

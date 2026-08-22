@@ -1,7 +1,7 @@
-// Onglet Fichiers (syndic) — base documentaire du dossier : ce que l'AMO et la
+// Onglet Fichiers (syndic) - base documentaire du dossier : ce que l'AMO et la
 // maîtrise d'œuvre y ont déposé ET ce que le syndic a lui-même fourni depuis
 // « Documents à produire ». Présentation alignée sur le portail AMO : cartes de
-// dossiers (avec bulles d'aide), clic pour lister les pièces. Lecture seule —
+// dossiers (avec bulles d'aide), clic pour lister les pièces. Lecture seule -
 // aperçu sans téléchargement, ou téléchargement.
 import { useState } from "react";
 import { ApercuDocument } from "@/components/ApercuDocument";

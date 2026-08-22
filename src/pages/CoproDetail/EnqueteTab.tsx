@@ -1,7 +1,7 @@
 // Onglet Enquête sociale & technique (AMO).
 // Le questionnaire est configuré depuis le catalogue (src/lib/enqueteCatalogue.ts) :
 // l'AMO active/désactive chaque question ; les questions socle (identité, usage des
-// lots) sont verrouillées. Les conditions d'affichage sont montrées à titre informatif —
+// lots) sont verrouillées. Les conditions d'affichage sont montrées à titre informatif -
 // elles s'appliquent côté portail copropriétaire au moment de la saisie.
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
@@ -23,7 +23,7 @@ import {
 } from "@/lib/enqueteCatalogue";
 import type { CoproWithStats } from "@/api/copros";
 
-// Libellés grand public (plafonds Anah) — les couleurs MPR restent un simple repère visuel.
+// Libellés grand public (plafonds Anah) - les couleurs MPR restent un simple repère visuel.
 const PROFIL_META: { p: Profil; label: string; color: string }[] = [
   { p: "Bleu", label: "Très modeste", color: "#2E6FA8" },
   { p: "Jaune", label: "Modeste", color: "#f2a30d" },
@@ -72,17 +72,17 @@ function ReponseRow({
     <tr style={{ cursor: "default" }}>
       <td style={{ fontWeight: 600 }}>{nom}</td>
       <td>
-        <input className="edit-inp sm" type="number" min="1" value={nb} placeholder="—" onChange={(e) => setNb(e.target.value)} style={{ width: 64 }} />
+        <input className="edit-inp sm" type="number" min="1" value={nb} placeholder="-" onChange={(e) => setNb(e.target.value)} style={{ width: 64 }} />
       </td>
       <td>
         <select className="edit-inp" value={statut} onChange={(e) => setStatut(e.target.value)}>
-          <option value="">—</option>
+          <option value="">-</option>
           <option value="occupant">Occupant</option>
           <option value="bailleur">Bailleur</option>
         </select>
       </td>
       <td>
-        <input className="edit-inp sm" type="number" min="0" value={rfr} placeholder="—" onChange={(e) => setRfr(e.target.value)} style={{ width: 100 }} />
+        <input className="edit-inp sm" type="number" min="0" value={rfr} placeholder="-" onChange={(e) => setRfr(e.target.value)} style={{ width: 100 }} />
       </td>
       <td>
         {meta ? (
@@ -91,7 +91,7 @@ function ReponseRow({
             {meta.label}
           </span>
         ) : (
-          <span style={{ color: "var(--fg-muted)" }}>—</span>
+          <span style={{ color: "var(--fg-muted)" }}>-</span>
         )}
       </td>
       <td>
@@ -156,7 +156,7 @@ function ConfigRow({
           </button>
         )}
         {q.locked ? (
-          <span className="q-switch on locked" title="Question socle — toujours posée">
+          <span className="q-switch on locked" title="Question socle - toujours posée">
             <Icon name="lock" size={11} className="lock-ico" />
             <span className="knob"></span>
           </span>
@@ -336,7 +336,7 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
           <div className="p-body">
             {repondants === 0 ? (
               <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
-                Aucune réponse pour l'instant — saisissez les réponses ci-dessous ou lancez la campagne.
+                Aucune réponse pour l'instant - saisissez les réponses ci-dessous ou lancez la campagne.
               </p>
             ) : (
               profilCounts.map((m) => {

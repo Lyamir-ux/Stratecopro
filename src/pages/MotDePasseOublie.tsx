@@ -1,4 +1,4 @@
-// Mot de passe oublié — envoie le lien de réinitialisation Supabase.
+// Mot de passe oublié - envoie le lien de réinitialisation Supabase.
 // Le lien renvoie vers /reinitialisation (URL à autoriser dans Supabase
 // Auth → URL Configuration → Redirect URLs).
 import { useState, type FormEvent } from "react";
@@ -28,7 +28,7 @@ export default function MotDePasseOublie() {
         );
       } else if (code === "over_request_rate_limit" || status === 429) {
         setError(
-          "Un lien vient déjà d'être envoyé à cette adresse. Patientez une minute avant d'en redemander un — et pensez à vérifier vos courriers indésirables.",
+          "Un lien vient déjà d'être envoyé à cette adresse. Patientez une minute avant d'en redemander un - et pensez à vérifier vos courriers indésirables.",
         );
       } else if (code === "over_email_send_rate_limit") {
         setError("Trop de demandes d'envoi pour le moment. Réessayez dans une heure.");

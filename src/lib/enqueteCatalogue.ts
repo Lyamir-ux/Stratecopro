@@ -1,6 +1,6 @@
 // Catalogue des questions d'enquête (sociale + technique) proposées à l'AMO.
 // Le catalogue est la source de vérité : la base ne stocke que la configuration
-// ({ id, on } par question + questions personnalisées) — les libellés, options
+// ({ id, on } par question + questions personnalisées) - les libellés, options
 // et conditions d'affichage vivent ici et peuvent évoluer sans migration.
 
 export type SectionId = "identite" | "situation" | "avis" | "lot" | "technique" | "confort";
@@ -47,7 +47,7 @@ export interface CatalogueQuestion {
 }
 
 export const SECTIONS: { id: SectionId; label: string; desc: string; scope: Scope }[] = [
-  { id: "identite", label: "Identité & coordonnées", desc: "Questions posées à chaque copropriétaire — socle du recensement.", scope: "coproprietaire" },
+  { id: "identite", label: "Identité & coordonnées", desc: "Questions posées à chaque copropriétaire - socle du recensement.", scope: "coproprietaire" },
   { id: "situation", label: "Situation & aides", desc: "Profil MaPrimeRénov', situation juridique et sociale.", scope: "coproprietaire" },
   { id: "avis", label: "Avis sur la copropriété", desc: "Perception des travaux et des parties communes.", scope: "coproprietaire" },
   { id: "lot", label: "Les lots", desc: "Questions posées pour chacun des lots du copropriétaire.", scope: "lot" },
@@ -92,7 +92,7 @@ export const CATALOGUE: CatalogueQuestion[] = [
   {
     id: "rfr-foyer", section: "situation", tag: "Revenu fiscal de référence du ménage", q: "Quel est le revenu fiscal de référence de votre ménage ?", type: "montant",
     cond: [{ qid: "type-coproprietaire", vals: ["Personne physique", "Indivision"], defaut: true }],
-    aide: "Ligne « Revenu fiscal de référence » de l'avis d'imposition (total du ménage si plusieurs avis). Donnée confidentielle, visible uniquement par l'AMO — elle détermine automatiquement votre catégorie d'aides (plafonds Anah).",
+    aide: "Ligne « Revenu fiscal de référence » de l'avis d'imposition (total du ménage si plusieurs avis). Donnée confidentielle, visible uniquement par l'AMO - elle détermine automatiquement votre catégorie d'aides (plafonds Anah).",
     locked: true, defaultOn: true,
   },
   {
@@ -179,7 +179,7 @@ export const CATALOGUE: CatalogueQuestion[] = [
   {
     id: "pathologies", section: "technique", tag: "Pathologies à signaler", q: "Avez-vous des pathologies à signaler ?", type: "multi",
     options: ["Humidité / condensation", "Moisissures", "Infiltrations d'eau", "Fissures", "Peintures écaillées / salpêtre", "Nuisibles (rongeurs, insectes…)", "Autre (précisez)", "Aucune pathologie"], precision: ["Autre (précisez)"],
-    aide: "Désordres constatés dans le logement — utiles pour orienter la visite technique.",
+    aide: "Désordres constatés dans le logement - utiles pour orienter la visite technique.",
     cond: [HAB_COM], defaultOn: true,
   },
 
@@ -187,7 +187,7 @@ export const CATALOGUE: CatalogueQuestion[] = [
   {
     id: "inconforts", section: "confort", tag: "Inconforts", q: "Ressentez-vous un inconfort particulier ?", type: "multi",
     options: ["Froid en hiver", "Chaleur excessive en été", "Courants d'air", "Parois ou sols froids", "Humidité", "Bruits (voisinage, extérieur)", "Odeurs / qualité de l'air", "Aucun inconfort particulier"],
-    aide: "Plusieurs réponses possibles — ces ressentis alimentent le diagnostic.",
+    aide: "Plusieurs réponses possibles - ces ressentis alimentent le diagnostic.",
     cond: [HAB_COM], defaultOn: true,
   },
   {
@@ -199,13 +199,13 @@ export const CATALOGUE: CatalogueQuestion[] = [
   {
     id: "tranches-age", section: "confort", tag: "Tranche d'âge des occupants", q: "Quelle est la tranche d'âge des personnes vivant dans le logement ?", type: "multi",
     options: ["Moins de 18 ans", "18 à 30 ans", "31 à 45 ans", "46 à 60 ans", "61 à 75 ans", "Plus de 75 ans"],
-    aide: "Plusieurs réponses possibles — utile pour identifier les publics sensibles (enfants, personnes âgées).",
+    aide: "Plusieurs réponses possibles - utile pour identifier les publics sensibles (enfants, personnes âgées).",
     cond: [HAB], defaultOn: false,
   },
   {
     id: "csp", section: "confort", tag: "CSP des personnes occupantes", q: "Quelle est la catégorie socio-professionnelle principale des personnes occupantes ?", type: "choix",
     options: ["Agriculteur", "Artisan, commerçant, chef d'entreprise", "Cadre, profession intellectuelle supérieure", "Profession intermédiaire", "Employé", "Ouvrier", "Retraité", "Étudiant", "Sans activité professionnelle"],
-    aide: "Nomenclature INSEE simplifiée — donnée statistique pour le volet social.",
+    aide: "Nomenclature INSEE simplifiée - donnée statistique pour le volet social.",
     cond: [HAB], defaultOn: false,
   },
   {
@@ -316,7 +316,7 @@ export const TYPE_LABELS: Record<QuestionType, string> = {
 export function describeType(q: Pick<CatalogueQuestion, "type" | "options">): string {
   const label = TYPE_LABELS[q.type];
   if (!q.options?.length) return label;
-  return `${label} — ${q.options.join(" · ")}`;
+  return `${label} - ${q.options.join(" · ")}`;
 }
 
 /** Textes des conditions d'affichage ("Usage du lot = Habitation ou Commerce"). */

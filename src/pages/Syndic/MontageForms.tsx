@@ -18,7 +18,7 @@ import {
 } from "@/api/montage";
 import type { SyndicCopro } from "@/api/syndic";
 
-// Coordonnées de l'opérateur — constantes Strat Eco (section AMO des fiches CEGEE)
+// Coordonnées de l'opérateur - constantes Strat Eco (section AMO des fiches CEGEE)
 const AMO = {
   nom: "STRAT ECO",
   adresse: "27 rue du Vieux Marché aux Vins",
@@ -118,7 +118,7 @@ const FICHE_SECTIONS: SectionDef[] = [
         label: "Durée souhaitée (ans)",
         type: "select",
         options: DUREES_ECOPTZ,
-        hint: "5, 7, 10, 12, 15 ans — ou 20 ans pour une rénovation énergétique globale",
+        hint: "5, 7, 10, 12, 15 ans - ou 20 ans pour une rénovation énergétique globale",
         visibleSi: (v) => v.pret_ecoptz === "OUI",
       },
       {
@@ -195,7 +195,7 @@ const PRET_SECTIONS: SectionDef[] = [
   },
   {
     titre: "Personne habilitée à signer le contrat de prêt",
-    note: "Pour une personne autre que le représentant légal du syndic, joindre une délégation de pouvoirs et une pièce d'identité (étape 2 — ouverture du compte travaux).",
+    note: "Pour une personne autre que le représentant légal du syndic, joindre une délégation de pouvoirs et une pièce d'identité (étape 2 - ouverture du compte travaux).",
     champs: [
       { key: "signataire_nom_fonction", label: "Nom, prénom et fonction", span2: true },
       { key: "signataire_mobile", label: "Téléphone mobile", hint: "Obligatoire en cas de signature électronique du contrat" },
@@ -209,15 +209,15 @@ const PRET_SECTIONS: SectionDef[] = [
       { key: "pro_date_creation", label: "Date de création du syndic", type: "date" },
       { key: "pro_carte_numero", label: "N° de carte professionnelle" },
       { key: "pro_carte_expiration", label: "Date d'expiration de la carte professionnelle", type: "date" },
-      { key: "pro_garantie_organisme", label: "Garantie financière — organisme émetteur" },
+      { key: "pro_garantie_organisme", label: "Garantie financière - organisme émetteur" },
       { key: "pro_garantie_numero", label: "Numéro de la garantie" },
       { key: "pro_garantie_montant", label: "Montant de la garantie financière (€)", type: "number" },
-      { key: "pro_rc", label: "Assurance RC professionnelle — n° et compagnie" },
+      { key: "pro_rc", label: "Assurance RC professionnelle - n° et compagnie" },
     ],
   },
   {
     titre: "Plan de financement",
-    note: "Pré-rempli depuis le plan de financement du projet — vérifié et finalisé par Strat Eco.",
+    note: "Pré-rempli depuis le plan de financement du projet - vérifié et finalisé par Strat Eco.",
     champs: [
       { key: "pf_cout_total", label: "Coût total de l'opération (A) (€)", type: "number" },
       { key: "pf_subventions_total", label: "Montant total des subventions (B) (€)", type: "number", hint: "Collectives et individuelles" },
@@ -279,7 +279,7 @@ function usePrefill(c: SyndicCopro, type: FormulaireType): Record<string, string
       trav_nature: "Rénovation énergétique globale",
       trav_cout_total: n(res?.coutTotal),
       amo_nom: AMO.nom,
-      amo_contact: `${AMO.interlocuteur} — ${AMO.tel} — ${AMO.email}`,
+      amo_contact: `${AMO.interlocuteur} - ${AMO.tel} - ${AMO.email}`,
       syndic_nom: c.syndic_name ?? "",
       pf_cout_total: n(res?.coutTotal),
       pf_subventions_total: res ? n(res.aidesColl + res.aidesIndiv) : "",
@@ -296,11 +296,11 @@ function usePrefill(c: SyndicCopro, type: FormulaireType): Record<string, string
 const FORM_META: Record<FormulaireType, { titre: string; sous: string; sections: SectionDef[] }> = {
   fiche_avant_ag: {
     titre: "Fiche de renseignements avant AG",
-    sous: "À compléter avant la convocation à l'assemblée générale — la banque prépare les résolutions d'emprunt et le projet de contrat à partir de ces informations.",
+    sous: "À compléter avant la convocation à l'assemblée générale - la banque prépare les résolutions d'emprunt et le projet de contrat à partir de ces informations.",
     sections: FICHE_SECTIONS,
   },
   demande_pret: {
-    titre: "Demande de prêt CEGEE — onglet 1",
+    titre: "Demande de prêt CEGEE - onglet 1",
     sous: "Vos réponses permettent à Strat Eco de pré-remplir le classeur Excel « COPRO CEGEE Demande de prêt » que vous n'aurez plus qu'à tamponner et signer.",
     sections: PRET_SECTIONS,
   },
@@ -359,7 +359,7 @@ export function FormulaireMontage({
         </div>
         <div className="p-body">
           <p className="se-small" style={{ marginTop: 0, color: "var(--fg-muted)" }}>
-            {meta.sous} Les champs déjà connus du projet sont pré-remplis — vérifiez-les et complétez le
+            {meta.sous} Les champs déjà connus du projet sont pré-remplis - vérifiez-les et complétez le
             reste.
           </p>
 
@@ -378,7 +378,7 @@ export function FormulaireMontage({
                     <div key={ch.key} className="fld" style={ch.span2 ? { gridColumn: "1 / -1" } : undefined}>
                       <label>
                         {ch.label}
-                        {ch.hint && <span className="hint"> — {ch.hint}</span>}
+                        {ch.hint && <span className="hint"> - {ch.hint}</span>}
                       </label>
                       {ch.type === "ouinon" || ch.type === "select" ? (
                         <select
@@ -388,7 +388,7 @@ export function FormulaireMontage({
                         >
                           {(ch.type === "ouinon" ? OUINON : ch.options ?? []).map((o) => (
                             <option key={o} value={o}>
-                              {o === "" ? "—" : o}
+                              {o === "" ? "-" : o}
                             </option>
                           ))}
                         </select>

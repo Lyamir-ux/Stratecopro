@@ -1,6 +1,6 @@
 // Coordonnées de remplissage des gabarits PDF (public/modeles/).
 // Origine en bas à gauche (convention PDF). Calibrées sur les gabarits CEGEE
-// via extraction pdfjs — ajuster ici si la banque change de mise en page.
+// via extraction pdfjs - ajuster ici si la banque change de mise en page.
 
 export interface TextSpot {
   x: number;

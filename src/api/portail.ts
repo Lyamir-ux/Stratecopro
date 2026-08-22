@@ -49,13 +49,13 @@ export function tantiemesAvecRattaches(lots: PortalLot[], lot: PortalLot, cle: s
   return lotTantiemes(lot, cle) + totalTantiemes(lotsRattaches(lots, lot), cle);
 }
 
-/** Lots annexes non rattachés à un lot d'habitation — bloquent la génération
+/** Lots annexes non rattachés à un lot d'habitation - bloquent la génération
  *  des documents d'adhésion dès que le copropriétaire a un lot d'habitation. */
 export function lotsAnnexesNonRattaches(lots: PortalLot[]): PortalLot[] {
   return lots.filter((l) => l.usage !== "habitation" && !l.rattacheA);
 }
 
-/** Rattache (cibleId) ou détache (null) un lot annexe — RPC validée en base. */
+/** Rattache (cibleId) ou détache (null) un lot annexe - RPC validée en base. */
 export function useRattacherLot() {
   const qc = useQueryClient();
   return useMutation({
@@ -151,7 +151,7 @@ export function useMonPlan(scenarioId: string | undefined, coproprietaireId: str
 export interface IndivBreakdown {
   quotePart: number;
   mprIndiv: number;
-  /** CEE — versés à la fin du chantier, donc hors « reste à financer avant travaux ». */
+  /** CEE - versés à la fin du chantier, donc hors « reste à financer avant travaux ». */
   cee: number;
   /** Subvention collective affectée (MPR Copro + fonds travaux). */
   subvColl: number;
@@ -347,7 +347,7 @@ export function useSaveChoix(scenarioId: string, coproprietaireId: string) {
 }
 
 /** Saisie du mode de financement d'un copropriétaire par le syndic (ou l'AMO
- *  en aperçu) — quand le gestionnaire a l'information en direct (ex. fonds
+ *  en aperçu) - quand le gestionnaire a l'information en direct (ex. fonds
  *  propres). Tracée via saisi_par pour la distinguer d'un choix du
  *  copropriétaire, qui garde la main depuis son portail. */
 export function useSaveChoixGestionnaire(scenarioId: string | undefined) {

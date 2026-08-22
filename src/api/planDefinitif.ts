@@ -247,7 +247,7 @@ export function usePartagerPfCopros(coproId: string) {
         ecoPtz: true,
         ecoPtzDuree: pvData.params.dureeEcoPtzAns,
       };
-      const nom = `PF définitif — ${input.plan.nom}`;
+      const nom = `PF définitif - ${input.plan.nom}`;
 
       let scenarioId: string;
       if (existant) {

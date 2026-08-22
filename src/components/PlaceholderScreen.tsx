@@ -15,7 +15,7 @@ export function PlaceholderScreen({ icon, title, text }: Props) {
         <Icon name={icon} size={30} />
       </div>
       <h2>{title}</h2>
-      <p>{text || "Module en cours de construction — prochaine étape du chantier."}</p>
+      <p>{text || "Module en cours de construction - prochaine étape du chantier."}</p>
       <button className="se-btn se-btn-primary" style={{ marginTop: 22 }} onClick={() => navigate("/")}>
         <Icon name="gauge" size={17} />
         Tableau de bord

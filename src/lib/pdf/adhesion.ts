@@ -81,7 +81,7 @@ function drawAdherent(
 /**
  * Bulletin d'adhésion pré-rempli pour UN lot principal.
  * `signaturePng` (dataURL) : apposée pour l'adhérent 1 (et 2 si `signature2Png`),
- * avec horodatage sous l'image — signature électronique simple.
+ * avec horodatage sous l'image - signature électronique simple.
  */
 export async function genBulletin(
   form: AdhesionForm,
@@ -144,7 +144,7 @@ export async function genBulletin(
   return doc.save();
 }
 
-/** Mandat SEPA pré-rempli — SANS signature (manuscrite exigée, envoi postal). */
+/** Mandat SEPA pré-rempli - SANS signature (manuscrite exigée, envoi postal). */
 export async function genMandatSepa(input: {
   nom: string;
   rue: string;

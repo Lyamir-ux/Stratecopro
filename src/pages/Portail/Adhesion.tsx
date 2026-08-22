@@ -236,7 +236,7 @@ export function Adhesion({
               <div key={l.id} className="afournir-row">
                 <Icon name="alert" size={15} style={{ color: "var(--color-warning-500)" }} />
                 Lot n°{l.num} ({(USAGE_LOT_LABEL[l.usage] ?? l.usage).toLowerCase()})
-                {l.batiment ? ` · ${libellesBatiments(copro.denomination_batiments).court} ` + l.batiment : ""} — non rattaché
+                {l.batiment ? ` · ${libellesBatiments(copro.denomination_batiments).court} ` + l.batiment : ""} - non rattaché
               </div>
             ))}
           </div>
@@ -267,14 +267,14 @@ export function Adhesion({
               <div key={b.path} className="doc-row">
                 <span className="d-ico"><Icon name="fileText" size={18} /></span>
                 <div style={{ minWidth: 0 }}>
-                  <div className="d-name">Bulletin d'adhésion — Lot n°{b.lotNum}</div>
+                  <div className="d-name">Bulletin d'adhésion - Lot n°{b.lotNum}</div>
                   <div className="d-sub">PDF pré-rempli et signé électroniquement</div>
                 </div>
                 <span className="spacer"></span>
                 <button
                   className="icon-btn"
                   title="Visualiser sans télécharger"
-                  onClick={() => setApercu({ name: `Bulletin d'adhésion — Lot n°${b.lotNum}`, path: b.path })}
+                  onClick={() => setApercu({ name: `Bulletin d'adhésion - Lot n°${b.lotNum}`, path: b.path })}
                 >
                   <Icon name="eye" size={16} />
                 </button>
@@ -293,7 +293,7 @@ export function Adhesion({
               </span>
               <div style={{ minWidth: 0 }}>
                 <div className="d-name">Mandat SEPA pré-rempli</div>
-                <div className="d-sub">À imprimer et signer à la main — aucune rature</div>
+                <div className="d-sub">À imprimer et signer à la main - aucune rature</div>
               </div>
               <span className="spacer"></span>
               <button
@@ -322,7 +322,7 @@ export function Adhesion({
             <div className="cc-next" style={{ marginTop: 12 }}>
               <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
               <span>
-                L'IBAN saisi ne correspond pas à celui détecté sur votre RIB téléversé — vérifiez l'un ou l'autre.
+                L'IBAN saisi ne correspond pas à celui détecté sur votre RIB téléversé - vérifiez l'un ou l'autre.
               </span>
             </div>
           )}
@@ -418,11 +418,11 @@ export function Adhesion({
             Votre signature sera apposée sur {lotsHab.length > 1 ? `les ${lotsHab.length} bulletins (un par lot)` : "le bulletin"},
             avec horodatage. Le mandat SEPA, lui, devra être signé <b>à la main</b> après téléchargement.
           </p>
-          <div className="se-eyebrow" style={{ marginBottom: 6 }}>Signature — {form.adherent1.nomPrenom || "Adhérent 1"} *</div>
+          <div className="se-eyebrow" style={{ marginBottom: 6 }}>Signature - {form.adherent1.nomPrenom || "Adhérent 1"} *</div>
           <SignaturePad onChange={setSig1} defaultName={form.adherent1.nomPrenom} />
           {form.adherent2 && (
             <>
-              <div className="se-eyebrow" style={{ margin: "16px 0 6px" }}>Signature — {form.adherent2.nomPrenom || "Adhérent 2"} *</div>
+              <div className="se-eyebrow" style={{ margin: "16px 0 6px" }}>Signature - {form.adherent2.nomPrenom || "Adhérent 2"} *</div>
               <SignaturePad onChange={setSig2} defaultName={form.adherent2.nomPrenom} />
             </>
           )}
@@ -548,12 +548,12 @@ export function Adhesion({
           </Fld>
           {iban && !ibanOk && (
             <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--color-error-700)", margin: 0 }}>
-              IBAN invalide — vérifiez la saisie (clé de contrôle incorrecte).
+              IBAN invalide - vérifiez la saisie (clé de contrôle incorrecte).
             </p>
           )}
           {bic && !bicOk && (
             <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--color-error-700)", margin: 0 }}>
-              BIC invalide — 8 ou 11 caractères (ex. CEPAFRPP513).
+              BIC invalide - 8 ou 11 caractères (ex. CEPAFRPP513).
             </p>
           )}
 
@@ -580,7 +580,7 @@ export function Adhesion({
         </div>
         {!champsOk && (
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10 }}>
-            Renseignez tous les champs marqués * — la banque rejette les dossiers incomplets.
+            Renseignez tous les champs marqués * - la banque rejette les dossiers incomplets.
           </p>
         )}
       </div>

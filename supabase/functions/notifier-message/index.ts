@@ -1,4 +1,4 @@
-// Edge function « notifier-message » — appelée par l'AMO après l'envoi d'un
+// Edge function « notifier-message » - appelée par l'AMO après l'envoi d'un
 // message aux prestataires d'un projet (onglet Communications du dossier).
 // Envoie une simple alerte « vous avez un message en attente » SANS le contenu
 // du message (exigence : le message se lit dans l'espace prestataire).
@@ -112,7 +112,7 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({
           from,
           to: [p.email],
-          subject: `Nouveau message Strat Eco — ${copro?.name ?? "votre projet"}`,
+          subject: `Nouveau message Strat Eco - ${copro?.name ?? "votre projet"}`,
           html,
         }),
       });

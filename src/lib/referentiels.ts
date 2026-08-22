@@ -1,5 +1,5 @@
 // Référentiels d'affichage (couleurs DPE, phases, rôles d'espace).
-// L'équipe AMO vient de la table `profiles` (M2) — TEAM_FALLBACK sert
+// L'équipe AMO vient de la table `profiles` (M2) - TEAM_FALLBACK sert
 // uniquement d'affichage avant chargement / pour les initiales inconnues.
 import type { UsageLot } from "./finance/types";
 
@@ -7,7 +7,7 @@ export type DpeClass = "A" | "B" | "C" | "D" | "E" | "F" | "G";
 
 export const DPE_CLASSES: DpeClass[] = ["A", "B", "C", "D", "E", "F", "G"];
 
-/** Usages de lot — libellés d'affichage (répartition, tableaux, portail). */
+/** Usages de lot - libellés d'affichage (répartition, tableaux, portail). */
 export const USAGES_LOTS: { id: UsageLot; label: string }[] = [
   { id: "habitation", label: "Habitation" },
   { id: "garage", label: "Garages / parkings" },
@@ -23,7 +23,7 @@ export const USAGE_LOT_LABEL: Record<string, string> = Object.fromEntries(
 
 /**
  * Dénomination des subdivisions du bâti : certaines copropriétés sont un seul
- * bâtiment à plusieurs entrées — on affiche alors « Entrée 01 » et non
+ * bâtiment à plusieurs entrées - on affiche alors « Entrée 01 » et non
  * « Bât. 01 ». Réglable dans la synthèse de l'onglet Données ; purement
  * cosmétique (les codes des bâtiments ne changent pas).
  */
@@ -81,7 +81,7 @@ export const ROLES: { id: RoleId; label: string; sub: string; icon: string; acti
   { id: "copro", label: "Copropriétaire", sub: "Votre projet de rénovation", icon: "user", active: true },
 ];
 
-/** Profils MaPrimeRénov' — infos d'affichage (portail + enquête).
+/** Profils MaPrimeRénov' - infos d'affichage (portail + enquête).
  *  `menage` = libellé grand public (les couleurs restent un code interne AMO). */
 export const PROFILS_MPR: Record<string, { color: string; label: string; desc: string; taux: string; menage: string }> = {
   Bleu: { color: "#2E6FA8", label: "Bleu", desc: "Revenus très modestes", taux: "jusqu'à 50 %", menage: "Ménage aux revenus très modestes" },

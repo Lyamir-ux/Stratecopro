@@ -1,7 +1,7 @@
-// Tâches du syndic — générées côté client depuis la phase du dossier
+// Tâches du syndic - générées côté client depuis la phase du dossier
 // (port de makeSyndicTasks, design-reference/project/data.js).
 // Ce sont des repères d'accompagnement (assemblées, comptes d'aides,
-// validations, registre, PV, DO…) — pas les tâches internes de l'AMO.
+// validations, registre, PV, DO…) - pas les tâches internes de l'AMO.
 import type { PhaseId } from "./referentiels";
 
 export type SyndicTaskStatus = "todo" | "doing" | "done";
@@ -23,7 +23,7 @@ export function makeSyndicTasks(phase: PhaseId): Record<PhaseId, SyndicTask[]> {
       { title: "Inscription du projet à l'ordre du jour de l'AG", status: phase === "diagnostic" ? "todo" : "done" },
     ],
     etudes: [
-      { title: "Tenue de l'assemblée générale — vote des travaux", status: phase === "diagnostic" ? "todo" : inE ? "doing" : "done", tag: "AG" },
+      { title: "Tenue de l'assemblée générale - vote des travaux", status: phase === "diagnostic" ? "todo" : inE ? "doing" : "done", tag: "AG" },
       { title: "Dressage du PV d'assemblée générale", status: inT ? "done" : inE ? "doing" : "todo" },
       { title: "Signature de la fiche État", status: inT ? "done" : "todo" },
       { title: "Ouverture du compte bancaire travaux", status: inT ? "done" : "todo" },

@@ -1,7 +1,7 @@
-// Espace prestataire (MOE & autres intervenants) — data layer.
+// Espace prestataire (MOE & autres intervenants) - data layer.
 // Tout est filtré par RLS : le prestataire connecté ne voit que les
 // consultations EN LIGNE de ses métiers (+ celles où il a candidaté),
-// ses propres candidatures, et — uniquement s'il est une MOE RETENUE —
+// ses propres candidatures, et - uniquement s'il est une MOE RETENUE -
 // la fiche et les bâtiments des copropriétés de ses projets.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -43,7 +43,7 @@ export function useMonPrestataire(enabled = true) {
 
 /** Consultations visibles pour une entreprise : en ligne sur ses métiers
  *  + celles où elle a candidaté. Le filtre client reproduit la RLS du
- *  prestataire — nécessaire quand un AMO consulte l'espace en aperçu
+ *  prestataire - nécessaire quand un AMO consulte l'espace en aperçu
  *  (sa RLS à lui renvoie tout). */
 export function useConsultationsPresta(presta: Tables<"prestataires">) {
   return useQuery({
@@ -107,7 +107,7 @@ export function useMesCandidatures(prestaId: string) {
 
 /** Trace la récupération du dossier de consultation par le prestataire
  *  (alimente l'onglet « État de la consultation » côté AMO). Meilleur effort :
- *  l'échec est ignoré — l'aperçu AMO d'un espace prestataire, notamment,
+ *  l'échec est ignoré - l'aperçu AMO d'un espace prestataire, notamment,
  *  n'a pas le droit d'écrire cette trace (et ne doit pas la fausser). */
 export async function marquerConsultationRecuperee(consultationId: string, prestataireId: string): Promise<void> {
   try {
@@ -143,7 +143,7 @@ export function usePoserQuestion() {
 
 /** Détail tarifaire d'une offre MOE ; `options` suit les cases cochées à la
  *  publication de la consultation. Le PRO/DCE et le suivi de chantier se
- *  chiffrent au forfait (€ HT) ou en pourcentage du montant des travaux —
+ *  chiffrent au forfait (€ HT) ou en pourcentage du montant des travaux -
  *  la valeur est dans l'unité du mode. */
 export interface TarifsMoe {
   diag_avp: number | null;
@@ -223,7 +223,7 @@ export function usePostuler() {
 }
 
 /** Retrait motivé d'une candidature encore à l'étude (consultation en ligne,
- *  offre « reçue ») — retrait tracé (corbeille des deux côtés), l'offre jointe
+ *  offre « reçue ») - retrait tracé (corbeille des deux côtés), l'offre jointe
  *  reste consultable par l'équipe AMO. Re-candidature possible tant que la
  *  consultation est en ligne. */
 export function useRetirerCandidature() {
@@ -245,7 +245,7 @@ export function useRetirerCandidature() {
   });
 }
 
-/** Accusé de lecture des décisions — posé à l'ouverture de « Mes candidatures »,
+/** Accusé de lecture des décisions - posé à l'ouverture de « Mes candidatures »,
  *  éteint la pastille « sélectionné / refusé » du menu. */
 export function useMarquerDecisionsVues(prestaId: string) {
   const qc = useQueryClient();
@@ -261,7 +261,7 @@ export function useMarquerDecisionsVues(prestaId: string) {
   });
 }
 
-/** Le prestataire retenu confirme son engagement sur l'opération — pour une
+/** Le prestataire retenu confirme son engagement sur l'opération - pour une
  *  MOE, le projet passe alors dans « Mes projets ». */
 export function useConfirmerEngagement() {
   const qc = useQueryClient();
@@ -282,7 +282,7 @@ export function useConfirmerEngagement() {
 
 // ========== Fiche entreprise (section « Mon entreprise ») ==========
 
-/** Coordonnées éditables par le prestataire — les métiers, le référencement
+/** Coordonnées éditables par le prestataire - les métiers, le référencement
  *  et la raison sociale restent pilotés par l'AMO (trigger côté base). */
 export function useMajMonPrestataire() {
   const qc = useQueryClient();
@@ -405,7 +405,7 @@ export function useUploadDocPresta(presta: Tables<"prestataires">) {
   });
 }
 
-/** Mise à jour de la fin de validité d'un document — réarme le rappel e-mail. */
+/** Mise à jour de la fin de validité d'un document - réarme le rappel e-mail. */
 export function useMajDocPresta(prestaId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -530,7 +530,7 @@ export function useMesProjetsMoe(enabled: boolean, prestaId: string) {
 
 // ========== Documents de projet (« Mes projets ») ==========
 // Fichiers déposés par l'entreprise retenue sur une opération (devis,
-// plannings, PV…) — visibles de l'équipe AMO dans l'onglet Prestataires
+// plannings, PV…) - visibles de l'équipe AMO dans l'onglet Prestataires
 // du dossier. Bucket presta-docs (même dossier que les certifications).
 
 export function useProjetDocs(prestaId: string) {

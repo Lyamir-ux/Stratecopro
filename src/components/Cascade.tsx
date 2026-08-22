@@ -1,4 +1,4 @@
-// Cascade de financement (coût total → déductions → reste) — portée de copro.jsx.
+// Cascade de financement (coût total → déductions → reste) - portée de copro.jsx.
 import { fmtEuro } from "@/lib/format";
 
 interface Row {

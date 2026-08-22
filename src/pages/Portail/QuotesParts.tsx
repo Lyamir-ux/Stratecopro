@@ -54,7 +54,7 @@ export function QuotesParts({
         <p className="sec-sub">Estimation par lot et par scénario de travaux.</p>
         <div className="cc-next">
           <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
-          <span>Aucun scénario n'a encore été partagé par votre AMO — vos quotes-parts apparaîtront ici.</span>
+          <span>Aucun scénario n'a encore été partagé par votre AMO - vos quotes-parts apparaîtront ici.</span>
         </div>
       </div>
     );
@@ -132,7 +132,7 @@ export function QuotesParts({
         <div className="card-xl">
           <div className="cx-head">
             <Icon name="euro" size={20} style={{ color: "var(--accent)" }} />
-            <h2>{lot ? `Lot n°${lot.num} — de votre quote-part à votre reste à charge` : "Votre quote-part"}</h2>
+            <h2>{lot ? `Lot n°${lot.num} - de votre quote-part à votre reste à charge` : "Votre quote-part"}</h2>
           </div>
           <div className="cx-body">
             <Cascade
@@ -150,7 +150,7 @@ export function QuotesParts({
                 Après le chantier
               </div>
               <p>
-                Vos <b>CEE — {fmtEuro(indiv.cee)}</b> sont versés <b>à la fin du chantier</b>, une fois les
+                Vos <b>CEE - {fmtEuro(indiv.cee)}</b> sont versés <b>à la fin du chantier</b>, une fois les
                 travaux réceptionnés : ils ne réduisent pas le montant à financer avant travaux, mais viendront
                 en déduction une fois perçus.
               </p>
@@ -170,7 +170,7 @@ export function QuotesParts({
             {!indiv.exact && profil && (
               <div className="cc-next" style={{ marginTop: 18 }}>
                 <Icon name="alert" size={15} className="ico" />
-                <span>Estimation au prorata des tantièmes — le plan individuel définitif sera publié par votre AMO.</span>
+                <span>Estimation au prorata des tantièmes - le plan individuel définitif sera publié par votre AMO.</span>
               </div>
             )}
           </div>
@@ -251,7 +251,7 @@ export function QuotesParts({
                     </>
                   ) : lotsHab.length === 0 ? (
                     <p className="se-body" style={{ margin: 0 }}>
-                      Ce lot ne peut être rattaché qu'à un lot d'habitation vous appartenant — aucun n'est
+                      Ce lot ne peut être rattaché qu'à un lot d'habitation vous appartenant - aucun n'est
                       relié à votre compte. Contactez votre AMO.
                     </p>
                   ) : (

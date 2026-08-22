@@ -1,5 +1,5 @@
 // Enquête sociale & technique côté portail : le questionnaire configuré par
-// l'AMO (catalogue + on/off) est rendu dynamiquement — questions « vous »
+// l'AMO (catalogue + on/off) est rendu dynamiquement - questions « vous »
 // (copropriétaire) puis une section par lot. Les conditions d'affichage
 // s'appliquent en direct pendant la saisie. Les réponses vivent dans
 // enquete_reponses.reponses (jsonb) ; foyer / occupation / RFR alimentent
@@ -98,7 +98,7 @@ function Champ({
             className="eq-inp"
             style={{ width: 130 }}
             value={typeof value === "number" ? value : ""}
-            placeholder="—"
+            placeholder="-"
             onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))}
           />
           {q.type === "montant" && <span className="eq-unit">€ / an</span>}
@@ -124,7 +124,7 @@ function Champ({
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value || undefined)}
         >
-          <option value="">— Choisir un lot principal —</option>
+          <option value="">- Choisir un lot principal -</option>
           {(lotsPrincipaux ?? []).map((l) => (
             <option key={l.id} value={l.id}>
               {l.label}
@@ -282,7 +282,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
         const u = rep?.lots[l.id]?.["usage-lot"];
         return u === "Habitation" || u === "Commerce";
       })
-      .map((l) => ({ id: l.id, label: `Lot ${l.num}${l.batiment ? ` — bât. ${l.batiment}` : ""}` }));
+      .map((l) => ({ id: l.id, label: `Lot ${l.num}${l.batiment ? ` - bât. ${l.batiment}` : ""}` }));
 
   const doSave = () => {
     if (!rep || !enquete) return;
@@ -383,7 +383,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                   <Icon name="home" size={20} style={{ color: "var(--accent)" }} />
                   <h2>
                     Lot {lot.num}
-                    {lot.batiment ? ` — bâtiment ${lot.batiment}` : ""}
+                    {lot.batiment ? ` - bâtiment ${lot.batiment}` : ""}
                   </h2>
                 </div>
                 <div className="cx-body">
@@ -427,7 +427,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                   <p className="se-small" style={{ color: "var(--color-success-700)", marginTop: 10, marginBottom: 0 }}>
                     {complet
                       ? "Merci ! Votre questionnaire est complet et enregistré."
-                      : "Réponses enregistrées — l'enquête sera considérée comme faite quand toutes les questions auront une réponse."}
+                      : "Réponses enregistrées - l'enquête sera considérée comme faite quand toutes les questions auront une réponse."}
                   </p>
                 )}
                 {save.isError && (
@@ -476,7 +476,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                   <div className="cx-body">
                     <p className="se-small" style={{ marginTop: 0, marginBottom: 10 }}>
                       Revenu fiscal de référence maximal du ménage
-                      {bareme.zone === "hors_idf" ? " — hors Île-de-France" : " — Île-de-France"} :
+                      {bareme.zone === "hors_idf" ? " - hors Île-de-France" : " - Île-de-France"} :
                     </p>
                     <table className="anah-table">
                       <thead>

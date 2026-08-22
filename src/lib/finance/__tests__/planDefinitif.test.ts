@@ -6,7 +6,7 @@ import { makeViolettes } from "./fixtureViolettes";
 
 const r = computePlanDefinitif(makeViolettes());
 
-describe("planDefinitif — lots de travaux", () => {
+describe("planDefinitif - lots de travaux", () => {
   it("reproduit chaque total de lot (HT, retenu, TTC)", () => {
     const attendus: [number, number, number, number][] = [
       // [numéro, HT après remise, HT retenu, TTC]
@@ -44,7 +44,7 @@ describe("planDefinitif — lots de travaux", () => {
   });
 });
 
-describe("planDefinitif — MOE et frais annexes", () => {
+describe("planDefinitif - MOE et frais annexes", () => {
   it("calcule les lignes en % des travaux (MOE travaux, syndic, dommage-ouvrage)", () => {
     const byName = (n: string) => r.moe.find((l) => l.designation === n)!;
     expect(byName("Maîtrise d'œuvre phase travaux").montantTtc).toBeCloseTo(44395.16451, 2);
@@ -59,7 +59,7 @@ describe("planDefinitif — MOE et frais annexes", () => {
   });
 });
 
-describe("planDefinitif — aides", () => {
+describe("planDefinitif - aides", () => {
   const aide = (id: string) => r.aides.find((a) => a.id === id)!;
 
   it("reproduit chaque aide du classeur", () => {
@@ -82,7 +82,7 @@ describe("planDefinitif — aides", () => {
   });
 });
 
-describe("planDefinitif — variante éco-PTZ collectif + avance de subventions", () => {
+describe("planDefinitif - variante éco-PTZ collectif + avance de subventions", () => {
   it("calcule couverture, reste à charge et reste à financer", () => {
     expect(r.tauxCouverture).toBeCloseTo(0.4586663888, 6);
     expect(r.resteACharge).toBeCloseTo(524659.3578, 2);
@@ -109,7 +109,7 @@ describe("planDefinitif — variante éco-PTZ collectif + avance de subventions"
   });
 });
 
-describe("planDefinitif — variante éco-PTZ collectif sans avance de subventions", () => {
+describe("planDefinitif - variante éco-PTZ collectif sans avance de subventions", () => {
   it("reprend les montants du collectif sans le coût d'avance", () => {
     // mêmes montants financés que la variante avec avance…
     expect(r.collectifSansAvance.resteAFinancer).toBeCloseTo(r.collectif.resteAFinancer, 6);
@@ -124,7 +124,7 @@ describe("planDefinitif — variante éco-PTZ collectif sans avance de subventio
   });
 });
 
-describe("planDefinitif — variante éco-PTZ individuel (70 % / 30 %)", () => {
+describe("planDefinitif - variante éco-PTZ individuel (70 % / 30 %)", () => {
   it("calcule les appels de fonds avec 70 % des aides déduites", () => {
     expect(r.individuel.aidesAvancees).toBeCloseTo(289681.6063, 2);
     expect(r.individuel.aidesFinChantier).toBeCloseTo(124149.2598, 2);
@@ -146,7 +146,7 @@ describe("planDefinitif — variante éco-PTZ individuel (70 % / 30 %)", () => {
   });
 });
 
-describe("planDefinitif — garde-fous et divers", () => {
+describe("planDefinitif - garde-fous et divers", () => {
   it("vérifie les trois garde-fous du classeur", () => {
     const [travaux, mpr, amo] = r.gardeFous;
     expect(travaux.valeur).toBeCloseTo(25000, 2);

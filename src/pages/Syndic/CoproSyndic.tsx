@@ -1,4 +1,4 @@
-// Détail d'une copropriété du portefeuille syndic — hero + 6 onglets.
+// Détail d'une copropriété du portefeuille syndic - hero + 6 onglets.
 // Tout est en lecture seule sauf « Documents à produire » (montage bancaire), où le syndic dépose
 // les documents du dossier de prêt. L'onglet vit dans l'URL (/syndic/copros/:id/:tab?).
 import { useNavigate, useParams } from "react-router-dom";
@@ -70,7 +70,7 @@ export default function CoproSyndic() {
                 }}
               >
                 <Icon name="image" size={18} />
-                Photo — {c.name}
+                Photo - {c.name}
               </div>
             )}
             <div className="dh-overlay"></div>

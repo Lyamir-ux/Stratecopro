@@ -1,6 +1,6 @@
 // Dialogue de nommage : à chaque dépôt, le déposant décrit le document
 // (type, objet, émetteur, date, état) et le nom normalisé se construit
-// en direct — {PREFIXE} - {Type} - {Objet} - {ÉMETTEUR} - {Date}[ - {état}].
+// en direct - {PREFIXE} - {Type} - {Objet} - {ÉMETTEUR} - {Date}[ - {état}].
 // Saisie entièrement manuelle (pas d'analyse automatique) ; « Garder le nom
 // d'origine » reste toujours possible.
 import { useEffect, useState } from "react";

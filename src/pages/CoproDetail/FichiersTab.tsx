@@ -1,4 +1,4 @@
-// Onglet Fichiers — porté de detail.jsx (FichiersTab), branché sur Storage + checklists réelles.
+// Onglet Fichiers - porté de detail.jsx (FichiersTab), branché sur Storage + checklists réelles.
 // Chaque dépôt passe par le renommage assisté (analyse documentaire + validation humaine).
 import { useRef, useState } from "react";
 import { ApercuDocument } from "@/components/ApercuDocument";
@@ -168,7 +168,7 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
             })}
           </div>
           <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
-            <Icon name="upload" size={13} /> Glissez-déposez un ou plusieurs fichiers ici — directement sur une carte
+            <Icon name="upload" size={13} /> Glissez-déposez un ou plusieurs fichiers ici - directement sur une carte
             pour choisir le dossier. Une archive <b>.zip</b> est acceptée : vous choisissez alors d'en extraire le
             contenu (fichier par fichier) ou de la déposer telle quelle.
           </p>
@@ -184,7 +184,7 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
               </div>
               {folderFiles.length === 0 ? (
                 <p className="se-small" style={{ color: "var(--fg-muted)" }}>
-                  Dossier vide — déposez un premier fichier.
+                  Dossier vide - déposez un premier fichier.
                 </p>
               ) : (
                 folderFiles.map((f) => (

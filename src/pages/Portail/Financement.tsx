@@ -1,5 +1,5 @@
 // Mon financement : fonds propres, prêt collectif (banque + durée fixées par
-// l'AMO — CEGEE/Domofinance, durée votée en AG) ou éco-PTZ individuel (durée
+// l'AMO - CEGEE/Domofinance, durée votée en AG) ou éco-PTZ individuel (durée
 // au choix du copropriétaire). L'adhésion au prêt collectif ouvre le dossier
 // pré-rempli (bulletins + mandat SEPA) avec signature électronique.
 import { useState } from "react";
@@ -120,7 +120,7 @@ export function Financement({
             </h2>
             {choix.saisi_par !== "copro" && (
               <p className="se-small" style={{ color: "var(--fg-muted)", margin: "0 0 10px" }}>
-                Ce choix a été enregistré pour vous par {choix.saisi_par === "syndic" ? "votre syndic" : "votre AMO"} —
+                Ce choix a été enregistré pour vous par {choix.saisi_par === "syndic" ? "votre syndic" : "votre AMO"} -
                 vous pouvez le modifier à tout moment ci-dessous.
               </p>
             )}
@@ -162,7 +162,7 @@ export function Financement({
               <Icon name="alert" size={15} className="ico" />
               <span>
                 Le dossier d'adhésion (bulletin + mandat SEPA) ouvrira dès que votre AMO aura lancé la campagne
-                d'adhésion — vous serez averti.
+                d'adhésion - vous serez averti.
               </span>
             </div>
           ))}
@@ -197,7 +197,7 @@ export function Financement({
           <h3>Prêt collectif</h3>
           <p>
             Éco-PTZ souscrit par la copropriété auprès de {config ? BANQUE_LABEL[config.banque] : "la banque partenaire"}.
-            Vous adhérez pour votre seule quote-part — pas de banque à contacter.
+            Vous adhérez pour votre seule quote-part - pas de banque à contacter.
           </p>
           <div className="loan-terms"><span className="term">Recommandé</span><span className="term">Durée votée en AG</span></div>
         </div>

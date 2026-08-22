@@ -1,6 +1,6 @@
 // Historique des candidatures du prestataire connecté, avec le statut donné
 // par l'AMO (reçue / retenue / non retenue). Candidature retenue : le
-// prestataire confirme son engagement — pour une MOE, le projet passe alors
+// prestataire confirme son engagement - pour une MOE, le projet passe alors
 // dans « Mes projets ». Candidature encore à l'étude : retrait possible, avec
 // motif obligatoire ; les candidatures retirées partent dans une corbeille
 // (visibles aussi de l'équipe AMO). L'ouverture de la page accuse réception
@@ -23,7 +23,7 @@ import type { Tables } from "@/lib/database.types";
 function StatutBadge({ statut }: { statut: CandidaturePresta["statut"] }) {
   if (statut === "retenue") return <Badge kind="success" dot>Retenue</Badge>;
   if (statut === "non_retenue") return <Badge kind="neutral">Non retenue</Badge>;
-  return <Badge kind="blue" dot>Reçue — en cours d'analyse</Badge>;
+  return <Badge kind="blue" dot>Reçue - en cours d'analyse</Badge>;
 }
 
 export function MesCandidatures({ presta }: { presta: Tables<"prestataires"> }) {
@@ -78,7 +78,7 @@ export function MesCandidatures({ presta }: { presta: Tables<"prestataires"> }) 
             {actives.map((cand) => {
               const cs = cand.consultation;
               const type = CONSULT_TYPES.find((t) => t.id === cs?.type);
-              const nom = cs?.copro?.name ?? cs?.copro_externe_nom ?? "—";
+              const nom = cs?.copro?.name ?? cs?.copro_externe_nom ?? "-";
               const retirable = cand.statut === "recue" && cs?.statut === "en_ligne";
               const retenueSansEngagement = cand.statut === "retenue" && !cand.engagement_at;
               return (
@@ -135,7 +135,7 @@ export function MesCandidatures({ presta }: { presta: Tables<"prestataires"> }) 
                       }}
                     >
                       <span style={{ flexBasis: "100%", fontSize: 13, fontWeight: 600 }}>
-                        Pourquoi retirez-vous votre candidature ? Votre offre partira à la corbeille —
+                        Pourquoi retirez-vous votre candidature ? Votre offre partira à la corbeille -
                         vous pourrez re-candidater tant que la consultation est en ligne.
                       </span>
                       <input
@@ -181,7 +181,7 @@ export function MesCandidatures({ presta }: { presta: Tables<"prestataires"> }) 
                       <span style={{ flex: 1, fontSize: 13.5, minWidth: 220 }}>
                         <strong>Votre candidature a été retenue.</strong> Confirmez votre engagement sur
                         l'opération pour valider le projet
-                        {isMoe && cs?.type === "moe" ? " — il apparaîtra alors dans « Mes projets »" : ""}.
+                        {isMoe && cs?.type === "moe" ? " - il apparaîtra alors dans « Mes projets »" : ""}.
                       </span>
                       <button
                         className="se-btn se-btn-primary btn-sm"
@@ -189,7 +189,7 @@ export function MesCandidatures({ presta }: { presta: Tables<"prestataires"> }) 
                         onClick={() => void engager.mutateAsync(cand.id)}
                       >
                         <Icon name="check" size={14} />
-                        {engager.isPending ? "Confirmation…" : "Je m'engage — valider le projet"}
+                        {engager.isPending ? "Confirmation…" : "Je m'engage - valider le projet"}
                       </button>
                     </div>
                   )}
@@ -197,7 +197,7 @@ export function MesCandidatures({ presta }: { presta: Tables<"prestataires"> }) 
                     <div style={{ margin: "0 14px 10px", fontSize: 12.5, color: "var(--fg2)", display: "flex", alignItems: "center", gap: 6 }}>
                       <Icon name="checkCircle" size={14} style={{ color: "var(--color-primary-700)" }} />
                       Engagement confirmé le {fmtDate(cand.engagement_at)}
-                      {isMoe && cs?.type === "moe" ? " — retrouvez l'opération dans « Mes projets »." : "."}
+                      {isMoe && cs?.type === "moe" ? " - retrouvez l'opération dans « Mes projets »." : "."}
                     </div>
                   )}
                 </div>
@@ -215,7 +215,7 @@ export function MesCandidatures({ presta }: { presta: Tables<"prestataires"> }) 
             onClick={() => setCorbeilleOuverte((v) => !v)}
           >
             <Icon name="trash" size={16} />
-            <h3>Corbeille — candidatures retirées</h3>
+            <h3>Corbeille - candidatures retirées</h3>
             <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{corbeille.length}</span>
             <span style={{ flex: 1 }}></span>
             <Icon name={corbeilleOuverte ? "chevronDown" : "chevronRight"} size={15} />
@@ -225,7 +225,7 @@ export function MesCandidatures({ presta }: { presta: Tables<"prestataires"> }) 
               {corbeille.map((cand) => {
                 const cs = cand.consultation;
                 const type = CONSULT_TYPES.find((t) => t.id === cs?.type);
-                const nom = cs?.copro?.name ?? cs?.copro_externe_nom ?? "—";
+                const nom = cs?.copro?.name ?? cs?.copro_externe_nom ?? "-";
                 return (
                   <div
                     key={cand.id}

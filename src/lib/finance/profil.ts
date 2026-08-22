@@ -1,4 +1,4 @@
-// Classement d'un foyer en profil MaPrimeRénov' — port de determineProfil (design-reference/project/data.js).
+// Classement d'un foyer en profil MaPrimeRénov' - port de determineProfil (design-reference/project/data.js).
 import type { Bareme, Profil } from "./types";
 
 export function determineProfil(persons: number, rfr: number, bareme: Bareme): Profil {

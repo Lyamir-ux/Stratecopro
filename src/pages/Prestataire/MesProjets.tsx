@@ -1,4 +1,4 @@
-// Mes projets — réservé aux MOE RETENUES : suivi de l'avancement de
+// Mes projets - réservé aux MOE RETENUES : suivi de l'avancement de
 // l'opération (phase du projet), fiche copro et bâtiments, et documents de
 // projet : l'entreprise dépose devis, plannings, PV… que l'équipe Strat Eco
 // retrouve dans l'onglet Prestataires du dossier. Les autres intervenants
@@ -55,7 +55,7 @@ function PhaseTimeline({ phase }: { phase: string | null }) {
   );
 }
 
-/** Documents de projet de l'entreprise (devis, plannings, PV…) — partagés
+/** Documents de projet de l'entreprise (devis, plannings, PV…) - partagés
  *  avec l'équipe Strat Eco (onglet Prestataires du dossier). */
 function ProjetDocsSection({
   presta,
@@ -141,7 +141,7 @@ export function MesProjets({ presta }: { presta: Tables<"prestataires"> }) {
         <div>
           <h1 className="page-title">Mes projets</h1>
           <p className="page-sub">
-            Opérations où votre candidature de maîtrise d'œuvre a été retenue et votre engagement confirmé —
+            Opérations où votre candidature de maîtrise d'œuvre a été retenue et votre engagement confirmé -
             suivez l'avancement, consultez les données de l'opération et partagez vos documents avec l'équipe
             Strat Eco
           </p>
@@ -156,7 +156,7 @@ export function MesProjets({ presta }: { presta: Tables<"prestataires"> }) {
           <Icon name="checkCircle" size={16} style={{ color: "var(--color-primary-700)", flex: "none" }} />
           <span style={{ fontSize: 13.5 }}>
             {enAttente} candidature{enAttente > 1 ? "s" : ""} retenue{enAttente > 1 ? "s" : ""} en attente de
-            votre confirmation d'engagement — rendez-vous dans « Mes candidatures » pour valider le projet.
+            votre confirmation d'engagement - rendez-vous dans « Mes candidatures » pour valider le projet.
           </span>
         </div>
       )}

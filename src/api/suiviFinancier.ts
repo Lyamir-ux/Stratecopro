@@ -1,4 +1,4 @@
-// Suivi financier du chantier — paiements par situation (1 à 10) sur les
+// Suivi financier du chantier - paiements par situation (1 à 10) sur les
 // lignes du PF définitif validé (lots de travaux, MOE et frais annexes).
 // Le syndic, qui règle les situations des entreprises, saisit les montants ;
 // l'équipe AMO garde la main via son aperçu de l'espace syndic.
@@ -9,7 +9,7 @@ import type { Json } from "@/lib/database.types";
 export const NB_SITUATIONS = 10;
 
 /**
- * Paiements par ligne du PF — clés « lot:<numero> » / « moe:<index> » (mêmes
+ * Paiements par ligne du PF - clés « lot:<numero> » / « moe:<index> » (mêmes
  * conventions que repartitionCles), valeur = montants TTC des situations 1 à 10
  * (null : situation non appelée).
  */

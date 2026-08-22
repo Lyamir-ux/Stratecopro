@@ -1,4 +1,4 @@
-// Consultations de prestations intellectuelles — côté AMO.
+// Consultations de prestations intellectuelles - côté AMO.
 // La publication alerte par e-mail les prestataires référencés du métier
 // concerné (edge function `notifier-consultation`). Les candidatures arrivent
 // soit du portail prestataire (offre chiffrée + pièce jointe), soit en saisie
@@ -17,7 +17,7 @@ export const CONSULT_TYPES: { id: Tables<"consultations">["type"]; label: string
 ];
 
 /** Prestations optionnelles proposées à la publication (cases à cocher).
- *  Uniquement pour une recherche de maîtrise d'œuvre — sans objet pour les autres métiers. */
+ *  Uniquement pour une recherche de maîtrise d'œuvre - sans objet pour les autres métiers. */
 export const CONSULT_OPTIONS: { id: string; label: string }[] = [
   { id: "audit_reglementaire", label: "Audit réglementaire" },
   { id: "pppt", label: "PPPT" },
@@ -50,7 +50,7 @@ export function consultationCible(cs: Consultation): { nom: string; lieu: string
     return { nom: cs.copro.name, lieu: cs.copro.adresse || cs.copro.city || "", externe: false };
   }
   return {
-    nom: cs.copro_externe_nom ?? "—",
+    nom: cs.copro_externe_nom ?? "-",
     lieu: [cs.copro_externe_adresse, cs.copro_externe_ville].filter(Boolean).join(", "),
     externe: true,
   };
@@ -159,7 +159,7 @@ export function usePublishConsultation() {
         if (rowErr) docErrors.push(file.name);
       }
 
-      // Alerte e-mail des prestataires référencés du métier — la consultation
+      // Alerte e-mail des prestataires référencés du métier - la consultation
       // reste publiée même si la notification échoue (relance possible).
       const { data: notif, error: fnErr } = await supabase.functions.invoke("notifier-consultation", {
         body: { consultation_id: data.id },
@@ -185,7 +185,7 @@ export function useCloseConsultation() {
   });
 }
 
-/** Remise en ligne d'une consultation clôturée — pour relancer la recherche
+/** Remise en ligne d'une consultation clôturée - pour relancer la recherche
  *  après la rétractation d'un prestataire retenu (faillite, devis expiré…). */
 export function useReopenConsultation() {
   const qc = useQueryClient();
@@ -236,7 +236,7 @@ export function useDeciderCandidature() {
       const { error } = await supabase.from("candidatures").update(patch).eq("id", id);
       if (error) throw error;
       if (statut === "recue") return { emailStatut: null, emailErreur: null };
-      // alerte e-mail au prestataire — la décision reste posée même si l'envoi échoue
+      // alerte e-mail au prestataire - la décision reste posée même si l'envoi échoue
       const { data, error: fnErr } = await supabase.functions.invoke("notifier-choix", {
         body: { candidature_id: id },
       });
@@ -248,7 +248,7 @@ export function useDeciderCandidature() {
   });
 }
 
-/** Questions de prestataires sans réponse sur les consultations en ligne —
+/** Questions de prestataires sans réponse sur les consultations en ligne -
  *  alimente l'alerte du menu « Consulter un intervenant » (côté AMO). */
 export function useQuestionsEnAttenteCount(enabled = true) {
   return useQuery({
@@ -267,7 +267,7 @@ export function useQuestionsEnAttenteCount(enabled = true) {
   });
 }
 
-/** Réponse de l'AMO à la question d'un candidat — visible de tous les
+/** Réponse de l'AMO à la question d'un candidat - visible de tous les
  *  candidats de la consultation (égalité d'information). */
 export function useRepondreQuestion() {
   const qc = useQueryClient();

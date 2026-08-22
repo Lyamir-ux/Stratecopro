@@ -1,4 +1,4 @@
-// Onglet Communications — centralise les échanges du dossier :
+// Onglet Communications - centralise les échanges du dossier :
 // 1. Messagerie du projet par bloc (prestataires / syndic / copropriétaires),
 //    avec envoi « à tous les prestataires » ou privé à une entreprise ; l'envoi
 //    aux prestataires déclenche une alerte e-mail sans le contenu du message.
@@ -88,10 +88,10 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
         const n = res.notification;
         setNotice(
           n.total === 0
-            ? "Message envoyé. Aucune entreprise retenue sur ce projet — personne n'a été alerté par e-mail."
+            ? "Message envoyé. Aucune entreprise retenue sur ce projet - personne n'a été alerté par e-mail."
             : n.mode === "simulation"
-              ? `Message envoyé — alerte e-mail simulée pour ${n.total} entreprise${n.total > 1 ? "s" : ""} (configurez RESEND_API_KEY pour l'envoi réel).`
-              : `Message envoyé — ${n.envoyes} alerte${n.envoyes > 1 ? "s" : ""} e-mail envoyée${n.envoyes > 1 ? "s" : ""}${n.erreurs ? `, ${n.erreurs} en erreur` : ""}.`
+              ? `Message envoyé - alerte e-mail simulée pour ${n.total} entreprise${n.total > 1 ? "s" : ""} (configurez RESEND_API_KEY pour l'envoi réel).`
+              : `Message envoyé - ${n.envoyes} alerte${n.envoyes > 1 ? "s" : ""} e-mail envoyée${n.envoyes > 1 ? "s" : ""}${n.erreurs ? `, ${n.erreurs} en erreur` : ""}.`
         );
       }
     }
@@ -116,13 +116,13 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 0 }}>
             Fil avec les entreprises retenues sur le projet. « À tous » est visible de toutes ;
             un message adressé à une entreprise reste privé. L'envoi déclenche une alerte e-mail
-            sans le contenu du message — il se lit dans l'espace prestataire.
+            sans le contenu du message - il se lit dans l'espace prestataire.
           </p>
         ) : (
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 0 }}>
             {canal === "syndic"
-              ? "Fil avec le syndic de la copropriété — l'affichage dans l'espace syndic arrive prochainement, le fil est déjà conservé."
-              : "Fil avec les copropriétaires — l'affichage dans le portail copropriétaire arrive prochainement, le fil est déjà conservé."}
+              ? "Fil avec le syndic de la copropriété - l'affichage dans l'espace syndic arrive prochainement, le fil est déjà conservé."
+              : "Fil avec les copropriétaires - l'affichage dans le portail copropriétaire arrive prochainement, le fil est déjà conservé."}
           </p>
         )}
 
@@ -161,10 +161,10 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
             <div style={{ flex: 1 }}>
               <div className="nbody">{m.body}</div>
               <div className="nmeta" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                {m.auteur_nom || "—"} · {ROLE_LABELS[m.auteur_role] ?? m.auteur_role} · {relativeDate(m.created_at)}
+                {m.auteur_nom || "-"} · {ROLE_LABELS[m.auteur_role] ?? m.auteur_role} · {relativeDate(m.created_at)}
                 {m.canal === "prestataires" &&
                   (m.prestataire_id ? (
-                    <Badge kind="blue">Privé — {m.prestataire?.raison_sociale ?? "entreprise"}</Badge>
+                    <Badge kind="blue">Privé - {m.prestataire?.raison_sociale ?? "entreprise"}</Badge>
                   ) : (
                     <Badge kind="neutral">À tous</Badge>
                   ))}
@@ -185,7 +185,7 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
               <option value="tous">À tous les prestataires du projet</option>
               {retenues.map((p) => (
                 <option key={p.id} value={p.id}>
-                  Privé — {p.nom}
+                  Privé - {p.nom}
                 </option>
               ))}
             </select>
@@ -293,7 +293,7 @@ export function CommunicationsTab({ c }: { c: CoproWithStats }) {
           </div>
           {(notes ?? []).length === 0 && (
             <p className="se-small" style={{ color: "var(--fg-muted)" }}>
-              Aucune note pour l'instant — consignez ici les points d'avancement du dossier.
+              Aucune note pour l'instant - consignez ici les points d'avancement du dossier.
             </p>
           )}
           {(notes ?? []).map((n) => (
@@ -302,7 +302,7 @@ export function CommunicationsTab({ c }: { c: CoproWithStats }) {
               <div>
                 <div className="nbody">{n.body}</div>
                 <div className="nmeta">
-                  {n.author?.full_name ?? "—"} · {relativeDate(n.created_at)}
+                  {n.author?.full_name ?? "-"} · {relativeDate(n.created_at)}
                 </div>
               </div>
             </div>

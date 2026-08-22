@@ -1,4 +1,4 @@
-// Vos tâches — agrégation cross-dossiers des tâches actionnables de la phase courante
+// Vos tâches - agrégation cross-dossiers des tâches actionnables de la phase courante
 // (porté de login.jsx MyTasks, branché sur les vraies tables).
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";

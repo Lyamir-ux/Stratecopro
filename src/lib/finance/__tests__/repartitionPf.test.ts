@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { computePlansIndividuelsPf, type CoproTantiemes, type ItemRepartitionPf } from "../repartitionPf";
 
 const items: ItemRepartitionPf[] = [
-  { id: "lot:1", libelle: "Lot 1 — ITE", montantTtc: 100000 },
-  { id: "lot:2", libelle: "Lot 2 — Chauffage", montantTtc: 50000 },
+  { id: "lot:1", libelle: "Lot 1 - ITE", montantTtc: 100000 },
+  { id: "lot:2", libelle: "Lot 2 - Chauffage", montantTtc: 50000 },
   { id: "moe:0", libelle: "MOE phase travaux", montantTtc: 10000 },
 ];
 

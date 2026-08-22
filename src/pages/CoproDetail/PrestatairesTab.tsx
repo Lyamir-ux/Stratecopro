@@ -1,4 +1,4 @@
-// Onglet Prestataires du dossier copro — suivi des consultations de la copro
+// Onglet Prestataires du dossier copro - suivi des consultations de la copro
 // et des candidatures reçues, piloté depuis le dashboard de la copropriété :
 // valider / refuser une offre (e-mail automatique au prestataire), suivre
 // l'engagement du prestataire retenu, répondre aux questions des candidats.
@@ -139,7 +139,7 @@ function ProjetDocsPanel({ c }: { c: CoproWithStats }) {
             >
               {d.name}
             </button>
-            <Badge kind="neutral">{d.prestataire?.raison_sociale ?? "—"}</Badge>
+            <Badge kind="neutral">{d.prestataire?.raison_sociale ?? "-"}</Badge>
             <span className="spacer" style={{ flex: 1 }}></span>
             <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>déposé le {fmtDate(d.uploaded_at)}</span>
           </div>

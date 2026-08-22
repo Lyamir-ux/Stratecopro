@@ -1,4 +1,4 @@
-// Étapes 1 à 6 de l'assistant — portées de design-reference/project/ingenierie.jsx.
+// Étapes 1 à 6 de l'assistant - portées de design-reference/project/ingenierie.jsx.
 import { Icon } from "@/components/Icon";
 import { Cascade } from "@/components/Cascade";
 import { fmtEuro } from "@/lib/format";
@@ -128,10 +128,10 @@ export function Step3({ s, set, d, c, bareme }: StepProps) {
           </label>
           <select value={s.mprCoproPct} onChange={(e) => set({ mprCoproPct: Number(e.target.value) })}>
             <option value={bareme.mprCopro.tauxStandard}>
-              {bareme.mprCopro.tauxStandard} % — gain de {bareme.mprCopro.seuilMin} à {bareme.mprCopro.seuilMajore} %
+              {bareme.mprCopro.tauxStandard} % - gain de {bareme.mprCopro.seuilMin} à {bareme.mprCopro.seuilMajore} %
             </option>
             <option value={bareme.mprCopro.tauxMajore}>
-              {bareme.mprCopro.tauxMajore} % — gain ≥ {bareme.mprCopro.seuilMajore} %
+              {bareme.mprCopro.tauxMajore} % - gain ≥ {bareme.mprCopro.seuilMajore} %
             </option>
           </select>
         </div>

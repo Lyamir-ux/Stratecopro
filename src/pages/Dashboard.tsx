@@ -1,4 +1,4 @@
-// Tableau de bord AMO — porté de design-reference/project/dashboard.jsx
+// Tableau de bord AMO - porté de design-reference/project/dashboard.jsx
 // Vues Kanban / Galerie / Tableau, KPI, filtres phase & secteur fonctionnels.
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
@@ -245,7 +245,7 @@ function KpiStrip({ copros }: { copros: CoproWithStats[] }) {
     {
       ico: "trendingUp" as const,
       label: "Gain énergétique moyen",
-      val: gainMoy != null ? gainMoy + " %" : "—",
+      val: gainMoy != null ? gainMoy + " %" : "-",
       foot:
         gainMoy != null && gainMoy >= 35 ? (
           <span>
@@ -297,7 +297,7 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
     fragile: false,
   });
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
-  // Documents de passation joints à la création — déposés dans le dossier « Passation »
+  // Documents de passation joints à la création - déposés dans le dossier « Passation »
   const [passation, setPassation] = useState<File[]>([]);
   const passationRef = useRef<HTMLInputElement>(null);
   const nbBats = Math.max(1, form.nb_batiments || 1);
@@ -498,7 +498,7 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
           <label style={{ fontSize: 13, fontWeight: 500, color: "var(--fg2)" }}>
             Documents de passation{" "}
             <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>
-              · optionnel — déposés dans les fichiers du dossier (Passation)
+              · optionnel - déposés dans les fichiers du dossier (Passation)
             </span>
           </label>
           <input
@@ -586,7 +586,7 @@ function CorbeilleDialog({ onClose }: { onClose: () => void }) {
         <p style={{ color: "var(--fg-muted)" }}>Chargement…</p>
       ) : items.length === 0 ? (
         <p style={{ color: "var(--fg-muted)", margin: 0 }}>
-          La corbeille est vide. Les dossiers mis à la corbeille depuis leur fiche apparaissent ici — vous
+          La corbeille est vide. Les dossiers mis à la corbeille depuis leur fiche apparaissent ici - vous
           pouvez les restaurer ou les supprimer définitivement.
         </p>
       ) : (
@@ -728,7 +728,7 @@ export default function Dashboard() {
         <span className="spacer"></span>
         <button
           className="se-btn se-btn-ghost btn-sm"
-          title="Dossiers mis à la corbeille — restaurer ou supprimer définitivement"
+          title="Dossiers mis à la corbeille - restaurer ou supprimer définitivement"
           onClick={() => setShowCorbeille(true)}
         >
           <Icon name="trash" size={15} />
@@ -811,7 +811,7 @@ export default function Dashboard() {
 
       {!isLoading && filtered.length === 0 && (
         <div style={{ padding: 40, textAlign: "center", color: "var(--fg-muted)" }}>
-          Aucun dossier pour l'instant — créez votre première copropriété.
+          Aucun dossier pour l'instant - créez votre première copropriété.
         </div>
       )}
 

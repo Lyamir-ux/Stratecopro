@@ -1,4 +1,4 @@
-// Consulter un intervenant — plateforme de consultation des prestations
+// Consulter un intervenant - plateforme de consultation des prestations
 // intellectuelles. La consultation vise une copro de la plateforme OU une
 // copro externe (études pas encore démarrées). À la publication, les
 // prestataires référencés du métier sont alertés par e-mail ; ils déposent
@@ -124,7 +124,7 @@ function EtatConsultation({ cs }: { cs: Consultation }) {
   );
 }
 
-/** Questions posées par les candidats avant de postuler — la réponse de
+/** Questions posées par les candidats avant de postuler - la réponse de
  *  l'AMO est visible de tous les candidats de la consultation.
  *  Réutilisé par l'onglet Prestataires du dossier copro. */
 export function QuestionsPanel({ cs }: { cs: Consultation }) {
@@ -159,14 +159,14 @@ export function QuestionsPanel({ cs }: { cs: Consultation }) {
               }}
             >
               <strong>Réponse</strong>
-              {q.answered_at ? ` · ${fmtDate(q.answered_at)}` : ""} — {q.reponse}
+              {q.answered_at ? ` · ${fmtDate(q.answered_at)}` : ""} - {q.reponse}
             </p>
           ) : (
             <div style={{ display: "flex", gap: 8 }}>
               <input
                 className="edit-inp"
                 style={{ flex: 1, maxWidth: "none" }}
-                placeholder="Votre réponse — visible de tous les candidats…"
+                placeholder="Votre réponse - visible de tous les candidats…"
                 value={brouillons[q.id] ?? ""}
                 onChange={(e) => setBrouillons((p) => ({ ...p, [q.id]: e.target.value }))}
               />
@@ -395,7 +395,7 @@ function Card({ cs }: { cs: Consultation }) {
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
               <input
                 className="edit-inp"
-                placeholder="Candidature reçue hors plateforme — nom de l'organisme…"
+                placeholder="Candidature reçue hors plateforme - nom de l'organisme…"
                 value={newOrg}
                 onChange={(e) => setNewOrg(e.target.value)}
                 style={{ flex: 1, maxWidth: "none" }}
@@ -504,7 +504,7 @@ export default function Consultations() {
         nb_logements: nbLogements,
         nb_batiments: nbBatiments,
         sous_type: draft.type === "diag" && draft.sous_type ? draft.sous_type : null,
-        // options réservées à la maîtrise d'œuvre — jamais publiées pour les autres métiers
+        // options réservées à la maîtrise d'œuvre - jamais publiées pour les autres métiers
         options: draft.type === "moe" ? draft.options : [],
         files,
       });
@@ -519,14 +519,14 @@ export default function Consultations() {
       const n = res.notification;
       setNotice(
         n.total === 0
-          ? "Consultation publiée. Aucun prestataire référencé pour ce métier — pensez à enrichir la base prestataires."
+          ? "Consultation publiée. Aucun prestataire référencé pour ce métier - pensez à enrichir la base prestataires."
           : n.mode === "simulation"
             ? `Consultation publiée. ${n.total} prestataire${n.total > 1 ? "s" : ""} référencé${n.total > 1 ? "s" : ""} identifié${n.total > 1 ? "s" : ""} (envoi simulé : configurez RESEND_API_KEY pour l'e-mail réel).`
             : `Consultation publiée. ${n.envoyes} e-mail${n.envoyes > 1 ? "s" : ""} envoyé${n.envoyes > 1 ? "s" : ""}${n.erreurs ? `, ${n.erreurs} en erreur` : ""}.`
       );
     }
     if (res.docErrors.length > 0) {
-      setNotice((prev) => (prev ? prev + " " : "") + `Attention : pièce(s) non jointe(s) — ${res.docErrors.join(", ")}.`);
+      setNotice((prev) => (prev ? prev + " " : "") + `Attention : pièce(s) non jointe(s) - ${res.docErrors.join(", ")}.`);
     }
     setDraft({ type: "moe", sous_type: "", cible: "existante", copro_id: "", ext_nom: "", ext_adresse: "", ext_ville: "", ext_lots: "", ext_batiments: "", mission: "", date_limite: "", budget: "", options: [] });
     setFiles([]);
@@ -643,10 +643,10 @@ export default function Consultations() {
                     value={draft.copro_id}
                     onChange={(e) => set("copro_id", e.target.value)}
                   >
-                    <option value="">— Choisir —</option>
+                    <option value="">- Choisir -</option>
                     {(copros ?? []).map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name} — {c.city}
+                        {c.name} - {c.city}
                       </option>
                     ))}
                   </select>
@@ -849,7 +849,7 @@ export default function Consultations() {
       </div>
       {enLigne.length === 0 && !form && (
         <p className="se-small" style={{ color: "var(--fg-muted)" }}>
-          Aucune consultation en ligne — publiez votre premier appel à intervenants.
+          Aucune consultation en ligne - publiez votre premier appel à intervenants.
         </p>
       )}
       {closed.length > 0 && (

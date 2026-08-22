@@ -3,7 +3,7 @@ import { determineProfil } from "../profil";
 import { BAREME_2024_HORS_IDF as B } from "../bareme2024";
 import { BAREME_2026_HORS_IDF, BAREME_2026_IDF } from "../bareme2026";
 
-describe("determineProfil — barème 2024 hors IDF", () => {
+describe("determineProfil - barème 2024 hors IDF", () => {
   it("seuils exacts pour 1 personne (bornes incluses)", () => {
     expect(determineProfil(1, 17173, B)).toBe("Bleu");
     expect(determineProfil(1, 17174, B)).toBe("Jaune");
@@ -39,7 +39,7 @@ describe("determineProfil — barème 2024 hors IDF", () => {
   });
 });
 
-describe("determineProfil — barème Anah 2026", () => {
+describe("determineProfil - barème Anah 2026", () => {
   it("hors Île-de-France : bornes exactes pour 1 personne", () => {
     const b = BAREME_2026_HORS_IDF;
     expect(determineProfil(1, 17363, b)).toBe("Bleu");

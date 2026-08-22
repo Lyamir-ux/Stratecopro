@@ -1,4 +1,4 @@
-// Onglet Plans de financement — porté de detail.jsx (FinancementTab), branché sur les scénarios réels.
+// Onglet Plans de financement - porté de detail.jsx (FinancementTab), branché sur les scénarios réels.
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
@@ -196,7 +196,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
               ))}
               {!active.validated_at && (
                 <p className="se-small" style={{ color: "var(--fg-muted)" }}>
-                  Scénario non validé — les montants sont calculés à la volée. Validez l'étape 7 pour figer les plans.
+                  Scénario non validé - les montants sont calculés à la volée. Validez l'étape 7 pour figer les plans.
                 </p>
               )}
             </div>
@@ -205,7 +205,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
         <div className="panel">
           <div className="p-head">
             <Icon name="users" size={18} />
-            <h3>Prêt collectif — adhésions</h3>
+            <h3>Prêt collectif - adhésions</h3>
             <span style={{ flex: 1 }}></span>
             <Badge kind={ouverte ? "success" : "neutral"}>{ouverte ? "Campagne ouverte" : "Fermée"}</Badge>
           </div>
@@ -250,7 +250,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
             <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 2 }}>
               {(adhesions ?? []).length === 0 ? (
                 <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
-                  Aucun dossier d'adhésion pour l'instant — les copropriétaires y accèdent depuis leur portail
+                  Aucun dossier d'adhésion pour l'instant - les copropriétaires y accèdent depuis leur portail
                   après avoir choisi le prêt collectif.
                 </p>
               ) : (
@@ -266,7 +266,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                         style={{ color: a.statut === "signee" ? "var(--color-success-500)" : "var(--fg-muted)" }} />
                       <div style={{ minWidth: 0 }}>
                         <div className="t-title" style={{ fontSize: 13 }}>
-                          {a.coproprietaire?.nom ?? "—"}
+                          {a.coproprietaire?.nom ?? "-"}
                         </div>
                         <div className="t-copro">
                           {a.statut === "signee"
@@ -319,7 +319,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
             <div className="kv">
               <span className="k">Gain énergétique</span>
               <span className="v" style={{ color: "var(--color-primary-700)" }}>
-                {pv ? `+${pv.performancePct.toFixed(1).replace(".", ",")} %` : c.gain_pct != null ? `+${c.gain_pct} %` : "—"}
+                {pv ? `+${pv.performancePct.toFixed(1).replace(".", ",")} %` : c.gain_pct != null ? `+${c.gain_pct} %` : "-"}
               </span>
             </div>
             <div className="kv">
@@ -361,7 +361,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
           <div className="p-body" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {(plans ?? []).length === 0 ? (
               <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
-                Aucun plan généré — validez le plan de financement définitif : les plans individuels seront
+                Aucun plan généré - validez le plan de financement définitif : les plans individuels seront
                 répartis suivant les clés de tantièmes de la copropriété.
               </p>
             ) : (
@@ -384,7 +384,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                     <Icon name="user" size={16} style={{ color: "var(--fg-muted)" }} />
                     <div>
                       <div className="t-title" style={{ fontSize: 13 }}>
-                        {(p as { coproprietaires: { nom: string } | null }).coproprietaires?.nom ?? "—"}
+                        {(p as { coproprietaires: { nom: string } | null }).coproprietaires?.nom ?? "-"}
                       </div>
                       <div className="t-copro">
                         Quote-part {fmtEuro(p.quote_part)} · reste {fmtEuro(p.reste)}
@@ -413,7 +413,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
           <div className="p-body" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {(choix ?? []).length === 0 ? (
               <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
-                Aucun choix transmis — les copropriétaires choisissent leur financement depuis leur portail.
+                Aucun choix transmis - les copropriétaires choisissent leur financement depuis leur portail.
               </p>
             ) : (
               (choix ?? []).map((ch, i, arr) => (
@@ -429,11 +429,11 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                   />
                   <div>
                     <div className="t-title" style={{ fontSize: 13 }}>
-                      {(ch as { coproprietaires: { nom: string } | null }).coproprietaires?.nom ?? "—"}
+                      {(ch as { coproprietaires: { nom: string } | null }).coproprietaires?.nom ?? "-"}
                     </div>
                     <div className="t-copro">
                       {ch.type === "collectif"
-                        ? `Prêt collectif · ${ch.duree_annees ?? "—"} ans`
+                        ? `Prêt collectif · ${ch.duree_annees ?? "-"} ans`
                         : ch.type === "individuel"
                           ? `Prêt individuel · ${ch.lot_ids.length} lot${ch.lot_ids.length > 1 ? "s" : ""}`
                           : "Fonds propres"}
@@ -480,7 +480,7 @@ function PlanDefinitifPanel({ coproId }: { coproId: string }) {
       <div className="p-body" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {(plans ?? []).length === 0 ? (
           <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
-            Aucun plan définitif — importez le classeur Excel du chef de projet (onglets « PF définitif Eco PTZ
+            Aucun plan définitif - importez le classeur Excel du chef de projet (onglets « PF définitif Eco PTZ
             collectif / individuel » + lots avec colonne « Retenu ») : le logiciel reconnaît la nomenclature et
             recalcule le plan à chaque modification.
           </p>
@@ -513,7 +513,7 @@ function PlanDefinitifPanel({ coproId }: { coproId: string }) {
                 {p.statut === "valide" ? (
                   <button
                     className="se-btn se-btn-ghost btn-sm"
-                    title="Repasser ce plan en brouillon — les panneaux du financement ne seront plus remplis à partir de ce plan"
+                    title="Repasser ce plan en brouillon - les panneaux du financement ne seront plus remplis à partir de ce plan"
                     disabled={valider.isPending}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -671,7 +671,7 @@ function PlansIndividuelsPfPanel({
     if (!lot.coproprietaire_id) continue;
     const co =
       parCopro.get(lot.coproprietaire_id) ??
-      { coproprietaireId: lot.coproprietaire_id, nom: lot.coproprietaire?.nom ?? "—", tantiemes: {} };
+      { coproprietaireId: lot.coproprietaire_id, nom: lot.coproprietaire?.nom ?? "-", tantiemes: {} };
     for (const [code, t] of Object.entries(lot.tantiemes)) co.tantiemes[code] = (co.tantiemes[code] ?? 0) + t;
     parCopro.set(lot.coproprietaire_id, co);
   }
@@ -760,7 +760,7 @@ function PlansIndividuelsPfPanel({
         ) : manquants.length > 0 ? (
           cleUnique ? (
             <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
-              La clé « {cles[0].label || cles[0].code} » n'a aucun tantième — vérifiez l'import des lots
+              La clé « {cles[0].label || cles[0].code} » n'a aucun tantième - vérifiez l'import des lots
               (onglet Données de la copro).
             </p>
           ) : (
@@ -782,7 +782,7 @@ function PlansIndividuelsPfPanel({
           <>
             {cleUnique && (
               <p className="se-small" style={{ margin: "0 0 6px", color: "var(--fg-muted)" }}>
-                Répartition automatique — clé unique « {cles[0].label || cles[0].code} »
+                Répartition automatique - clé unique « {cles[0].label || cles[0].code} »
                 {" "}(total {totauxCles[cleUnique] ?? 0}).
               </p>
             )}
@@ -854,7 +854,7 @@ function RepartitionClesDialog({
   const [cleGlobale, setCleGlobale] = useState(defaut);
   const manquants = items.filter((it) => !config[it.id]).length;
   const libelleCle = (k: { code: string; label: string | null }) =>
-    `${k.code}${k.label && k.label !== k.code ? ` — ${k.label}` : ""} (total ${totauxCles[k.code] ?? 0})`;
+    `${k.code}${k.label && k.label !== k.code ? ` - ${k.label}` : ""} (total ${totauxCles[k.code] ?? 0})`;
 
   return (
     <Modal title="Clés de répartition des plans individuels" onClose={onClose} width={760} closeOnBackdrop={false}>
@@ -900,7 +900,7 @@ function RepartitionClesDialog({
                     onChange={(e) => setConfig((c2) => ({ ...c2, [it.id]: e.target.value }))}
                   >
                     <option value="" disabled>
-                      — choisir —
+                      - choisir -
                     </option>
                     {cles.map((k) => (
                       <option key={k.code} value={k.code}>

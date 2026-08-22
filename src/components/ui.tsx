@@ -1,4 +1,4 @@
-// Briques d'UI partagées — portées depuis design-reference/project/components.jsx
+// Briques d'UI partagées - portées depuis design-reference/project/components.jsx
 import type { ReactNode } from "react";
 import { Icon } from "./Icon";
 import { DPE, TEAM_FALLBACK, type DpeClass, type PhaseId } from "@/lib/referentiels";
@@ -82,7 +82,7 @@ export function Badge({ kind, children, dot }: { kind: BadgeKind; children: Reac
   );
 }
 
-// Miniature photo — placeholder de marque en attendant l'upload (M3, Supabase Storage)
+// Miniature photo - placeholder de marque en attendant l'upload (M3, Supabase Storage)
 export function ThumbSlot({ photoUrl, placeholder }: { photoUrl?: string | null; placeholder?: string }) {
   return (
     <div className="cc-thumb">
