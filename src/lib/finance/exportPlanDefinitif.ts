@@ -26,6 +26,12 @@ export function exportPlanDefinitif(data: PlanDefinitifData): WorkBook {
   const wb = utils.book_new();
   const used = new Set<string>();
 
+  // Copropriétés à plusieurs clés : la clé choisie ligne par ligne est exportée
+  // (colonne dédiée) - elle pilote les plans individuels dans le logiciel.
+  const avecCles =
+    data.lots.some((lot) => lot.lignes.some((l) => l.cleRepartition)) ||
+    data.moe.some((l) => l.cleRepartition);
+
   const lotSheetNames = new Map<number, string>();
 
   // ---------- Onglets PF (collectif, collectif sans avance, individuel) ----------
@@ -90,7 +96,7 @@ export function exportPlanDefinitif(data: PlanDefinitifData): WorkBook {
     push(null);
 
     // MOE et frais annexes
-    push(null, "MOE et frais annexes", null, "Scénario 1");
+    push(null, "MOE et frais annexes", null, "Scénario 1", null, avecCles ? "Clé de répartition" : null);
     for (const ph of PHASES_MOE) {
       let first = true;
       data.moe.forEach((l, i) => {
@@ -100,7 +106,8 @@ export function exportPlanDefinitif(data: PlanDefinitifData): WorkBook {
           l.entreprise ? `${l.designation} (${l.entreprise})` : l.designation,
           null,
           r.moe[i].montantTtc,
-          l.commentaire ?? null
+          l.commentaire ?? null,
+          avecCles ? l.cleRepartition ?? null : null
         );
         first = false;
       });
@@ -231,10 +238,18 @@ export function exportPlanDefinitif(data: PlanDefinitifData): WorkBook {
       "Retenu",
       "Scénario",
       null,
+      avecCles ? "Clé de répartition" : null,
     ]);
     rows.push([null, null, null, "€ HT", null]);
     for (const l of lot.lignes) {
-      rows.push([l.groupe ?? null, l.designation, l.retenu ? "oui" : "non", l.montantHt, `TVA de ${fmtTaux(l.tvaPct)}%`]);
+      rows.push([
+        l.groupe ?? null,
+        l.designation,
+        l.retenu ? "oui" : "non",
+        l.montantHt,
+        `TVA de ${fmtTaux(l.tvaPct)}%`,
+        avecCles ? l.cleRepartition ?? null : null,
+      ]);
     }
     rows.push([null, "Total HT", null, rl.totalHt, null]);
     if (lot.remisePct > 0) {
@@ -248,7 +263,7 @@ export function exportPlanDefinitif(data: PlanDefinitifData): WorkBook {
     rows.push([null, "Total TTC", null, rl.totalTtc, null]);
 
     const ws = utils.aoa_to_sheet(rows);
-    ws["!cols"] = [{ wch: 26 }, { wch: 58 }, { wch: 8 }, { wch: 14 }, { wch: 14 }];
+    ws["!cols"] = [{ wch: 26 }, { wch: 58 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 18 }];
     const name = sheetName(`Lot ${numStr}  ${lot.titre}`, used);
     lotSheetNames.set(lot.numero, name);
     utils.book_append_sheet(wb, ws, name);

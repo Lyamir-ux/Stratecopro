@@ -23,6 +23,12 @@ export interface LigneLot {
   montantHt: number;
   /** Taux de TVA de la ligne (5.5, 10, 20). */
   tvaPct: number;
+  /**
+   * Code de la clé de répartition appliquée à la ligne (copropriétés à
+   * plusieurs clés) - sert aux plans individuels. Absent : clé unique de la
+   * copro, ou choix legacy par lot entier (repartitionCles).
+   */
+  cleRepartition?: string;
   commentaire?: string;
 }
 
@@ -64,6 +70,8 @@ export interface LigneMoe {
   eligibleMprEtudes: boolean;
   /** Prestation AMO - assiette MaPrimeRénov' AMO (50 % du HT). */
   eligibleMprAmo: boolean;
+  /** Code de la clé de répartition de la ligne (phase travaux uniquement) - voir LigneLot. */
+  cleRepartition?: string;
   commentaire?: string;
 }
 
@@ -169,9 +177,10 @@ export interface PlanDefinitifData {
   params: ParamsFinancement;
   variantes: VariantesPlan;
   /**
-   * Clé de répartition (code) choisie par item pour les plans individuels -
-   * clés « lot:<numero> » / « moe:<index> » (voir repartitionPf.ts). Inutile
-   * quand la copropriété n'a qu'une seule clé (tout est réparti avec elle).
+   * Legacy : clé de répartition (code) choisie par lot entier / item MOE -
+   * clés « lot:<numero> » / « moe:<index> » (voir repartitionPf.ts). Sert de
+   * repli aux lignes sans `cleRepartition` (plans enregistrés avant le choix
+   * ligne par ligne). Inutile quand la copropriété n'a qu'une seule clé.
    */
   repartitionCles?: Record<string, string>;
 }

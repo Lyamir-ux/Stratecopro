@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { computePlansIndividuelsPf, type CoproTantiemes, type ItemRepartitionPf } from "../repartitionPf";
+import { computePlanDefinitif, makeDefaultPlanDefinitif } from "../planDefinitif";
+import {
+  computePlansIndividuelsPf,
+  itemsARepartirPf,
+  type CoproTantiemes,
+  type ItemRepartitionPf,
+} from "../repartitionPf";
 
 const items: ItemRepartitionPf[] = [
   { id: "lot:1", libelle: "Lot 1 - ITE", montantTtc: 100000 },
@@ -85,5 +91,94 @@ describe("computePlansIndividuelsPf", () => {
     expect(manquants.map((m) => m.id)).toEqual(["lot:2", "moe:0"]);
     // les items affectés sont quand même répartis (plan partiel)
     expect(plans.find((p) => p.nom === "Dupont")?.quotePartAvant).toBeCloseTo(60000, 2);
+  });
+
+  it("utilise la clé portée par la ligne quand aucune clé n'est forcée", () => {
+    const itemsAvecCle: ItemRepartitionPf[] = [
+      { id: "lot:1:0", libelle: "ITE", montantTtc: 100000, cle: "GEN" },
+      { id: "lot:1:1", libelle: "Chaufferie", montantTtc: 50000, cle: "CHAUF" },
+    ];
+    const { plans, manquants } = computePlansIndividuelsPf({
+      items: itemsAvecCle,
+      cleParItem: {},
+      copros,
+      totauxCles,
+      totalAides: 0,
+      fondsTravaux: 0,
+      totalPhaseTravauxTtc: 150000,
+    });
+    expect(manquants).toHaveLength(0);
+    // Dupont : 60 % de 100 000 (GEN) + 30 % de 50 000 (CHAUF)
+    expect(plans.find((p) => p.nom === "Dupont")?.quotePartAvant).toBeCloseTo(75000, 2);
+  });
+
+  it("cleParItem (clé unique de la copro) est prioritaire sur la clé de la ligne", () => {
+    const itemsAvecCle: ItemRepartitionPf[] = [
+      { id: "lot:1:0", libelle: "ITE", montantTtc: 100000, cle: "CHAUF" },
+    ];
+    const { plans } = computePlansIndividuelsPf({
+      items: itemsAvecCle,
+      cleParItem: { "lot:1:0": "GEN" },
+      copros,
+      totauxCles,
+      totalAides: 0,
+      fondsTravaux: 0,
+      totalPhaseTravauxTtc: 100000,
+    });
+    expect(plans.find((p) => p.nom === "Dupont")?.quotePartAvant).toBeCloseTo(60000, 2);
+  });
+});
+
+describe("itemsARepartirPf", () => {
+  it("génère un item par ligne de devis (remise et imprévus inclus) et par ligne MOE travaux", () => {
+    const data = makeDefaultPlanDefinitif();
+    data.params.imprevusPct = 10;
+    data.lots = [
+      {
+        numero: 1,
+        titre: "Façades",
+        remisePct: 10,
+        lignes: [
+          { designation: "ITE", retenu: true, montantHt: 1000, tvaPct: 5.5, cleRepartition: "GEN" },
+          { designation: "Peinture", retenu: false, montantHt: 500, tvaPct: 10 },
+          { designation: "Ligne vide", retenu: false, montantHt: 0, tvaPct: 10 },
+        ],
+      },
+    ];
+    data.moe = [
+      {
+        designation: "MOE chantier",
+        phase: "travaux",
+        montant: { mode: "forfait", montantHt: 200 },
+        tvaPct: 20,
+        eligibleMprEtudes: false,
+        eligibleMprAmo: false,
+        cleRepartition: "CHAUF",
+      },
+      {
+        designation: "Audit",
+        phase: "etude",
+        montant: { mode: "forfait", montantHt: 300 },
+        tvaPct: 20,
+        eligibleMprEtudes: true,
+        eligibleMprAmo: false,
+      },
+    ];
+    // repli legacy : la clé choisie autrefois pour le lot entier s'applique aux lignes sans clé
+    data.repartitionCles = { "lot:1": "LEGACY" };
+
+    const r = computePlanDefinitif(data);
+    const items = itemsARepartirPf(data, r);
+
+    expect(items.map((it) => it.id)).toEqual(["lot:1:0", "lot:1:1", "moe:0"]);
+    // ITE : (1000 × 0,9 + 1000 × 5,5 %) × 1,10 - remise sur le HT, TVA avant remise, imprévus
+    expect(items[0]).toMatchObject({ cle: "GEN" });
+    expect(items[0].montantTtc).toBeCloseTo((1000 * 0.9 + 55) * 1.1, 6);
+    expect(items[1]).toMatchObject({ cle: "LEGACY" });
+    expect(items[1].montantTtc).toBeCloseTo((500 * 0.9 + 50) * 1.1, 6);
+    expect(items[2]).toMatchObject({ cle: "CHAUF" });
+    expect(items[2].montantTtc).toBeCloseTo(240, 6);
+    // la somme des lignes de lot couvre le total TTC du lot avec imprévus
+    expect(items[0].montantTtc + items[1].montantTtc).toBeCloseTo(r.lots[0].totalTtc * 1.1, 6);
   });
 });

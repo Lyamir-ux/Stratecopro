@@ -1,31 +1,49 @@
 // Plans individuels générés depuis le PF définitif validé.
 // Le total de la phase travaux TTC (lots avec imprévus + MOE phase travaux)
-// est réparti item par item suivant une clé de répartition de la copropriété :
+// est réparti ligne par ligne suivant une clé de répartition de la copropriété :
 // s'il n'y a qu'une seule clé, tout passe par elle sans question ; sinon
-// l'AMO choisit la clé lot par lot, item par item.
+// l'AMO choisit la clé sur chaque ligne de devis et chaque ligne MOE
+// (choix porté par la ligne dans le PF définitif).
 import type { PlanDefinitifData, PlanDefinitifResult } from "./planDefinitif";
 import { round2 } from "./round";
 
-/** Item du PF à répartir suivant une clé (lot de travaux ou ligne MOE phase travaux). */
+/** Ligne du PF à répartir suivant une clé (ligne de devis ou ligne MOE phase travaux). */
 export interface ItemRepartitionPf {
-  /** « lot:<numero> » ou « moe:<index> » - sert de clé dans repartitionCles. */
+  /** « lot:<numero>:<index ligne> » ou « moe:<index> ». */
   id: string;
   libelle: string;
-  /** Montant TTC phase travaux de l'item (imprévus inclus pour les lots). */
+  /** Montant TTC phase travaux de la ligne (remise et imprévus inclus pour les lots). */
   montantTtc: number;
+  /** Clé (code) choisie sur la ligne - repli : choix legacy par lot entier (repartitionCles). */
+  cle?: string;
 }
 
-/** Lots + imprévus au prorata, puis lignes MOE de la phase travaux. */
+/** Lignes de devis (remise du lot et imprévus au prorata), puis lignes MOE de la phase travaux. */
 export function itemsARepartirPf(data: PlanDefinitifData, r: PlanDefinitifResult): ItemRepartitionPf[] {
   const coefImprevus = 1 + data.params.imprevusPct / 100;
-  const items: ItemRepartitionPf[] = r.lots.map((l) => ({
-    id: `lot:${l.numero}`,
-    libelle: `Lot ${l.numero} - ${l.titre}`,
-    montantTtc: l.totalTtc * coefImprevus,
-  }));
+  const legacy = data.repartitionCles ?? {};
+  const items: ItemRepartitionPf[] = [];
+  for (const lot of data.lots) {
+    lot.lignes.forEach((l, i) => {
+      if (l.montantHt === 0) return;
+      // Convention du classeur : remise sur le HT, TVA calculée sur le montant avant remise.
+      const ttc = l.montantHt * (1 - lot.remisePct / 100) + (l.montantHt * l.tvaPct) / 100;
+      items.push({
+        id: `lot:${lot.numero}:${i}`,
+        libelle: `Lot ${lot.numero} - ${l.designation || lot.titre}`,
+        montantTtc: ttc * coefImprevus,
+        cle: l.cleRepartition ?? legacy[`lot:${lot.numero}`],
+      });
+    });
+  }
   r.moe.forEach((m, i) => {
     if (m.phase === "travaux" && m.montantTtc !== 0)
-      items.push({ id: `moe:${i}`, libelle: m.designation || `Ligne MOE ${i + 1}`, montantTtc: m.montantTtc });
+      items.push({
+        id: `moe:${i}`,
+        libelle: m.designation || `Ligne MOE ${i + 1}`,
+        montantTtc: m.montantTtc,
+        cle: data.moe[i]?.cleRepartition ?? legacy[`moe:${i}`],
+      });
   });
   return items;
 }
@@ -49,15 +67,16 @@ export interface PlanIndividuelPf {
 }
 
 /**
- * Répartit chaque item suivant sa clé : part du copropriétaire =
- * tantièmes(copro, clé) / total(clé). Les aides et le fonds travaux sont
- * déduits au prorata de la quote-part. Retourne aussi les items sans clé
- * exploitable (clé non choisie ou total de clé nul) - le plan n'est complet
- * que si `manquants` est vide.
+ * Répartit chaque ligne suivant sa clé : part du copropriétaire =
+ * tantièmes(copro, clé) / total(clé). La clé d'une ligne est `cleParItem`
+ * (prioritaire - cas de la clé unique) puis la clé portée par la ligne.
+ * Les aides et le fonds travaux sont déduits au prorata de la quote-part.
+ * Retourne aussi les lignes sans clé exploitable (clé non choisie ou total
+ * de clé nul) - le plan n'est complet que si `manquants` est vide.
  */
 export function computePlansIndividuelsPf(input: {
   items: ItemRepartitionPf[];
-  /** Clé (code) choisie par item ; ignoré si une seule clé est fournie dans totauxCles. */
+  /** Clé (code) forcée par item - prioritaire sur la clé portée par la ligne. */
   cleParItem: Record<string, string>;
   copros: CoproTantiemes[];
   /** Total de tantièmes par code de clé (somme sur tous les lots de la copro). */
@@ -67,14 +86,15 @@ export function computePlansIndividuelsPf(input: {
   totalPhaseTravauxTtc: number;
 }): { plans: PlanIndividuelPf[]; manquants: ItemRepartitionPf[] } {
   const { items, cleParItem, copros, totauxCles, totalAides, fondsTravaux, totalPhaseTravauxTtc } = input;
+  const cleDe = (it: ItemRepartitionPf) => cleParItem[it.id] ?? it.cle;
   const manquants = items.filter((it) => {
-    const cle = cleParItem[it.id];
+    const cle = cleDe(it);
     return !cle || !(totauxCles[cle] > 0);
   });
 
   const parts = new Map<string, number>();
   for (const it of items) {
-    const cle = cleParItem[it.id];
+    const cle = cleDe(it);
     const total = cle ? totauxCles[cle] : 0;
     if (!cle || !(total > 0)) continue;
     for (const co of copros) {

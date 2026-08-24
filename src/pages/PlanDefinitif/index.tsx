@@ -8,11 +8,13 @@ import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { useCopro } from "@/api/copros";
+import { useDonnees } from "@/api/donnees";
 import { usePlanDefinitif, useUpdatePlanDefinitif, useValiderPlanDefinitif } from "@/api/planDefinitif";
 import { fmtEuro, fmtEuroFull } from "@/lib/format";
 import {
   computePlanDefinitif,
   exportPlanDefinitif,
+  itemsARepartirPf,
   makeAidesDefaut,
   PHASES_MOE,
   readPlanDefinitif,
@@ -70,12 +72,44 @@ function TvaSelect({ value, onChange }: { value: number; onChange: (n: number) =
 const thR: CSSProperties = { textAlign: "right" };
 const tdR: CSSProperties = { textAlign: "right", whiteSpace: "nowrap" };
 
+/** Clés de répartition de la copro telles que servies par useDonnees. */
+type CleCopro = { code: string; label: string | null; is_default: boolean };
+
+/** Sélecteur de la clé de répartition d'une ligne (copropriétés à plusieurs clés). */
+function CleSelect({
+  cles,
+  value,
+  onChange,
+}: {
+  cles: CleCopro[];
+  value: string | undefined;
+  onChange: (code: string | undefined) => void;
+}) {
+  return (
+    <select
+      className="edit-inp"
+      style={{ width: "100%" }}
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value || undefined)}
+    >
+      <option value="">- choisir -</option>
+      {cles.map((k) => (
+        <option key={k.code} value={k.code}>
+          {k.code}
+          {k.label && k.label !== k.code ? ` - ${k.label}` : ""}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 // ---------- page ----------
 
 export default function PlanDefinitifPage() {
   const { id: coproId, planId } = useParams();
   const navigate = useNavigate();
   const { data: c } = useCopro(coproId);
+  const { data: donnees } = useDonnees(coproId);
   const { data: plan, isLoading } = usePlanDefinitif(planId);
   const update = useUpdatePlanDefinitif(coproId ?? "");
   const valider = useValiderPlanDefinitif(coproId ?? "");
@@ -84,6 +118,8 @@ export default function PlanDefinitifPage() {
   const [dirty, setDirty] = useState(false);
   // Lots repliés par défaut : on ne déroule que le lot qu'on veut consulter/éditer.
   const [lotsOuverts, setLotsOuverts] = useState<Record<number, boolean>>({});
+  // Clé sélectionnée pour l'action « appliquer à toutes les lignes » (copros à plusieurs clés).
+  const [cleGlobale, setCleGlobale] = useState("");
 
   useEffect(() => {
     if (plan && !dirty) setData(readPlanDefinitif(plan.data));
@@ -100,6 +136,14 @@ export default function PlanDefinitifPage() {
 
   if (isLoading || !plan || !data || !r)
     return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
+
+  // Copropriétés à plusieurs clés de répartition : la clé se choisit ligne par
+  // ligne (lignes de devis + lignes MOE phase travaux) et alimente les plans
+  // individuels du financement.
+  const cles: CleCopro[] = donnees?.cles ?? [];
+  const multiCles = cles.length > 1;
+  const itemsCles = multiCles ? itemsARepartirPf(data, r) : [];
+  const lignesSansCle = itemsCles.filter((it) => !it.cle).length;
 
   const edit = (fn: (d: PlanDefinitifData) => PlanDefinitifData) => {
     setData((d) => (d ? fn(structuredClone(d)) : d));
@@ -338,6 +382,11 @@ export default function PlanDefinitifPage() {
                         </th>
                         <th style={{ ...thR, width: 130 }}>€ HT</th>
                         <th style={{ width: 90 }}>TVA</th>
+                        {multiCles && (
+                          <th style={{ width: 170 }} title="Clé de répartition appliquée à la ligne pour les plans individuels">
+                            Clé de répartition
+                          </th>
+                        )}
                         <th style={{ width: 36 }}></th>
                       </tr>
                     </thead>
@@ -376,6 +425,15 @@ export default function PlanDefinitifPage() {
                           <td>
                             <TvaSelect value={l.tvaPct} onChange={(n) => edit((d) => ((d.lots[li].lignes[i].tvaPct = n), d))} />
                           </td>
+                          {multiCles && (
+                            <td>
+                              <CleSelect
+                                cles={cles}
+                                value={l.cleRepartition ?? data.repartitionCles?.[`lot:${lot.numero}`]}
+                                onChange={(code) => edit((d) => ((d.lots[li].lignes[i].cleRepartition = code), d))}
+                              />
+                            </td>
+                          )}
                           <td>
                             <button className="icon-btn" title="Supprimer la ligne" onClick={() => edit((d) => (d.lots[li].lignes.splice(i, 1), d))}>
                               <Icon name="x" size={14} />
@@ -488,6 +546,11 @@ export default function PlanDefinitifPage() {
                   <th style={{ width: 56 }} title="Assiette Maprimerénov' AMO (50 %)">
                     AMO
                   </th>
+                  {multiCles && (
+                    <th style={{ width: 170 }} title="Clé de répartition de la ligne (phase travaux uniquement) pour les plans individuels">
+                      Clé de répartition
+                    </th>
+                  )}
                   <th style={{ ...thR, width: 110 }}>TTC</th>
                   <th style={{ width: 36 }}></th>
                 </tr>
@@ -578,6 +641,21 @@ export default function PlanDefinitifPage() {
                         onChange={(e) => edit((d) => ((d.moe[i].eligibleMprAmo = e.target.checked), d))}
                       />
                     </td>
+                    {multiCles && (
+                      <td>
+                        {l.phase === "travaux" ? (
+                          <CleSelect
+                            cles={cles}
+                            value={l.cleRepartition ?? data.repartitionCles?.[`moe:${i}`]}
+                            onChange={(code) => edit((d) => ((d.moe[i].cleRepartition = code), d))}
+                          />
+                        ) : (
+                          <span className="se-small" style={{ color: "var(--fg-muted)" }} title="Seules les lignes de la phase travaux sont réparties dans les plans individuels">
+                            -
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="mono" style={tdR}>
                       {fmtEuroFull(r.moe[i]?.montantTtc ?? 0)}
                     </td>
@@ -597,6 +675,77 @@ export default function PlanDefinitifPage() {
           </p>
         </div>
       </div>
+
+      {/* ---- répartition par clé (copros à plusieurs clés) ----
+          Le choix se fait ligne par ligne dans les tableaux ci-dessus ; ce
+          panneau récapitule les montants TTC phase travaux par clé - ce sont
+          ces clés qui servent aux plans individuels du financement. */}
+      {multiCles && (
+        <div className="panel">
+          <div className="p-head">
+            <Icon name="users" size={18} />
+            <h3>Répartition par clé</h3>
+            <span style={{ flex: 1 }}></span>
+            {lignesSansCle > 0 ? (
+              <Badge kind="warn">
+                {lignesSansCle} ligne{lignesSansCle > 1 ? "s" : ""} sans clé
+              </Badge>
+            ) : (
+              <Badge kind="success">Toutes les lignes affectées</Badge>
+            )}
+          </div>
+          <div className="p-body">
+            <p className="se-small" style={{ color: "var(--fg-muted)", margin: "0 0 10px" }}>
+              La copropriété a {cles.length} clés de répartition : choisissez sur chaque ligne de devis et
+              chaque ligne MOE de la phase travaux la clé à appliquer. Ces choix servent au calcul des plans
+              de financement individuels (onglet Financement de la copropriété).
+            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13 }}>Appliquer une clé à toutes les lignes :</span>
+              <select className="edit-inp" value={cleGlobale} onChange={(e) => setCleGlobale(e.target.value)}>
+                <option value="">- choisir -</option>
+                {cles.map((k) => (
+                  <option key={k.code} value={k.code}>
+                    {k.code}
+                    {k.label && k.label !== k.code ? ` - ${k.label}` : ""}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="se-btn se-btn-secondary btn-sm"
+                disabled={!cleGlobale}
+                onClick={() =>
+                  edit((d) => {
+                    for (const lot of d.lots) for (const l of lot.lignes) l.cleRepartition = cleGlobale;
+                    for (const l of d.moe) if (l.phase === "travaux") l.cleRepartition = cleGlobale;
+                    return d;
+                  })
+                }
+              >
+                Appliquer
+              </button>
+            </div>
+            <div className="kv" style={{ display: "flex", gap: 24, flexWrap: "wrap", fontSize: 13.5 }}>
+              {cles.map((k) => {
+                const total = itemsCles.reduce((s, it) => s + (it.cle === k.code ? it.montantTtc : 0), 0);
+                if (total === 0) return null;
+                return (
+                  <span key={k.code}>
+                    Clé {k.code}
+                    {k.label && k.label !== k.code ? ` - ${k.label}` : ""} <b>{fmtEuroFull(total)}</b>
+                  </span>
+                );
+              })}
+              {lignesSansCle > 0 && (
+                <span style={{ color: "var(--color-error-700)" }}>
+                  Non affecté{" "}
+                  <b>{fmtEuroFull(itemsCles.reduce((s, it) => s + (it.cle ? 0 : it.montantTtc), 0))}</b>
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ---- aides ---- */}
       <div className="panel">

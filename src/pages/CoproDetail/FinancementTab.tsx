@@ -638,8 +638,8 @@ function PanelIngenieriePf({
 /**
  * Plans individuels générés depuis le PF définitif validé. Une seule clé de
  * répartition dans la copropriété → tout est réparti automatiquement avec
- * elle ; plusieurs clés → l'AMO choisit, lot par lot et item par item, la clé
- * à appliquer (choix conservés dans le plan).
+ * elle ; plusieurs clés → l'AMO choisit, ligne par ligne, la clé à appliquer
+ * (choix porté par les lignes du PF définitif, modifiable ici ou dans l'éditeur du plan).
  */
 function PlansIndividuelsPfPanel({
   coproId,
@@ -676,10 +676,12 @@ function PlansIndividuelsPfPanel({
     parCopro.set(lot.coproprietaire_id, co);
   }
 
+  // Clé unique : tout passe par elle. Sinon la clé de chaque ligne vient du PF
+  // définitif (choix ligne par ligne, repli legacy par lot) - déjà portée par les items.
   const cleUnique = cles.length === 1 ? cles[0].code : null;
   const cleParItem: Record<string, string> = cleUnique
     ? Object.fromEntries(items.map((it) => [it.id, cleUnique]))
-    : (pvData.repartitionCles ?? {});
+    : {};
 
   const { plans, manquants } = computePlansIndividuelsPf({
     items,
@@ -691,11 +693,22 @@ function PlansIndividuelsPfPanel({
     totalPhaseTravauxTtc: pv.totalPhaseTravauxTtc,
   });
 
-  const saveCles = (config: Record<string, string>) =>
-    update.mutate(
-      { id: plan.id, data: { ...pvData, repartitionCles: config } },
-      { onSuccess: () => setConfigOpen(false) }
-    );
+  // Le choix est porté par les lignes du PF définitif (ids « lot:<numero>:<index> »
+  // / « moe:<index> ») - il reste ainsi visible et modifiable dans l'éditeur du plan.
+  const saveCles = (config: Record<string, string>) => {
+    const data = structuredClone(pvData);
+    for (const [id, cle] of Object.entries(config)) {
+      const mLot = /^lot:(\d+):(\d+)$/.exec(id);
+      if (mLot) {
+        const ligne = data.lots.find((l) => l.numero === Number(mLot[1]))?.lignes[Number(mLot[2])];
+        if (ligne) ligne.cleRepartition = cle;
+        continue;
+      }
+      const mMoe = /^moe:(\d+)$/.exec(id);
+      if (mMoe && data.moe[Number(mMoe[1])]) data.moe[Number(mMoe[1])].cleRepartition = cle;
+    }
+    update.mutate({ id: plan.id, data }, { onSuccess: () => setConfigOpen(false) });
+  };
 
   // Partage au portail copropriétaire : clé de référence pour la mise à
   // l'échelle par lot (clé unique, sinon clé par défaut de la copro).
@@ -766,8 +779,9 @@ function PlansIndividuelsPfPanel({
           ) : (
           <>
             <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
-              La copropriété a {cles.length} clés de répartition : choisissez, lot par lot et item par item,
-              la clé à appliquer ({manquants.length} item{manquants.length > 1 ? "s" : ""} restant à affecter).
+              La copropriété a {cles.length} clés de répartition : choisissez, ligne par ligne, la clé à
+              appliquer ({manquants.length} ligne{manquants.length > 1 ? "s" : ""} restant à affecter -
+              également modifiable dans l'éditeur du PF définitif).
             </p>
             <button
               className="se-btn se-btn-primary btn-sm"
@@ -821,7 +835,7 @@ function PlansIndividuelsPfPanel({
           items={items}
           cles={cles}
           totauxCles={totauxCles}
-          initial={cleParItem}
+          initial={Object.fromEntries(items.flatMap((it) => (it.cle ? [[it.id, it.cle]] : [])))}
           pending={update.isPending}
           onSave={saveCles}
           onClose={() => setConfigOpen(false)}
@@ -859,11 +873,12 @@ function RepartitionClesDialog({
   return (
     <Modal title="Clés de répartition des plans individuels" onClose={onClose} width={760} closeOnBackdrop={false}>
       <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 0 }}>
-        Chaque lot de travaux (imprévus inclus) et chaque frais de la phase travaux est réparti entre les
-        copropriétaires suivant la clé choisie.
+        Chaque ligne de devis (remise et imprévus inclus) et chaque frais de la phase travaux est réparti
+        entre les copropriétaires suivant la clé choisie pour la ligne. Le choix est enregistré sur le PF
+        définitif et reste modifiable dans son éditeur.
       </p>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 13 }}>Appliquer à tous les items :</span>
+        <span style={{ fontSize: 13 }}>Appliquer à toutes les lignes :</span>
         <select className="edit-inp" value={cleGlobale} onChange={(e) => setCleGlobale(e.target.value)}>
           {cles.map((k) => (
             <option key={k.code} value={k.code}>
@@ -882,7 +897,7 @@ function RepartitionClesDialog({
         <table className="dossiers" style={{ fontSize: 12.5 }}>
           <thead>
             <tr>
-              <th>Lot / item</th>
+              <th>Ligne</th>
               <th style={{ textAlign: "right", width: 130 }}>Montant TTC</th>
               <th style={{ width: 240 }}>Clé de répartition</th>
             </tr>
@@ -921,7 +936,7 @@ function RepartitionClesDialog({
         <button
           className="se-btn se-btn-primary btn-sm"
           disabled={manquants > 0 || pending}
-          title={manquants > 0 ? `${manquants} item(s) sans clé` : undefined}
+          title={manquants > 0 ? `${manquants} ligne(s) sans clé` : undefined}
           onClick={() => onSave(config)}
         >
           {pending ? "Enregistrement…" : "Enregistrer la répartition"}
