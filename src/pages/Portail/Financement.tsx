@@ -70,7 +70,8 @@ export function Financement({
     );
   }
 
-  const cle = readParams(scenario.params, bareme).cle;
+  const params = readParams(scenario.params, bareme);
+  const cle = params.cle;
   // On finance le reste avant travaux : les CEE, versés à la fin du chantier,
   // n'en font pas partie (ils arrivent après).
   const indiv = computeIndiv(scenario, bareme, plan, totalTantiemes(lots, cle), profil);
@@ -263,7 +264,9 @@ export function Financement({
                   <span className="lc-main">
                     <b>Lot n°{l.num}</b>{l.batiment ? " · Bât. " + l.batiment : ""}
                   </span>
-                  <span className="lc-tant">{lotTantiemes(l, cle)}/1000</span>
+                  <span className="lc-tant">
+                    {lotTantiemes(l, cle).toLocaleString("fr-FR")}/{(params.totalCle || 1000).toLocaleString("fr-FR")}
+                  </span>
                 </label>
               ))}
             </div>

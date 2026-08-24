@@ -170,7 +170,8 @@ export interface IndivBreakdown {
 /**
  * Décomposition pour un sous-ensemble de tantièmes (un lot ou tous les lots).
  * Si le plan individuel exact existe, on le met à l'échelle t/tPlan ;
- * sinon estimation prorata depuis les paramètres du scénario (clé ≈ 1000 ‰).
+ * sinon estimation prorata depuis les paramètres du scénario, sur le total
+ * de la clé persisté dans les params (1000 par défaut).
  */
 export function computeIndiv(
   scenario: Scenario,
@@ -205,7 +206,7 @@ export function computeIndiv(
     };
   }
   const coutTotal = params.travaux + params.honoraires + params.aleas;
-  const frac = tantiemes / 1000;
+  const frac = tantiemes / (params.totalCle || 1000);
   const p = profil ?? "Jaune";
   const quotePart = coutTotal * frac;
   const mprIndiv = params.primeIndiv[p] ?? 0;

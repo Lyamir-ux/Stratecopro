@@ -39,6 +39,7 @@ export function makeDefaultParams(bareme: Bareme): FinanceParams {
     honoraires: 0,
     aleas: 0,
     cle: "MUN",
+    totalCle: 1000,
     mprCoproPct: bareme.mprCopro.tauxStandard,
     bonusPassoire: false,
     cee: 0,

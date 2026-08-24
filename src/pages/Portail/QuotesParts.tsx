@@ -195,7 +195,9 @@ export function QuotesParts({
                   </div>
                   <div className="kv">
                     <span className="k">Tantièmes</span>
-                    <span className="v">{lotT}/1000</span>
+                    <span className="v">
+                      {lotT.toLocaleString("fr-FR")}/{(params.totalCle || 1000).toLocaleString("fr-FR")}
+                    </span>
                   </div>
                   {lot.usage === "habitation" && lotsRattaches(lots, lot).length > 0 && (
                     <div className="kv">

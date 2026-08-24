@@ -110,9 +110,14 @@ export default function Ingenierie() {
     setDirty(true);
   };
 
+  // Total de la clé courante (dénominateur des tantièmes) - persisté avec les
+  // params pour que le portail affiche et estime les quotes-parts sur la bonne base.
+  const totalCleCourant = () =>
+    (donnees?.lots ?? []).reduce((a, l) => a + (l.tantiemes[draft.cle] ?? 0), 0) || draft.totalCle || 1000;
+
   const save = async () => {
     if (locked || !dirty) return;
-    await updateScenario.mutateAsync({ id: active.id, params: draft });
+    await updateScenario.mutateAsync({ id: active.id, params: { ...draft, totalCle: totalCleCourant() } });
     setDirty(false);
   };
 
@@ -149,7 +154,7 @@ export default function Ingenierie() {
     const baseName = f.name.replace(/\.(xlsx|xls|csv)$/i, "");
     const sc = await createScenario.mutateAsync({
       name: baseName || "Plan importé",
-      params: draft,
+      params: { ...draft, totalCle: totalCleCourant() },
       statut: "importe",
       locked: true,
       baremeMillesime: bareme.millesime,
@@ -163,7 +168,7 @@ export default function Ingenierie() {
     const { owners, totalCle } = buildOwners(donnees, draft.cle, profils);
     const res = await validateScenario.mutateAsync({
       scenarioId: active.id,
-      params: draft,
+      params: { ...draft, totalCle },
       ctx,
       owners,
       totalCle,

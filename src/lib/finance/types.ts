@@ -46,6 +46,8 @@ export interface FinanceParams {
   honoraires: number;
   aleas: number;
   cle: CleRepartition;
+  /** Total de la clé de répartition (dénominateur des tantièmes - 1000 par convention, 10000 sur certaines copros). */
+  totalCle?: number;
   /** Taux MPR Copro retenu (30 ou 45 dans le barème 2024). */
   mprCoproPct: number;
   bonusPassoire: boolean;

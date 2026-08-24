@@ -208,6 +208,8 @@ export function usePartagerPfCopros(coproId: string) {
       tantiemesRef: Record<string, number>;
       /** Code de la clé de référence (clé unique ou clé par défaut de la copro). */
       cleRef: string;
+      /** Total de la clé de référence sur toute la copro (dénominateur des tantièmes). */
+      totalCle: number;
       bareme: Bareme;
       partager: boolean;
     }) => {
@@ -240,6 +242,7 @@ export function usePartagerPfCopros(coproId: string) {
         honoraires: round2(pv.totalMoeTtc),
         aleas: round2(pv.totalTravauxTtcImprevus - pv.totalTravauxTtc),
         cle: input.cleRef,
+        totalCle: input.totalCle || 1000,
         mprCoproPct: travaux > 0 ? round2(((pv.totalAides - pv.primeCee) / travaux) * 100) : 0,
         bonusPassoire: false,
         cee: round2(pv.primeCee),

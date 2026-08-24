@@ -29,7 +29,7 @@ const GROUPES: Groupe[] = [
     items: [
       {
         q: "Le prêt « Avance de subvention » a été voté : suis-je obligé d'y souscrire ?",
-        a: "Oui. Dès qu'il est voté en assemblée générale à la majorité requise, il s'applique automatiquement à l'ensemble de la copropriété. Il sert à avancer les subventions en attendant leur versement : il est remboursé de lui-même quand les aides sont perçues, à la fin des travaux.",
+        a: "Oui. Dès qu'il est voté en assemblée générale à la majorité requise, il s'applique automatiquement à l'ensemble de la copropriété. Il sert à avancer les subventions publiques en attendant leur versement : le capital du prêt est remboursé de lui-même quand ces subventions publiques sont perçues, à la fin des travaux. Seuls les intérêts du prêt restent à votre charge.",
       },
     ],
   },
@@ -39,7 +39,7 @@ const GROUPES: Groupe[] = [
     items: [
       {
         q: "L'éco-PTZ et le prêt complémentaire ont été votés : suis-je obligé d'y adhérer ?",
-        a: "Non. Le vote en AG ouvre simplement la possibilité d'y souscrire : l'adhésion reste individuelle et volontaire. Vous êtes libre d'adhérer à l'un, à l'autre, aux deux - ou de régler votre quote-part sur fonds propres.",
+        a: "Non. Le vote en AG ouvre simplement la possibilité d'y souscrire : l'adhésion reste individuelle et volontaire. Vous êtes libre d'adhérer à l'un, à l'autre, aux deux - ou de régler votre quote-part sur fonds propres. Vous pouvez aussi panacher : régler une partie de votre reste à charge via le prêt et l'autre sur fonds propres.",
       },
       {
         q: "Comment adhérer à ces prêts ?",
@@ -73,7 +73,7 @@ const GROUPES: Groupe[] = [
       },
       {
         q: "Puis-je rembourser mon prêt par anticipation ?",
-        a: "Oui, à condition de rembourser en une seule fois la totalité du capital restant dû - les remboursements anticipés partiels ne sont pas possibles.",
+        a: "Oui, et sans pénalités - à condition de rembourser en une seule fois la totalité du capital restant dû : les remboursements anticipés partiels ne sont pas possibles.",
       },
     ],
   },

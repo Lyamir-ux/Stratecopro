@@ -720,7 +720,17 @@ function PlansIndividuelsPfPanel({
     const tantiemesRef = Object.fromEntries(
       [...parCopro.values()].map((co) => [co.coproprietaireId, co.tantiemes[cleRef] ?? 0])
     );
-    partagerMut.mutate({ plan, pv, pvData, plans, tantiemesRef, cleRef, bareme, partager });
+    partagerMut.mutate({
+      plan,
+      pv,
+      pvData,
+      plans,
+      tantiemesRef,
+      cleRef,
+      totalCle: totauxCles[cleRef] || 1000,
+      bareme,
+      partager,
+    });
   };
   const openPortail = (coproprietaireId: string) => navigate(`/portail?cp=${coproprietaireId}`);
 

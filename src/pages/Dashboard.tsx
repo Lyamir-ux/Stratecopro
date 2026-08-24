@@ -191,7 +191,7 @@ function TableView({ copros }: { copros: CoproWithStats[] }) {
                   </span>
                   <div>
                     <div className="nm">{c.name}</div>
-                    <div className="sub">{[c.city, c.syndic_name].filter(Boolean).join(" · ")}</div>
+                    <div className="sub">{c.city ?? ""}</div>
                   </div>
                 </div>
               </td>
@@ -213,7 +213,22 @@ function TableView({ copros }: { copros: CoproWithStats[] }) {
                 </div>
               </td>
               <td>
-                <TeamStack team={c.team} />
+                {/* Chef de projet (vert) et syndic (bleu) - deux couleurs distinctes sur tous les projets */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                  {c.chef_projet ? (
+                    <span title="Chef de projet">
+                      <Badge kind="primary">{c.chef_projet}</Badge>
+                    </span>
+                  ) : null}
+                  {c.syndic_name ? (
+                    <span title="Syndic">
+                      <Badge kind="blue">{c.syndic_name}</Badge>
+                    </span>
+                  ) : null}
+                  {!c.chef_projet && !c.syndic_name && (
+                    <span style={{ color: "var(--fg-muted)", fontSize: 13 }}>-</span>
+                  )}
+                </div>
               </td>
               <td>
                 <Icon name="chevronRight" size={18} style={{ color: "var(--fg-muted)" }} />
