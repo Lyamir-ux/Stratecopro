@@ -904,6 +904,42 @@ export type Database = {
           },
         ]
       }
+      documents_reference: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          mime: string | null
+          name: string
+          secteur: string
+          size: number | null
+          storage_path: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          mime?: string | null
+          name: string
+          secteur?: string
+          size?: number | null
+          storage_path: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          mime?: string | null
+          name?: string
+          secteur?: string
+          size?: number | null
+          storage_path?: string
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
       enquete_reponses: {
         Row: {
           coproprietaire_id: string
@@ -1497,6 +1533,51 @@ export type Database = {
           slug?: string
         }
         Relationships: []
+      }
+      passations: {
+        Row: {
+          ancien_chef: string | null
+          copro_id: string
+          created_at: string
+          email_statut: string
+          id: string
+          notifie_par: string | null
+          nouveau_chef: string
+        }
+        Insert: {
+          ancien_chef?: string | null
+          copro_id: string
+          created_at?: string
+          email_statut?: string
+          id?: string
+          notifie_par?: string | null
+          nouveau_chef: string
+        }
+        Update: {
+          ancien_chef?: string | null
+          copro_id?: string
+          created_at?: string
+          email_statut?: string
+          id?: string
+          notifie_par?: string | null
+          nouveau_chef?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "passations_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passations_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       phase_notes: {
         Row: {

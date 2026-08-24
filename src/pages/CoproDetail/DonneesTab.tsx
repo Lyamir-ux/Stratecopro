@@ -12,12 +12,14 @@ import {
   type DpeClass,
 } from "@/lib/referentiels";
 import { useDonnees, useSetNbBatiments, useSetUsageLot } from "@/api/donnees";
-import { useUpdateCopro, type CoproWithStats } from "@/api/copros";
+import { notifierPassation, useUpdateCopro, type CoproWithStats, type PassationMailStatut } from "@/api/copros";
+import { useTeamProfiles } from "@/api/profiles";
 import type { Enums } from "@/lib/database.types";
 import { ImportLotsDialog } from "./ImportLotsDialog";
 
 export function DonneesTab({ c }: { c: CoproWithStats }) {
   const { data, isLoading } = useDonnees(c.id);
+  const { data: team } = useTeamProfiles();
   const update = useUpdateCopro(c.id);
   const [showImport, setShowImport] = useState(false);
   const [editingSynth, setEditingSynth] = useState(false);
@@ -94,6 +96,8 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
         return;
       }
     }
+    const ancienChef = (c.chef_projet ?? "").trim();
+    const nouveauChef = synth.chefProjet.trim();
     await update.mutateAsync({
       adresse: synth.adresse || null,
       syndic_name: synth.syndic || null,
@@ -107,6 +111,18 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
       energy_after: synth.energyAfter || null,
     });
     setEditingSynth(false);
+    // Passation de dossier : le changement de chef de projet déclenche
+    // l'alerte automatique aux chefs de projet concernés (edge notifier-passation).
+    if (nouveauChef && nouveauChef !== ancienChef) {
+      const statut = await notifierPassation(c.id, ancienChef || null, nouveauChef);
+      const messages: Record<PassationMailStatut, string> = {
+        envoye: `Passation notifiée par e-mail à ${nouveauChef}.`,
+        simule: `Passation enregistrée - e-mail simulé (configurez RESEND_API_KEY pour l'envoi réel).`,
+        sans_email: `Passation enregistrée - aucun compte collaborateur ne correspond à « ${nouveauChef} », pas d'e-mail envoyé.`,
+        erreur: "Passation enregistrée, mais l'e-mail d'alerte n'a pas pu être envoyé.",
+      };
+      window.alert(messages[statut]);
+    }
   };
 
   return (
@@ -357,7 +373,20 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
           <div className="kv">
             <span className="k">Chef de projet</span>
             {editingSynth ? (
-              <input className="edit-inp" value={synth.chefProjet} onChange={(e) => setSynth((s) => ({ ...s, chefProjet: e.target.value }))} />
+              <>
+                {/* Suggestions = comptes collaborateurs : un nom reconnu reçoit l'e-mail de passation */}
+                <input
+                  className="edit-inp"
+                  list="chefs-projet-suggestions"
+                  value={synth.chefProjet}
+                  onChange={(e) => setSynth((s) => ({ ...s, chefProjet: e.target.value }))}
+                />
+                <datalist id="chefs-projet-suggestions">
+                  {(team ?? []).map((p) => (
+                    <option key={p.user_id} value={p.full_name} />
+                  ))}
+                </datalist>
+              </>
             ) : (
               <span className="v">{c.chef_projet ?? "-"}</span>
             )}

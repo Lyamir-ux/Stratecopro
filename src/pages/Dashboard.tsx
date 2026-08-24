@@ -11,6 +11,7 @@ import { fmtEuro } from "@/lib/format";
 import { useUi } from "@/stores/ui";
 import {
   nbLogements,
+  notifierPassation,
   useCopros,
   useCoprosCorbeille,
   useCreateCopro,
@@ -19,6 +20,7 @@ import {
   useSupprimerDefinitivement,
   type CoproWithStats,
 } from "@/api/copros";
+import { useTeamProfiles } from "@/api/profiles";
 import { fmtDate } from "@/lib/format";
 import { uploadFichierDirect } from "@/api/fichiers";
 
@@ -294,6 +296,7 @@ const DPE_CLASSES: DpeClass[] = ["A", "B", "C", "D", "E", "F", "G"];
 
 function NewCoproDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateCopro();
+  const { data: team } = useTeamProfiles();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: "",
@@ -331,6 +334,11 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
       nb_logements: form.nb_logements ? Number(form.nb_logements) : null,
       energy_before: form.energy_before || null,
     });
+    // Le chef de projet désigné à la création est alerté par e-mail
+    // (edge notifier-passation) - sans bloquer la création du dossier.
+    if (form.chef_projet.trim()) {
+      void notifierPassation(copro.id, null, form.chef_projet.trim());
+    }
     // Dépôt des documents de passation dans les fichiers du dossier créé.
     // Le dossier existe déjà : en cas d'échec d'un dépôt on continue quand même,
     // les pièces se redéposent depuis l'onglet Fichiers.
@@ -475,7 +483,20 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
           )}
           {field(
             "Chef de projet",
-            <input className="login-input" value={form.chef_projet} onChange={(e) => set({ chef_projet: e.target.value })} />
+            <>
+              {/* Suggestions = comptes collaborateurs : un nom reconnu reçoit l'e-mail de passation */}
+              <input
+                className="login-input"
+                list="chefs-projet-suggestions-creation"
+                value={form.chef_projet}
+                onChange={(e) => set({ chef_projet: e.target.value })}
+              />
+              <datalist id="chefs-projet-suggestions-creation">
+                {(team ?? []).map((p) => (
+                  <option key={p.user_id} value={p.full_name} />
+                ))}
+              </datalist>
+            </>
           )}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

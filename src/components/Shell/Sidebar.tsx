@@ -39,6 +39,7 @@ export function Sidebar({ recents, tasksCount, questionsCount, user, onLogout }:
   const nav2: NavEntry[] = [
     { to: "/prestataires", icon: "briefcase", label: "Base prestataires" },
     { to: "/collaborateurs", icon: "users", label: "Collaborateurs" },
+    { to: "/base-connaissances", icon: "book", label: "Base de connaissances" },
     { to: "/parametres", icon: "settings", label: "Paramètres" },
   ];
   // l'AMO peut consulter chaque espace tel que le voient ses utilisateurs

@@ -13,6 +13,7 @@ import MesTaches from "./pages/MesTaches";
 import Consultations from "./pages/Consultations";
 import Prestataires from "./pages/Prestataires";
 import Collaborateurs from "./pages/Collaborateurs";
+import BaseConnaissances from "./pages/BaseConnaissances";
 import Parametres from "./pages/Parametres";
 import Portail from "./pages/Portail";
 import Prestataire from "./pages/Prestataire";
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
               { path: "/consultations", element: <Consultations /> },
               { path: "/prestataires", element: <Prestataires /> },
               { path: "/collaborateurs", element: <Collaborateurs /> },
+              { path: "/base-connaissances", element: <BaseConnaissances /> },
               { path: "/parametres", element: <Parametres /> },
             ],
           },

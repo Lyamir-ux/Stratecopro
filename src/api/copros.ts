@@ -188,6 +188,26 @@ export function useCopro(id: string | undefined) {
   });
 }
 
+export type PassationMailStatut = "envoye" | "simule" | "erreur" | "sans_email";
+
+/**
+ * Alerte par e-mail les chefs de projet lors d'une passation de dossier
+ * (edge notifier-passation, trace dans la table passations). Le chef de
+ * projet est saisi en clair : la correspondance avec un compte collaborateur
+ * se fait par le nom - « sans_email » si aucun compte ne correspond.
+ */
+export async function notifierPassation(
+  coproId: string,
+  ancienChef: string | null,
+  nouveauChef: string
+): Promise<PassationMailStatut> {
+  const { data, error } = await supabase.functions.invoke("notifier-passation", {
+    body: { copro_id: coproId, ancien_chef: ancienChef, nouveau_chef: nouveauChef },
+  });
+  if (error) return "erreur";
+  return (data as { statut?: PassationMailStatut } | null)?.statut ?? "erreur";
+}
+
 export function useUpdateCopro(id: string) {
   const qc = useQueryClient();
   return useMutation({
