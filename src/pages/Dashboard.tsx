@@ -223,8 +223,10 @@ function TableView({ copros }: { copros: CoproWithStats[] }) {
                     </span>
                   ) : null}
                   {c.syndic_name ? (
-                    <span title="Syndic">
-                      <Badge kind="blue">{c.syndic_name}</Badge>
+                    <span title={c.gestionnaire_nom ? "Syndic - gestionnaire en charge" : "Syndic"}>
+                      <Badge kind="blue">
+                        {c.gestionnaire_nom ? `${c.syndic_name} - ${c.gestionnaire_nom}` : c.syndic_name}
+                      </Badge>
                     </span>
                   ) : null}
                   {!c.chef_projet && !c.syndic_name && (
@@ -683,7 +685,7 @@ function CorbeilleDialog({ onClose }: { onClose: () => void }) {
 }
 
 function exportCsv(copros: CoproWithStats[]) {
-  const head = ["Copropriété", "Ville", "Phase", "DPE avant", "DPE après", "Gain %", "Logements", "Lots", "Copropriétaires", "Bâtiments", "Montant TTC", "Avancement %", "Syndic"];
+  const head = ["Copropriété", "Ville", "Phase", "DPE avant", "DPE après", "Gain %", "Logements", "Lots", "Copropriétaires", "Bâtiments", "Montant TTC", "Avancement %", "Syndic", "Gestionnaire"];
   const lines = copros.map((c) =>
     [
       c.name,
@@ -699,6 +701,7 @@ function exportCsv(copros: CoproWithStats[]) {
       c.stats?.montant_ttc ?? "",
       c.progress,
       c.syndic_name ?? "",
+      c.gestionnaire_nom ?? "",
     ]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(";")
