@@ -82,15 +82,18 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
     const prestataireId = canal === "prestataires" && dest !== "tous" ? dest : null;
     const res = await envoyer.mutateAsync({ canal, prestataireId, body: text });
     setBody("");
-    if (canal === "prestataires") {
+    if (canal !== "coproprietaires") {
+      const cible = canal === "prestataires" ? "entreprise" : "compte syndic";
       if (res.notifyError) setNotice("Message envoyé, mais l'alerte e-mail a échoué : " + res.notifyError);
       else if (res.notification) {
         const n = res.notification;
         setNotice(
           n.total === 0
-            ? "Message envoyé. Aucune entreprise retenue sur ce projet - personne n'a été alerté par e-mail."
+            ? canal === "prestataires"
+              ? "Message envoyé. Aucune entreprise retenue sur ce projet - personne n'a été alerté par e-mail."
+              : "Message envoyé. Aucun compte syndic rattaché à ce dossier - personne n'a été alerté par e-mail."
             : n.mode === "simulation"
-              ? `Message envoyé - alerte e-mail simulée pour ${n.total} entreprise${n.total > 1 ? "s" : ""} (configurez RESEND_API_KEY pour l'envoi réel).`
+              ? `Message envoyé - alerte e-mail simulée pour ${n.total} ${cible}${n.total > 1 ? "s" : ""} (configurez RESEND_API_KEY pour l'envoi réel).`
               : `Message envoyé - ${n.envoyes} alerte${n.envoyes > 1 ? "s" : ""} e-mail envoyée${n.envoyes > 1 ? "s" : ""}${n.erreurs ? `, ${n.erreurs} en erreur` : ""}.`
         );
       }
@@ -121,7 +124,7 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
         ) : (
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 0 }}>
             {canal === "syndic"
-              ? "Fil avec le syndic de la copropriété - l'affichage dans l'espace syndic arrive prochainement, le fil est déjà conservé."
+              ? "Fil avec le syndic de la copropriété - il le lit et vous répond depuis son espace (page Messages). L'envoi déclenche une alerte e-mail sans le contenu du message vers les gestionnaires du dossier et les directeurs de l'enseigne."
               : "Fil avec les copropriétaires - l'affichage dans le portail copropriétaire arrive prochainement, le fil est déjà conservé."}
           </p>
         )}

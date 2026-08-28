@@ -7,6 +7,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { useCopros, useTasksCount } from "@/api/copros";
 import { useQuestionsEnAttenteCount } from "@/api/consultations";
 import { declencherRappelAgrements } from "@/api/prestataires";
+import { declencherRapportSyndic } from "@/api/rapportSyndic";
 
 // Accent dynamique - repris de la maquette (app.jsx ACCENT_MAP)
 const ACCENT_MAP: Record<Accent, { hover: string; soft: string; deep: string }> = {
@@ -31,8 +32,10 @@ export function Layout() {
   }, [accent]);
   const { profile, signOut } = useAuth();
   // rappel e-mail des agréments prestataires en fin de validité (1×/jour)
+  // + rapport mensuel de portefeuille aux cabinets de syndic (1×/mois)
   useEffect(() => {
     void declencherRappelAgrements();
+    void declencherRapportSyndic();
   }, []);
   const { data: copros } = useCopros();
   const { data: tasksCount } = useTasksCount();

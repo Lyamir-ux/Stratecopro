@@ -44,13 +44,15 @@ export function useMessagesCopro(coproId: string | undefined) {
 }
 
 export interface EnvoiMessageResult {
-  /** Bilan de l'alerte e-mail (canal prestataires uniquement). */
+  /** Bilan de l'alerte e-mail (canaux prestataires et syndic). */
   notification: { total: number; envoyes: number; simules: number; erreurs: number; mode: string } | null;
   notifyError: string | null;
 }
 
 /** Envoi AMO depuis l'onglet Communications ; l'alerte e-mail (sans contenu)
- *  part vers l'entreprise visée ou toutes les entreprises retenues du projet. */
+ *  part vers l'entreprise visée ou toutes les entreprises retenues du projet
+ *  (canal prestataires), ou vers les gestionnaires du dossier et les directeurs
+ *  de l'enseigne (canal syndic, edge function `notifier-syndic`). */
 export function useEnvoyerMessage(coproId: string) {
   const qc = useQueryClient();
   const { profile } = useAuth();
@@ -75,10 +77,15 @@ export function useEnvoyerMessage(coproId: string) {
         body: body.trim(),
       });
       if (error) throw error;
-      if (canal !== "prestataires") return { notification: null, notifyError: null };
-      const { data, error: fnErr } = await supabase.functions.invoke("notifier-message", {
-        body: { copro_id: coproId, prestataire_id: prestataireId },
-      });
+      if (canal === "coproprietaires") return { notification: null, notifyError: null };
+      const { data, error: fnErr } =
+        canal === "prestataires"
+          ? await supabase.functions.invoke("notifier-message", {
+              body: { copro_id: coproId, prestataire_id: prestataireId },
+            })
+          : await supabase.functions.invoke("notifier-syndic", {
+              body: { copro_id: coproId, type: "message_amo" },
+            });
       return {
         notification: fnErr ? null : (data as EnvoiMessageResult["notification"]),
         notifyError: fnErr ? String(fnErr.message ?? fnErr) : null,
@@ -121,6 +128,68 @@ export function useMessagesPresta(prestaId: string, coproIds: string[]) {
             coproIds.includes(m.copro_id) &&
             (m.prestataire_id == null || m.prestataire_id === prestaId)
         );
+    },
+  });
+}
+
+// ========== Côté syndic ==========
+
+export type MessageSyndic = Tables<"messages_projet">;
+
+/** Fil syndic des copropriétés du portefeuille (RLS : canal syndic de son
+ *  périmètre). Le filtre client reproduit la RLS quand un AMO consulte
+ *  l'espace syndic en aperçu (il lit tous les canaux de toutes les copros). */
+export function useMessagesSyndic(coproIds: string[]) {
+  return useQuery({
+    // coproIds fait partie de la clé : le portefeuille arrive après coup
+    queryKey: ["messages-syndic", [...coproIds].sort().join(",")],
+    enabled: coproIds.length > 0,
+    queryFn: async (): Promise<MessageSyndic[]> => {
+      const { data, error } = await supabase
+        .from("messages_projet")
+        .select("*")
+        .eq("canal", "syndic")
+        .in("copro_id", coproIds)
+        .order("created_at");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/** Message du syndic vers l'équipe AMO d'un dossier ; l'équipe est alertée
+ *  par e-mail (sans le contenu) via l'edge function `notifier-syndic`.
+ *  En aperçu AMO, le message est signé « amo » et l'alerte part vers le
+ *  syndic (mêmes destinataires que l'onglet Communications). */
+export function useEnvoyerMessageSyndic() {
+  const qc = useQueryClient();
+  const { profile } = useAuth();
+  return useMutation({
+    mutationFn: async ({ coproId, body }: { coproId: string; body: string }) => {
+      const { data: session } = await supabase.auth.getSession();
+      const estAmo = profile?.role === "amo";
+      const { error } = await supabase.from("messages_projet").insert({
+        copro_id: coproId,
+        canal: "syndic",
+        prestataire_id: null,
+        user_id: session.session?.user.id ?? null,
+        auteur_nom: profile?.full_name ?? "",
+        auteur_role: estAmo ? "amo" : "syndic",
+        body: body.trim(),
+      });
+      if (error) throw error;
+      // alerte e-mail - meilleur effort, le message est déjà posté
+      try {
+        await supabase.functions.invoke("notifier-syndic", {
+          body: { copro_id: coproId, type: estAmo ? "message_amo" : "message_syndic" },
+        });
+      } catch {
+        /* l'alerte e-mail est facultative */
+      }
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["messages-syndic"] });
+      void qc.invalidateQueries({ queryKey: ["messages"] });
     },
   });
 }

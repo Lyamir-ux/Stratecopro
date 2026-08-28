@@ -7,6 +7,7 @@ import { Fragment, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge, type BadgeKind } from "@/components/ui";
 import { fmtDate, fmtEuroFull } from "@/lib/format";
+import { telechargerCsv } from "@/lib/csv";
 import { useAuth } from "@/auth/AuthProvider";
 import { useDonnees } from "@/api/donnees";
 import { useChoixFinancementScenario } from "@/api/scenarios";
@@ -286,6 +287,34 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
             <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
               {(choix ?? []).length}/{coproprietaires.length} transmis
             </span>
+            {coproprietaires.length > 0 && (
+              <button
+                className="se-btn se-btn-secondary btn-sm"
+                title="Exporter les choix de financement (CSV pour Excel)"
+                onClick={() =>
+                  telechargerCsv(
+                    `financement-${c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.csv`,
+                    ["Copropriétaire", "Lots", "Mode de financement", "Durée (ans)", "Transmis le", "Saisi par"],
+                    coproprietaires.map((cp) => {
+                      const ch = choixByCp.get(cp.id) ?? null;
+                      return [
+                        cp.nom,
+                        lotsByCp.get(cp.id) ?? 0,
+                        ch ? TYPE_META[ch.type].label : "En attente",
+                        ch?.type === "collectif"
+                          ? (finConfig?.duree_annees ?? ch.duree_annees ?? "")
+                          : (ch?.duree_annees ?? ""),
+                        ch ? fmtDate(ch.transmitted_at) : "",
+                        ch ? (ch.saisi_par === "copro" ? "Copropriétaire" : ch.saisi_par === "syndic" ? "Syndic" : "Strat Eco") : "",
+                      ];
+                    })
+                  )
+                }
+              >
+                <Icon name="download" size={13} />
+                Exporter
+              </button>
+            )}
           </div>
           <div className="p-body">
             {coproprietaires.length === 0 ? (

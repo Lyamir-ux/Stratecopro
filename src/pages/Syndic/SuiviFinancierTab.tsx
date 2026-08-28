@@ -6,6 +6,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { fmtDate, fmtEuroFull } from "@/lib/format";
+import { telechargerCsv } from "@/lib/csv";
 import { usePlansDefinitifs } from "@/api/planDefinitif";
 import {
   NB_SITUATIONS,
@@ -140,6 +141,50 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
           {dirty && !save.isPending && (
             <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Modifications non enregistrées</span>
           )}
+          <button
+            className="se-btn se-btn-secondary btn-sm"
+            title="Exporter le suivi des paiements (CSV pour Excel)"
+            onClick={() =>
+              telechargerCsv(
+                `suivi-financier-${c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.csv`,
+                [
+                  "Ligne du plan de financement",
+                  "Entreprise",
+                  "Voté TTC",
+                  ...Array.from({ length: NB_SITUATIONS }, (_, i) => `Situation ${i + 1}`),
+                  "Total payé",
+                  "Restant",
+                ],
+                [
+                  ...groupes.flatMap((g) => [
+                    [g.titre],
+                    ...g.lignes.map((l) => {
+                      const paye = sommeLigne(paiements, l.key);
+                      return [
+                        l.libelle,
+                        l.entreprise ?? "",
+                        l.vote,
+                        ...Array.from({ length: NB_SITUATIONS }, (_, i) => paiements[l.key]?.[i] ?? ""),
+                        paye,
+                        l.vote - paye,
+                      ];
+                    }),
+                  ]),
+                  [
+                    "Total",
+                    "",
+                    totalVote,
+                    ...Array.from({ length: NB_SITUATIONS }, (_, i) => totalSituation(i)),
+                    totalPaye,
+                    totalVote - totalPaye,
+                  ],
+                ]
+              )
+            }
+          >
+            <Icon name="download" size={13} />
+            Exporter
+          </button>
           <button
             className="se-btn se-btn-primary btn-sm"
             disabled={!dirty || save.isPending}

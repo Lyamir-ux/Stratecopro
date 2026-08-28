@@ -1,13 +1,18 @@
-// Portefeuille du syndic - un « système » par gestionnaire : une bulle grise au
-// centre (ses initiales, le total de logements et le montant d'opération dont il
-// a la charge), autour de laquelle gravitent ses copropriétés. La couleur d'un
-// satellite donne la phase du dossier.
+// Portefeuille du syndic - deux vues commutables :
+// 1. « Bulles » : un système par gestionnaire, une bulle grise au centre (ses
+//    initiales, total de logements et montant d'opération), autour de laquelle
+//    gravitent ses copropriétés (couleur = phase du dossier).
+// 2. « Tableau » : pilotage direction - colonnes triables, comparatif par
+//    gestionnaire (charge, phases, tâches en retard) et export CSV.
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
-import { PHASES, type PhaseId } from "@/lib/referentiels";
+import { Badge, DpePair } from "@/components/ui";
+import { PHASES, type DpeClass, type PhaseId } from "@/lib/referentiels";
 import { fmtEuroCourt } from "@/lib/format";
+import { telechargerCsv } from "@/lib/csv";
 import { nbLogements } from "@/api/copros";
+import { enRetard, useSyndicTaches } from "@/api/syndicTaches";
 import type { SyndicCopro } from "@/api/syndic";
 
 /** Comparaison de recherche : minuscules, sans accents. */
@@ -120,11 +125,219 @@ function construireSystemes(copros: SyndicCopro[]): Systeme[] {
     .sort((a, b) => (a.key === SANS_GESTIONNAIRE ? 1 : b.key === SANS_GESTIONNAIRE ? -1 : b.logements - a.logements));
 }
 
+// ========== Vue tableau (pilotage direction) ==========
+
+type ColTri = "name" | "gestionnaire" | "phase" | "logements" | "montant" | "progress" | "retard";
+
+const PHASE_RANK: Record<PhaseId, number> = { diagnostic: 0, etudes: 1, travaux: 2 };
+
+function VueTableau({
+  copros,
+  retards,
+}: {
+  copros: SyndicCopro[];
+  retards: Map<string, number>;
+}) {
+  const navigate = useNavigate();
+  const [tri, setTri] = useState<{ col: ColTri; desc: boolean }>({ col: "name", desc: false });
+
+  const cliquerTri = (col: ColTri) =>
+    setTri((prev) => ({ col, desc: prev.col === col ? !prev.desc : col !== "name" && col !== "gestionnaire" }));
+
+  const lignes = useMemo(() => {
+    const valeur = (c: SyndicCopro): string | number => {
+      switch (tri.col) {
+        case "name": return c.name;
+        case "gestionnaire": return c.gestionnaire_nom ?? "";
+        case "phase": return PHASE_RANK[c.phase];
+        case "logements": return nbLogements(c);
+        case "montant": return c.stats?.montant_ttc ?? 0;
+        case "progress": return c.progress ?? 0;
+        case "retard": return retards.get(c.id) ?? 0;
+      }
+    };
+    return [...copros].sort((a, b) => {
+      const va = valeur(a);
+      const vb = valeur(b);
+      const cmp = typeof va === "string" ? va.localeCompare(String(vb), "fr") : Number(va) - Number(vb);
+      return tri.desc ? -cmp : cmp;
+    });
+  }, [copros, tri, retards]);
+
+  // Comparatif par gestionnaire (charge et état du portefeuille de chacun)
+  const parGestionnaire = useMemo(() => {
+    const groupes = new Map<string, { nom: string; copros: SyndicCopro[] }>();
+    for (const c of copros) {
+      const cle = c.gestionnaire_email?.toLowerCase() || c.gestionnaire_nom || SANS_GESTIONNAIRE;
+      const g = groupes.get(cle) ?? { nom: c.gestionnaire_nom || "Non attribué", copros: [] };
+      g.copros.push(c);
+      groupes.set(cle, g);
+    }
+    return [...groupes.values()]
+      .map((g) => ({
+        nom: g.nom,
+        copros: g.copros.length,
+        logements: g.copros.reduce((s, c) => s + nbLogements(c), 0),
+        montant: g.copros.reduce((s, c) => s + (c.stats?.montant_ttc ?? 0), 0),
+        phases: PHASES.map((ph) => g.copros.filter((c) => c.phase === ph.id).length),
+        retard: g.copros.reduce((s, c) => s + (retards.get(c.id) ?? 0), 0),
+      }))
+      .sort((a, b) => b.logements - a.logements);
+  }, [copros, retards]);
+
+  const Th = ({ col, label, num }: { col: ColTri; label: string; num?: boolean }) => (
+    <th
+      className={num ? "num" : undefined}
+      style={{ cursor: "pointer", whiteSpace: "nowrap", userSelect: "none" }}
+      title="Trier sur cette colonne"
+      onClick={() => cliquerTri(col)}
+    >
+      {label}
+      {tri.col === col && (
+        <Icon name={tri.desc ? "chevronDown" : "chevronUp"} size={12} style={{ marginLeft: 4, verticalAlign: -1 }} />
+      )}
+    </th>
+  );
+
+  return (
+    <>
+      {parGestionnaire.length > 1 && (
+        <div className="panel" style={{ marginBottom: 20 }}>
+          <div className="p-head">
+            <Icon name="users" size={18} />
+            <h3>Comparatif par gestionnaire</h3>
+          </div>
+          <div className="p-body" style={{ paddingTop: 0 }}>
+            <div className="tablewrap">
+              <table className="dossiers" style={{ fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <th>Gestionnaire</th>
+                    <th className="num">Copros</th>
+                    <th className="num">Logements</th>
+                    <th className="num">Montant TTC</th>
+                    {PHASES.map((ph) => (
+                      <th key={ph.id} className="num">{ph.label}</th>
+                    ))}
+                    <th className="num">Tâches en retard</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parGestionnaire.map((g) => (
+                    <tr key={g.nom} style={{ cursor: "default" }}>
+                      <td style={{ fontWeight: 600 }}>{g.nom}</td>
+                      <td className="num">{g.copros}</td>
+                      <td className="num">{g.logements}</td>
+                      <td className="num">{g.montant ? fmtEuroCourt(g.montant) : "-"}</td>
+                      {g.phases.map((n, i) => (
+                        <td key={i} className="num">{n || "-"}</td>
+                      ))}
+                      <td className="num">
+                        {g.retard > 0 ? (
+                          <span style={{ color: "var(--color-error-700)", fontWeight: 700 }}>{g.retard}</span>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="panel">
+        <div className="p-head">
+          <Icon name="table" size={18} />
+          <h3>Copropriétés du portefeuille</h3>
+          <span style={{ flex: 1 }}></span>
+          <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>cliquez un en-tête pour trier</span>
+        </div>
+        <div className="p-body" style={{ paddingTop: 0 }}>
+          <div className="tablewrap">
+            <table className="dossiers" style={{ fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <Th col="name" label="Copropriété" />
+                  <Th col="gestionnaire" label="Gestionnaire" />
+                  <Th col="phase" label="Phase" />
+                  <th>DPE</th>
+                  <Th col="logements" label="Logements" num />
+                  <Th col="montant" label="Montant TTC" num />
+                  <Th col="progress" label="Avancement" num />
+                  <Th col="retard" label="Tâches en retard" num />
+                </tr>
+              </thead>
+              <tbody>
+                {lignes.map((c) => {
+                  const retard = retards.get(c.id) ?? 0;
+                  return (
+                    <tr key={c.id} onClick={() => navigate(`/syndic/copros/${c.id}`)} style={{ cursor: "pointer" }}>
+                      <td style={{ fontWeight: 600 }}>
+                        {c.name}
+                        {c.fragile && (
+                          <Badge kind="warn" >Fragile</Badge>
+                        )}
+                        {c.city && (
+                          <span style={{ display: "block", fontSize: 11.5, color: "var(--fg-muted)", fontWeight: 400 }}>
+                            {c.city}
+                          </span>
+                        )}
+                      </td>
+                      <td>{c.gestionnaire_nom || "-"}</td>
+                      <td>
+                        <span className="leg-g" style={{ whiteSpace: "nowrap" }}>
+                          <span className="dot" style={{ background: COULEUR_PHASE[c.phase] }}></span>
+                          {PHASES.find((p) => p.id === c.phase)?.label}
+                        </span>
+                      </td>
+                      <td>
+                        <DpePair before={c.energy_before as DpeClass | null} after={c.energy_after as DpeClass | null} />
+                      </td>
+                      <td className="num">{nbLogements(c) || "-"}</td>
+                      <td className="num">{c.stats?.montant_ttc ? fmtEuroCourt(c.stats.montant_ttc) : "-"}</td>
+                      <td className="num">{c.progress ?? 0} %</td>
+                      <td className="num">
+                        {retard > 0 ? (
+                          <span style={{ color: "var(--color-error-700)", fontWeight: 700 }}>{retard}</span>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
+            Le montant est celui du plan de financement validé (à défaut, du scénario partagé). Les tâches en
+            retard sont vos tâches de syndic dont l'échéance est dépassée (page « Vos tâches »).
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ========== Page ==========
+
 export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
   const navigate = useNavigate();
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [recherche, setRecherche] = useState("");
+  const [vue, setVue] = useState<"bulles" | "tableau">("bulles");
   const systemes = useMemo(() => construireSystemes(copros), [copros]);
+
+  // tâches en retard par copro (sème le gabarit au passage - idempotent)
+  const { data: taches } = useSyndicTaches(copros.map((c) => c.id));
+  const retards = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of taches ?? []) if (enRetard(t)) m.set(t.copro_id, (m.get(t.copro_id) ?? 0) + 1);
+    return m;
+  }, [taches]);
 
   // Recherche par gestionnaire (ou par nom de copropriété : le système du
   // gestionnaire concerné reste affiché en entier).
@@ -134,9 +347,38 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
         (s) => normaliser(s.nom).includes(q) || s.satellites.some((sat) => normaliser(sat.name).includes(q))
       )
     : systemes;
+  const coprosFiltres = q
+    ? copros.filter(
+        (c) => normaliser(c.name).includes(q) || normaliser(c.gestionnaire_nom ?? "").includes(q)
+      )
+    : copros;
 
   const phaseCounts = PHASES.map((ph) => ({ ph, n: copros.filter((c) => c.phase === ph.id).length }));
   const totalLogements = copros.reduce((s, c) => s + nbLogements(c), 0);
+
+  const exporter = () =>
+    telechargerCsv(
+      "portefeuille-syndic.csv",
+      ["Copropriété", "Ville", "Gestionnaire", "Phase", "DPE avant", "DPE après", "Gain %", "Logements", "Lots", "Copropriétaires", "Montant TTC", "Avancement %", "Fragile", "Tâches en retard"],
+      [...copros]
+        .sort((a, b) => a.name.localeCompare(b.name, "fr"))
+        .map((c) => [
+          c.name,
+          c.city ?? "",
+          c.gestionnaire_nom ?? "",
+          PHASES.find((p) => p.id === c.phase)?.label ?? c.phase,
+          c.energy_before ?? "",
+          c.energy_after ?? "",
+          c.gain_pct ?? "",
+          nbLogements(c),
+          c.stats?.lots ?? 0,
+          c.stats?.coproprietaires ?? 0,
+          c.stats?.montant_ttc ?? "",
+          c.progress ?? 0,
+          c.fragile ? "Oui" : "",
+          retards.get(c.id) ?? 0,
+        ])
+    );
 
   return (
     <div className="page syndic-dash fade" style={{ padding: 0 }}>
@@ -149,6 +391,18 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
           </p>
         </div>
         <span className="spacer"></span>
+        <div className="opt-mini">
+          <button className={vue === "bulles" ? "on" : ""} onClick={() => setVue("bulles")} title="Vue par gestionnaire">
+            <Icon name="grid" size={14} /> Bulles
+          </button>
+          <button className={vue === "tableau" ? "on" : ""} onClick={() => setVue("tableau")} title="Vue de pilotage : tri, comparatif, export">
+            <Icon name="table" size={14} /> Tableau
+          </button>
+        </div>
+        <button className="se-btn se-btn-secondary btn-sm" onClick={exporter} title="Exporter le portefeuille (CSV pour Excel)">
+          <Icon name="download" size={14} />
+          Exporter
+        </button>
         <div className="search" style={{ margin: 0 }}>
           <Icon name="search" size={16} />
           <input
@@ -169,7 +423,7 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
         </div>
       </div>
 
-      {q && (
+      {q && vue === "bulles" && (
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: -6, marginBottom: 10 }}>
           {visibles.length === 0
             ? "Aucun gestionnaire ni copropriété ne correspond à cette recherche."
@@ -177,6 +431,10 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
         </p>
       )}
 
+      {vue === "tableau" ? (
+        <VueTableau copros={coprosFiltres} retards={retards} />
+      ) : (
+        <>
       <div className="orbites">
         {visibles.map((s, i) => (
           <div className="orbite-cell" key={s.key}>
@@ -247,8 +505,10 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
       <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12 }}>
         Chaque bulle grise est un gestionnaire, entouré des copropriétés dont il a la charge - la couleur d'un satellite
         donne sa phase. Cliquez une copropriété pour ouvrir le dossier. Le montant est celui du scénario partagé, tant
-        qu'il y en a un.
+        qu'il y en a un. La vue Tableau permet de trier, comparer les gestionnaires et exporter.
       </p>
+        </>
+      )}
     </div>
   );
 }

@@ -147,6 +147,16 @@ export function useValiderPlanDefinitif(coproId: string) {
           const { error: errCopro } = await supabase.from("coproprietes").update(patch).eq("id", coproId);
           if (errCopro) throw errCopro;
         }
+
+        // Le syndic (gestionnaires du dossier + directeurs de l'enseigne) est
+        // prévenu par e-mail - meilleur effort, la validation est déjà acquise.
+        try {
+          await supabase.functions.invoke("notifier-syndic", {
+            body: { copro_id: coproId, type: "pf_valide" },
+          });
+        } catch {
+          /* l'alerte e-mail est facultative */
+        }
       }
     },
     onSuccess: (_r, v) => {

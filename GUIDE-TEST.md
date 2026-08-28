@@ -84,14 +84,34 @@ documents du dossier de prêt et remplit les formulaires destinés à la banque.
 
 | Section | Ce qui doit marcher |
 |---|---|
-| **Portefeuille** | Un **système par gestionnaire** : bulle grise au centre (ses initiales, le total de logements et le montant d'opération dont il a la charge), autour de laquelle **gravitent ses copropriétés**. La taille d'un satellite suit son nombre de logements, sa **couleur donne la phase** (orange Diagnostic, bleu Études, vert Travaux), « ! » = fragile. Les dossiers sans gestionnaire renseigné se regroupent sous « Non attribué ». Clic sur un satellite = ouvrir le dossier |
-| **Vos tâches** | Actions du syndic par copropriété et phase (AG, PV, fiche État, compte travaux, DO, validations d'aides…) |
-| **Dossier → Projet** | Les mêmes actions phase par phase, avec l'avancement |
+| **Portefeuille** | Deux vues commutables. **Bulles** : un **système par gestionnaire** — bulle grise au centre (ses initiales, le total de logements et le montant d'opération dont il a la charge), autour de laquelle **gravitent ses copropriétés**. La taille d'un satellite suit son nombre de logements, sa **couleur donne la phase** (orange Diagnostic, bleu Études, vert Travaux), « ! » = fragile. Les dossiers sans gestionnaire renseigné se regroupent sous « Non attribué ». Clic sur un satellite = ouvrir le dossier. **Tableau** (pilotage direction) : colonnes **triables** (nom, gestionnaire, phase, logements, montant, avancement, tâches en retard), DPE avant→après, et un **comparatif par gestionnaire** (copros, logements, montant, répartition par phase, tâches en retard). Bouton **Exporter** = CSV du portefeuille pour Excel |
+| **Vos tâches** | Actions du syndic par copropriété et phase (AG, PV, fiche État, compte travaux, DO, validations d'aides…) — désormais **persistées** : cochez ce qui est fait (traçé), fixez une **échéance datée** sur chaque tâche ; les tâches dont l'échéance est dépassée remontent en tête avec un badge **En retard** et alimentent le rapport mensuel. Bascule « À faire / Tout » pour revoir les tâches faites et celles des phases à venir |
+| **Messages** | **Messagerie avec l'équipe Strat Eco**, un fil par copropriété (pastille de non-lus dans le menu). Chaque envoi du syndic alerte l'équipe AMO du dossier par e-mail (sans le contenu) ; en face, l'AMO écrit depuis l'onglet Communications (canal Syndic) et le syndic est alerté de la même façon |
+| **Dossier → Projet** | Les mêmes actions phase par phase, avec l'avancement — cochables directement dans le kanban |
 | **Dossier → Données de la copro** | Lots (bâtiment, usage, copropriétaire, tantièmes), copropriétaires, bâtiments — sans import ni édition |
 | **Dossier → Enquête sociale** | Vue d'information uniquement : profils MPR, réponses (foyer, occupation, profil — **jamais le RFR**), questionnaire, état de la campagne. **Aucun bouton d'envoi ou de relance** — l'enquête est pilotée par l'AMO |
 | **Dossier → Financement** | **Mode de financement choisi par chaque copropriétaire** : fonds propres / éco-PTZ collectif / éco-PTZ individuel (+ « En attente » tant que rien n'est transmis), tuiles de comptage, paramètres du prêt collectif (banque, durée AG, adhésions ouvertes). **Le PF définitif validé par l'AMO est partagé automatiquement** (pas de bouton « partager ») : panneau « Plan de financement définitif — Validé » avec coût total de l'opération TTC, aides mobilisées, fonds travaux, reste à charge collectif et date de validation ; sans PF validé, le scénario partagé s'affiche comme avant |
 | **Dossier → Documents à produire** | Cartes des montages (ANAH/MPR, CEE, ClimAxion = « Bientôt disponible ») ; **Éco-PTZ collectif CEGEE** = parcours en 3 étapes : ① Résolutions de prêt (fiche de renseignements avant AG pré-remplie depuis le projet + attestation du taux d'impayés avec modèle Word téléchargeable), ② Ouverture du compte travaux (14 pièces à déposer, dont un groupe conditionnel « signataire ≠ dirigeant » avec case « Non concerné »), ③ Dépôt du dossier de demande d'offre de prêt (formulaire « Demande de prêt CEGEE » pré-rempli + pièces éco-PTZ et avance de subventions). **Dommages-ouvrage ROEDERER** = parcours en 3 étapes : ① Demande de tarification (8 pièces, dont le questionnaire « Assurances de chantier » avec modèle Word téléchargeable — majoritairement MOE/AMO, affichées « En attente » pour suivi), ② Accord sur l'offre et établissement du contrat (offre « Bon pour accord » + pièces du contrat + groupe LCB-FT : Kbis, bénéficiaires effectifs), ③ Régularisation définitive (dans les 6 mois suivant la réception : coût définitif, PV de réception, rapport final du CT). Dans les deux parcours : dépôt multi-fichiers par document (**clic ou glissé-déposé directement sur la ligne** — la ligne passe au vert avec une coche une fois la pièce déposée), téléchargement, suppression, case « Non concerné » sur les pièces conditionnelles, compteurs d'avancement par étape |
 | **Dossier → Fichiers** | **Toute la base documentaire du dossier**, pas seulement ce qui est publié aux copropriétaires : les documents déposés par l'AMO et la maîtrise d'œuvre **et** ceux que le syndic a lui-même fournis depuis « Documents à produire ». Chaque ligne porte un badge d'origine — **AMO**, **MOE** ou **Projet syndic** — et les mêmes filtres en tête de panneau (seules les origines présentes s'affichent). Deux actions : **l'œil ouvre un aperçu** du document sans le télécharger (PDF, images, texte ; les tableurs et documents Word annoncent qu'ils doivent être téléchargés), la flèche télécharge |
+
+### Alertes e-mail au syndic & rapport mensuel — nouveau
+
+Le syndic n'était jamais notifié ; il l'est désormais (envoi réel si
+`RESEND_API_KEY` est configurée, sinon simulé et journalisé, comme les autres
+alertes) :
+
+- **Plan de financement validé** : la validation du PF définitif côté AMO envoie
+  un e-mail aux gestionnaires du dossier et aux directeurs de l'enseigne, avec un
+  lien direct vers l'onglet Financement de leur espace.
+- **Message AMO → syndic** (onglet Communications, canal Syndic) : alerte e-mail
+  sans le contenu, lien vers la page Messages de l'espace syndic. Dans l'autre
+  sens, un message du syndic alerte l'équipe AMO du dossier.
+- **Rapport mensuel de portefeuille** : au premier chargement de l'app du mois,
+  chaque **directeur** reçoit l'état de tout le portefeuille de son enseigne et
+  chaque **gestionnaire** celui de ses copropriétés (phase, avancement, logements,
+  montant TTC, choix de financement transmis, PF validé, tâches en retard, points
+  de vigilance). Un envoi par enseigne et par mois (journal en base) ; bouton
+  « Envoyer maintenant » dans **Paramètres → Rapport mensuel aux syndics**.
 
 ### Organisations (enseignes de gestion) — nouveau
 
@@ -203,7 +223,7 @@ côté AMO, le nom d'origine reste tracé en base (`fichiers.name_original`).
 - **Adhésion prêt collectif** : CEGEE uniquement (Domofinance viendra) ; personne physique, adhérents 1 et 2 (indivision >2 et SCI : plus tard) ; la signature électronique est une signature simple (dessin + horodatage) — la banque exigeant des originaux papier, les bulletins signés restent imprimables ; la concordance RIB ne se vérifie que sur les RIB PDF (photo/scan image = contrôle manuel).
 - **Consultations** : l'alerte e-mail aux prestataires est **simulée** (journalisée mais pas envoyée) tant que la clé d'envoi `RESEND_API_KEY` n'est pas configurée côté Supabase — tout le reste du circuit est réel.
 - **Prestataires** : le rattachement d'une entreprise à un compte de connexion se fait encore côté base (comme pour les copropriétaires) ; l'espace « Mes projets » d'une MOE retenue est en lecture (le pilotage des missions loi MOP viendra ensuite).
-- **Espace Syndic** : les organisations se gèrent depuis Paramètres, mais le rattachement d'un **gestionnaire** à ses copropriétés se fait encore côté base (`copro_members`, rôle `syndic`) — seul le périmètre du directeur (toute l'enseigne) est administrable à l'écran. Les tâches syndic affichées sont des repères générés depuis la phase du dossier (pas encore cochables).
+- **Espace Syndic** : les organisations se gèrent depuis Paramètres, mais le rattachement d'un **gestionnaire** à ses copropriétés se fait encore côté base (`copro_members`, rôle `syndic`) — seul le périmètre du directeur (toute l'enseigne) est administrable à l'écran.
 - **Collaborateurs** : l'ajout d'un compte passe par le tableau de bord Supabase pour l'instant.
 - **Import Excel d'un scénario financier** : crée un scénario verrouillé avec les paramètres courants — il ne lit pas encore les chiffres du fichier.
 - **Recherche globale** (barre du haut), notifications et bouton Aide : décoratifs pour l'instant.

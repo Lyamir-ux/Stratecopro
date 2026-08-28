@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.15"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -2030,6 +2030,44 @@ export type Database = {
           },
         ]
       }
+      rapport_syndic_envois: {
+        Row: {
+          created_at: string
+          destinataires: Json
+          envoyes: number
+          erreurs: number
+          id: string
+          organisation_id: string
+          periode: string
+        }
+        Insert: {
+          created_at?: string
+          destinataires?: Json
+          envoyes?: number
+          erreurs?: number
+          id?: string
+          organisation_id: string
+          periode: string
+        }
+        Update: {
+          created_at?: string
+          destinataires?: Json
+          envoyes?: number
+          erreurs?: number
+          id?: string
+          organisation_id?: string
+          periode?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rapport_syndic_envois_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scenarios_financiers: {
         Row: {
           bareme_millesime: number | null
@@ -2133,6 +2171,73 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "coproprietes"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      syndic_taches: {
+        Row: {
+          cle: string
+          copro_id: string
+          echeance: string | null
+          fait_le: string | null
+          fait_par: string | null
+          id: string
+          ordre: number
+          phase: Database["public"]["Enums"]["phase_copro"]
+          statut: string
+          tag: string | null
+          titre: string
+          updated_at: string
+        }
+        Insert: {
+          cle: string
+          copro_id: string
+          echeance?: string | null
+          fait_le?: string | null
+          fait_par?: string | null
+          id?: string
+          ordre?: number
+          phase: Database["public"]["Enums"]["phase_copro"]
+          statut?: string
+          tag?: string | null
+          titre: string
+          updated_at?: string
+        }
+        Update: {
+          cle?: string
+          copro_id?: string
+          echeance?: string | null
+          fait_le?: string | null
+          fait_par?: string | null
+          id?: string
+          ordre?: number
+          phase?: Database["public"]["Enums"]["phase_copro"]
+          statut?: string
+          tag?: string | null
+          titre?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "syndic_taches_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "syndic_taches_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "syndic_taches_fait_par_fkey"
+            columns: ["fait_par"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -2268,6 +2373,10 @@ export type Database = {
       rattacher_lot: {
         // p_cible_id null = détacher le lot (défaut SQL non vu par le générateur)
         Args: { p_cible_id: string | null; p_lot_id: string }
+        Returns: undefined
+      }
+      seed_syndic_taches: {
+        Args: { p_copro_ids: string[] }
         Returns: undefined
       }
     }

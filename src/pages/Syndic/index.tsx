@@ -1,21 +1,25 @@
 // Espace syndic (portail) - même chrome que les portails copropriétaire et
-// prestataire. Le gestionnaire consulte son portefeuille en LECTURE SEULE :
-// portefeuille (bulles), tâches d'accompagnement, détail copro (5 onglets).
+// prestataire. Le gestionnaire consulte son portefeuille (bulles ou tableau,
+// export CSV), coche ses tâches d'accompagnement (échéances datées), échange
+// avec l'équipe AMO (Messages) et ouvre le détail de chaque copro (7 onglets).
 import { useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon, type IconName } from "@/components/Icon";
-import { Avatar } from "@/components/ui";
+import { Avatar, Badge } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
 import { useOrganisations } from "@/api/organisations";
+import { compteNonLus, useLectures, useMessagesSyndic } from "@/api/messages";
 import { useCoprosSyndic, useMonOrganisation, type SyndicCopro } from "@/api/syndic";
 import { Portefeuille } from "./Portefeuille";
 import { TachesSyndic } from "./Taches";
+import { MessagesSyndic } from "./Messages";
 
-export type SectionId = "portefeuille" | "taches";
+export type SectionId = "portefeuille" | "taches" | "messages";
 
 const SECTIONS: { id: SectionId; label: string; icon: IconName }[] = [
   { id: "portefeuille", label: "Portefeuille", icon: "building" },
   { id: "taches", label: "Vos tâches", icon: "clipboard" },
+  { id: "messages", label: "Messages", icon: "message" },
 ];
 
 export function Loader() {
@@ -72,10 +76,13 @@ function OrgRail({
 export function SyndicShell({
   active,
   rail,
+  badges,
   children,
 }: {
   active: SectionId | null;
   rail?: ReactNode;
+  /** Pastilles du menu (ex. messages non lus). */
+  badges?: Partial<Record<SectionId, number>>;
   children: ReactNode;
 }) {
   const { profile, signOut } = useAuth();
@@ -122,6 +129,7 @@ export function SyndicShell({
           >
             <Icon name={it.icon} size={17} />
             {it.label}
+            {(badges?.[it.id] ?? 0) > 0 && <Badge kind="warn">{badges![it.id]}</Badge>}
           </button>
         ))}
       </nav>
@@ -161,11 +169,15 @@ export function AucuneCopro() {
 
 export default function Syndic() {
   const { section: sectionParam } = useParams();
-  const section: SectionId = sectionParam === "taches" ? "taches" : "portefeuille";
-  const { profile } = useAuth();
+  const section: SectionId =
+    sectionParam === "taches" ? "taches" : sectionParam === "messages" ? "messages" : "portefeuille";
+  const { profile, session } = useAuth();
   const { data: copros, isLoading } = useCoprosSyndic();
   // Filtre d'enseigne : réservé à l'aperçu AMO, qui voit tous les portefeuilles.
   const [orgId, setOrgId] = useState<string | null>(null);
+  // pastille « messages non lus » du menu
+  const { data: messagesSyndic } = useMessagesSyndic((copros ?? []).map((c) => c.id));
+  const { data: lectures } = useLectures();
 
   if (isLoading) return <Loader />;
   if (!copros || copros.length === 0) return <AucuneCopro />;
@@ -177,13 +189,17 @@ export default function Syndic() {
       ? copros.filter((c) => !c.organisation_id)
       : copros.filter((c) => c.organisation_id === orgId);
 
+  const nonLus = compteNonLus(messagesSyndic, lectures, session?.user.id);
+
   return (
     <SyndicShell
       active={section}
+      badges={{ messages: nonLus }}
       rail={apercuAmo ? <OrgRail copros={copros} value={orgId} onChange={setOrgId} /> : undefined}
     >
       {section === "portefeuille" && <Portefeuille copros={visibles} />}
       {section === "taches" && <TachesSyndic copros={visibles} />}
+      {section === "messages" && <MessagesSyndic copros={visibles} />}
     </SyndicShell>
   );
 }

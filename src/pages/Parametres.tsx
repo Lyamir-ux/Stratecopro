@@ -8,6 +8,7 @@ import { Badge, type BadgeKind } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 import { OrganisationsPanel } from "@/components/OrganisationsPanel";
 import { useEditerFeedback, useFeedbacks, useMajFeedback, useSupprimerFeedback, type Feedback } from "@/api/feedback";
+import { useEnvoyerRapportSyndic, useRapportsEnvoyes, type BilanRapport } from "@/api/rapportSyndic";
 import type { Json, Tables } from "@/lib/database.types";
 import type { Bareme } from "@/lib/finance";
 import { ACCENTS, useUi } from "@/stores/ui";
@@ -383,6 +384,84 @@ function FeedbackPanel() {
   );
 }
 
+/** Rapport mensuel de portefeuille aux cabinets de syndic : journal des envois
+ *  (un par enseigne et par mois) + envoi manuel immédiat. L'envoi automatique
+ *  part au premier chargement de l'app du mois. */
+function RapportSyndicPanel() {
+  const { data: envois } = useRapportsEnvoyes();
+  const envoyer = useEnvoyerRapportSyndic();
+  const [bilan, setBilan] = useState<BilanRapport | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  const moisLabel = new Date().toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  const fmtPeriode = (p: string) =>
+    new Date(p + "-01T00:00:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+
+  return (
+    <div className="panel">
+      <div className="p-head">
+        <Icon name="mail" size={18} />
+        <h3>Rapport mensuel aux syndics</h3>
+        <span style={{ flex: 1 }}></span>
+        <button
+          className="se-btn se-btn-secondary btn-sm"
+          disabled={envoyer.isPending}
+          title="Envoie le rapport du mois à tous les cabinets, même s'il est déjà parti"
+          onClick={() => {
+            if (!window.confirm(`Envoyer maintenant le rapport de ${moisLabel} à tous les cabinets de syndic (directeurs et gestionnaires) ?`)) return;
+            setErreur(null);
+            setBilan(null);
+            envoyer
+              .mutateAsync()
+              .then(setBilan)
+              .catch((e) => setErreur(String((e as Error).message ?? e)));
+          }}
+        >
+          <Icon name="send" size={13} />
+          {envoyer.isPending ? "Envoi…" : "Envoyer maintenant"}
+        </button>
+      </div>
+      <div className="p-body">
+        <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 0 }}>
+          Chaque début de mois, chaque directeur de cabinet reçoit l'état d'avancement de tout le portefeuille
+          de son enseigne, et chaque gestionnaire celui de ses copropriétés : phase, avancement, montants,
+          choix de financement transmis, plan de financement validé, tâches en retard. Un envoi par enseigne
+          et par mois.
+        </p>
+        {erreur && (
+          <p style={{ padding: "8px 12px", borderRadius: "var(--radius-md)", background: "var(--color-error-50)", color: "var(--color-error-700)", fontSize: 13 }}>
+            Envoi impossible : {erreur}
+          </p>
+        )}
+        {bilan && (
+          <p style={{ padding: "8px 12px", borderRadius: "var(--radius-md)", background: "var(--bg-soft)", border: "1px solid var(--border)", fontSize: 12.5 }}>
+            {bilan.mode === "simulation"
+              ? `Envoi simulé pour ${bilan.simules} destinataire${bilan.simules > 1 ? "s" : ""} (configurez RESEND_API_KEY pour l'envoi réel).`
+              : `${bilan.envoyes} rapport${bilan.envoyes > 1 ? "s" : ""} envoyé${bilan.envoyes > 1 ? "s" : ""} (${bilan.organisations} enseigne${bilan.organisations > 1 ? "s" : ""})${bilan.erreurs ? `, ${bilan.erreurs} en erreur` : ""}.`}
+          </p>
+        )}
+        {(envois ?? []).length === 0 ? (
+          <p className="se-small" style={{ color: "var(--fg-muted)", marginBottom: 0 }}>
+            Aucun rapport envoyé pour l'instant.
+          </p>
+        ) : (
+          (envois ?? []).map((r) => (
+            <div className="kv" key={r.id}>
+              <span className="k">
+                {r.organisation?.nom ?? "Enseigne supprimée"} · {fmtPeriode(r.periode)}
+              </span>
+              <span className="v">
+                {r.envoyes} envoyé{r.envoyes > 1 ? "s" : ""}
+                {r.erreurs ? ` · ${r.erreurs} en erreur` : ""}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Parametres() {
   useCrumbs([{ label: "Paramètres" }]);
   const { data: baremes } = useBaremes();
@@ -405,6 +484,8 @@ export default function Parametres() {
           <FeedbackPanel />
 
           <OrganisationsPanel />
+
+          <RapportSyndicPanel />
 
           <div className="panel">
             <div className="p-head">

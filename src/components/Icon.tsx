@@ -23,6 +23,7 @@ const ICON_PATHS = {
   chevronRight: '<path d="m9 18 6-6-6-6"/>',
   chevronDown: '<path d="m6 9 6 6 6-6"/>',
   chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+  chevronUp: '<path d="m18 15-6-6-6 6"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
   more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
   mapPin: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
