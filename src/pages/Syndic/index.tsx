@@ -10,7 +10,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { useOrganisations } from "@/api/organisations";
 import { compteNonLus, useLectures, useMessagesSyndic } from "@/api/messages";
 import { useCoprosSyndic, useMonOrganisation, type SyndicCopro } from "@/api/syndic";
-import { Portefeuille } from "./Portefeuille";
+import { Portefeuille, cleGestionnaire } from "./Portefeuille";
 import { TachesSyndic } from "./Taches";
 import { MessagesSyndic } from "./Messages";
 
@@ -175,6 +175,9 @@ export default function Syndic() {
   const { data: copros, isLoading } = useCoprosSyndic();
   // Filtre d'enseigne : réservé à l'aperçu AMO, qui voit tous les portefeuilles.
   const [orgId, setOrgId] = useState<string | null>(null);
+  // Vue gestionnaire (aperçu AMO) : clic sur un gestionnaire = exactement son
+  // portefeuille, sur toutes les sections - ses tâches restent cochables.
+  const [gest, setGest] = useState<{ key: string; nom: string } | null>(null);
   // pastille « messages non lus » du menu
   const { data: messagesSyndic } = useMessagesSyndic((copros ?? []).map((c) => c.id));
   const { data: lectures } = useLectures();
@@ -183,11 +186,12 @@ export default function Syndic() {
   if (!copros || copros.length === 0) return <AucuneCopro />;
 
   const apercuAmo = profile?.role === "amo";
-  const visibles = !apercuAmo || orgId === null
+  const parOrg = !apercuAmo || orgId === null
     ? copros
     : orgId === "__sans__"
       ? copros.filter((c) => !c.organisation_id)
       : copros.filter((c) => c.organisation_id === orgId);
+  const visibles = apercuAmo && gest ? parOrg.filter((c) => cleGestionnaire(c) === gest.key) : parOrg;
 
   const nonLus = compteNonLus(messagesSyndic, lectures, session?.user.id);
 
@@ -195,9 +199,31 @@ export default function Syndic() {
     <SyndicShell
       active={section}
       badges={{ messages: nonLus }}
-      rail={apercuAmo ? <OrgRail copros={copros} value={orgId} onChange={setOrgId} /> : undefined}
+      rail={apercuAmo ? <OrgRail copros={copros} value={orgId} onChange={(id) => { setOrgId(id); setGest(null); }} /> : undefined}
     >
-      {section === "portefeuille" && <Portefeuille copros={visibles} />}
+      {apercuAmo && gest && (
+        <div
+          className="panel"
+          style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", marginBottom: 18 }}
+        >
+          <Icon name="user" size={16} style={{ color: "var(--color-primary-700)", flex: "none" }} />
+          <span style={{ fontSize: 13.5 }}>
+            <b>Portefeuille de {gest.nom}</b> - vous voyez exactement sa vue ({visibles.length} copropriété
+            {visibles.length > 1 ? "s" : ""}). Vous pouvez cocher ses tâches à sa place, l'action est tracée.
+          </span>
+          <span style={{ flex: 1 }}></span>
+          <button className="se-btn se-btn-ghost btn-sm" onClick={() => setGest(null)}>
+            <Icon name="x" size={13} />
+            Quitter cette vue
+          </button>
+        </div>
+      )}
+      {section === "portefeuille" && (
+        <Portefeuille
+          copros={visibles}
+          onGestionnaire={apercuAmo && !gest ? (key, nom) => setGest({ key, nom }) : undefined}
+        />
+      )}
       {section === "taches" && <TachesSyndic copros={visibles} />}
       {section === "messages" && <MessagesSyndic copros={visibles} />}
     </SyndicShell>

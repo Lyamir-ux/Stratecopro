@@ -20,6 +20,14 @@ dossiers. Cliquez une enseigne pour ne voir qu'elle — le portefeuille **et** l
 tâches se filtrent. Ce rail n'existe qu'en aperçu AMO : un vrai gestionnaire ne
 voit que son propre portefeuille.
 
+Toujours en aperçu AMO, **cliquez un gestionnaire** (sa bulle grise, ou sa ligne
+du comparatif en vue Tableau) pour **entrer dans son portefeuille** : toutes les
+sections (Portefeuille, Vos tâches, Messages) se filtrent sur ses seules
+copropriétés — exactement sa vue. Un bandeau rappelle la vue en cours (bouton
+« Quitter cette vue ») et vous pouvez **cocher ses tâches à sa place** (utile
+quand le syndic a fait le travail sans le pointer) : l'action est tracée en base
+(qui a coché, quand).
+
 Pour tester les espaces **tels que les voient leurs utilisateurs** (connexion,
 périmètre RLS), utilisez les comptes de démo :
 `copro@demo.strateco.fr` / `Demo-Copro-2026!` — il est rattaché à un copropriétaire
@@ -84,7 +92,7 @@ documents du dossier de prêt et remplit les formulaires destinés à la banque.
 
 | Section | Ce qui doit marcher |
 |---|---|
-| **Portefeuille** | Deux vues commutables. **Bulles** : un **système par gestionnaire** — bulle grise au centre (ses initiales, le total de logements et le montant d'opération dont il a la charge), autour de laquelle **gravitent ses copropriétés**. La taille d'un satellite suit son nombre de logements, sa **couleur donne la phase** (orange Diagnostic, bleu Études, vert Travaux), « ! » = fragile. Les dossiers sans gestionnaire renseigné se regroupent sous « Non attribué ». Clic sur un satellite = ouvrir le dossier. **Tableau** (pilotage direction) : colonnes **triables** (nom, gestionnaire, phase, logements, montant, avancement, tâches en retard), DPE avant→après, et un **comparatif par gestionnaire** (copros, logements, montant, répartition par phase, tâches en retard). Bouton **Exporter** = CSV du portefeuille pour Excel |
+| **Portefeuille** | Deux vues commutables. **Bulles** : un **système par gestionnaire** — bulle grise au centre (ses initiales, le total de logements et le montant d'opération dont il a la charge), autour de laquelle **gravitent ses copropriétés**. La taille d'un satellite suit son nombre de logements, sa **couleur donne la phase** (orange Diagnostic, bleu Études, vert Travaux), « ! » = fragile. Les dossiers sans gestionnaire renseigné se regroupent sous « Non attribué ». Clic sur un satellite = ouvrir le dossier. **Tableau** (pilotage direction) : colonnes **triables** (nom, gestionnaire, phase, logements, montant, **honoraires syndic**, avancement, tâches en retard), DPE avant→après, et un **comparatif par gestionnaire** (copros, logements, montant, honoraires syndic, répartition par phase, tâches en retard — cliquez une ligne en aperçu AMO pour entrer dans le portefeuille du gestionnaire). Les honoraires du syndic viennent de la ligne « syndic » des frais annexes du PF définitif validé ; le total du portefeuille s'affiche aussi sous le titre de la page. Bouton **Exporter** = CSV du portefeuille pour Excel |
 | **Vos tâches** | Actions du syndic par copropriété et phase — Diagnostic : validation du CDC de la MOE et des intervenants annexes, transmission des documents signés, comptes d'aides, préparation d'AG ; Études : registre, SIRET, fiche État, résolution de prêt, tarification DO, AG de vote des travaux ; Travaux : documents signés, compte travaux, dossiers d'aides, accord DO, appels de fonds, demande de prêt, OS, suivi de chantier, acompte et solde d'aides. Désormais **persistées** : cochez ce qui est fait (traçé), fixez une **échéance datée** sur chaque tâche ; les tâches dont l'échéance est dépassée remontent en tête avec un badge **En retard** et alimentent le rapport mensuel. Bascule « À faire / Tout » pour revoir les tâches faites et celles des phases à venir |
 | **Messages** | **Messagerie avec l'équipe Strat Eco**, un fil par copropriété (pastille de non-lus dans le menu). Chaque envoi du syndic alerte l'équipe AMO du dossier par e-mail (sans le contenu) ; en face, l'AMO écrit depuis l'onglet Communications (canal Syndic) et le syndic est alerté de la même façon |
 | **Dossier → Projet** | Les mêmes actions phase par phase, avec l'avancement — cochables directement dans le kanban |

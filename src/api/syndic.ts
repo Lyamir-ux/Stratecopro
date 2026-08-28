@@ -80,6 +80,37 @@ export function useCoproSyndic(id: string | undefined) {
   });
 }
 
+/**
+ * Honoraires du syndic par copropriété - somme des lignes « syndic » des frais
+ * annexes du PF définitif validé (lues dans l'instantané `resultat`, léger :
+ * on ne charge pas les plans entiers). Copros sans PF validé : absentes.
+ */
+export function useHonorairesSyndic(coproIds: string[]) {
+  return useQuery({
+    queryKey: ["syndic", "honoraires", [...coproIds].sort().join(",")],
+    enabled: coproIds.length > 0,
+    queryFn: async (): Promise<Map<string, number>> => {
+      const { data, error } = await supabase
+        .from("plans_definitifs")
+        .select("copro_id, updated_at, moe:resultat->moe")
+        .eq("statut", "valide")
+        .in("copro_id", coproIds)
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      const m = new Map<string, number>();
+      type Ligne = { designation?: string; montantTtc?: number };
+      for (const row of (data ?? []) as unknown as { copro_id: string; moe: Ligne[] | null }[]) {
+        if (m.has(row.copro_id)) continue; // au plus un plan validé - on garde le plus récent
+        const total = (row.moe ?? [])
+          .filter((l) => /syndic/i.test(l.designation ?? ""))
+          .reduce((s, l) => s + (l.montantTtc ?? 0), 0);
+        m.set(row.copro_id, total);
+      }
+      return m;
+    },
+  });
+}
+
 /** L'enquête sociale du dossier - lecture pure (pas de création côté syndic). */
 export function useEnqueteSyndic(coproId: string | undefined) {
   return useQuery({

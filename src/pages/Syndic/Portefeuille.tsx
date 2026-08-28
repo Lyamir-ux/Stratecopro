@@ -13,7 +13,7 @@ import { fmtEuroCourt } from "@/lib/format";
 import { telechargerCsv } from "@/lib/csv";
 import { nbLogements } from "@/api/copros";
 import { enRetard, useSyndicTaches } from "@/api/syndicTaches";
-import type { SyndicCopro } from "@/api/syndic";
+import { useHonorairesSyndic, type SyndicCopro } from "@/api/syndic";
 
 /** Comparaison de recherche : minuscules, sans accents. */
 const normaliser = (s: string) =>
@@ -30,6 +30,11 @@ const COULEUR_PHASE: Record<PhaseId, string> = {
 
 const SANS_GESTIONNAIRE = "__sans__";
 const R_GESTIONNAIRE = 58;
+
+/** Clé de regroupement d'un gestionnaire (e-mail, à défaut le nom). */
+export function cleGestionnaire(c: SyndicCopro): string {
+  return c.gestionnaire_email?.toLowerCase() || c.gestionnaire_nom || SANS_GESTIONNAIRE;
+}
 
 /** « Claude LOBSTEIN » → « CL ». Un seul mot → ses deux premières lettres. */
 function initiales(nom: string): string {
@@ -65,7 +70,7 @@ interface Systeme {
 function construireSystemes(copros: SyndicCopro[]): Systeme[] {
   const groupes = new Map<string, { nom: string; copros: SyndicCopro[] }>();
   for (const c of copros) {
-    const cle = c.gestionnaire_email?.toLowerCase() || c.gestionnaire_nom || SANS_GESTIONNAIRE;
+    const cle = cleGestionnaire(c);
     const g = groupes.get(cle) ?? { nom: c.gestionnaire_nom || "Non attribué", copros: [] };
     g.copros.push(c);
     groupes.set(cle, g);
@@ -127,16 +132,20 @@ function construireSystemes(copros: SyndicCopro[]): Systeme[] {
 
 // ========== Vue tableau (pilotage direction) ==========
 
-type ColTri = "name" | "gestionnaire" | "phase" | "logements" | "montant" | "progress" | "retard";
+type ColTri = "name" | "gestionnaire" | "phase" | "logements" | "montant" | "honoraires" | "progress" | "retard";
 
 const PHASE_RANK: Record<PhaseId, number> = { diagnostic: 0, etudes: 1, travaux: 2 };
 
 function VueTableau({
   copros,
   retards,
+  honoraires,
+  onGestionnaire,
 }: {
   copros: SyndicCopro[];
   retards: Map<string, number>;
+  honoraires: Map<string, number>;
+  onGestionnaire?: (key: string, nom: string) => void;
 }) {
   const navigate = useNavigate();
   const [tri, setTri] = useState<{ col: ColTri; desc: boolean }>({ col: "name", desc: false });
@@ -152,6 +161,7 @@ function VueTableau({
         case "phase": return PHASE_RANK[c.phase];
         case "logements": return nbLogements(c);
         case "montant": return c.stats?.montant_ttc ?? 0;
+        case "honoraires": return honoraires.get(c.id) ?? 0;
         case "progress": return c.progress ?? 0;
         case "retard": return retards.get(c.id) ?? 0;
       }
@@ -162,28 +172,30 @@ function VueTableau({
       const cmp = typeof va === "string" ? va.localeCompare(String(vb), "fr") : Number(va) - Number(vb);
       return tri.desc ? -cmp : cmp;
     });
-  }, [copros, tri, retards]);
+  }, [copros, tri, retards, honoraires]);
 
   // Comparatif par gestionnaire (charge et état du portefeuille de chacun)
   const parGestionnaire = useMemo(() => {
     const groupes = new Map<string, { nom: string; copros: SyndicCopro[] }>();
     for (const c of copros) {
-      const cle = c.gestionnaire_email?.toLowerCase() || c.gestionnaire_nom || SANS_GESTIONNAIRE;
+      const cle = cleGestionnaire(c);
       const g = groupes.get(cle) ?? { nom: c.gestionnaire_nom || "Non attribué", copros: [] };
       g.copros.push(c);
       groupes.set(cle, g);
     }
-    return [...groupes.values()]
-      .map((g) => ({
+    return [...groupes.entries()]
+      .map(([key, g]) => ({
+        key,
         nom: g.nom,
         copros: g.copros.length,
         logements: g.copros.reduce((s, c) => s + nbLogements(c), 0),
         montant: g.copros.reduce((s, c) => s + (c.stats?.montant_ttc ?? 0), 0),
+        honoraires: g.copros.reduce((s, c) => s + (honoraires.get(c.id) ?? 0), 0),
         phases: PHASES.map((ph) => g.copros.filter((c) => c.phase === ph.id).length),
         retard: g.copros.reduce((s, c) => s + (retards.get(c.id) ?? 0), 0),
       }))
       .sort((a, b) => b.logements - a.logements);
-  }, [copros, retards]);
+  }, [copros, retards, honoraires]);
 
   const Th = ({ col, label, num }: { col: ColTri; label: string; num?: boolean }) => (
     <th
@@ -216,6 +228,7 @@ function VueTableau({
                     <th className="num">Copros</th>
                     <th className="num">Logements</th>
                     <th className="num">Montant TTC</th>
+                    <th className="num">Honoraires syndic</th>
                     {PHASES.map((ph) => (
                       <th key={ph.id} className="num">{ph.label}</th>
                     ))}
@@ -224,11 +237,17 @@ function VueTableau({
                 </thead>
                 <tbody>
                   {parGestionnaire.map((g) => (
-                    <tr key={g.nom} style={{ cursor: "default" }}>
+                    <tr
+                      key={g.key}
+                      style={{ cursor: onGestionnaire ? "pointer" : "default" }}
+                      title={onGestionnaire ? `Ouvrir le portefeuille de ${g.nom}` : undefined}
+                      onClick={onGestionnaire ? () => onGestionnaire(g.key, g.nom) : undefined}
+                    >
                       <td style={{ fontWeight: 600 }}>{g.nom}</td>
                       <td className="num">{g.copros}</td>
                       <td className="num">{g.logements}</td>
                       <td className="num">{g.montant ? fmtEuroCourt(g.montant) : "-"}</td>
+                      <td className="num">{g.honoraires ? fmtEuroCourt(g.honoraires) : "-"}</td>
                       {g.phases.map((n, i) => (
                         <td key={i} className="num">{n || "-"}</td>
                       ))}
@@ -266,6 +285,7 @@ function VueTableau({
                   <th>DPE</th>
                   <Th col="logements" label="Logements" num />
                   <Th col="montant" label="Montant TTC" num />
+                  <Th col="honoraires" label="Honoraires syndic" num />
                   <Th col="progress" label="Avancement" num />
                   <Th col="retard" label="Tâches en retard" num />
                 </tr>
@@ -298,6 +318,7 @@ function VueTableau({
                       </td>
                       <td className="num">{nbLogements(c) || "-"}</td>
                       <td className="num">{c.stats?.montant_ttc ? fmtEuroCourt(c.stats.montant_ttc) : "-"}</td>
+                      <td className="num">{honoraires.get(c.id) ? fmtEuroCourt(honoraires.get(c.id)!) : "-"}</td>
                       <td className="num">{c.progress ?? 0} %</td>
                       <td className="num">
                         {retard > 0 ? (
@@ -313,8 +334,9 @@ function VueTableau({
             </table>
           </div>
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
-            Le montant est celui du plan de financement validé (à défaut, du scénario partagé). Les tâches en
-            retard sont vos tâches de syndic dont l'échéance est dépassée (page « Vos tâches »).
+            Le montant est celui du plan de financement validé (à défaut, du scénario partagé) ; les honoraires
+            du syndic sont la ligne correspondante des frais annexes du PF validé. Les tâches en retard sont
+            vos tâches de syndic dont l'échéance est dépassée (page « Vos tâches »).
           </p>
         </div>
       </div>
@@ -324,7 +346,14 @@ function VueTableau({
 
 // ========== Page ==========
 
-export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
+export function Portefeuille({
+  copros,
+  onGestionnaire,
+}: {
+  copros: SyndicCopro[];
+  /** Aperçu AMO : clic sur un gestionnaire = entrer dans son portefeuille. */
+  onGestionnaire?: (key: string, nom: string) => void;
+}) {
   const navigate = useNavigate();
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [recherche, setRecherche] = useState("");
@@ -338,6 +367,11 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
     for (const t of taches ?? []) if (enRetard(t)) m.set(t.copro_id, (m.get(t.copro_id) ?? 0) + 1);
     return m;
   }, [taches]);
+
+  // honoraires du syndic (ligne « syndic » des frais annexes du PF validé)
+  const { data: honorairesData } = useHonorairesSyndic(copros.map((c) => c.id));
+  const honoraires = honorairesData ?? new Map<string, number>();
+  const totalHonoraires = copros.reduce((s, c) => s + (honoraires.get(c.id) ?? 0), 0);
 
   // Recherche par gestionnaire (ou par nom de copropriété : le système du
   // gestionnaire concerné reste affiché en entier).
@@ -359,7 +393,7 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
   const exporter = () =>
     telechargerCsv(
       "portefeuille-syndic.csv",
-      ["Copropriété", "Ville", "Gestionnaire", "Phase", "DPE avant", "DPE après", "Gain %", "Logements", "Lots", "Copropriétaires", "Montant TTC", "Avancement %", "Fragile", "Tâches en retard"],
+      ["Copropriété", "Ville", "Gestionnaire", "Phase", "DPE avant", "DPE après", "Gain %", "Logements", "Lots", "Copropriétaires", "Montant TTC", "Honoraires syndic TTC", "Avancement %", "Fragile", "Tâches en retard"],
       [...copros]
         .sort((a, b) => a.name.localeCompare(b.name, "fr"))
         .map((c) => [
@@ -374,6 +408,7 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
           c.stats?.lots ?? 0,
           c.stats?.coproprietaires ?? 0,
           c.stats?.montant_ttc ?? "",
+          honoraires.get(c.id) != null ? Math.round(honoraires.get(c.id)! * 100) / 100 : "",
           c.progress ?? 0,
           c.fragile ? "Oui" : "",
           retards.get(c.id) ?? 0,
@@ -388,6 +423,7 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
           <p className="page-sub">
             {copros.length} copropriété{copros.length > 1 ? "s" : ""} · {totalLogements} logements ·{" "}
             {systemes.length} gestionnaire{systemes.length > 1 ? "s" : ""}
+            {totalHonoraires > 0 && <> · {fmtEuroCourt(totalHonoraires)} d'honoraires syndic</>}
           </p>
         </div>
         <span className="spacer"></span>
@@ -432,7 +468,7 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
       )}
 
       {vue === "tableau" ? (
-        <VueTableau copros={coprosFiltres} retards={retards} />
+        <VueTableau copros={coprosFiltres} retards={retards} honoraires={honoraires} onGestionnaire={onGestionnaire} />
       ) : (
         <>
       <div className="orbites">
@@ -473,9 +509,14 @@ export function Portefeuille({ copros }: { copros: SyndicCopro[] }) {
               </div>
 
               <div
-                className="bubble orbite-gest"
-                style={{ width: R_GESTIONNAIRE * 2, height: R_GESTIONNAIRE * 2 }}
-                title={`${s.nom} - ${s.copros} copropriété${s.copros > 1 ? "s" : ""}`}
+                className={"bubble orbite-gest" + (onGestionnaire ? " clickable" : "")}
+                style={{ width: R_GESTIONNAIRE * 2, height: R_GESTIONNAIRE * 2, cursor: onGestionnaire ? "pointer" : undefined }}
+                title={
+                  onGestionnaire
+                    ? `Ouvrir le portefeuille de ${s.nom}`
+                    : `${s.nom} - ${s.copros} copropriété${s.copros > 1 ? "s" : ""}`
+                }
+                onClick={onGestionnaire ? () => onGestionnaire(s.key, s.nom) : undefined}
               >
                 <span className="b-init">{s.initiales}</span>
                 <span className="b-sub">{s.logements} logements</span>
