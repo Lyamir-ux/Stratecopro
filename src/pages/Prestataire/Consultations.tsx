@@ -1,7 +1,8 @@
 // Consultations ouvertes pour les métiers du prestataire connecté - porté de
 // design-reference/project/consultations.jsx (ConsultationsMOE), généralisé à
 // tous les intervenants. Dépôt d'offre : montant + note + pièce jointe (PDF).
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Badge, PhaseBadge } from "@/components/ui";
 import { Modal } from "@/components/Modal";
@@ -550,9 +551,18 @@ export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires">
   const [postulerA, setPostulerA] = useState<ConsultationPresta | null>(null);
   const [questionsDe, setQuestionsDe] = useState<ConsultationPresta | null>(null);
   const [carteDe, setCarteDe] = useState<ConsultationPresta | null>(null);
+  // Lien profond des e-mails d'alerte : ?c=<id> cible la consultation en
+  // question - carte mise en évidence et amenée à l'écran.
+  const [searchParams] = useSearchParams();
+  const cibleId = searchParams.get("c");
 
   const open = (consultations ?? []).filter((c) => c.statut === "en_ligne");
   const applied = open.filter((c) => c.maCandidature).length;
+
+  useEffect(() => {
+    if (!cibleId || !consultations) return;
+    document.getElementById("cs-" + cibleId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [cibleId, consultations]);
 
   return (
     <div className="page" style={{ padding: 0 }}>
@@ -584,7 +594,12 @@ export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires">
           const c = cible(cs);
           const jr = joursRestants(cs.date_limite);
           return (
-            <div className="cs-card mp" key={cs.id}>
+            <div
+              className="cs-card mp"
+              key={cs.id}
+              id={"cs-" + cs.id}
+              style={cs.id === cibleId ? { outline: "2px solid var(--accent)", outlineOffset: 2 } : undefined}
+            >
               <div className="cs-card-head">
                 <TypeTag type={cs.type} />
                 <span className="spacer" style={{ flex: 1 }}></span>

@@ -118,7 +118,8 @@ Deno.serve(async (req: Request) => {
     let erreur: string | null = null;
 
     if (resendKey) {
-      const lienConsultations = `${appUrl}/prestataire/consultations`;
+      // lien profond : ouvre l'espace prestataire directement sur la consultation
+      const lienConsultations = `${appUrl}/prestataire/consultations?c=${consultation_id}`;
       const ligne = (label: string, valeur: string) =>
         `<tr><td style="padding:4px 14px 4px 0;color:#666;white-space:nowrap;vertical-align:top">${label}</td><td style="padding:4px 0;color:#1a1a1a">${valeur}</td></tr>`;
       const html = `
