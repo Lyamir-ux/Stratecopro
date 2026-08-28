@@ -115,6 +115,9 @@ Deno.serve(async (req: Request) => {
         html,
       }),
     });
+    // La raison du refus (domaine non vérifié, from invalide...) part dans les
+    // logs de la fonction - sinon l'erreur est invisible et indiagnosticable.
+    if (!r.ok) console.error("Resend a refusé l'envoi:", r.status, await r.text().catch(() => ""));
     await trace(r.ok ? "envoye" : "erreur");
     return json(200, { statut: r.ok ? "envoye" : "erreur" });
   } catch {

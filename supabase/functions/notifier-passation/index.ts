@@ -126,6 +126,8 @@ Deno.serve(async (req: Request) => {
         headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({ from, to: [to], subject, html }),
       });
+      // La raison du refus part dans les logs de la fonction (diagnostic)
+      if (!r.ok) console.error("Resend a refusé l'envoi:", r.status, await r.text().catch(() => ""));
       return r.ok;
     } catch {
       return false;
