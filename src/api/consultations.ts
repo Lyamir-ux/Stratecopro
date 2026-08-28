@@ -174,6 +174,26 @@ export function usePublishConsultation() {
   });
 }
 
+/**
+ * Relance les alertes e-mail d'une consultation en ligne : notifie les
+ * prestataires référencés du métier qui n'ont pas encore été alertés
+ * (nouveaux référencés, ou traces purgées après un envoi simulé/en erreur).
+ * La fonction ne renvoie jamais deux fois au même prestataire.
+ */
+export function useRelancerAlertes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (consultationId: string): Promise<PublishResult["notification"]> => {
+      const { data, error: fnErr } = await supabase.functions.invoke("notifier-consultation", {
+        body: { consultation_id: consultationId },
+      });
+      if (fnErr) throw new Error(String(fnErr.message ?? fnErr));
+      return data as PublishResult["notification"];
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["consultations"] }),
+  });
+}
+
 export function useCloseConsultation() {
   const qc = useQueryClient();
   return useMutation({

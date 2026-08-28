@@ -24,6 +24,7 @@ import {
   useCloseConsultation,
   useConsultations,
   usePublishConsultation,
+  useRelancerAlertes,
   useReopenConsultation,
   useRepondreQuestion,
   type Consultation,
@@ -193,7 +194,22 @@ function Card({ cs }: { cs: Consultation }) {
   const [newOrg, setNewOrg] = useState("");
   const close = useCloseConsultation();
   const reopen = useReopenConsultation();
+  const relance = useRelancerAlertes();
   const addCand = useAddCandidature();
+
+  // Renvoie les alertes e-mail aux prestataires du métier pas encore prévenus
+  // (la fonction serveur ne notifie jamais deux fois le même prestataire).
+  const relancerAlertes = async () => {
+    const n = await relance.mutateAsync(cs.id);
+    if (!n) return;
+    window.alert(
+      n.total === 0
+        ? "Tous les prestataires référencés du métier ont déjà été alertés - aucun nouvel e-mail."
+        : n.mode === "simulation"
+          ? `${n.total} prestataire${n.total > 1 ? "s" : ""} identifié${n.total > 1 ? "s" : ""} - envoi simulé (configurez RESEND_API_KEY pour l'e-mail réel).`
+          : `Alertes envoyées : ${n.envoyes} e-mail${n.envoyes > 1 ? "s" : ""}${n.erreurs ? ` · ${n.erreurs} en erreur` : ""}.`
+    );
+  };
   const jr = joursRestants(cs.date_limite);
   const enLigne = cs.statut === "en_ligne";
   const cible = consultationCible(cs);
@@ -299,9 +315,20 @@ function Card({ cs }: { cs: Consultation }) {
         </button>
         <span className="spacer" style={{ flex: 1 }}></span>
         {enLigne ? (
-          <button className="se-btn se-btn-ghost btn-sm" onClick={() => void close.mutateAsync(cs.id)}>
-            Clôturer
-          </button>
+          <>
+            <button
+              className="se-btn se-btn-ghost btn-sm"
+              title="Alerter par e-mail les prestataires référencés du métier qui ne l'ont pas encore été"
+              disabled={relance.isPending}
+              onClick={() => void relancerAlertes()}
+            >
+              <Icon name="mail" size={13} />
+              {relance.isPending ? "Envoi…" : "Relancer les alertes"}
+            </button>
+            <button className="se-btn se-btn-ghost btn-sm" onClick={() => void close.mutateAsync(cs.id)}>
+              Clôturer
+            </button>
+          </>
         ) : (
           <button
             className="se-btn se-btn-ghost btn-sm"
