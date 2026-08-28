@@ -150,7 +150,7 @@ function VueKanban({
 }) {
   const navigate = useNavigate();
   return (
-    <div className="kanban">
+    <div className="kanban fluide">
       {COLONNES_KANBAN.map((col) => {
         const list = copros
           .filter((c) => c.phase === col.id)

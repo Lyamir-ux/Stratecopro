@@ -236,6 +236,10 @@ button { font-family: inherit; }
    ========================================================================== */
 .kanban { display: flex; gap: 18px; align-items: flex-start; overflow-x: auto; padding-bottom: 16px; }
 .kcol { width: 340px; flex: none; display: flex; flex-direction: column; }
+/* Variante fluide (portefeuille syndic, 4 étapes) : les colonnes se partagent
+   la largeur pour tenir dans la fenêtre ; sous 4 × 225 px, le défilement
+   horizontal du .kanban reprend la main. */
+.kanban.fluide .kcol { flex: 1 1 0; width: auto; min-width: 225px; }
 .kcol-head {
   display: flex; align-items: center; gap: 10px; padding: 6px 6px 12px;
 }
