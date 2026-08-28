@@ -167,6 +167,26 @@ export function AucuneCopro() {
   );
 }
 
+// La vue d'aperçu AMO (enseigne + gestionnaire) survit à l'ouverture d'un
+// dossier : le bouton « Portefeuille » d'un dossier doit ramener à la vue
+// d'où l'on vient, pas au portefeuille global (feedback du 28/08).
+function lireVue<T>(cle: string): T | null {
+  try {
+    const v = sessionStorage.getItem(cle);
+    return v ? (JSON.parse(v) as T) : null;
+  } catch {
+    return null;
+  }
+}
+function ecrireVue(cle: string, v: unknown) {
+  try {
+    if (v == null) sessionStorage.removeItem(cle);
+    else sessionStorage.setItem(cle, JSON.stringify(v));
+  } catch {
+    /* stockage indisponible : la vue ne survivra pas à la navigation */
+  }
+}
+
 export default function Syndic() {
   const { section: sectionParam } = useParams();
   const section: SectionId =
@@ -174,10 +194,20 @@ export default function Syndic() {
   const { profile, session } = useAuth();
   const { data: copros, isLoading } = useCoprosSyndic();
   // Filtre d'enseigne : réservé à l'aperçu AMO, qui voit tous les portefeuilles.
-  const [orgId, setOrgId] = useState<string | null>(null);
+  const [orgId, setOrgIdBrut] = useState<string | null>(() => lireVue<string>("syndic-apercu-org"));
   // Vue gestionnaire (aperçu AMO) : clic sur un gestionnaire = exactement son
   // portefeuille, sur toutes les sections - ses tâches restent cochables.
-  const [gest, setGest] = useState<{ key: string; nom: string } | null>(null);
+  const [gest, setGestBrut] = useState<{ key: string; nom: string } | null>(() =>
+    lireVue<{ key: string; nom: string }>("syndic-apercu-gest")
+  );
+  const setOrgId = (v: string | null) => {
+    setOrgIdBrut(v);
+    ecrireVue("syndic-apercu-org", v);
+  };
+  const setGest = (v: { key: string; nom: string } | null) => {
+    setGestBrut(v);
+    ecrireVue("syndic-apercu-gest", v);
+  };
   // pastille « messages non lus » du menu
   const { data: messagesSyndic } = useMessagesSyndic((copros ?? []).map((c) => c.id));
   const { data: lectures } = useLectures();

@@ -130,6 +130,91 @@ function construireSystemes(copros: SyndicCopro[]): Systeme[] {
     .sort((a, b) => (a.key === SANS_GESTIONNAIRE ? 1 : b.key === SANS_GESTIONNAIRE ? -1 : b.logements - a.logements));
 }
 
+// ========== Vue kanban (une colonne par étape du projet) ==========
+
+// « Futur projet » anticipe la prospection : aucune phase du référentiel ne s'y
+// range encore (feedback du 28/08), la colonne existe pour préparer la suite.
+const COLONNES_KANBAN: { id: PhaseId | "futur"; label: string; dot: string }[] = [
+  { id: "futur", label: "Futur projet", dot: "var(--color-neutral-300)" },
+  { id: "diagnostic", label: "Diagnostic", dot: COULEUR_PHASE.diagnostic },
+  { id: "etudes", label: "Études", dot: COULEUR_PHASE.etudes },
+  { id: "travaux", label: "Travaux", dot: COULEUR_PHASE.travaux },
+];
+
+function VueKanban({
+  copros,
+  retards,
+}: {
+  copros: SyndicCopro[];
+  retards: Map<string, number>;
+}) {
+  const navigate = useNavigate();
+  return (
+    <div className="kanban">
+      {COLONNES_KANBAN.map((col) => {
+        const list = copros
+          .filter((c) => c.phase === col.id)
+          .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+        return (
+          <section className="kcol" key={col.id}>
+            <div className="kcol-head">
+              <span className="kdot" style={{ background: col.dot }}></span>
+              <span className="ktitle">{col.label}</span>
+              <span className="kcount">{list.length}</span>
+            </div>
+            <div className="kcol-body">
+              {list.map((c) => {
+                const retard = retards.get(c.id) ?? 0;
+                return (
+                  <article
+                    key={c.id}
+                    className="panel"
+                    style={{ padding: "12px 14px", marginBottom: 10, cursor: "pointer" }}
+                    title={`Ouvrir le dossier ${c.name}`}
+                    onClick={() => navigate(`/syndic/copros/${c.id}`)}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {c.name}
+                      </span>
+                      <span style={{ flex: 1 }}></span>
+                      {c.fragile && <Badge kind="warn">Fragile</Badge>}
+                    </div>
+                    <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginBottom: 6 }}>
+                      {[c.city, `${nbLogements(c)} logements`, c.gestionnaire_nom].filter(Boolean).join(" · ")}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <DpePair before={c.energy_before as DpeClass | null} after={c.energy_after as DpeClass | null} />
+                      <span style={{ flex: 1 }}></span>
+                      {retard > 0 && (
+                        <Badge kind="warn" dot>
+                          {retard} en retard
+                        </Badge>
+                      )}
+                      {c.stats?.montant_ttc != null && (
+                        <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--color-primary-700)" }}>
+                          {fmtEuroCourt(c.stats.montant_ttc)}
+                        </span>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+              {list.length === 0 && (
+                <div style={{ padding: 18, textAlign: "center", color: "var(--fg-muted)", fontSize: 13 }}>
+                  {col.id === "futur"
+                    ? "Les projets en prospection apparaîtront ici."
+                    : "Aucun dossier"}
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 // ========== Vue tableau (pilotage direction) ==========
 
 type ColTri = "name" | "gestionnaire" | "phase" | "logements" | "montant" | "honoraires" | "progress" | "retard";
@@ -357,7 +442,23 @@ export function Portefeuille({
   const navigate = useNavigate();
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [recherche, setRecherche] = useState("");
-  const [vue, setVue] = useState<"bulles" | "tableau">("bulles");
+  // la vue choisie survit à l'ouverture d'un dossier (retour cohérent)
+  const [vue, setVueBrut] = useState<"bulles" | "kanban" | "tableau">(() => {
+    try {
+      const v = sessionStorage.getItem("syndic-vue-portefeuille");
+      return v === "kanban" || v === "tableau" ? v : "bulles";
+    } catch {
+      return "bulles";
+    }
+  });
+  const setVue = (v: "bulles" | "kanban" | "tableau") => {
+    setVueBrut(v);
+    try {
+      sessionStorage.setItem("syndic-vue-portefeuille", v);
+    } catch {
+      /* stockage indisponible */
+    }
+  };
   const systemes = useMemo(() => construireSystemes(copros), [copros]);
 
   // tâches en retard par copro (sème le gabarit au passage - idempotent)
@@ -431,6 +532,9 @@ export function Portefeuille({
           <button className={vue === "bulles" ? "on" : ""} onClick={() => setVue("bulles")} title="Vue par gestionnaire">
             <Icon name="grid" size={14} /> Bulles
           </button>
+          <button className={vue === "kanban" ? "on" : ""} onClick={() => setVue("kanban")} title="Une colonne par étape : futur projet, diagnostic, études, travaux">
+            <Icon name="columns" size={14} /> Kanban
+          </button>
           <button className={vue === "tableau" ? "on" : ""} onClick={() => setVue("tableau")} title="Vue de pilotage : tri, comparatif, export">
             <Icon name="table" size={14} /> Tableau
           </button>
@@ -469,6 +573,8 @@ export function Portefeuille({
 
       {vue === "tableau" ? (
         <VueTableau copros={coprosFiltres} retards={retards} honoraires={honoraires} onGestionnaire={onGestionnaire} />
+      ) : vue === "kanban" ? (
+        <VueKanban copros={coprosFiltres} retards={retards} />
       ) : (
         <>
       <div className="orbites">
