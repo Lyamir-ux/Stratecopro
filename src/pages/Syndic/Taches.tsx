@@ -120,7 +120,8 @@ export function TachesSyndic({ copros }: { copros: SyndicCopro[] }) {
         <div>
           <h1 className="page-title">Vos tâches</h1>
           <p className="page-sub">
-            Assemblées, comptes d'aides, validations, registre & PV - cochez ce qui est fait, fixez vos échéances
+            Validations, registre, fiche État, prêt bancaire, DO, appels de fonds, aides - cochez ce qui est
+            fait, fixez vos échéances
           </p>
         </div>
         <span className="spacer"></span>
