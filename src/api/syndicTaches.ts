@@ -11,6 +11,15 @@ export type SyndicTache = Tables<"syndic_taches">;
 
 export const PHASE_RANK: Record<PhaseId, number> = { diagnostic: 0, etudes: 1, travaux: 2 };
 
+/** Cycle du clic sur la pastille - même enchaînement que les tâches AMO :
+ *  à faire → en cours (orange) → fait (vert) → à faire. */
+export type StatutTache = "todo" | "doing" | "done";
+export const STATUT_SUIVANT: Record<StatutTache, StatutTache> = {
+  todo: "doing",
+  doing: "done",
+  done: "todo",
+};
+
 /**
  * Tâches syndic d'un ensemble de copropriétés. Le semis du gabarit est fait
  * juste avant la lecture : idempotent (on conflict do nothing sur
@@ -35,16 +44,17 @@ export function useSyndicTaches(coproIds: string[]) {
   });
 }
 
-/** Coche / décoche une tâche (fait_par et fait_le tracés). */
-export function useToggleSyndicTache() {
+/** Change le statut d'une tâche (fait_par et fait_le tracés au passage à « fait »). */
+export function useStatutSyndicTache() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ tache, done }: { tache: SyndicTache; done: boolean }) => {
+    mutationFn: async ({ tache, statut }: { tache: SyndicTache; statut: StatutTache }) => {
       const { data: session } = await supabase.auth.getSession();
+      const done = statut === "done";
       const { error } = await supabase
         .from("syndic_taches")
         .update({
-          statut: done ? "done" : "todo",
+          statut,
           fait_par: done ? (session.session?.user.id ?? null) : null,
           fait_le: done ? new Date().toISOString() : null,
           updated_at: new Date().toISOString(),
@@ -52,7 +62,12 @@ export function useToggleSyndicTache() {
         .eq("id", tache.id);
       if (error) throw error;
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["syndic-taches"] }),
+    onSuccess: (_r) => {
+      void qc.invalidateQueries({ queryKey: ["syndic-taches"] });
+      // l'avancement affiché (copro_stats) suit le nombre de tâches faites
+      void qc.invalidateQueries({ queryKey: ["syndic", "copros"] });
+      void qc.invalidateQueries({ queryKey: ["syndic", "copro"] });
+    },
   });
 }
 

@@ -91,9 +91,15 @@ export function SyndicShell({
   if (!profile) return <Loader />;
 
   // Sous-titre : l'enseigne et le périmètre, à défaut l'intitulé du profil.
-  const sousTitre = org
-    ? `${org.nom} · ${org.role === "directeur" ? "Direction - tout le portefeuille" : "Gestionnaire"}`
-    : profile.job_title || "Syndic";
+  const roleLabel =
+    org?.role === "directeur"
+      ? "Direction - tout le portefeuille"
+      : org?.role === "administratif"
+        ? "Administratif"
+        : org?.role === "comptable"
+          ? "Comptable"
+          : "Gestionnaire";
+  const sousTitre = org ? `${org.nom} · ${roleLabel}` : profile.job_title || "Syndic";
 
   return (
     <div className="portal">

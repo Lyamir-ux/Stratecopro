@@ -60,6 +60,45 @@ export function nbLogements(c: {
   return c.stats?.lots_hab || c.nb_logements || 0;
 }
 
+/**
+ * Avancement côté AMO : part des tâches internes faites (plan de tâches du
+ * dossier, onglet Projet). Remplace l'ancien champ manuel coproprietes.progress,
+ * qui n'était jamais alimenté.
+ */
+export function avancementAmo(c: {
+  stats: { taches_total: number | null; taches_faites: number | null } | null;
+}): number {
+  const total = c.stats?.taches_total ?? 0;
+  if (!total) return 0;
+  return Math.round(((c.stats?.taches_faites ?? 0) / total) * 100);
+}
+
+// Effectifs du gabarit des tâches syndic (0048) : 5 diagnostic + 6 études +
+// 10 travaux. Sert de repli tant que le gabarit d'un dossier n'est pas semé
+// (première ouverture) : mêmes valeurs que le semis, qui marque faites les
+// tâches des phases déjà franchies.
+const GABARIT_SYNDIC = { total: 21, diagnostic: 5, etudes: 6 };
+
+/**
+ * Avancement côté syndic : part de SES tâches d'accompagnement faites
+ * (syndic_taches). Dossier jamais ouvert côté syndic (gabarit pas encore
+ * semé) : équivalent du semis d'après la phase.
+ */
+export function avancementSyndic(c: {
+  phase: string;
+  stats: { staches_total: number | null; staches_faites: number | null } | null;
+}): number {
+  const total = c.stats?.staches_total ?? 0;
+  if (total) return Math.round(((c.stats?.staches_faites ?? 0) / total) * 100);
+  const faites =
+    c.phase === "travaux"
+      ? GABARIT_SYNDIC.diagnostic + GABARIT_SYNDIC.etudes
+      : c.phase === "etudes"
+        ? GABARIT_SYNDIC.diagnostic
+        : 0;
+  return Math.round((faites / GABARIT_SYNDIC.total) * 100);
+}
+
 export interface NewCoproInput {
   name: string;
   city: string;

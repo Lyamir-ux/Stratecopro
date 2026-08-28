@@ -2321,6 +2321,10 @@ export type Database = {
           next_task: string | null
           reste_a_charge: number | null
           scenario: string | null
+          staches_faites: number | null
+          staches_total: number | null
+          taches_faites: number | null
+          taches_total: number | null
           taux_aides: number | null
         }
         Relationships: []
@@ -2384,7 +2388,7 @@ export type Database = {
       app_role: "amo" | "syndic" | "moe" | "copro" | "presta"
       canal_message: "prestataires" | "syndic" | "coproprietaires"
       member_role: "amo_referent" | "syndic" | "moe" | "coproprietaire"
-      org_role: "directeur" | "gestionnaire"
+      org_role: "directeur" | "gestionnaire" | "administratif" | "comptable"
       phase_copro: "diagnostic" | "etudes" | "travaux"
       statut_candidature: "recue" | "retenue" | "non_retenue"
       statut_consultation: "en_ligne" | "cloturee"
@@ -2537,7 +2541,7 @@ export const Constants = {
       app_role: ["amo", "syndic", "moe", "copro", "presta"],
       canal_message: ["prestataires", "syndic", "coproprietaires"],
       member_role: ["amo_referent", "syndic", "moe", "coproprietaire"],
-      org_role: ["directeur", "gestionnaire"],
+      org_role: ["directeur", "gestionnaire", "administratif", "comptable"],
       phase_copro: ["diagnostic", "etudes", "travaux"],
       statut_candidature: ["recue", "retenue", "non_retenue"],
       statut_consultation: ["en_ligne", "cloturee"],

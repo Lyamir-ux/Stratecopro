@@ -24,6 +24,18 @@ import {
 const ROLE_LABEL: Record<OrgRole, string> = {
   directeur: "Direction - tout le portefeuille",
   gestionnaire: "Gestionnaire - ses dossiers",
+  administratif: "Administratif - ses dossiers",
+  comptable: "Comptable - ses dossiers",
+};
+
+/** Sous-titre affiché sous le nom du membre : son rôle dans l'enseigne prime
+ *  sur l'intitulé de poste du profil (feedback du 28/08 : un directeur ne doit
+ *  pas rester étiqueté « gestionnaire de copropriété »). */
+const ROLE_COURT: Record<OrgRole, string> = {
+  directeur: "Direction",
+  gestionnaire: "Gestionnaire",
+  administratif: "Administratif",
+  comptable: "Comptable",
 };
 
 const EYEBROW: React.CSSProperties = { color: "var(--fg-muted)", margin: "14px 0 8px" };
@@ -54,7 +66,9 @@ function Membres({ org }: { org: Organisation }) {
               <div className="t-title" style={{ fontSize: 14 }}>
                 {m.full_name}
               </div>
-              {m.job_title && <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>{m.job_title}</div>}
+              <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+                {m.org_role === "gestionnaire" ? m.job_title || ROLE_COURT[m.org_role] : ROLE_COURT[m.org_role]}
+              </div>
             </div>
             <span className="spacer"></span>
             <select
@@ -226,8 +240,9 @@ export function OrganisationsPanel() {
       </div>
       <div className="p-body">
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 0 }}>
-          Enseignes de gestion (cabinets de syndic). La direction accède à tous les dossiers de son enseigne, les
-          gestionnaires aux seuls dossiers dont ils ont la charge - en lecture seule dans les deux cas.
+          Enseignes de gestion (cabinets de syndic). La direction accède à tous les dossiers de son enseigne ;
+          gestionnaires, administratifs et comptables aux seuls dossiers dont ils ont la charge (rattachement
+          copro par copro).
         </p>
 
         {creation && (

@@ -18,7 +18,7 @@ export interface SyndicCopro extends CoproRow {
 export interface MonOrganisation {
   id: string;
   nom: string;
-  role: "directeur" | "gestionnaire";
+  role: Tables<"organisation_membres">["org_role"];
 }
 
 /**

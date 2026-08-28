@@ -78,7 +78,11 @@ export function useMembresOrganisation(orgId: string | undefined) {
           initials: m.profiles?.initials ?? "?",
           job_title: m.profiles?.job_title ?? null,
         }))
-        .sort((a, b) => (a.org_role === b.org_role ? a.full_name.localeCompare(b.full_name) : a.org_role === "directeur" ? -1 : 1));
+        .sort((a, b) => {
+          // direction en tête, puis gestionnaires, puis administratifs et comptables
+          const rang: Record<OrgRole, number> = { directeur: 0, gestionnaire: 1, administratif: 2, comptable: 3 };
+          return rang[a.org_role] - rang[b.org_role] || a.full_name.localeCompare(b.full_name);
+        });
     },
   });
 }

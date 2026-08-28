@@ -5,7 +5,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Badge, DpePair, PhaseBadge, THUMB_BG } from "@/components/ui";
 import type { DpeClass } from "@/lib/referentiels";
-import { usePhotoUrl } from "@/api/copros";
+import { avancementSyndic, usePhotoUrl } from "@/api/copros";
 import { useCoproSyndic } from "@/api/syndic";
 import { SyndicShell, Loader, AucuneCopro } from "./index";
 import { ProjetTabSyndic } from "./ProjetTab";
@@ -111,8 +111,8 @@ export default function CoproSyndic() {
                 <div className="l">{c.denomination_batiments === "entree" ? "entrées" : "bâtiments"}</div>
               </div>
               <div className="dh-stat">
-                <div className="v">{c.progress}%</div>
-                <div className="l">avancement</div>
+                <div className="v">{avancementSyndic(c)}%</div>
+                <div className="l">avancement de vos tâches</div>
               </div>
             </div>
           </div>

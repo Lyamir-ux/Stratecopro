@@ -11,7 +11,7 @@ import { Badge, DpePair } from "@/components/ui";
 import { PHASES, type DpeClass, type PhaseId } from "@/lib/referentiels";
 import { fmtEuroCourt } from "@/lib/format";
 import { telechargerCsv } from "@/lib/csv";
-import { nbLogements } from "@/api/copros";
+import { avancementSyndic, nbLogements } from "@/api/copros";
 import { enRetard, useSyndicTaches } from "@/api/syndicTaches";
 import { useHonorairesSyndic, type SyndicCopro } from "@/api/syndic";
 
@@ -247,7 +247,7 @@ function VueTableau({
         case "logements": return nbLogements(c);
         case "montant": return c.stats?.montant_ttc ?? 0;
         case "honoraires": return honoraires.get(c.id) ?? 0;
-        case "progress": return c.progress ?? 0;
+        case "progress": return avancementSyndic(c);
         case "retard": return retards.get(c.id) ?? 0;
       }
     };
@@ -404,7 +404,7 @@ function VueTableau({
                       <td className="num">{nbLogements(c) || "-"}</td>
                       <td className="num">{c.stats?.montant_ttc ? fmtEuroCourt(c.stats.montant_ttc) : "-"}</td>
                       <td className="num">{honoraires.get(c.id) ? fmtEuroCourt(honoraires.get(c.id)!) : "-"}</td>
-                      <td className="num">{c.progress ?? 0} %</td>
+                      <td className="num">{avancementSyndic(c)} %</td>
                       <td className="num">
                         {retard > 0 ? (
                           <span style={{ color: "var(--color-error-700)", fontWeight: 700 }}>{retard}</span>
@@ -510,7 +510,7 @@ export function Portefeuille({
           c.stats?.coproprietaires ?? 0,
           c.stats?.montant_ttc ?? "",
           honoraires.get(c.id) != null ? Math.round(honoraires.get(c.id)! * 100) / 100 : "",
-          c.progress ?? 0,
+          avancementSyndic(c),
           c.fragile ? "Oui" : "",
           retards.get(c.id) ?? 0,
         ])

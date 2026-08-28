@@ -93,7 +93,7 @@ documents du dossier de prêt et remplit les formulaires destinés à la banque.
 | Section | Ce qui doit marcher |
 |---|---|
 | **Portefeuille** | Trois vues commutables (le choix survit à l'ouverture d'un dossier). **Kanban** : une colonne par étape — **Futur projet** (prospection : vide pour l'instant, la colonne anticipe la suite), Diagnostic, Études, Travaux — cartes cliquables (ville, logements, gestionnaire, DPE, montant, tâches en retard). **Bulles** : un **système par gestionnaire** — bulle grise au centre (ses initiales, le total de logements et le montant d'opération dont il a la charge), autour de laquelle **gravitent ses copropriétés**. La taille d'un satellite suit son nombre de logements, sa **couleur donne la phase** (orange Diagnostic, bleu Études, vert Travaux), « ! » = fragile. Les dossiers sans gestionnaire renseigné se regroupent sous « Non attribué ». Clic sur un satellite = ouvrir le dossier. **Tableau** (pilotage direction) : colonnes **triables** (nom, gestionnaire, phase, logements, montant, **honoraires syndic**, avancement, tâches en retard), DPE avant→après, et un **comparatif par gestionnaire** (copros, logements, montant, honoraires syndic, répartition par phase, tâches en retard — cliquez une ligne en aperçu AMO pour entrer dans le portefeuille du gestionnaire). Les honoraires du syndic viennent de la ligne « syndic » des frais annexes du PF définitif validé ; le total du portefeuille s'affiche aussi sous le titre de la page. Bouton **Exporter** = CSV du portefeuille pour Excel |
-| **Vos tâches** | Actions du syndic par copropriété et phase — Diagnostic : validation du CDC de la MOE et des intervenants annexes, transmission des documents signés, comptes d'aides, préparation d'AG ; Études : registre, SIRET, fiche État, résolution de prêt, tarification DO, AG de vote des travaux ; Travaux : documents signés, compte travaux, dossiers d'aides, accord DO, appels de fonds, demande de prêt, OS, suivi de chantier, acompte et solde d'aides. Désormais **persistées** : cochez ce qui est fait (traçé), fixez une **échéance datée** sur chaque tâche ; les tâches dont l'échéance est dépassée remontent en tête avec un badge **En retard** et alimentent le rapport mensuel. Bascule « À faire / Tout » pour revoir les tâches faites et celles des phases à venir |
+| **Vos tâches** | Actions du syndic par copropriété et phase — Diagnostic : validation du CDC de la MOE et des intervenants annexes, transmission des documents signés, comptes d'aides, préparation d'AG ; Études : registre, SIRET, fiche État, résolution de prêt, tarification DO, AG de vote des travaux ; Travaux : documents signés, compte travaux, dossiers d'aides, accord DO, appels de fonds, demande de prêt, OS, suivi de chantier, acompte et solde d'aides. Désormais **persistées**, avec la **pastille à trois états** des tâches AMO : un clic = **en cours** (orange), un second = **fait** (vert, tracé : qui et quand), un troisième = retour à faire. Fixez une **échéance datée** sur chaque tâche ; les tâches dont l'échéance est dépassée remontent en tête avec un badge **En retard** et alimentent le rapport mensuel. Bascule « À faire / Tout » pour revoir les tâches faites et celles des phases à venir. Le **% d'avancement affiché au syndic** (fiche copro, vue Tableau, rapport mensuel) = part de SES tâches faites - côté AMO, l'avancement du tableau de bord = part des tâches AMO du dossier (l'ancien champ manuel, toujours à 0, n'est plus utilisé) |
 | **Messages** | **Messagerie avec l'équipe Strat Eco**, un fil par copropriété (pastille de non-lus dans le menu). Chaque envoi du syndic alerte l'équipe AMO du dossier par e-mail (sans le contenu) ; en face, l'AMO écrit depuis l'onglet Communications (canal Syndic) et le syndic est alerté de la même façon |
 | **Dossier → Projet** | Les mêmes actions phase par phase, avec l'avancement — cochables directement dans le kanban |
 | **Dossier → Données de la copro** | Lots (bâtiment, usage, copropriétaire, tantièmes), copropriétaires, bâtiments — sans import ni édition |
@@ -124,10 +124,14 @@ alertes) :
 ### Organisations (enseignes de gestion) — nouveau
 
 Un cabinet de syndic peut désormais être modélisé comme une **organisation** avec
-deux niveaux d'accès :
+quatre rôles :
 
 - **directeur** → tout le portefeuille de l'enseigne, sans rattachement copro par copro ;
-- **gestionnaire** → ses seules copropriétés (rattachement `copro_members`, inchangé).
+- **gestionnaire** → ses seules copropriétés (rattachement `copro_members`, inchangé) ;
+- **administratif** et **comptable** → même périmètre que le gestionnaire (leurs
+  dossiers rattachés). Dans la liste des membres, le sous-titre affiche le rôle
+  dans l'enseigne (« Direction », « Administratif »…) plutôt que l'intitulé de
+  poste du profil.
 
 L'accès reste en lecture seule, avec les mêmes garde-fous de confidentialité
 (pas de RFR, pas de tâches internes AMO, pas d'IBAN). Le bandeau de l'espace

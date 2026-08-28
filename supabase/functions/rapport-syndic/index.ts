@@ -139,7 +139,7 @@ Deno.serve(async (req: Request) => {
     admin.from("organisations").select("id, nom"),
     admin
       .from("coproprietes")
-      .select("id, name, city, phase, progress, fragile, nb_logements, gestionnaire_nom, organisation_id")
+      .select("id, name, city, phase, fragile, nb_logements, gestionnaire_nom, organisation_id")
       .is("deleted_at", null)
       .not("organisation_id", "is", null),
     admin.from("rapport_syndic_envois").select("organisation_id").eq("periode", periode),
@@ -151,13 +151,7 @@ Deno.serve(async (req: Request) => {
     await Promise.all([
       admin.from("copro_stats").select("id, lots_hab, coproprietaires, montant_ttc").in("id", coproIds),
       admin.from("plans_definitifs").select("copro_id").eq("statut", "valide").in("copro_id", coproIds),
-      admin
-        .from("syndic_taches")
-        .select("copro_id, echeance, statut")
-        .in("copro_id", coproIds)
-        .neq("statut", "done")
-        .not("echeance", "is", null)
-        .lt("echeance", aujourdHui),
+      admin.from("syndic_taches").select("copro_id, echeance, statut").in("copro_id", coproIds),
       admin.from("scenarios_financiers").select("id, copro_id").eq("statut", "partage").in("copro_id", coproIds),
       admin.from("copro_members").select("copro_id, user_id, member_role").in("copro_id", coproIds).eq("member_role", "syndic"),
       admin.from("organisation_membres").select("organisation_id, user_id, org_role, profiles(full_name, active)"),
@@ -180,8 +174,26 @@ Deno.serve(async (req: Request) => {
 
   const statsById = new Map((stats ?? []).map((s) => [s.id, s]));
   const pfValides = new Set((pfs ?? []).map((p) => p.copro_id));
+  // tâches syndic : retards + avancement (% de tâches faites)
   const retardParCopro = new Map<string, number>();
-  for (const t of taches ?? []) retardParCopro.set(t.copro_id, (retardParCopro.get(t.copro_id) ?? 0) + 1);
+  const tachesParCopro = new Map<string, { total: number; faites: number }>();
+  for (const t of taches ?? []) {
+    const acc = tachesParCopro.get(t.copro_id) ?? { total: 0, faites: 0 };
+    acc.total++;
+    if (t.statut === "done") acc.faites++;
+    tachesParCopro.set(t.copro_id, acc);
+    if (t.statut !== "done" && t.echeance && t.echeance < aujourdHui) {
+      retardParCopro.set(t.copro_id, (retardParCopro.get(t.copro_id) ?? 0) + 1);
+    }
+  }
+  // dossier jamais ouvert côté syndic (gabarit pas semé) : équivalent du semis
+  // d'après la phase - gabarit 0048 : 5 diagnostic + 6 études + 10 travaux
+  const avancement = (coproId: string, phase: string): number => {
+    const acc = tachesParCopro.get(coproId);
+    if (acc?.total) return Math.round((acc.faites / acc.total) * 100);
+    const faites = phase === "travaux" ? 11 : phase === "etudes" ? 5 : 0;
+    return Math.round((faites / 21) * 100);
+  };
 
   const lignesParOrg = new Map<string, LigneCopro[]>();
   for (const c of copros ?? []) {
@@ -191,7 +203,7 @@ Deno.serve(async (req: Request) => {
       name: c.name,
       city: c.city,
       phase: c.phase,
-      progress: c.progress ?? 0,
+      progress: avancement(c.id, c.phase),
       fragile: !!c.fragile,
       gestionnaire: c.gestionnaire_nom ?? "",
       logements: s?.lots_hab || c.nb_logements || 0,

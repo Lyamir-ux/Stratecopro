@@ -10,6 +10,7 @@ import { PHASES, type DpeClass, type PhaseId } from "@/lib/referentiels";
 import { fmtEuro } from "@/lib/format";
 import { useUi } from "@/stores/ui";
 import {
+  avancementAmo,
   nbLogements,
   notifierPassation,
   useCopros,
@@ -91,9 +92,9 @@ function CoproCard({ c, showProgress }: { c: CoproWithStats; showProgress: boole
             <div className="cc-prog-row">
               <div className="lab">
                 <span>Avancement</span>
-                <span>{c.progress}%</span>
+                <span>{avancementAmo(c)}%</span>
               </div>
-              <Progress value={c.progress} blue={c.phase === "etudes"} />
+              <Progress value={avancementAmo(c)} blue={c.phase === "etudes"} />
             </div>
           )}
 
@@ -208,9 +209,9 @@ function TableView({ copros }: { copros: CoproWithStats[] }) {
               <td style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}>{fmtEuro(c.stats?.montant_ttc)}</td>
               <td>
                 <div className="td-prog">
-                  <span className="pct">{c.progress}%</span>
+                  <span className="pct">{avancementAmo(c)}%</span>
                   <div style={{ flex: 1 }}>
-                    <Progress value={c.progress} blue={c.phase === "etudes"} />
+                    <Progress value={avancementAmo(c)} blue={c.phase === "etudes"} />
                   </div>
                 </div>
               </td>
@@ -699,7 +700,7 @@ function exportCsv(copros: CoproWithStats[]) {
       c.stats?.coproprietaires ?? 0,
       c.stats?.batiments ?? 0,
       c.stats?.montant_ttc ?? "",
-      c.progress,
+      avancementAmo(c),
       c.syndic_name ?? "",
       c.gestionnaire_nom ?? "",
     ]

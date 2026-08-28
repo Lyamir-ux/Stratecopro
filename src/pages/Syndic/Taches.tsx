@@ -7,33 +7,36 @@ import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Badge, PhaseBadge } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
+import { StatusDot } from "@/pages/CoproDetail/ProjetTab";
 import {
   PHASE_RANK,
+  STATUT_SUIVANT,
   enRetard,
   useEcheanceSyndicTache,
+  useStatutSyndicTache,
   useSyndicTaches,
-  useToggleSyndicTache,
+  type StatutTache,
   type SyndicTache,
 } from "@/api/syndicTaches";
 import type { SyndicCopro } from "@/api/syndic";
 
-/** Ligne de tâche : case à cocher, libellé, échéance modifiable. */
+/** Ligne de tâche : pastille à trois états (clic = à faire → en cours → fait,
+ *  comme côté AMO), libellé, échéance modifiable. */
 export function LigneTache({ t, phaseCourante }: { t: SyndicTache; phaseCourante?: boolean }) {
-  const toggle = useToggleSyndicTache();
+  const statutMut = useStatutSyndicTache();
   const setEcheance = useEcheanceSyndicTache();
   const [editDate, setEditDate] = useState(false);
   const retard = enRetard(t);
-  const done = t.statut === "done";
+  const statut = t.statut as StatutTache;
+  const done = statut === "done";
 
   return (
     <div className="mt-task" style={{ cursor: "default", opacity: done ? 0.62 : 1 }}>
-      <input
-        type="checkbox"
-        checked={done}
-        disabled={toggle.isPending}
-        title={done ? "Repasser la tâche à faire" : "Marquer la tâche comme faite"}
-        style={{ width: 16, height: 16, flex: "none", accentColor: "var(--color-primary-700)", cursor: "pointer" }}
-        onChange={(e) => void toggle.mutateAsync({ tache: t, done: e.target.checked })}
+      <StatusDot
+        status={statut}
+        onClick={() => {
+          if (!statutMut.isPending) void statutMut.mutateAsync({ tache: t, statut: STATUT_SUIVANT[statut] });
+        }}
       />
       <span className="mt-task-title" style={done ? { textDecoration: "line-through" } : undefined}>
         {t.titre}
@@ -41,6 +44,7 @@ export function LigneTache({ t, phaseCourante }: { t: SyndicTache; phaseCourante
       <span className="spacer"></span>
       {t.tag && <Badge kind={t.tag === "Aides" ? "blue" : "primary"}>{t.tag}</Badge>}
       {phaseCourante === false && <PhaseBadge phase={t.phase} />}
+      {statut === "doing" && <Badge kind="warn" dot>En cours</Badge>}
       {retard && <Badge kind="warn" dot>En retard</Badge>}
       {!done &&
         (editDate ? (
@@ -98,9 +102,11 @@ export function TachesSyndic({ copros }: { copros: SyndicCopro[] }) {
         const visibles = toutAfficher
           ? toutes
           : toutes.filter((t) => t.statut !== "done" && PHASE_RANK[t.phase] <= PHASE_RANK[c.phase]);
+        // retards en tête, puis « en cours », puis à faire
+        const rangStatut = (t: SyndicTache) => (enRetard(t) ? 0 : t.statut === "doing" ? 1 : t.statut === "todo" ? 2 : 3);
         return {
           c,
-          tasks: [...visibles].sort((a, b) => Number(enRetard(b)) - Number(enRetard(a))),
+          tasks: [...visibles].sort((a, b) => rangStatut(a) - rangStatut(b)),
         };
       })
       .filter((g) => g.tasks.length > 0)
@@ -113,6 +119,7 @@ export function TachesSyndic({ copros }: { copros: SyndicCopro[] }) {
       PHASE_RANK[t.phase] <= PHASE_RANK[copros.find((c) => c.id === t.copro_id)?.phase ?? "travaux"]
   );
   const nbRetard = restantes.filter(enRetard).length;
+  const nbEnCours = restantes.filter((t) => t.statut === "doing").length;
 
   return (
     <div className="page fade" style={{ padding: 0 }}>
@@ -120,8 +127,8 @@ export function TachesSyndic({ copros }: { copros: SyndicCopro[] }) {
         <div>
           <h1 className="page-title">Vos tâches</h1>
           <p className="page-sub">
-            Validations, registre, fiche État, prêt bancaire, DO, appels de fonds, aides - cochez ce qui est
-            fait, fixez vos échéances
+            Validations, registre, fiche État, prêt bancaire, DO, appels de fonds, aides - un clic sur la
+            pastille = en cours, un second = fait ; fixez vos échéances
           </p>
         </div>
         <span className="spacer"></span>
@@ -129,6 +136,12 @@ export function TachesSyndic({ copros }: { copros: SyndicCopro[] }) {
           {nbRetard > 0 && (
             <>
               <span style={{ color: "var(--color-error-700)" }}><b>{nbRetard}</b> en retard</span>
+              <span className="dot"></span>
+            </>
+          )}
+          {nbEnCours > 0 && (
+            <>
+              <span><b>{nbEnCours}</b> en cours</span>
               <span className="dot"></span>
             </>
           )}

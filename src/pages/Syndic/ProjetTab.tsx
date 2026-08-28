@@ -1,16 +1,24 @@
-// Onglet Projet (syndic) - vos actions par phase : assemblées, comptes d'aides,
-// validations, registre, PV, DO. Tâches persistées (migration 0047) : cochez
-// directement dans le kanban, l'échéance se règle depuis « Vos tâches ».
+// Onglet Projet (syndic) - vos actions par phase : validations, registre,
+// fiche État, prêt, DO, appels de fonds. Tâches persistées (migration 0047) :
+// la pastille se clique directement dans le kanban (à faire → en cours → fait,
+// comme côté AMO), l'échéance se règle depuis « Vos tâches ».
 import { Badge } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 import { PHASES } from "@/lib/referentiels";
 import { fmtDate } from "@/lib/format";
-import { enRetard, useSyndicTaches, useToggleSyndicTache } from "@/api/syndicTaches";
+import { StatusDot } from "@/pages/CoproDetail/ProjetTab";
+import {
+  STATUT_SUIVANT,
+  enRetard,
+  useStatutSyndicTache,
+  useSyndicTaches,
+  type StatutTache,
+} from "@/api/syndicTaches";
 import type { SyndicCopro } from "@/api/syndic";
 
 export function ProjetTabSyndic({ c }: { c: SyndicCopro }) {
   const { data: taches, isLoading } = useSyndicTaches([c.id]);
-  const toggle = useToggleSyndicTache();
+  const statutMut = useStatutSyndicTache();
 
   if (isLoading) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
@@ -38,24 +46,25 @@ export function ProjetTabSyndic({ c }: { c: SyndicCopro }) {
               </div>
               <div className="tcol-body">
                 {list.map((t) => {
-                  const done = t.statut === "done";
+                  const statut = t.statut as StatutTache;
+                  const done = statut === "done";
                   const retard = enRetard(t);
                   return (
                     <div key={t.id} className={"task-card" + (done ? " done" : "")}>
                       <div style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
-                        <input
-                          type="checkbox"
-                          checked={done}
-                          disabled={toggle.isPending}
-                          title={done ? "Repasser la tâche à faire" : "Marquer la tâche comme faite"}
-                          style={{ width: 15, height: 15, flex: "none", marginTop: 2, accentColor: "var(--color-primary-700)", cursor: "pointer" }}
-                          onChange={(e) => void toggle.mutateAsync({ tache: t, done: e.target.checked })}
+                        <StatusDot
+                          status={statut}
+                          onClick={() => {
+                            if (!statutMut.isPending)
+                              void statutMut.mutateAsync({ tache: t, statut: STATUT_SUIVANT[statut] });
+                          }}
                         />
                         <div className="tt">{t.titre}</div>
                       </div>
-                      {(t.tag || t.echeance || retard) && (
+                      {(t.tag || t.echeance || retard || statut === "doing") && (
                         <div className="task-foot">
                           {t.tag && <Badge kind={t.tag === "Aides" ? "blue" : "primary"}>{t.tag}</Badge>}
+                          {statut === "doing" && <Badge kind="warn" dot>En cours</Badge>}
                           {retard && <Badge kind="warn" dot>En retard</Badge>}
                           {t.echeance && !done && (
                             <span className="due" style={retard ? { color: "var(--color-error-700)" } : undefined}>

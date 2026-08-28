@@ -7,7 +7,7 @@ import { Icon } from "@/components/Icon";
 import { Badge, DpePair, PhaseBadge, THUMB_BG } from "@/components/ui";
 import type { DpeClass } from "@/lib/referentiels";
 import { useAuth } from "@/auth/AuthProvider";
-import { useCopro, useMettreCorbeille, usePhotoUrl, useUploadPhoto } from "@/api/copros";
+import { avancementAmo, useCopro, useMettreCorbeille, usePhotoUrl, useUploadPhoto } from "@/api/copros";
 import { useConsultations } from "@/api/consultations";
 import { compteNonLus, useLectures, useMessagesCopro } from "@/api/messages";
 import { ProjetTab } from "./ProjetTab";
@@ -148,7 +148,7 @@ export default function CoproDetail() {
               <div className="l">{c.denomination_batiments === "entree" ? "entrées" : "bâtiments"}</div>
             </div>
             <div className="dh-stat">
-              <div className="v">{c.progress}%</div>
+              <div className="v">{avancementAmo(c)}%</div>
               <div className="l">avancement</div>
             </div>
           </div>
