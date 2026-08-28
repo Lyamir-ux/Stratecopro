@@ -76,7 +76,7 @@ Deno.serve(async (req: Request) => {
 
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const from = Deno.env.get("RESEND_FROM") ?? "Strat Eco <onboarding@resend.dev>";
-  const appUrl = Deno.env.get("APP_URL") ?? "http://localhost:5173";
+  const appUrl = Deno.env.get("APP_URL") ?? "https://stratecopro.vercel.app";
   const lien = `${appUrl}/prestataire/entreprise`;
 
   if (!resendKey) {

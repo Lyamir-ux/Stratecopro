@@ -21,7 +21,8 @@ const TYPE_LABELS: Record<string, string> = {
 const OPTION_LABELS: Record<string, string> = {
   audit_reglementaire: "Audit réglementaire",
   pppt: "PPPT",
-  memoire_climaxion: "Mémoire ClimAxion",
+  dpe_collectif: "DPE collectif",
+  memoire_climaxion: "Mémoire Climaxion",
 };
 
 const SOUS_TYPE_LABELS: Record<string, string> = {
@@ -91,7 +92,7 @@ Deno.serve(async (req: Request) => {
 
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const from = Deno.env.get("RESEND_FROM") ?? "Strat Eco <onboarding@resend.dev>";
-  const appUrl = Deno.env.get("APP_URL") ?? "http://localhost:5173";
+  const appUrl = Deno.env.get("APP_URL") ?? "https://stratecopro.vercel.app";
 
   const coproNom = cs.coproprietes?.name ?? cs.copro_externe_nom ?? "-";
   const coproLieu = cs.coproprietes
