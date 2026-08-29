@@ -5,7 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Tables } from "@/lib/database.types";
-import type { PhaseId } from "@/lib/referentiels";
+import { PHASES, type PhaseId } from "@/lib/referentiels";
 
 export type SyndicTache = Tables<"syndic_taches">;
 
@@ -84,6 +84,21 @@ export function useEcheanceSyndicTache() {
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["syndic-taches"] }),
   });
+}
+
+/**
+ * Phase d'avancement d'un dossier d'après les validations du syndic : première
+ * phase dont les tâches ne sont pas toutes faites. Tout est fait : dernière
+ * phase à tâches ; aucune tâche (gabarit pas encore semé) : phase du dossier.
+ * Sert à toutes les vues du syndic (bulles, kanban, tableau, fiche) pour que
+ * couleur et pastille « En cours » racontent la même chose (feedbacks 29/08).
+ */
+export function phaseAvancement(phaseDossier: PhaseId, taches: SyndicTache[]): PhaseId {
+  const listes = PHASES.map((ph) => taches.filter((t) => t.phase === ph.id));
+  const i = listes.findIndex((l) => l.length > 0 && l.some((t) => t.statut !== "done"));
+  if (i !== -1) return PHASES[i].id;
+  const j = listes.map((l) => l.length > 0).lastIndexOf(true);
+  return j !== -1 ? PHASES[j].id : phaseDossier;
 }
 
 /** Une tâche est en retard : non faite et échéance dépassée. */

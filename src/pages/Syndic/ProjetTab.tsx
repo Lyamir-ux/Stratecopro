@@ -10,6 +10,7 @@ import { StatusDot } from "@/pages/CoproDetail/ProjetTab";
 import {
   STATUT_SUIVANT,
   enRetard,
+  phaseAvancement,
   useStatutSyndicTache,
   useSyndicTaches,
   type StatutTache,
@@ -22,22 +23,16 @@ export function ProjetTabSyndic({ c }: { c: SyndicCopro }) {
 
   if (isLoading) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
-  // La pastille « En cours » suit les validations du syndic : première phase
-  // dont les tâches ne sont pas toutes faites (feedback 29/08). Tout est fait :
-  // dernière phase à tâches ; aucune tâche : phase du dossier en repli.
-  const listes = PHASES.map((ph) => (taches ?? []).filter((t) => t.phase === ph.id));
-  let idxEnCours = listes.findIndex((l) => l.length > 0 && l.some((t) => t.statut !== "done"));
-  if (idxEnCours === -1) {
-    const derniere = listes.map((l) => l.length > 0).lastIndexOf(true);
-    idxEnCours = derniere !== -1 ? derniere : PHASES.findIndex((ph) => ph.id === c.phase);
-  }
+  // La pastille « En cours » suit les validations du syndic, comme la couleur
+  // des vues du portefeuille (feedbacks 29/08).
+  const phaseEnCours = phaseAvancement(c.phase, taches ?? []);
 
   return (
     <div className="fade">
       <div className="tkanban">
         {PHASES.map((ph, i) => {
-          const list = listes[i].sort((a, b) => a.ordre - b.ordre);
-          const cur = i === idxEnCours;
+          const list = (taches ?? []).filter((t) => t.phase === ph.id).sort((a, b) => a.ordre - b.ordre);
+          const cur = ph.id === phaseEnCours;
           const doneN = list.filter((t) => t.statut === "done").length;
           return (
             <section key={ph.id}>

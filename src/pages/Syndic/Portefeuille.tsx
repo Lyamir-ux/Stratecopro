@@ -12,7 +12,7 @@ import { PHASES, type DpeClass, type PhaseId } from "@/lib/referentiels";
 import { fmtEuroCourt } from "@/lib/format";
 import { telechargerCsv } from "@/lib/csv";
 import { avancementSyndic, nbLogements } from "@/api/copros";
-import { enRetard, useSyndicTaches } from "@/api/syndicTaches";
+import { enRetard, phaseAvancement, useSyndicTaches, type SyndicTache } from "@/api/syndicTaches";
 import { useHonorairesSyndic, type SyndicCopro } from "@/api/syndic";
 
 /** Comparaison de recherche : minuscules, sans accents. */
@@ -67,7 +67,7 @@ interface Systeme {
   satellites: Satellite[];
 }
 
-function construireSystemes(copros: SyndicCopro[]): Systeme[] {
+function construireSystemes(copros: SyndicCopro[], phaseDe: (c: SyndicCopro) => PhaseId): Systeme[] {
   const groupes = new Map<string, { nom: string; copros: SyndicCopro[] }>();
   for (const c of copros) {
     const cle = cleGestionnaire(c);
@@ -117,7 +117,7 @@ function construireSystemes(copros: SyndicCopro[]): Systeme[] {
             return {
               id: c.id,
               name: c.name,
-              phase: c.phase,
+              phase: phaseDe(c),
               fragile: c.fragile,
               logements,
               r,
@@ -144,16 +144,18 @@ const COLONNES_KANBAN: { id: PhaseId | "futur"; label: string; dot: string }[] =
 function VueKanban({
   copros,
   retards,
+  phaseDe,
 }: {
   copros: SyndicCopro[];
   retards: Map<string, number>;
+  phaseDe: (c: SyndicCopro) => PhaseId;
 }) {
   const navigate = useNavigate();
   return (
     <div className="kanban fluide">
       {COLONNES_KANBAN.map((col) => {
         const list = copros
-          .filter((c) => c.phase === col.id)
+          .filter((c) => phaseDe(c) === col.id)
           .sort((a, b) => a.name.localeCompare(b.name, "fr"));
         return (
           <section className="kcol" key={col.id}>
@@ -238,11 +240,13 @@ function VueTableau({
   copros,
   retards,
   honoraires,
+  phaseDe,
   onGestionnaire,
 }: {
   copros: SyndicCopro[];
   retards: Map<string, number>;
   honoraires: Map<string, number>;
+  phaseDe: (c: SyndicCopro) => PhaseId;
   onGestionnaire?: (key: string, nom: string) => void;
 }) {
   const navigate = useNavigate();
@@ -256,7 +260,7 @@ function VueTableau({
       switch (tri.col) {
         case "name": return c.name;
         case "gestionnaire": return c.gestionnaire_nom ?? "";
-        case "phase": return PHASE_RANK[c.phase];
+        case "phase": return PHASE_RANK[phaseDe(c)];
         case "logements": return nbLogements(c);
         case "montant": return c.stats?.montant_ttc ?? 0;
         case "honoraires": return honoraires.get(c.id) ?? 0;
@@ -270,7 +274,7 @@ function VueTableau({
       const cmp = typeof va === "string" ? va.localeCompare(String(vb), "fr") : Number(va) - Number(vb);
       return tri.desc ? -cmp : cmp;
     });
-  }, [copros, tri, retards, honoraires]);
+  }, [copros, tri, retards, honoraires, phaseDe]);
 
   // Comparatif par gestionnaire (charge et état du portefeuille de chacun)
   const parGestionnaire = useMemo(() => {
@@ -289,11 +293,17 @@ function VueTableau({
         logements: g.copros.reduce((s, c) => s + nbLogements(c), 0),
         montant: g.copros.reduce((s, c) => s + (c.stats?.montant_ttc ?? 0), 0),
         honoraires: g.copros.reduce((s, c) => s + (honoraires.get(c.id) ?? 0), 0),
-        phases: PHASES.map((ph) => g.copros.filter((c) => c.phase === ph.id).length),
+        phases: PHASES.map((ph) => g.copros.filter((c) => phaseDe(c) === ph.id).length),
         retard: g.copros.reduce((s, c) => s + (retards.get(c.id) ?? 0), 0),
       }))
       .sort((a, b) => b.logements - a.logements);
-  }, [copros, retards, honoraires]);
+  }, [copros, retards, honoraires, phaseDe]);
+
+  // Un seul gestionnaire dans le périmètre (vrai gestionnaire chez lui, ou
+  // aperçu AMO de son portefeuille) : inutile de répéter son nom sur chaque
+  // ligne - la colonne reste pour la direction, qui voit plusieurs
+  // gestionnaires (feedback 29/08).
+  const multiGest = parGestionnaire.length > 1;
 
   const Th = ({ col, label, num }: { col: ColTri; label: string; num?: boolean }) => (
     <th
@@ -378,7 +388,7 @@ function VueTableau({
               <thead>
                 <tr>
                   <Th col="name" label="Copropriété" />
-                  <Th col="gestionnaire" label="Gestionnaire" />
+                  {multiGest && <Th col="gestionnaire" label="Gestionnaire" />}
                   <Th col="phase" label="Phase" />
                   <th>DPE</th>
                   <Th col="logements" label="Logements" num />
@@ -404,11 +414,11 @@ function VueTableau({
                           </span>
                         )}
                       </td>
-                      <td>{c.gestionnaire_nom || "-"}</td>
+                      {multiGest && <td>{c.gestionnaire_nom || "-"}</td>}
                       <td>
                         <span className="leg-g" style={{ whiteSpace: "nowrap" }}>
-                          <span className="dot" style={{ background: COULEUR_PHASE[c.phase] }}></span>
-                          {PHASES.find((p) => p.id === c.phase)?.label}
+                          <span className="dot" style={{ background: COULEUR_PHASE[phaseDe(c)] }}></span>
+                          {PHASES.find((p) => p.id === phaseDe(c))?.label}
                         </span>
                       </td>
                       <td>
@@ -472,8 +482,6 @@ export function Portefeuille({
       /* stockage indisponible */
     }
   };
-  const systemes = useMemo(() => construireSystemes(copros), [copros]);
-
   // tâches en retard par copro (sème le gabarit au passage - idempotent)
   const { data: taches } = useSyndicTaches(copros.map((c) => c.id));
   const retards = useMemo(() => {
@@ -481,6 +489,18 @@ export function Portefeuille({
     for (const t of taches ?? []) if (enRetard(t)) m.set(t.copro_id, (m.get(t.copro_id) ?? 0) + 1);
     return m;
   }, [taches]);
+
+  // Phase d'avancement (validations des tâches) : même couleur de dossier dans
+  // toutes les vues - bulles, kanban, tableau - et que la pastille « En cours »
+  // de la fiche (feedback 29/08). Repli sur la phase du dossier sans tâches.
+  const phases = useMemo(() => {
+    const parCopro = new Map<string, SyndicTache[]>();
+    for (const t of taches ?? []) parCopro.set(t.copro_id, [...(parCopro.get(t.copro_id) ?? []), t]);
+    return new Map(copros.map((c) => [c.id, phaseAvancement(c.phase, parCopro.get(c.id) ?? [])]));
+  }, [copros, taches]);
+  const phaseDe = useMemo(() => (c: SyndicCopro) => phases.get(c.id) ?? c.phase, [phases]);
+
+  const systemes = useMemo(() => construireSystemes(copros, phaseDe), [copros, phaseDe]);
 
   // honoraires du syndic (ligne « syndic » des frais annexes du PF validé)
   const { data: honorairesData } = useHonorairesSyndic(copros.map((c) => c.id));
@@ -501,7 +521,7 @@ export function Portefeuille({
       )
     : copros;
 
-  const phaseCounts = PHASES.map((ph) => ({ ph, n: copros.filter((c) => c.phase === ph.id).length }));
+  const phaseCounts = PHASES.map((ph) => ({ ph, n: copros.filter((c) => phaseDe(c) === ph.id).length }));
   const totalLogements = copros.reduce((s, c) => s + nbLogements(c), 0);
 
   const exporter = () =>
@@ -514,7 +534,7 @@ export function Portefeuille({
           c.name,
           c.city ?? "",
           c.gestionnaire_nom ?? "",
-          PHASES.find((p) => p.id === c.phase)?.label ?? c.phase,
+          PHASES.find((p) => p.id === phaseDe(c))?.label ?? phaseDe(c),
           c.energy_before ?? "",
           c.energy_after ?? "",
           c.gain_pct ?? "",
@@ -585,9 +605,9 @@ export function Portefeuille({
       )}
 
       {vue === "tableau" ? (
-        <VueTableau copros={coprosFiltres} retards={retards} honoraires={honoraires} onGestionnaire={onGestionnaire} />
+        <VueTableau copros={coprosFiltres} retards={retards} honoraires={honoraires} phaseDe={phaseDe} onGestionnaire={onGestionnaire} />
       ) : vue === "kanban" ? (
-        <VueKanban copros={coprosFiltres} retards={retards} />
+        <VueKanban copros={coprosFiltres} retards={retards} phaseDe={phaseDe} />
       ) : (
         <>
       <div className="orbites">
@@ -664,7 +684,8 @@ export function Portefeuille({
       </div>
       <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12 }}>
         Chaque bulle grise est un gestionnaire, entouré des copropriétés dont il a la charge - la couleur d'un satellite
-        donne sa phase. Cliquez une copropriété pour ouvrir le dossier. Le montant est celui du scénario partagé, tant
+        donne l'état d'avancement du dossier (d'après les tâches validées, comme dans les autres vues). Cliquez une
+        copropriété pour ouvrir le dossier. Le montant est celui du scénario partagé, tant
         qu'il y en a un. La vue Tableau permet de trier, comparer les gestionnaires et exporter.
       </p>
         </>

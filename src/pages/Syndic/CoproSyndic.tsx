@@ -6,6 +6,7 @@ import { Icon } from "@/components/Icon";
 import { Badge, DpePair, PhaseBadge, THUMB_BG } from "@/components/ui";
 import type { DpeClass } from "@/lib/referentiels";
 import { avancementSyndic, usePhotoUrl } from "@/api/copros";
+import { phaseAvancement, useSyndicTaches } from "@/api/syndicTaches";
 import { useCoproSyndic } from "@/api/syndic";
 import { SyndicShell, Loader, AucuneCopro } from "./index";
 import { ProjetTabSyndic } from "./ProjetTab";
@@ -33,12 +34,16 @@ export default function CoproSyndic() {
   const navigate = useNavigate();
   const { data: c, isLoading } = useCoproSyndic(id);
   const { data: photoUrl } = usePhotoUrl(c?.photo_path ?? null);
+  // Le badge de phase suit l'avancement des tâches, comme la pastille
+  // « En cours » de l'onglet Projet et les vues du portefeuille (feedback 29/08).
+  const { data: taches } = useSyndicTaches(id ? [id] : []);
 
   const tab: TabId = TABS.some((t) => t.id === tabParam) ? (tabParam as TabId) : "projet";
 
   if (isLoading) return <Loader />;
   if (!c) return <AucuneCopro />;
   const s = c.stats;
+  const phase = phaseAvancement(c.phase, taches ?? []);
 
   return (
     <SyndicShell active={null}>
@@ -78,7 +83,7 @@ export default function CoproSyndic() {
           <div className="dh-body">
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                <PhaseBadge phase={c.phase} />
+                <PhaseBadge phase={phase} />
                 {c.fragile && (
                   <Badge kind="warn">
                     <Icon name="alert" size={12} />
