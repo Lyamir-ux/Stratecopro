@@ -15,8 +15,11 @@ import { useScenariosPartages, useFinancementConfig, useSaveChoixGestionnaire } 
 import { usePlansDefinitifs, type PlanDefinitif } from "@/api/planDefinitif";
 import {
   computePlanDefinitif,
+  computePlansIndividuelsPf,
+  itemsARepartirPf,
   readPlanDefinitif,
   regrouperAnnexes,
+  type CoproTantiemes,
   type PlanDefinitifResult,
 } from "@/lib/finance";
 import type { Enums } from "@/lib/database.types";
@@ -208,6 +211,42 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
   const coproprietaires = donnees?.coproprietaires ?? [];
   const lots = donnees?.lots ?? [];
 
+  // Appel de fonds par copropriétaire : son reste à charge d'après le PF
+  // définitif validé (quote-part - aides et fonds travaux au prorata), même
+  // répartition que les plans individuels côté AMO (feedback 29/08).
+  const appelsDeFonds = useMemo(() => {
+    if (!pf || !donnees) return null;
+    const items = itemsARepartirPf(pf.data, pf.pv);
+    const totauxCles: Record<string, number> = {};
+    const parCopro = new Map<string, CoproTantiemes>();
+    for (const lot of donnees.lots) {
+      for (const [code, t] of Object.entries(lot.tantiemes)) totauxCles[code] = (totauxCles[code] ?? 0) + t;
+      if (!lot.coproprietaire_id) continue;
+      const co =
+        parCopro.get(lot.coproprietaire_id) ??
+        { coproprietaireId: lot.coproprietaire_id, nom: lot.coproprietaire?.nom ?? "-", tantiemes: {} };
+      for (const [code, t] of Object.entries(lot.tantiemes)) co.tantiemes[code] = (co.tantiemes[code] ?? 0) + t;
+      parCopro.set(lot.coproprietaire_id, co);
+    }
+    const cleUnique = donnees.cles.length === 1 ? donnees.cles[0].code : null;
+    const cleParItem: Record<string, string> = cleUnique
+      ? Object.fromEntries(items.map((it) => [it.id, cleUnique]))
+      : {};
+    const { plans, manquants } = computePlansIndividuelsPf({
+      items,
+      cleParItem,
+      copros: [...parCopro.values()],
+      totauxCles,
+      totalAides: pf.pv.totalAides,
+      fondsTravaux: pf.data.params.fondsTravaux,
+      totalPhaseTravauxTtc: pf.pv.totalPhaseTravauxTtc,
+    });
+    // Répartition incomplète (clé manquante sur une ligne) : ne rien afficher
+    // plutôt que des montants faux.
+    if (manquants.length > 0) return null;
+    return new Map(plans.map((p) => [p.coproprietaireId, p.reste]));
+  }, [pf, donnees]);
+
   const lotsByCp = useMemo(() => {
     const m = new Map<string, number>();
     for (const l of lots) {
@@ -294,13 +333,14 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                 onClick={() =>
                   telechargerCsv(
                     `financement-${c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.csv`,
-                    ["Copropriétaire", "Lots", "Mode de financement", "Durée (ans)", "Transmis le", "Saisi par"],
+                    ["Copropriétaire", "Lots", "Mode de financement", "Appel de fonds", "Durée (ans)", "Transmis le", "Saisi par"],
                     coproprietaires.map((cp) => {
                       const ch = choixByCp.get(cp.id) ?? null;
                       return [
                         cp.nom,
                         lotsByCp.get(cp.id) ?? 0,
                         ch ? TYPE_META[ch.type].label : "En attente",
+                        appelsDeFonds?.get(cp.id) != null ? Math.round(appelsDeFonds.get(cp.id)! * 100) / 100 : "",
                         ch?.type === "collectif"
                           ? (finConfig?.duree_annees ?? ch.duree_annees ?? "")
                           : (ch?.duree_annees ?? ""),
@@ -329,7 +369,7 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                       <th>Copropriétaire</th>
                       <th>Lots</th>
                       <th>Mode de financement</th>
-                      <th>Durée</th>
+                      <th>Appel de fonds</th>
                       <th>Transmis le</th>
                       {scenario && <th style={{ width: 40 }}></th>}
                     </tr>
@@ -345,41 +385,42 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                             <td style={{ fontWeight: 600 }}>{cp.nom}</td>
                             <td>{lotsByCp.get(cp.id) ?? 0}</td>
                             <td>
-                              <select
-                                className="edit-inp"
-                                value={draftType}
-                                autoFocus
-                                onChange={(e) => setDraftType(e.target.value as TypeFinancement)}
-                                style={{ maxWidth: 180 }}
-                              >
-                                {(Object.keys(TYPE_META) as TypeFinancement[]).map((t) => (
-                                  <option key={t} value={t}>
-                                    {TYPE_META[t].label}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td>
-                              {draftType === "individuel" ? (
+                              <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                                 <select
                                   className="edit-inp"
-                                  value={draftDuree}
-                                  onChange={(e) => setDraftDuree(Number(e.target.value))}
-                                  style={{ maxWidth: 90 }}
-                                  title="Durée de l'éco-PTZ individuel"
+                                  value={draftType}
+                                  autoFocus
+                                  onChange={(e) => setDraftType(e.target.value as TypeFinancement)}
+                                  style={{ maxWidth: 180 }}
                                 >
-                                  {Array.from({ length: 18 }, (_, i) => i + 3).map((n) => (
-                                    <option key={n} value={n}>
-                                      {n} ans
+                                  {(Object.keys(TYPE_META) as TypeFinancement[]).map((t) => (
+                                    <option key={t} value={t}>
+                                      {TYPE_META[t].label}
                                     </option>
                                   ))}
                                 </select>
-                              ) : draftType === "collectif" ? (
-                                (finConfig?.duree_annees ?? 15) + " ans"
-                              ) : (
-                                "-"
-                              )}
+                                {draftType === "individuel" ? (
+                                  <select
+                                    className="edit-inp"
+                                    value={draftDuree}
+                                    onChange={(e) => setDraftDuree(Number(e.target.value))}
+                                    style={{ maxWidth: 90 }}
+                                    title="Durée de l'éco-PTZ individuel"
+                                  >
+                                    {Array.from({ length: 18 }, (_, i) => i + 3).map((n) => (
+                                      <option key={n} value={n}>
+                                        {n} ans
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : draftType === "collectif" ? (
+                                  <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
+                                    {(finConfig?.duree_annees ?? 15) + " ans"}
+                                  </span>
+                                ) : null}
+                              </span>
                             </td>
+                            <td>{appelsDeFonds?.get(cp.id) != null ? fmtEuroFull(appelsDeFonds.get(cp.id)!) : "-"}</td>
                             <td colSpan={2}>
                               <span style={{ display: "inline-flex", gap: 6 }}>
                                 <button
@@ -430,12 +471,8 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                               <Badge kind="warn">En attente</Badge>
                             )}
                           </td>
-                          <td>
-                            {ch?.type === "collectif"
-                              ? (finConfig?.duree_annees ?? ch.duree_annees ?? "-") + " ans"
-                              : ch?.type === "individuel" && ch.duree_annees
-                                ? ch.duree_annees + " ans"
-                                : "-"}
+                          <td title="Reste à charge du copropriétaire d'après le plan de financement définitif validé">
+                            {appelsDeFonds?.get(cp.id) != null ? fmtEuroFull(appelsDeFonds.get(cp.id)!) : "-"}
                           </td>
                           <td>
                             {ch ? fmtDate(ch.transmitted_at) : "-"}
@@ -482,8 +519,9 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
               Chaque copropriétaire transmet son choix depuis son portail - si vous avez l'information en direct
               (ex. paiement sur fonds propres), vous pouvez l'enregistrer ici (✎) : la saisie est tracée et le
               copropriétaire peut toujours la modifier depuis son portail. L'éco-PTZ individuel saisi ici porte
-              sur l'ensemble de ses lots. Les montants individuels (quotes-parts, aides, restes à charge) sont
-              gérés par l'équipe Strat Eco.
+              sur l'ensemble de ses lots. L'appel de fonds est le reste à charge du copropriétaire d'après le
+              plan de financement définitif validé (quote-part moins aides et fonds travaux) ; le détail est
+              géré par l'équipe Strat Eco.
             </p>
           </div>
         </div>

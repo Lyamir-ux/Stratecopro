@@ -7,7 +7,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
-import { Badge, DpePair } from "@/components/ui";
+import { Badge, DpePair, Progress } from "@/components/ui";
 import { PHASES, type DpeClass, type PhaseId } from "@/lib/referentiels";
 import { fmtEuroCourt } from "@/lib/format";
 import { telechargerCsv } from "@/lib/csv";
@@ -181,7 +181,20 @@ function VueKanban({
                       {c.fragile && <Badge kind="warn">Fragile</Badge>}
                     </div>
                     <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginBottom: 6 }}>
-                      {[c.city, `${nbLogements(c)} logements`, c.gestionnaire_nom].filter(Boolean).join(" · ")}
+                      {[c.city, `${nbLogements(c)} logements`].filter(Boolean).join(" · ")}
+                    </div>
+                    {/* Le gestionnaire n'est pas répété sur la carte (colonne déjà
+                        contextualisée) : petite barre d'avancement à la place (feedback 29/08). */}
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}
+                      title={`Avancement de vos tâches : ${avancementSyndic(c)} %`}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <Progress value={avancementSyndic(c)} />
+                      </div>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--fg-muted)" }}>
+                        {avancementSyndic(c)} %
+                      </span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <DpePair before={c.energy_before as DpeClass | null} after={c.energy_after as DpeClass | null} />
@@ -313,7 +326,7 @@ function VueTableau({
                     <th className="num">Copros</th>
                     <th className="num">Logements</th>
                     <th className="num">Montant TTC</th>
-                    <th className="num">Honoraires syndic</th>
+                    <th className="num">Honoraires</th>
                     {PHASES.map((ph) => (
                       <th key={ph.id} className="num">{ph.label}</th>
                     ))}
@@ -370,7 +383,7 @@ function VueTableau({
                   <th>DPE</th>
                   <Th col="logements" label="Logements" num />
                   <Th col="montant" label="Montant TTC" num />
-                  <Th col="honoraires" label="Honoraires syndic" num />
+                  <Th col="honoraires" label="Honoraires" num />
                   <Th col="progress" label="Avancement" num />
                   <Th col="retard" label="Tâches en retard" num />
                 </tr>

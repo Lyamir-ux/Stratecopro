@@ -50,7 +50,10 @@ export function Accueil({
           profil
         )
       : null;
-  const aidesTotal = indiv ? indiv.mprIndiv + indiv.cee + indiv.subvColl : null;
+  // Aides collectives uniquement (MPR Copro + fonds travaux + CEE) : la prime
+  // individuelle dépend du profil de l'enquête, elle reste détaillée dans
+  // « Vos quotes-parts » (feedback 28/08).
+  const aidesCollectives = indiv ? indiv.cee + indiv.subvColl : null;
 
   const todos: { id: SectionId; done: boolean; ico: string; title: string; sub: string }[] = [
     {
@@ -112,9 +115,9 @@ export function Accueil({
             </div>
           </div>
           <div className="tile">
-            <div className="t-lbl"><Icon name="leaf" size={16} />Vos aides estimées</div>
-            <div className="t-val accent">{fmtEuro(aidesTotal)}</div>
-            <div className="t-foot">MaPrimeRénov' + CEE + collectif</div>
+            <div className="t-lbl"><Icon name="leaf" size={16} />Vos aides collectives estimées</div>
+            <div className="t-val accent">{fmtEuro(aidesCollectives)}</div>
+            <div className="t-foot">MaPrimeRénov' Copro + fonds travaux + CEE</div>
           </div>
           <div className="tile">
             <div className="t-lbl"><Icon name="trendingUp" size={16} />À financer avant travaux</div>
