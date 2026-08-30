@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -97,6 +97,45 @@ export type Database = {
           },
         ]
       }
+      audit_log: {
+        Row: {
+          bulletin_id: string
+          evenement: string
+          hash_courant: string
+          hash_precedent: string | null
+          horodatage: string
+          id: number
+          ip: unknown
+          payload: Json | null
+          signataire_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          bulletin_id: string
+          evenement: string
+          hash_courant?: string
+          hash_precedent?: string | null
+          horodatage?: string
+          id?: number
+          ip?: unknown
+          payload?: Json | null
+          signataire_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          bulletin_id?: string
+          evenement?: string
+          hash_courant?: string
+          hash_precedent?: string | null
+          horodatage?: string
+          id?: number
+          ip?: unknown
+          payload?: Json | null
+          signataire_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       baremes: {
         Row: {
           actif: boolean
@@ -165,6 +204,135 @@ export type Database = {
             columns: ["copro_id"]
             isOneToOne: false
             referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bulletins: {
+        Row: {
+          adhesion_id: string | null
+          alerte_j25_le: string | null
+          certificat_path: string | null
+          cgu_version: string
+          copro_id: string
+          coproprietaire_id: string
+          created_at: string
+          cree_par: string
+          document_hash: string | null
+          document_path: string | null
+          document_signe_hash: string | null
+          document_signe_path: string | null
+          eco_ptz_demande: boolean
+          iban_chiffre: string | null
+          iban_dernier4: string | null
+          id: string
+          liens_envoyes_le: string | null
+          lot_id: string | null
+          lot_reference: string
+          notification_anah_le: string | null
+          purge_effectuee_le: string | null
+          rib_hash: string | null
+          rib_path: string | null
+          sceau_signature: string | null
+          scelle_le: string | null
+          statut: Database["public"]["Enums"]["bulletin_statut"]
+          tantiemes: number | null
+          transmission_banque_le: string | null
+        }
+        Insert: {
+          adhesion_id?: string | null
+          alerte_j25_le?: string | null
+          certificat_path?: string | null
+          cgu_version: string
+          copro_id: string
+          coproprietaire_id: string
+          created_at?: string
+          cree_par?: string
+          document_hash?: string | null
+          document_path?: string | null
+          document_signe_hash?: string | null
+          document_signe_path?: string | null
+          eco_ptz_demande?: boolean
+          iban_chiffre?: string | null
+          iban_dernier4?: string | null
+          id?: string
+          liens_envoyes_le?: string | null
+          lot_id?: string | null
+          lot_reference: string
+          notification_anah_le?: string | null
+          purge_effectuee_le?: string | null
+          rib_hash?: string | null
+          rib_path?: string | null
+          sceau_signature?: string | null
+          scelle_le?: string | null
+          statut?: Database["public"]["Enums"]["bulletin_statut"]
+          tantiemes?: number | null
+          transmission_banque_le?: string | null
+        }
+        Update: {
+          adhesion_id?: string | null
+          alerte_j25_le?: string | null
+          certificat_path?: string | null
+          cgu_version?: string
+          copro_id?: string
+          coproprietaire_id?: string
+          created_at?: string
+          cree_par?: string
+          document_hash?: string | null
+          document_path?: string | null
+          document_signe_hash?: string | null
+          document_signe_path?: string | null
+          eco_ptz_demande?: boolean
+          iban_chiffre?: string | null
+          iban_dernier4?: string | null
+          id?: string
+          liens_envoyes_le?: string | null
+          lot_id?: string | null
+          lot_reference?: string
+          notification_anah_le?: string | null
+          purge_effectuee_le?: string | null
+          rib_hash?: string | null
+          rib_path?: string | null
+          sceau_signature?: string | null
+          scelle_le?: string | null
+          statut?: Database["public"]["Enums"]["bulletin_statut"]
+          tantiemes?: number | null
+          transmission_banque_le?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulletins_adhesion_id_fkey"
+            columns: ["adhesion_id"]
+            isOneToOne: false
+            referencedRelation: "adhesions_pret"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulletins_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulletins_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulletins_coproprietaire_id_fkey"
+            columns: ["coproprietaire_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietaires"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulletins_lot_id_fkey"
+            columns: ["lot_id"]
+            isOneToOne: false
+            referencedRelation: "lots"
             referencedColumns: ["id"]
           },
         ]
@@ -267,6 +435,44 @@ export type Database = {
             columns: ["prestataire_id"]
             isOneToOne: false
             referencedRelation: "prestataires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cgu_acceptations: {
+        Row: {
+          accepte_le: string
+          cgu_version: string
+          contexte: string
+          coproprietaire_id: string | null
+          id: string
+          info_avis_imposition: boolean
+          user_id: string
+        }
+        Insert: {
+          accepte_le?: string
+          cgu_version: string
+          contexte?: string
+          coproprietaire_id?: string | null
+          id?: string
+          info_avis_imposition?: boolean
+          user_id?: string
+        }
+        Update: {
+          accepte_le?: string
+          cgu_version?: string
+          contexte?: string
+          coproprietaire_id?: string | null
+          id?: string
+          info_avis_imposition?: boolean
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cgu_acceptations_coproprietaire_id_fkey"
+            columns: ["coproprietaire_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietaires"
             referencedColumns: ["id"]
           },
         ]
@@ -1534,6 +1740,44 @@ export type Database = {
         }
         Relationships: []
       }
+      otp_codes: {
+        Row: {
+          code_hash: string
+          created_at: string
+          expire_le: string
+          id: string
+          signataire_id: string
+          tentatives: number
+          valide_le: string | null
+        }
+        Insert: {
+          code_hash: string
+          created_at?: string
+          expire_le: string
+          id?: string
+          signataire_id: string
+          tentatives?: number
+          valide_le?: string | null
+        }
+        Update: {
+          code_hash?: string
+          created_at?: string
+          expire_le?: string
+          id?: string
+          signataire_id?: string
+          tentatives?: number
+          valide_le?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "otp_codes_signataire_id_fkey"
+            columns: ["signataire_id"]
+            isOneToOne: false
+            referencedRelation: "signataires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       passations: {
         Row: {
           ancien_chef: string | null
@@ -1635,6 +1879,7 @@ export type Database = {
           id: string
           mime: string | null
           name: string
+          sha256: string | null
           size: number | null
           storage_path: string
           type: Database["public"]["Enums"]["type_piece"]
@@ -1646,6 +1891,7 @@ export type Database = {
           id?: string
           mime?: string | null
           name: string
+          sha256?: string | null
           size?: number | null
           storage_path: string
           type: Database["public"]["Enums"]["type_piece"]
@@ -1657,6 +1903,7 @@ export type Database = {
           id?: string
           mime?: string | null
           name?: string
+          sha256?: string | null
           size?: number | null
           storage_path?: string
           type?: Database["public"]["Enums"]["type_piece"]
@@ -1953,6 +2200,7 @@ export type Database = {
           full_name: string
           initials: string
           job_title: string | null
+          niveau_pieces: number
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
@@ -1963,6 +2211,7 @@ export type Database = {
           full_name: string
           initials: string
           job_title?: string | null
+          niveau_pieces?: number
           role?: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
@@ -1973,6 +2222,7 @@ export type Database = {
           full_name?: string
           initials?: string
           job_title?: string | null
+          niveau_pieces?: number
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
@@ -2131,6 +2381,131 @@ export type Database = {
             columns: ["plan_definitif_id"]
             isOneToOne: false
             referencedRelation: "plans_definitifs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signataires: {
+        Row: {
+          adresse_ligne1: string | null
+          adresse_ligne2: string | null
+          attestation_honneur_le: string | null
+          attestation_piece_le: string | null
+          bulletin_id: string
+          cgu_acceptees_le: string | null
+          civilite: string | null
+          code_postal: string | null
+          created_at: string
+          date_naissance: string | null
+          document_hash_signature: string | null
+          document_lu_le: string | null
+          email: string
+          id: string
+          lieu_naissance: string | null
+          nom: string
+          ordre: number
+          pays: string | null
+          piece_deposee_ip: unknown
+          piece_deposee_le: string | null
+          piece_identite_hash: string | null
+          piece_identite_path: string | null
+          piece_identite_type: string | null
+          prenom: string
+          relance1_le: string | null
+          relance2_le: string | null
+          role: Database["public"]["Enums"]["signataire_role"]
+          signe_ip: unknown
+          signe_le: string | null
+          signe_user_agent: string | null
+          statut: Database["public"]["Enums"]["signataire_statut"]
+          telephone: string
+          token_consomme_le: string | null
+          token_expire_le: string | null
+          token_hash: string | null
+          ville: string | null
+        }
+        Insert: {
+          adresse_ligne1?: string | null
+          adresse_ligne2?: string | null
+          attestation_honneur_le?: string | null
+          attestation_piece_le?: string | null
+          bulletin_id: string
+          cgu_acceptees_le?: string | null
+          civilite?: string | null
+          code_postal?: string | null
+          created_at?: string
+          date_naissance?: string | null
+          document_hash_signature?: string | null
+          document_lu_le?: string | null
+          email: string
+          id?: string
+          lieu_naissance?: string | null
+          nom: string
+          ordre: number
+          pays?: string | null
+          piece_deposee_ip?: unknown
+          piece_deposee_le?: string | null
+          piece_identite_hash?: string | null
+          piece_identite_path?: string | null
+          piece_identite_type?: string | null
+          prenom: string
+          relance1_le?: string | null
+          relance2_le?: string | null
+          role: Database["public"]["Enums"]["signataire_role"]
+          signe_ip?: unknown
+          signe_le?: string | null
+          signe_user_agent?: string | null
+          statut?: Database["public"]["Enums"]["signataire_statut"]
+          telephone: string
+          token_consomme_le?: string | null
+          token_expire_le?: string | null
+          token_hash?: string | null
+          ville?: string | null
+        }
+        Update: {
+          adresse_ligne1?: string | null
+          adresse_ligne2?: string | null
+          attestation_honneur_le?: string | null
+          attestation_piece_le?: string | null
+          bulletin_id?: string
+          cgu_acceptees_le?: string | null
+          civilite?: string | null
+          code_postal?: string | null
+          created_at?: string
+          date_naissance?: string | null
+          document_hash_signature?: string | null
+          document_lu_le?: string | null
+          email?: string
+          id?: string
+          lieu_naissance?: string | null
+          nom?: string
+          ordre?: number
+          pays?: string | null
+          piece_deposee_ip?: unknown
+          piece_deposee_le?: string | null
+          piece_identite_hash?: string | null
+          piece_identite_path?: string | null
+          piece_identite_type?: string | null
+          prenom?: string
+          relance1_le?: string | null
+          relance2_le?: string | null
+          role?: Database["public"]["Enums"]["signataire_role"]
+          signe_ip?: unknown
+          signe_le?: string | null
+          signe_user_agent?: string | null
+          statut?: Database["public"]["Enums"]["signataire_statut"]
+          telephone?: string
+          token_consomme_le?: string | null
+          token_expire_le?: string | null
+          token_hash?: string | null
+          ville?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signataires_bulletin_id_fkey"
+            columns: ["bulletin_id"]
+            isOneToOne: false
+            referencedRelation: "bulletins"
             referencedColumns: ["id"]
           },
         ]
@@ -2356,6 +2731,7 @@ export type Database = {
         }[]
       }
       is_amo: { Args: never; Returns: boolean }
+      is_amo_niveau1: { Args: never; Returns: boolean }
       is_copro_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_directeur_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_moe_retenu_of: { Args: { p_copro_id: string }; Returns: boolean }
@@ -2375,7 +2751,8 @@ export type Database = {
         Returns: boolean
       }
       rattacher_lot: {
-        // p_cible_id null = détacher le lot (défaut SQL non vu par le générateur)
+        // retouche manuelle à préserver : p_cible_id a un défaut SQL (null)
+        // que le générateur ne voit pas
         Args: { p_cible_id: string | null; p_lot_id: string }
         Returns: undefined
       }
@@ -2386,10 +2763,18 @@ export type Database = {
     }
     Enums: {
       app_role: "amo" | "syndic" | "moe" | "copro" | "presta"
+      bulletin_statut:
+        | "brouillon"
+        | "en_signature"
+        | "complet"
+        | "expire"
+        | "annule"
       canal_message: "prestataires" | "syndic" | "coproprietaires"
       member_role: "amo_referent" | "syndic" | "moe" | "coproprietaire"
       org_role: "directeur" | "gestionnaire" | "administratif" | "comptable"
       phase_copro: "diagnostic" | "etudes" | "travaux"
+      signataire_role: "principal" | "cosignataire"
+      signataire_statut: "en_attente" | "identite_deposee" | "signe" | "expire"
       statut_candidature: "recue" | "retenue" | "non_retenue"
       statut_consultation: "en_ligne" | "cloturee"
       statut_enquete: "brouillon" | "prete" | "envoyee"
@@ -2539,10 +2924,19 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["amo", "syndic", "moe", "copro", "presta"],
+      bulletin_statut: [
+        "brouillon",
+        "en_signature",
+        "complet",
+        "expire",
+        "annule",
+      ],
       canal_message: ["prestataires", "syndic", "coproprietaires"],
       member_role: ["amo_referent", "syndic", "moe", "coproprietaire"],
       org_role: ["directeur", "gestionnaire", "administratif", "comptable"],
       phase_copro: ["diagnostic", "etudes", "travaux"],
+      signataire_role: ["principal", "cosignataire"],
+      signataire_statut: ["en_attente", "identite_deposee", "signe", "expire"],
       statut_candidature: ["recue", "retenue", "non_retenue"],
       statut_consultation: ["en_ligne", "cloturee"],
       statut_enquete: ["brouillon", "prete", "envoyee"],

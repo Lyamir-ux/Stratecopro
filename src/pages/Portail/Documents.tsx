@@ -1,5 +1,7 @@
 // Mes documents : téléversement des pièces justificatives (bucket privé pieces-copro)
 // + consultation des documents du projet partagés par l'AMO.
+// Le dépôt (enquête sociale : avis d'imposition notamment) exige l'acceptation
+// préalable des CGU du service - tracée par version dans cgu_acceptations.
 import { useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
@@ -14,6 +16,8 @@ import {
   type Membership,
   type TypePiece,
 } from "@/api/portail";
+import { CGU_VERSION } from "@/lib/cguSignature";
+import { useAccepterCguDepot, useCguDepotPieces } from "@/api/signature";
 
 function fmtSize(bytes: number | null): string {
   if (bytes == null) return "";
@@ -25,6 +29,10 @@ export function Documents({ membership }: { membership: Membership }) {
   const { data: pieces } = useMesPieces(membership.coproprietaireId);
   const { data: fichiers } = useFichiersPartages(membership.copro.id);
   const upload = useUploadPiece(membership.copro.id, membership.coproprietaireId);
+  const { data: cguAcceptees, isLoading: chargeCgu } = useCguDepotPieces(CGU_VERSION);
+  const accepterCgu = useAccepterCguDepot(CGU_VERSION);
+  const [cguCochee, setCguCochee] = useState(false);
+  const [infoAvisCochee, setInfoAvisCochee] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [pendingType, setPendingType] = useState<TypePiece | null>(null);
   // Pièce en attente de renommage assisté avant téléversement
@@ -65,6 +73,59 @@ export function Documents({ membership }: { membership: Membership }) {
             <span style={{ flex: 1 }}></span>
             <Badge kind={done >= req.length ? "success" : "warn"}>{done}/{req.length} obligatoires</Badge>
           </div>
+          {/* CGU avant tout dépôt : accepter après l'upload reviendrait à
+              traiter la pièce avant que la personne ait accepté le cadre */}
+          {chargeCgu ? (
+            <div className="cx-body">
+              <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>Chargement…</p>
+            </div>
+          ) : !cguAcceptees ? (
+            <div className="cx-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <p className="se-body" style={{ margin: 0 }}>
+                Avant de déposer vos pièces justificatives (avis d'imposition, pièce d'identité, RIB…),
+                merci de prendre connaissance des conditions qui encadrent leur traitement : qui peut les
+                consulter, à quels organismes elles sont transmises, et quand elles sont supprimées.
+              </p>
+              <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer" }}>
+                <input type="checkbox" checked={cguCochee} onChange={(e) => setCguCochee(e.target.checked)} style={{ marginTop: 3 }} />
+                <span>
+                  J'ai lu et j'accepte les{" "}
+                  <a href="/cgu-signature" target="_blank" rel="noreferrer">Conditions Générales d'Utilisation</a>{" "}
+                  du service de dépôt de pièces justificatives et de signature électronique Strat Eco Pro
+                  (version {CGU_VERSION}).
+                </span>
+              </label>
+              <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer" }}>
+                <input type="checkbox" checked={infoAvisCochee} onChange={(e) => setInfoAvisCochee(e.target.checked)} style={{ marginTop: 3 }} />
+                <span>
+                  J'ai été informé(e) que mon avis d'imposition sera transmis dans son intégralité à l'Anah
+                  et, le cas échéant, à l'établissement bancaire instruisant ma demande d'éco-prêt à taux
+                  zéro, aux fins de vérification de mes ressources, puis supprimé des systèmes de Strat Eco
+                  une fois ces transmissions effectuées.
+                </span>
+              </label>
+              <div>
+                <button
+                  className="se-btn se-btn-primary"
+                  disabled={!cguCochee || !infoAvisCochee || accepterCgu.isPending}
+                  onClick={() =>
+                    void accepterCgu.mutateAsync({
+                      coproprietaireId: membership.coproprietaireId,
+                      infoAvisImposition: infoAvisCochee,
+                    }).catch(() => null)
+                  }
+                >
+                  <Icon name="checkCircle" size={16} />
+                  {accepterCgu.isPending ? "Enregistrement…" : "Accepter et déposer mes pièces"}
+                </button>
+              </div>
+              {accepterCgu.isError && (
+                <p className="se-small" style={{ color: "var(--color-error-700)", margin: 0 }}>
+                  L'enregistrement a échoué - réessayez.
+                </p>
+              )}
+            </div>
+          ) : (
           <div className="cx-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {PIECES.map((d) => {
               const piece = (pieces ?? []).find((x) => x.type === d.type);
@@ -92,8 +153,10 @@ export function Documents({ membership }: { membership: Membership }) {
             )}
             <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
               Vos pièces sont stockées de manière sécurisée et ne sont visibles que par vous et l'équipe Strat Eco.
+              CGU acceptées le {fmtDate(cguAcceptees.accepte_le)} (version {cguAcceptees.cgu_version}).
             </p>
           </div>
+          )}
         </div>
 
         <div className="card-xl">

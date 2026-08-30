@@ -434,6 +434,10 @@ export function useUploadPiece(coproId: string, coproprietaireId: string) {
       if (!uid) throw new Error("Session expirée");
       const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const path = `${uid}/${type}-${Date.now()}-${safe}`;
+      // empreinte calculée au dépôt : seule trace conservée après la purge
+      // automatique des pièces (CGU art. 7.4.2)
+      const empreinte = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+      const sha256 = [...new Uint8Array(empreinte)].map((b) => b.toString(16).padStart(2, "0")).join("");
       const { error: eUp } = await supabase.storage.from("pieces-copro").upload(path, file);
       if (eUp) throw eUp;
       // remplace l'éventuelle pièce précédente (ligne + objet Storage)
@@ -452,6 +456,7 @@ export function useUploadPiece(coproId: string, coproprietaireId: string) {
           storage_path: path,
           size: file.size,
           mime: file.type || null,
+          sha256,
           uploaded_at: new Date().toISOString(),
         },
         { onConflict: "coproprietaire_id,type" }

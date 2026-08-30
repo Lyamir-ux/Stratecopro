@@ -19,11 +19,16 @@ import Portail from "./pages/Portail";
 import Prestataire from "./pages/Prestataire";
 import Syndic from "./pages/Syndic";
 import CoproSyndic from "./pages/Syndic/CoproSyndic";
+import SignaturePublique from "./pages/Signature";
+import CguSignature from "./pages/CguSignature";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <Login /> },
   { path: "/mot-de-passe-oublie", element: <MotDePasseOublie /> },
   { path: "/reinitialisation", element: <Reinitialisation /> },
+  // pages publiques : cosignataires sans compte (lien tokenisé) et CGU
+  { path: "/signature/:token", element: <SignaturePublique /> },
+  { path: "/cgu-signature", element: <CguSignature /> },
   {
     element: <RequireAuth />,
     children: [

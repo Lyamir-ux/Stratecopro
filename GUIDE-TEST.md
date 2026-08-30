@@ -258,3 +258,48 @@ Le plus utile pour corriger vite, pour chaque bug :
 2. **Quoi** — ce que vous avez fait, ce qui s'est passé, ce que vous attendiez
 3. **Chiffres** — si c'est un calcul faux : les montants attendus vs affichés
 4. Une capture d'écran si c'est visuel (à m'envoyer à part pour l'instant, en citant votre remarque)
+
+## Signature électronique des bulletins d'adhésion (nouveau)
+
+Le parcours d'adhésion du portail copropriétaire remplace la signature dessinée
+par une **signature électronique avancée** (pièce d'identité + code à usage
+unique). Pour tester :
+
+1. **Portail copropriétaire** (aperçu AMO ou vrai compte) - section « Adhésion au
+   prêt » : acceptez les CGU (lien vers `/cgu-signature`), remplissez le
+   formulaire, déclarez d'éventuels **cosignataires** (e-mail + portable propres à
+   chacun - jamais partagés), cochez les deux attestations, puis « Passer à la
+   signature ».
+2. Déposez votre **pièce d'identité** (1 ou 2 photos, ou un PDF), puis le **RIB**
+   avec IBAN/BIC (l'IBAN est chiffré côté serveur, seuls les 4 derniers
+   caractères restent visibles).
+3. **Lisez le bulletin jusqu'en bas** (le bouton ne s'active qu'après), demandez
+   le code : il arrive **par e-mail** tant qu'aucun prestataire SMS n'est
+   branché (sans RESEND_API_KEY, le code s'affiche à l'écran en mode test).
+4. Votre signature envoie automatiquement leur **lien personnel** aux
+   cosignataires : chacun ouvre `/signature/<lien>` sans compte, accepte les CGU,
+   dépose SA pièce, lit, signe avec son propre code.
+5. Quand tout le monde a signé : PDF **scellé** (blocs de signature + SHA-256) et
+   **certificat de preuve** envoyés à tous, téléchargeables depuis le portail et
+   depuis l'onglet Financement du dossier AMO (panneau « Signatures
+   électroniques des bulletins »).
+6. **Côté AMO** : ce panneau permet de relancer un cosignataire, de saisir les
+   dates « notification Anah » et « transmission banque » - déclencheurs de la
+   **purge automatique** des pièces (30 jours après, seuls les hash restent) -
+   et de consulter les pièces (réservé aux profils **niveau 1** ; par défaut tout
+   le monde est niveau 2, sans lecture : passez un profil en niveau 1 via SQL
+   `update profiles set niveau_pieces = 1 where user_id = ...`). Chaque
+   consultation est journalisée dans `audit_log` (chaîné, non modifiable).
+
+Relances automatiques J+3 / J+7, alerte J+25, expiration J+30 : déclenchées une
+fois par jour au chargement de l'app AMO (fonction `signature-cron`).
+
+### CGU avant tout dépôt de pièce (enquête sociale comprise)
+
+Dans « Mes documents » (portail copropriétaire), le bloc « Vos pièces à
+fournir » est verrouillé tant que les CGU n'ont pas été acceptées : deux cases
+(CGU + information sur la transmission intégrale de l'avis d'imposition) puis
+« Accepter et déposer mes pièces ». L'acceptation est tracée par version dans
+la table `cgu_acceptations` (horodatage serveur) - une nouvelle version des
+CGU redemandera l'acceptation. La date d'acceptation s'affiche ensuite sous la
+liste des pièces.

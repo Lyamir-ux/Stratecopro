@@ -38,6 +38,12 @@ import type { CoproWithStats } from "@/api/copros";
 import { StatutPill } from "@/pages/Ingenierie/ScenarioMenu";
 import { ImportPlanDefinitifDialog } from "@/pages/PlanDefinitif/ImportPlanDefinitifDialog";
 import type { PlanDefinitifResult } from "@/lib/finance";
+import {
+  ouvrirDocumentSignature,
+  useBulletinsCopro,
+  useMarquerInstruction,
+  useRelancerSignataire,
+} from "@/api/signature";
 
 export function FinancementTab({ c }: { c: CoproWithStats }) {
   const navigate = useNavigate();
@@ -308,6 +314,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
             </div>
           </div>
         </div>
+        <SignaturesElectroniquesPanel coproId={c.id} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div className="panel">
@@ -953,5 +960,170 @@ function RepartitionClesDialog({
         </button>
       </div>
     </Modal>
+  );
+}
+
+/** Suivi des signatures électroniques avancées des bulletins d'adhésion
+ *  (spec signature + CGU v1.6). Les dates Anah / banque saisies ici sont les
+ *  déclencheurs de la purge automatique des pièces justificatives (art. 7.4.1).
+ *  Le contenu des pièces (identité, RIB) n'est lisible que par les profils de
+ *  niveau 1 - chaque consultation est journalisée. */
+function SignaturesElectroniquesPanel({ coproId }: { coproId: string }) {
+  const { data: bulletins } = useBulletinsCopro(coproId);
+  const relancer = useRelancerSignataire();
+  const marquer = useMarquerInstruction(coproId);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  const actifs = (bulletins ?? []).filter((b) => b.statut !== "annule" && b.statut !== "brouillon");
+  if (actifs.length === 0) return null;
+
+  const STATUTS: Record<string, { label: string; kind: "success" | "warn" | "neutral" }> = {
+    en_signature: { label: "En signature", kind: "neutral" },
+    complet: { label: "Signé et scellé", kind: "success" },
+    expire: { label: "Liens expirés", kind: "warn" },
+  };
+
+  const versDate = (v: string | null) => (v ? v.slice(0, 10) : "");
+  const versIso = (v: string) => (v ? new Date(v + "T12:00:00").toISOString() : null);
+
+  const agir = (p: Promise<unknown>) => {
+    setErreur(null);
+    p.catch((e) => setErreur(e instanceof Error ? e.message : "Action impossible"));
+  };
+
+  return (
+    <div className="panel">
+      <div className="p-head">
+        <Icon name="fileCheck" size={18} />
+        <h3>Signatures électroniques des bulletins</h3>
+        <span style={{ flex: 1 }}></span>
+        <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{actifs.length}</span>
+      </div>
+      <div className="p-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {erreur && <p className="se-small" style={{ color: "var(--color-error-700)", margin: 0 }}>{erreur}</p>}
+        {actifs.map((b) => {
+          const principal = b.signataires.find((s) => s.role === "principal");
+          const signes = b.signataires.filter((s) => s.statut === "signe").length;
+          return (
+            <div key={b.id} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <b style={{ fontSize: 13.5 }}>{principal ? `${principal.prenom} ${principal.nom}` : "-"} · {b.lot_reference}</b>
+                <Badge kind={STATUTS[b.statut]?.kind ?? "neutral"}>{STATUTS[b.statut]?.label ?? b.statut}</Badge>
+                <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
+                  {signes}/{b.signataires.length} signature{b.signataires.length > 1 ? "s" : ""}
+                  {b.iban_dernier4 ? ` · IBAN ····${b.iban_dernier4}` : ""}
+                  {b.purge_effectuee_le ? ` · pièces purgées le ${fmtDate(b.purge_effectuee_le)}` : ""}
+                </span>
+                <span style={{ flex: 1 }}></span>
+                {b.statut === "complet" && (
+                  <>
+                    <button
+                      className="icon-btn"
+                      title="Bulletin signé (PDF scellé)"
+                      onClick={() => agir(ouvrirDocumentSignature({ action: "amo_document_url", bulletin_id: b.id, quoi: "signe" }))}
+                    >
+                      <Icon name="fileText" size={15} />
+                    </button>
+                    <button
+                      className="icon-btn"
+                      title="Certificat de preuve"
+                      onClick={() => agir(ouvrirDocumentSignature({ action: "amo_document_url", bulletin_id: b.id, quoi: "certificat" }))}
+                    >
+                      <Icon name="fileCheck" size={15} />
+                    </button>
+                  </>
+                )}
+                {!b.purge_effectuee_le && b.rib_path && (
+                  <button
+                    className="icon-btn"
+                    title="RIB (niveau 1 uniquement - consultation journalisée)"
+                    onClick={() => agir(ouvrirDocumentSignature({ action: "amo_piece_url", bulletin_id: b.id, quoi: "rib" }))}
+                  >
+                    <Icon name="euro" size={15} />
+                  </button>
+                )}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+                {b.signataires
+                  .slice()
+                  .sort((x, y) => x.ordre - y.ordre)
+                  .map((s) => (
+                    <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
+                      <Icon
+                        name={s.statut === "signe" ? "checkCircle" : "clock"}
+                        size={13}
+                        style={{ color: s.statut === "signe" ? "var(--color-success-500)" : "var(--fg-muted)" }}
+                      />
+                      <span>
+                        {s.prenom} {s.nom} ({s.role === "principal" ? "principal" : "cosignataire"})
+                        {s.signe_le ? ` - signé le ${fmtDate(s.signe_le)}` : s.statut === "identite_deposee" ? " - identité déposée" : s.statut === "expire" ? " - lien expiré" : " - en attente"}
+                      </span>
+                      <span style={{ flex: 1 }}></span>
+                      {!b.purge_effectuee_le && s.piece_identite_path && (
+                        <button
+                          className="icon-btn"
+                          title="Pièce d'identité (niveau 1 uniquement - consultation journalisée)"
+                          onClick={() => agir(ouvrirDocumentSignature({ action: "amo_piece_url", signataire_id: s.id, quoi: "piece" }))}
+                        >
+                          <Icon name="eye" size={13} />
+                        </button>
+                      )}
+                      {b.statut === "en_signature" && s.role === "cosignataire" && s.statut !== "signe" && (
+                        <button
+                          className="se-btn se-btn-ghost btn-sm"
+                          disabled={relancer.isPending}
+                          onClick={() => agir(relancer.mutateAsync(s.id))}
+                        >
+                          <Icon name="send" size={12} />Relancer
+                        </button>
+                      )}
+                    </div>
+                  ))}
+              </div>
+              {b.statut === "complet" && !b.purge_effectuee_le && (
+                <div style={{ display: "flex", gap: 14, alignItems: "flex-end", marginTop: 10, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <label style={{ fontSize: 12, color: "var(--fg2)" }}>Notification Anah reçue le</label>
+                    <input
+                      className="edit-inp"
+                      type="date"
+                      value={versDate(b.notification_anah_le)}
+                      onChange={(e) =>
+                        agir(marquer.mutateAsync({ bulletinId: b.id, notificationAnahLe: versIso(e.target.value) }))
+                      }
+                    />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <label style={{ fontSize: 12, color: "var(--fg2)" }}>Dossier transmis à la banque le</label>
+                    <input
+                      className="edit-inp"
+                      type="date"
+                      value={versDate(b.transmission_banque_le)}
+                      onChange={(e) =>
+                        agir(marquer.mutateAsync({ bulletinId: b.id, transmissionBanqueLe: versIso(e.target.value) }))
+                      }
+                    />
+                  </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, cursor: "pointer", paddingBottom: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={b.eco_ptz_demande}
+                      onChange={(e) => agir(marquer.mutateAsync({ bulletinId: b.id, ecoPtzDemande: e.target.checked }))}
+                    />
+                    Éco-PTZ demandé
+                  </label>
+                </div>
+              )}
+              {b.statut === "complet" && !b.purge_effectuee_le && b.notification_anah_le && (b.transmission_banque_le || !b.eco_ptz_demande) && (
+                <p className="se-small" style={{ color: "var(--fg-muted)", margin: "6px 0 0" }}>
+                  Conditions de purge réunies : les pièces justificatives (identité, avis d'imposition, taxe
+                  foncière) seront supprimées automatiquement 30 jours après la dernière date saisie.
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
