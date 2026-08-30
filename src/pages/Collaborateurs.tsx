@@ -13,7 +13,15 @@ import { useAuth } from "@/auth/AuthProvider";
 function useUpdateProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ userId, ...patch }: { userId: string; job_title?: string | null; active?: boolean }) => {
+    mutationFn: async ({
+      userId,
+      ...patch
+    }: {
+      userId: string;
+      job_title?: string | null;
+      active?: boolean;
+      niveau_pieces?: number;
+    }) => {
       const { error } = await supabase.from("profiles").update(patch).eq("user_id", userId);
       if (error) throw error;
     },
@@ -73,6 +81,21 @@ export default function Collaborateurs() {
                 )}
               </div>
               <span className="spacer"></span>
+              {/* Habilitation pièces justificatives (CGU art. 7.5.1) : le
+                  niveau 1 lit le contenu des pièces (chaque consultation est
+                  journalisée), le niveau 2 n'y a aucun accès en lecture */}
+              <select
+                className="edit-inp"
+                style={{ width: 210 }}
+                value={p.niveau_pieces}
+                title="Accès aux pièces justificatives (identité, avis d'imposition, RIB) - CGU art. 7.5.1"
+                onChange={(e) =>
+                  void update.mutateAsync({ userId: p.user_id, niveau_pieces: Number(e.target.value) })
+                }
+              >
+                <option value={1}>Niveau 1 - lecture des pièces</option>
+                <option value={2}>Niveau 2 - sans lecture</option>
+              </select>
               <Badge kind={p.active ? "success" : "neutral"} dot={p.active}>
                 {p.active ? "Actif" : "Inactif"}
               </Badge>
@@ -89,6 +112,16 @@ export default function Collaborateurs() {
             </div>
           ))}
           <div className="import-note" style={{ marginTop: 16 }}>
+            <Icon name="lock" size={16} />
+            <span>
+              <b>Accès aux pièces justificatives</b> (identité, avis d'imposition, RIB des signatures
+              électroniques) : le <b>niveau 1</b> (service administratif) peut lire le contenu des pièces
+              - chaque consultation est journalisée ; le <b>niveau 2</b> (chef de projet) n'y a aucun
+              accès en lecture et ne voit que les métadonnées. Par défaut, tout nouveau collaborateur est
+              au niveau 2, le plus restrictif.
+            </span>
+          </div>
+          <div className="import-note" style={{ marginTop: 10 }}>
             <Icon name="users" size={16} />
             <span>
               Pour ajouter un collaborateur : créez son compte dans Supabase (Authentication → Users → Invite), puis sa
