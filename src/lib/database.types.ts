@@ -2197,6 +2197,7 @@ export type Database = {
           active: boolean
           avatar_color: string | null
           created_at: string
+          dirigeant: boolean
           full_name: string
           initials: string
           job_title: string | null
@@ -2208,6 +2209,7 @@ export type Database = {
           active?: boolean
           avatar_color?: string | null
           created_at?: string
+          dirigeant?: boolean
           full_name: string
           initials: string
           job_title?: string | null
@@ -2219,6 +2221,7 @@ export type Database = {
           active?: boolean
           avatar_color?: string | null
           created_at?: string
+          dirigeant?: boolean
           full_name?: string
           initials?: string
           job_title?: string | null
@@ -2734,6 +2737,7 @@ export type Database = {
       is_amo_niveau1: { Args: never; Returns: boolean }
       is_copro_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_directeur_of: { Args: { p_copro_id: string }; Returns: boolean }
+      is_dirigeant: { Args: never; Returns: boolean }
       is_moe_retenu_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_presta_retenu_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_scenario_partage: { Args: { p_scenario_id: string }; Returns: boolean }

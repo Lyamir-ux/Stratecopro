@@ -83,12 +83,19 @@ export default function Collaborateurs() {
               <span className="spacer"></span>
               {/* Habilitation pièces justificatives (CGU art. 7.5.1) : le
                   niveau 1 lit le contenu des pièces (chaque consultation est
-                  journalisée), le niveau 2 n'y a aucun accès en lecture */}
+                  journalisée), le niveau 2 n'y a aucun accès en lecture.
+                  Modifiable par le seul dirigeant - verrouillé aussi en base
+                  (trigger), le sélecteur grisé n'est qu'un rappel. */}
               <select
                 className="edit-inp"
                 style={{ width: 210 }}
                 value={p.niveau_pieces}
-                title="Accès aux pièces justificatives (identité, avis d'imposition, RIB) - CGU art. 7.5.1"
+                disabled={!me?.dirigeant}
+                title={
+                  me?.dirigeant
+                    ? "Accès aux pièces justificatives (identité, avis d'imposition, RIB) - CGU art. 7.5.1"
+                    : "Seul le dirigeant peut modifier le niveau d'accès aux pièces"
+                }
                 onChange={(e) =>
                   void update.mutateAsync({ userId: p.user_id, niveau_pieces: Number(e.target.value) })
                 }
@@ -118,7 +125,7 @@ export default function Collaborateurs() {
               électroniques) : le <b>niveau 1</b> (service administratif) peut lire le contenu des pièces
               - chaque consultation est journalisée ; le <b>niveau 2</b> (chef de projet) n'y a aucun
               accès en lecture et ne voit que les métadonnées. Par défaut, tout nouveau collaborateur est
-              au niveau 2, le plus restrictif.
+              au niveau 2, le plus restrictif. Seul le <b>dirigeant</b> peut modifier ces niveaux.
             </span>
           </div>
           <div className="import-note" style={{ marginTop: 10 }}>
