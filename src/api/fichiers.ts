@@ -8,7 +8,7 @@ export type Fichier = Tables<"fichiers">;
 export const DOSSIERS = [
   "Passation",
   "Diagnostic & audit",
-  "Études techniques",
+  "Devis des études techniques et Frais Annexes",
   "Plans de financement",
   "Marchés de travaux",
   "Assemblée générale",
@@ -22,8 +22,8 @@ export const DOSSIER_AIDE: Record<(typeof DOSSIERS)[number], string> = {
     "Documents remis à la prise en main du dossier : règlement de copropriété, derniers PV d'AG, carnet d'entretien, contrats en cours et pièces transmises par le syndic.",
   "Diagnostic & audit":
     "Audit énergétique réglementaire, DPE collectif, PPPT et rapports de diagnostic de la copropriété.",
-  "Études techniques":
-    "Étude thermique, test d'étanchéité à l'air, diagnostic amiante-plomb, plans, contrats AMO et MOE.",
+  "Devis des études techniques et Frais Annexes":
+    "Devis des études techniques (étude thermique, test d'étanchéité à l'air, diagnostic amiante-plomb), plans, contrats AMO et MOE et autres frais annexes.",
   "Plans de financement":
     "Plans de financement, accords de subvention, offres de prêt, attestations CEE (sur l'honneur, cadre contribution), RIB, immatriculation au registre et justificatifs des copropriétaires.",
   "Marchés de travaux":

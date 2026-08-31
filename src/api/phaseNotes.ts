@@ -11,7 +11,7 @@ export type PhaseNote = Tables<"phase_notes">;
  *  détermine la liste « Documents liés » de chaque colonne du kanban. */
 export const DOSSIERS_PAR_PHASE: Record<PhaseId, string[]> = {
   diagnostic: ["Passation", "Diagnostic & audit"],
-  etudes: ["Études techniques", "Plans de financement", "Assemblée générale"],
+  etudes: ["Devis des études techniques et Frais Annexes", "Plans de financement", "Assemblée générale"],
   travaux: ["Marchés de travaux", "Photos chantier"],
 };
 
