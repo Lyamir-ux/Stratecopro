@@ -129,8 +129,11 @@ export const estVisualisable = (nom: string) => VISUALISABLES.test(nom);
 
 export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: string[] }[] = [
   {
+    // fusion des anciennes listes « CEE - Avant travaux » et « CEE - Après
+    // travaux » (feedback du 31/08/2026) - la clé `dispositif` reste
+    // inchangée : c'est l'identifiant stocké en base
     dispositif: "cee_avant",
-    label: "CEE - Avant travaux",
+    label: "CEE",
     items: [
       "Devis signé avant engagement des travaux",
       "Attestation RGE de l'entreprise",
@@ -138,12 +141,6 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: st
       "Cadre contribution CEE signé",
       "PV d'AG votant les travaux",
       "Attestation sur l'honneur (partie A)",
-    ],
-  },
-  {
-    dispositif: "cee_apres",
-    label: "CEE - Après travaux",
-    items: [
       "Factures détaillées des travaux",
       "Attestation sur l'honneur (partie B) signée",
       "PV de réception des travaux",
@@ -155,7 +152,7 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: st
     // chefs de projet, feedback du 19/08/2026) - la clé `dispositif` reste
     // inchangée : c'est l'identifiant stocké en base
     dispositif: "mpr_copro_2024",
-    label: "MaPrimeRénov' Copropriété",
+    label: "MaPrimeRénov'",
     items: [
       "PV d'AG ayant décidé de réaliser les travaux",
       "PV d'AG nommant le représentant légal",
@@ -174,11 +171,47 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: st
       "Plan de financement définitif de la copropriété (Excel)",
     ],
   },
+  // Climaxion, Eurométropole et Autre (feedback du 31/08/2026) : listes de
+  // pièces indicatives - modifiez librement les items ci-dessous.
+  {
+    dispositif: "climaxion",
+    label: "Climaxion",
+    items: [
+      "Dossier de demande de subvention Climaxion",
+      "Audit énergétique / étude thermique",
+      "PV d'AG votant les travaux",
+      "Devis / DPGF des travaux",
+      "Plan de financement",
+      "RIB du compte travaux",
+      "Notification d'accord de subvention",
+    ],
+  },
+  {
+    dispositif: "eurometropole",
+    label: "Eurométropole",
+    items: [
+      "Dossier de demande d'aide Eurométropole",
+      "PV d'AG votant les travaux",
+      "Devis / DPGF des travaux",
+      "Plan de financement",
+      "RIB du compte travaux",
+      "Notification d'accord de subvention",
+    ],
+  },
+  {
+    dispositif: "autre",
+    label: "Autre",
+    items: [
+      "Dossier de demande",
+      "Pièces justificatives transmises",
+      "Notification d'accord reçue",
+    ],
+  },
   {
     // millésime 2026 (feedback du 19/08/2026) - la clé `dispositif` reste
     // inchangée : c'est l'identifiant stocké en base
     dispositif: "eco_ptz_2024",
-    label: "Éco-PTZ collectif 2026",
+    label: "Éco-PTZ",
     items: [
       "Formulaire emprunteur « copropriétés »",
       "Formulaire entreprise par action de travaux",
@@ -244,6 +277,10 @@ export function useChecklists(coproId: string | undefined) {
         void qc.invalidateQueries({ queryKey: ["checklists", coproId] });
       }
       return lists
+        // Les checklists retirées des gabarits (ex. « CEE - Après travaux »,
+        // fusionnée dans « CEE ») restent en base si un ancien bundle les
+        // recrée : on ne les affiche plus.
+        .filter((l) => CHECKLIST_TEMPLATES.some((t) => t.dispositif === l.dispositif))
         .map((l) => {
           const { checklist_items, ...rest } = l as typeof l & { checklist_items: Tables<"checklist_items">[] };
           return { ...rest, items: (checklist_items ?? []).sort((a, b) => a.position - b.position) };
