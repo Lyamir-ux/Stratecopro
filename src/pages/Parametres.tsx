@@ -151,6 +151,7 @@ function FeedbackRow({ fb, coche, onCocher }: { fb: Feedback; coche?: boolean; o
   const [brouillon, setBrouillon] = useState(fb.message);
   const t = FB_TYPE_BADGE[fb.type] ?? FB_TYPE_BADGE.remarque;
   const traite = fb.statut === "traite";
+  const aEtudier = fb.statut === "a_etudier";
   return (
     <div style={{ padding: "12px 4px", borderBottom: "1px solid var(--border)", opacity: traite && !edition ? 0.55 : 1 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -179,6 +180,14 @@ function FeedbackRow({ fb, coche, onCocher }: { fb: Feedback; coche?: boolean; o
           }}
         >
           <Icon name="edit" size={15} />
+        </button>
+        <button
+          className="icon-btn"
+          style={{ width: 30, height: 30, ...(aEtudier ? { color: "var(--color-primary-700)" } : {}) }}
+          title={aEtudier ? "Repasser dans « À traiter »" : "Mettre de côté dans « À étudier plus tard »"}
+          onClick={() => void maj.mutateAsync({ id: fb.id, statut: aEtudier ? "nouveau" : "a_etudier" })}
+        >
+          <Icon name="book" size={15} />
         </button>
         <button
           className="icon-btn"
@@ -272,15 +281,17 @@ function feedbacksToMarkdown(list: Feedback[]): string {
 
 function FeedbackPanel() {
   const { data: feedbacks } = useFeedbacks();
-  // « à traiter » = retours nouveaux ; « archives » = retours déjà traités,
-  // filtrables par auteur (menu des clients)
-  const [vue, setVue] = useState<"a_traiter" | "archives">("a_traiter");
+  const maj = useMajFeedback();
+  // « à traiter » = retours nouveaux ; « à étudier » = mis de côté pour plus
+  // tard ; « archives » = retours déjà traités, filtrables par auteur
+  const [vue, setVue] = useState<"a_traiter" | "a_etudier" | "archives">("a_traiter");
   const [auteur, setAuteur] = useState<string>("tous");
   const [copie, setCopie] = useState(false);
-  // cases cochées dans « À traiter » : sélection de la fournée à exporter,
-  // les retours non cochés restent en suspens
+  // cases cochées dans « À traiter » : sélection de la fournée à exporter
+  // ou à mettre de côté, les retours non cochés restent en suspens
   const [selection, setSelection] = useState<Set<string>>(new Set());
-  const nouveaux = (feedbacks ?? []).filter((f) => f.statut !== "traite");
+  const nouveaux = (feedbacks ?? []).filter((f) => f.statut !== "traite" && f.statut !== "a_etudier");
+  const aEtudier = (feedbacks ?? []).filter((f) => f.statut === "a_etudier");
   const traites = (feedbacks ?? []).filter((f) => f.statut === "traite");
   const auteurs = [...new Set(traites.map((f) => f.auteur_nom || "Anonyme"))].sort((a, b) =>
     a.localeCompare(b, "fr")
@@ -288,9 +299,11 @@ function FeedbackPanel() {
   const visibles =
     vue === "a_traiter"
       ? nouveaux
-      : auteur === "tous"
-        ? traites
-        : traites.filter((f) => (f.auteur_nom || "Anonyme") === auteur);
+      : vue === "a_etudier"
+        ? aEtudier
+        : auteur === "tous"
+          ? traites
+          : traites.filter((f) => (f.auteur_nom || "Anonyme") === auteur);
 
   const coches = nouveaux.filter((f) => selection.has(f.id));
   const cocher = (id: string) =>
@@ -326,6 +339,19 @@ function FeedbackPanel() {
         <h3>Retours de test</h3>
         <span style={{ flex: 1 }}></span>
         {nouveaux.length > 0 && <Badge kind="primary" dot>{nouveaux.length} à traiter</Badge>}
+        {vue === "a_traiter" && coches.length > 0 && (
+          <button
+            className="se-btn se-btn-ghost btn-sm"
+            title="Mettre de côté les retours cochés dans « À étudier plus tard »"
+            onClick={() => {
+              void Promise.all(coches.map((f) => maj.mutateAsync({ id: f.id, statut: "a_etudier" }))).then(() =>
+                setSelection(new Set())
+              );
+            }}
+          >
+            <Icon name="book" size={14} />À étudier plus tard ({coches.length})
+          </button>
+        )}
         {vue === "a_traiter" && nouveaux.length > 0 && (
           <button
             className="se-btn se-btn-secondary btn-sm"
@@ -343,6 +369,9 @@ function FeedbackPanel() {
         <div className="opt-mini">
           <button className={vue === "a_traiter" ? "on" : ""} onClick={() => setVue("a_traiter")}>
             À traiter
+          </button>
+          <button className={vue === "a_etudier" ? "on" : ""} onClick={() => setVue("a_etudier")}>
+            À étudier · {aEtudier.length}
           </button>
           <button className={vue === "archives" ? "on" : ""} onClick={() => setVue("archives")}>
             Archives · {traites.length}
@@ -367,7 +396,9 @@ function FeedbackPanel() {
           <p className="se-small" style={{ color: "var(--fg-muted)" }}>
             {vue === "archives"
               ? "Aucun retour traité pour l'instant - les retours marqués comme traités s'archivent ici."
-              : "Aucun retour pour l'instant - les remarques envoyées via le bouton « Feedback » (en bas à droite de chaque page, tous espaces confondus) s'afficheront ici."}
+              : vue === "a_etudier"
+                ? "Rien à étudier pour l'instant - mettez de côté un retour intéressant mais à creuser via le bouton livre (à l'unité ou en cochant plusieurs retours)."
+                : "Aucun retour pour l'instant - les remarques envoyées via le bouton « Feedback » (en bas à droite de chaque page, tous espaces confondus) s'afficheront ici."}
           </p>
         ) : (
           visibles.map((fb) => (

@@ -55,6 +55,20 @@ export const TYPES_DOCUMENT: { id: string; label: string; dossier: string }[] = 
 
 export const typeLabel = (id: string): string => TYPES_DOCUMENT.find((t) => t.id === id)?.label ?? id;
 
+/** Retrouve le type (id TYPES_DOCUMENT) d'un fichier d'après son nom normalisé
+ *  ({COPRO} - {Type} - …) - sert aux dossiers récapitulatifs par dispositif.
+ *  Retourne null si le nom ne suit pas la nomenclature. */
+export function typeDepuisNom(name: string): string | null {
+  const sansExt = name.replace(/\.[a-zA-Z0-9]{1,8}$/, "");
+  const egal = (a: string, b: string) => a.localeCompare(b, "fr", { sensitivity: "base" }) === 0;
+  // le type est en 2e segment (préfixe copro) ou en 1er (nom sans préfixe)
+  for (const seg of sansExt.split(" - ").slice(0, 2)) {
+    const t = TYPES_DOCUMENT.find((x) => egal(x.label, seg.trim()));
+    if (t) return t.id;
+  }
+  return null;
+}
+
 export const dossierSuggere = (typeId: string): string | null =>
   TYPES_DOCUMENT.find((t) => t.id === typeId)?.dossier ?? null;
 

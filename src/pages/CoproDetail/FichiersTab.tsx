@@ -7,6 +7,7 @@ import { Icon } from "@/components/Icon";
 import { Progress } from "@/components/ui";
 import { RenommageDialog } from "@/components/RenommageDialog";
 import {
+  DISPOSITIFS_RECAP,
   DOSSIERS,
   DOSSIER_AIDE,
   downloadFichier,
@@ -19,6 +20,7 @@ import {
   useUploadFichier,
   type Fichier,
 } from "@/api/fichiers";
+import { typeDepuisNom, typeLabel } from "@/lib/nommage";
 import type { CoproWithStats } from "@/api/copros";
 
 function fmtSize(n: number | null): string {
@@ -36,6 +38,8 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
   const toggle = useToggleChecklistItem(c.id);
   const fileRef = useRef<HTMLInputElement>(null);
   const [openFolder, setOpenFolder] = useState<string | null>(null);
+  // Dossier récapitulatif par dispositif ouvert (CEE, MaPrimeRénov'…)
+  const [openDispositif, setOpenDispositif] = useState<string | null>(null);
   const [uploadFolder, setUploadFolder] = useState<string>(DOSSIERS[0]);
   const [openChecklist, setOpenChecklist] = useState<string | null>(null);
   const [apercu, setApercu] = useState<Fichier | null>(null);
@@ -50,6 +54,15 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
   const byFolder = (f: string) => (fichiers ?? []).filter((x) => x.dossier === f);
   const folderFiles = openFolder ? byFolder(openFolder) : [];
 
+  // Fichiers concernant un dispositif : type déduit du nom normalisé.
+  const byDispositif = (types: string[]) =>
+    (fichiers ?? []).filter((x) => {
+      const t = typeDepuisNom(x.name);
+      return t != null && types.includes(t);
+    });
+  const dispositifOuvert = DISPOSITIFS_RECAP.find((d) => d.id === openDispositif) ?? null;
+  const dispositifFiles = dispositifOuvert ? byDispositif(dispositifOuvert.types) : [];
+
   // Le dépôt (input multiple ou glissé-déposé) ouvre le dialogue de renommage,
   // qui analyse chaque document et appelle l'upload une fois le nom validé.
   // Les archives zip passent d'abord par le choix du format de dépôt.
@@ -63,7 +76,13 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
 
   const selectFolder = (f: string) => {
     setOpenFolder(openFolder === f ? null : f);
+    setOpenDispositif(null);
     setUploadFolder(f); // le sélecteur de dépôt suit le dossier cliqué
+  };
+
+  const selectDispositif = (id: string) => {
+    setOpenDispositif(openDispositif === id ? null : id);
+    setOpenFolder(null);
   };
 
   return (
@@ -167,6 +186,49 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
               );
             })}
           </div>
+          <div className="se-eyebrow" style={{ margin: "18px 0 8px", color: "var(--fg-muted)" }}>
+            Dossiers par dispositif - récapitulatifs, aucun dépôt
+          </div>
+          <div className="file-grid">
+            {DISPOSITIFS_RECAP.map((d) => {
+              const n = byDispositif(d.types).length;
+              return (
+                <div
+                  className="file-card"
+                  key={d.id}
+                  onClick={() => selectDispositif(d.id)}
+                  // Dossier virtuel : on n'y dépose rien, le glissé-déposé est neutralisé
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.dataTransfer.dropEffect = "none";
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  style={{
+                    position: "relative",
+                    cursor: "pointer",
+                    outline: openDispositif === d.id ? "2px solid var(--accent)" : "1px dashed var(--border)",
+                  }}
+                >
+                  <span className="fc-help" tabIndex={0} onClick={(e) => e.stopPropagation()}>
+                    <Icon name="help" size={15} />
+                    <span className="fc-help-bulle" role="tooltip">
+                      Regroupe automatiquement les documents concernant ce dispositif, d'après le type dans leur nom :{" "}
+                      {d.types.map(typeLabel).join(", ")}. Les fichiers restent classés dans leur dossier d'origine.
+                    </span>
+                  </span>
+                  <Icon name="layers" size={26} className="fc-ico" />
+                  <div className="fc-name">{d.label}</div>
+                  <div className="fc-sub">
+                    {n} fichier{n > 1 ? "s" : ""}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
             <Icon name="upload" size={13} /> Glissez-déposez un ou plusieurs fichiers ici - directement sur une carte
             pour choisir le dossier. Une archive <b>.zip</b> est acceptée : vous choisissez alors d'en extraire le
@@ -230,6 +292,49 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                       }}
                     >
                       <Icon name="trash" size={16} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+          {dispositifOuvert && (
+            <div style={{ marginTop: 18 }}>
+              <div className="se-eyebrow" style={{ marginBottom: 8, color: "var(--fg-muted)" }}>
+                {dispositifOuvert.label} - documents concernés
+              </div>
+              {dispositifFiles.length === 0 ? (
+                <p className="se-small" style={{ color: "var(--fg-muted)" }}>
+                  Aucun document pour ce dispositif pour l'instant - les fichiers déposés dans les dossiers ci-dessus
+                  dont le type correspond ({dispositifOuvert.types.slice(0, 4).map(typeLabel).join(", ")}…)
+                  apparaîtront ici automatiquement.
+                </p>
+              ) : (
+                dispositifFiles.map((f) => (
+                  <div key={f.id} className="task-row" style={{ padding: "9px 4px", borderBottom: "1px solid var(--border)" }}>
+                    <Icon name="fileText" size={16} style={{ color: "var(--color-secondary-500)" }} />
+                    <div>
+                      <div className="t-title" style={{ fontSize: 13 }}>
+                        {f.name}
+                      </div>
+                      <div className="t-copro">
+                        dans « {f.dossier} »{f.size != null ? ` · ${fmtSize(f.size)}` : ""}
+                      </div>
+                    </div>
+                    <span className="spacer"></span>
+                    <button
+                      className="icon-btn"
+                      title={
+                        estVisualisable(f.name)
+                          ? "Aperçu sans téléchargement"
+                          : "Ce format ne s'affiche pas dans le navigateur"
+                      }
+                      onClick={() => setApercu(f)}
+                    >
+                      <Icon name="eye" size={16} />
+                    </button>
+                    <button className="icon-btn" title="Télécharger" onClick={() => void downloadFichier(f)}>
+                      <Icon name="download" size={16} />
                     </button>
                   </div>
                 ))

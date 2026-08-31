@@ -6,6 +6,8 @@ import type { Tables } from "@/lib/database.types";
 
 export type Feedback = Tables<"feedbacks">;
 export type FeedbackType = "bug" | "idee" | "remarque";
+/** nouveau = à traiter · a_etudier = mis de côté « à étudier plus tard » · traite = archivé */
+export type FeedbackStatut = "nouveau" | "a_etudier" | "traite";
 
 export const FEEDBACK_TYPES: { id: FeedbackType; label: string }[] = [
   { id: "bug", label: "Bug" },
@@ -65,7 +67,7 @@ export function useMajFeedback() {
       statut,
     }: {
       id: string;
-      statut: "nouveau" | "traite";
+      statut: FeedbackStatut;
     }): Promise<{ mail: FeedbackMailStatut | null }> => {
       const { error } = await supabase.from("feedbacks").update({ statut }).eq("id", id);
       if (error) throw error;

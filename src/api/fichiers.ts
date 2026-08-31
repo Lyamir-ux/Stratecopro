@@ -34,6 +34,55 @@ export const DOSSIER_AIDE: Record<(typeof DOSSIERS)[number], string> = {
     "Photos de l'immeuble et du chantier - avant, pendant et après les travaux.",
 };
 
+/** Dossiers récapitulatifs par dispositif d'aide - virtuels : on n'y dépose
+ *  rien, ils regroupent automatiquement les fichiers dont le type (déduit du
+ *  nom normalisé, voir typeDepuisNom) concerne le dispositif. Un même fichier
+ *  peut apparaître dans plusieurs dispositifs (ex. un devis de « Marchés de
+ *  travaux » concerne CEE, MaPrimeRénov', Climaxion et Éco-PTZ).
+ *  Modifiez librement les listes de types (ids de TYPES_DOCUMENT). */
+export const DISPOSITIFS_RECAP: { id: string; label: string; types: string[] }[] = [
+  {
+    id: "cee",
+    label: "CEE",
+    types: [
+      "devis", "facture", "situation_travaux", "attestation_rge",
+      "etude_thermique", "cadre_cee", "ah_cee", "pv_ag", "pv_reception",
+    ],
+  },
+  {
+    id: "mpr",
+    label: "MaPrimeRénov'",
+    types: [
+      "devis", "facture", "marche_travaux", "pv_ag", "rib", "contrat_amo",
+      "contrat_moe", "audit_energetique", "plan_financement",
+      "accord_subvention", "immatriculation", "avis_imposition",
+    ],
+  },
+  {
+    id: "climaxion",
+    label: "Climaxion",
+    types: [
+      "devis", "audit_energetique", "etude_thermique", "pv_ag",
+      "plan_financement", "rib", "accord_subvention",
+    ],
+  },
+  {
+    id: "eurometropole",
+    label: "Eurométropole",
+    types: ["devis", "pv_ag", "plan_financement", "rib", "accord_subvention"],
+  },
+  {
+    id: "autre",
+    label: "Autre",
+    types: ["devis", "pv_ag", "plan_financement", "accord_subvention"],
+  },
+  {
+    id: "eco_ptz",
+    label: "Éco-PTZ",
+    types: ["devis", "marche_travaux", "attestation_rge", "pv_ag", "offre_pret"],
+  },
+];
+
 export function useFichiers(coproId: string | undefined) {
   return useQuery({
     queryKey: ["fichiers", coproId],
