@@ -31,7 +31,12 @@ export default function Reinitialisation() {
       return;
     }
     setBusy(true);
-    const { error: err } = await supabase.auth.updateUser({ password });
+    // efface aussi le marqueur de première connexion (compte créé par le
+    // dirigeant avec mot de passe provisoire) : l'accès se débloque
+    const { error: err } = await supabase.auth.updateUser({
+      password,
+      data: { mot_de_passe_provisoire: false },
+    });
     setBusy(false);
     if (err) {
       setError(
