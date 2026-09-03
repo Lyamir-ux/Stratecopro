@@ -567,7 +567,11 @@ export async function urlSigneePiece(path: string): Promise<string> {
 }
 
 export async function downloadFromPieces(path: string, filename: string) {
-  const { data, error } = await supabase.storage.from("pieces-copro").createSignedUrl(path, 300);
+  // `download` côté Storage : Content-Disposition attachment - l'attribut
+  // download d'un lien est ignoré par les navigateurs sur une URL cross-origin
+  const { data, error } = await supabase.storage
+    .from("pieces-copro")
+    .createSignedUrl(path, 300, { download: filename });
   if (error) throw error;
   const a = document.createElement("a");
   a.href = data.signedUrl;

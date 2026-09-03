@@ -27,6 +27,7 @@ import {
   tantiemesAvecRattaches,
   uploadPdfGenere,
   urlSigneePiece,
+  downloadFromPieces,
   useMonAdhesion,
   useSaveAdhesion,
   type FinancementConfig,
@@ -158,6 +159,47 @@ function AdherentFields({ a, onChange, titre }: { a: Adherent; onChange: (a: Adh
   );
 }
 
+/** Ligne « Mandat SEPA pré-rempli » : aperçu, téléchargement et, tant que le
+ *  dossier est en préparation, retour à la saisie du RIB pour le régénérer. */
+function MandatSepaRow({
+  path,
+  onApercu,
+  onRegenerer,
+}: {
+  path: string;
+  onApercu: () => void;
+  onRegenerer?: () => void;
+}) {
+  return (
+    <div className="doc-row">
+      <span className="d-ico" style={{ background: "var(--accent-soft)", color: "var(--color-primary-700)" }}>
+        <Icon name="fileText" size={18} />
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div className="d-name">Mandat SEPA pré-rempli</div>
+        <div className="d-sub">À imprimer et signer à la main - aucune rature</div>
+      </div>
+      <span className="spacer"></span>
+      {onRegenerer && (
+        <button className="se-btn se-btn-ghost btn-sm" title="Ressaisir le RIB et régénérer le mandat" onClick={onRegenerer}>
+          <Icon name="refresh" size={14} />
+          Régénérer
+        </button>
+      )}
+      <button className="icon-btn" title="Visualiser sans télécharger" onClick={onApercu}>
+        <Icon name="eye" size={16} />
+      </button>
+      <button
+        className="icon-btn"
+        title="Télécharger le mandat SEPA"
+        onClick={() => void downloadFromPieces(path, "mandat-sepa.pdf").catch(() => null)}
+      >
+        <Icon name="download" size={16} />
+      </button>
+    </div>
+  );
+}
+
 /** Aperçu inline d'un PDF généré (bucket pieces-copro), sans téléchargement. */
 function ApercuPdfGenere({ name, path, onClose }: { name: string; path: string; onClose: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -233,6 +275,9 @@ export function Adhesion({
   const [ribFichier, setRibFichier] = useState<File | null>(null);
   const [iban, setIban] = useState("");
   const [bic, setBic] = useState("");
+  // Retour volontaire à l'étape RIB pour régénérer le mandat SEPA (feedback
+  // du 03/09/2026) - possible tant que les bulletins sont en brouillon
+  const [refaireRib, setRefaireRib] = useState(false);
 
   const [idxSignature, setIdxSignature] = useState(0);
   const [docUrl, setDocUrl] = useState<string | null>(null);
@@ -398,23 +443,10 @@ export function Adhesion({
           {adhesion?.sepa_path && (
             <>
               <div className="se-eyebrow" style={{ margin: "18px 0 8px" }}>Mandat de prélèvement SEPA</div>
-              <div className="doc-row">
-                <span className="d-ico" style={{ background: "var(--accent-soft)", color: "var(--color-primary-700)" }}>
-                  <Icon name="fileText" size={18} />
-                </span>
-                <div style={{ minWidth: 0 }}>
-                  <div className="d-name">Mandat SEPA pré-rempli</div>
-                  <div className="d-sub">À imprimer et signer à la main - aucune rature</div>
-                </div>
-                <span className="spacer"></span>
-                <button
-                  className="icon-btn"
-                  title="Visualiser sans télécharger"
-                  onClick={() => setApercu({ name: "Mandat SEPA pré-rempli", path: adhesion.sepa_path! })}
-                >
-                  <Icon name="eye" size={16} />
-                </button>
-              </div>
+              <MandatSepaRow
+                path={adhesion.sepa_path}
+                onApercu={() => setApercu({ name: "Mandat SEPA pré-rempli", path: adhesion.sepa_path! })}
+              />
               <div className="proc-note" style={{ marginTop: 14 }}>
                 <Icon name="send" size={18} />
                 <div>
@@ -517,17 +549,36 @@ export function Adhesion({
       );
     }
 
-    // ---------- étape RIB ----------
-    if (!ribOk) {
+    // ---------- étape RIB (ou retour volontaire pour régénérer le mandat) ----------
+    if (!ribOk || refaireRib) {
       const ibanOk = isValidIban(iban);
       const bicOk = isValidBic(bic);
       return (
         <div className="card-xl fade" style={{ marginTop: 22 }}>
           <div className="cx-head">
             <Icon name="euro" size={20} style={{ color: "var(--accent)" }} />
-            <h2 style={{ fontSize: 19 }}>RIB du lot</h2>
+            <h2 style={{ fontSize: 19 }}>{refaireRib ? "Nouveau RIB et nouveau mandat SEPA" : "RIB du lot"}</h2>
+            {refaireRib && (
+              <>
+                <span style={{ flex: 1 }}></span>
+                <button className="se-btn se-btn-ghost btn-sm" disabled={!!busy} onClick={() => setRefaireRib(false)}>
+                  <Icon name="chevronLeft" size={14} />
+                  Garder le mandat actuel
+                </button>
+              </>
+            )}
           </div>
           <div className="cx-body">
+            {refaireRib && (
+              <div className="cc-next" style={{ marginBottom: 14 }}>
+                <Icon name="refresh" size={15} className="ico" />
+                <span>
+                  Déposez à nouveau le RIB et ressaisissez l'IBAN et le BIC : le RIB rattaché à vos bulletins
+                  est remplacé et un nouveau mandat SEPA pré-rempli est généré. L'ancien mandat n'est plus à
+                  utiliser.
+                </span>
+              </div>
+            )}
             <p className="se-body" style={{ marginTop: 0 }}>
               Le RIB sert au prélèvement des échéances du prêt (un seul RIB par bulletin). L'IBAN est
               conservé chiffré ; seuls ses 4 derniers caractères restent affichables.
@@ -599,12 +650,14 @@ export function Adhesion({
                     sepaPath,
                     ribConcordance: concordance,
                   });
+                  setRefaireRib(false);
+                  setRibFichier(null);
                   await refetchBulletins();
                 }, "rib")
               }
             >
               <Icon name="upload" size={16} />
-              {busy ? "Dépôt en cours…" : "Déposer le RIB et continuer"}
+              {busy ? "Dépôt en cours…" : refaireRib ? "Remplacer le RIB et régénérer le mandat" : "Déposer le RIB et continuer"}
             </button>
           </div>
         </div>
@@ -738,6 +791,26 @@ export function Adhesion({
             </div>
           )}
 
+          {adhesion?.sepa_path && (
+            <>
+              <div className="se-eyebrow" style={{ margin: "22px 0 8px" }}>Mandat de prélèvement SEPA</div>
+              <MandatSepaRow
+                path={adhesion.sepa_path}
+                onApercu={() => setApercu({ name: "Mandat SEPA pré-rempli", path: adhesion.sepa_path! })}
+                onRegenerer={() => {
+                  setDocUrl(null);
+                  setOtp(null);
+                  setCode("");
+                  setRefaireRib(true);
+                }}
+              />
+              <p className="se-small" style={{ color: "var(--fg-muted)", margin: "8px 0 0" }}>
+                Le mandat est à imprimer et à signer à la main. Une erreur de RIB ? « Régénérer » vous ramène à
+                la saisie du RIB et produit un nouveau mandat, tant que vos bulletins ne sont pas signés.
+              </p>
+            </>
+          )}
+
           <button
             className="se-btn se-btn-ghost btn-sm"
             style={{ marginTop: 20 }}
@@ -756,6 +829,7 @@ export function Adhesion({
             Abandonner et reprendre la préparation à zéro
           </button>
         </div>
+        {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}
       </div>
     );
   }
@@ -797,23 +871,10 @@ export function Adhesion({
           {adhesion.sepa_path && (
             <>
               <div className="se-eyebrow" style={{ margin: "18px 0 8px" }}>Mandat de prélèvement SEPA</div>
-              <div className="doc-row">
-                <span className="d-ico" style={{ background: "var(--accent-soft)", color: "var(--color-primary-700)" }}>
-                  <Icon name="fileText" size={18} />
-                </span>
-                <div style={{ minWidth: 0 }}>
-                  <div className="d-name">Mandat SEPA pré-rempli</div>
-                  <div className="d-sub">À imprimer et signer à la main - aucune rature</div>
-                </div>
-                <span className="spacer"></span>
-                <button
-                  className="icon-btn"
-                  title="Visualiser sans télécharger"
-                  onClick={() => setApercu({ name: "Mandat SEPA pré-rempli", path: adhesion.sepa_path! })}
-                >
-                  <Icon name="eye" size={16} />
-                </button>
-              </div>
+              <MandatSepaRow
+                path={adhesion.sepa_path}
+                onApercu={() => setApercu({ name: "Mandat SEPA pré-rempli", path: adhesion.sepa_path! })}
+              />
             </>
           )}
         </div>
