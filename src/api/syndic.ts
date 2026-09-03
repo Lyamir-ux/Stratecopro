@@ -3,9 +3,9 @@
 // bancaire, choix de financement d'un copropriétaire (useSaveChoixGestionnaire,
 // api/portail.ts). Les réponses d'enquête passent par la RPC
 // enquete_reponses_syndic qui exclut le RFR (donnée sensible).
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { urlSigneeFichier } from "@/api/fichiers";
+import { uploadFichierDirect, urlSigneeFichier } from "@/api/fichiers";
 import type { Tables } from "@/lib/database.types";
 
 export type CoproRow = Tables<"coproprietes">;
@@ -162,6 +162,9 @@ export interface DocumentSyndic {
   dossier: string;
   date: string | null;
   origine: OrigineDocument;
+  /** Déposé par l'utilisateur connecté depuis l'onglet Fichiers (table fichiers) :
+   *  seul cas où il peut le retirer (policy fichiers_syndic_delete_own). */
+  mien: boolean;
 }
 
 export const ORIGINE_LABEL: Record<OrigineDocument, string> = {
@@ -185,8 +188,18 @@ export function useDocumentsSyndic(coproId: string | undefined) {
     queryKey: ["syndic", "documents", coproId],
     enabled: !!coproId,
     queryFn: async (): Promise<DocumentSyndic[]> => {
-      const { data, error } = await supabase.rpc("documents_dossier", { p_copro_id: coproId! });
+      const { data: session } = await supabase.auth.getSession();
+      const uid = session.session?.user.id ?? null;
+      const [{ data, error }, miens] = await Promise.all([
+        supabase.rpc("documents_dossier", { p_copro_id: coproId! }),
+        // Mes propres dépôts (la RPC ne renvoie pas le déposant)
+        uid
+          ? supabase.from("fichiers").select("id").eq("copro_id", coproId!).eq("uploaded_by", uid)
+          : Promise.resolve({ data: [] as { id: string }[], error: null }),
+      ]);
       if (error) throw error;
+      if (miens.error) throw miens.error;
+      const mesIds = new Set((miens.data ?? []).map((f) => f.id));
       return (data ?? []).map((d) => ({
         id: d.id,
         name: d.name,
@@ -195,7 +208,39 @@ export function useDocumentsSyndic(coproId: string | undefined) {
         dossier: d.dossier,
         date: d.depose_le,
         origine: (d.origine as OrigineDocument) ?? "amo",
+        mien: mesIds.has(d.id),
       }));
+    },
+  });
+}
+
+/** Dépôt d'un fichier du projet par le syndic - même chemin que l'AMO
+ *  (bucket copro-files + table fichiers, policies 0058). */
+export function useUploadDocumentSyndic(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, dossier, nameOriginal }: { file: File; dossier: string; nameOriginal?: string }) =>
+      uploadFichierDirect(coproId, file, dossier, nameOriginal),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["syndic", "documents", coproId] });
+      void qc.invalidateQueries({ queryKey: ["fichiers", coproId] });
+    },
+  });
+}
+
+/** Retrait d'un fichier déposé par le syndic lui-même (`mien`). */
+export function useSupprimerDocumentSyndic(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (d: DocumentSyndic) => {
+      if (!d.mien) throw new Error("Seuls vos propres dépôts peuvent être retirés.");
+      await supabase.storage.from("copro-files").remove([d.path]);
+      const { error } = await supabase.from("fichiers").delete().eq("id", d.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["syndic", "documents", coproId] });
+      void qc.invalidateQueries({ queryKey: ["fichiers", coproId] });
     },
   });
 }

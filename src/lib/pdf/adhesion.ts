@@ -144,6 +144,12 @@ export async function genBulletin(
   return doc.save();
 }
 
+/** Un caractère centré dans une case de largeur `w` dont le bord gauche est en `x`. */
+function drawInBox(page: PDFPage, font: PDFFont, ch: string, x: number, w: number, y: number, size: number) {
+  const cw = font.widthOfTextAtSize(ch, size);
+  page.drawText(ch, { x: x + (w - cw) / 2, y, size, font, color: INK });
+}
+
 /** Mandat SEPA pré-rempli - SANS signature (manuscrite exigée, envoi postal). */
 export async function genMandatSepa(input: {
   nom: string;
@@ -163,27 +169,39 @@ export async function genMandatSepa(input: {
 
   drawSpot(p, font, input.nom, C.nom);
   drawSpot(p, font, input.rue, C.rue);
-  drawSpot(p, font, input.cp, C.cp);
+  // Code postal : 5 cases - on ne garde que les chiffres
+  [...input.cp.replace(/\D/g, "")].slice(0, C.cp.xs.length).forEach((ch, i) =>
+    drawInBox(p, fontBold, ch, C.cp.xs[i], C.cp.w, C.cp.y, C.cp.size)
+  );
   drawSpot(p, font, input.ville, C.ville);
   drawSpot(p, font, "FRANCE", C.pays);
 
   const iban = normalizeIban(input.iban);
-  [...iban].forEach((ch, i) =>
-    p.drawText(ch, { x: C.iban.x0 + i * C.iban.pas, y: C.iban.y, size: C.iban.size, font: fontBold, color: INK })
+  [...iban].slice(0, C.iban.xs.length).forEach((ch, i) =>
+    drawInBox(p, fontBold, sanitize(ch), C.iban.xs[i], C.iban.w, C.iban.y, C.iban.size)
   );
   const bic = input.bic.replace(/\s/g, "").toUpperCase();
-  [...bic].slice(0, 11).forEach((ch, i) =>
-    p.drawText(ch, { x: C.bic.x0 + i * C.bic.pas, y: C.bic.y, size: C.bic.size, font: fontBold, color: INK })
+  [...bic].slice(0, C.bic.xs.length).forEach((ch, i) =>
+    drawInBox(p, fontBold, sanitize(ch), C.bic.xs[i], C.bic.w, C.bic.y, C.bic.size)
   );
 
-  drawX(p, fontBold, C.caseRecurrent);
+  // Coche « paiement récurrent » : petit carré, croix ajustée à sa taille
+  drawInBox(p, fontBold, "X", C.caseRecurrent.x, C.caseRecurrent.w, C.caseRecurrent.y + 0.6, 5);
   drawSpot(p, font, input.lieu, C.lieu);
   const d = input.date;
   const digits =
     String(d.getDate()).padStart(2, "0") + String(d.getMonth() + 1).padStart(2, "0") + String(d.getFullYear());
-  [...digits].forEach((ch, i) =>
-    p.drawText(ch, { x: C.dateDigits.xs[i], y: C.dateDigits.y, size: C.dateDigits.size, font: fontBold, color: INK })
-  );
+  [...digits].forEach((ch, i) => {
+    // masque la lettre-repère (J, M, A) imprimée dans la case, sans toucher au cadre
+    p.drawRectangle({
+      x: C.dateDigits.xs[i] + 1,
+      y: C.dateDigits.boxY + 1,
+      width: C.dateDigits.w - 2,
+      height: C.dateDigits.boxH - 2,
+      color: rgb(1, 1, 1),
+    });
+    drawInBox(p, fontBold, ch, C.dateDigits.xs[i], C.dateDigits.w, C.dateDigits.y, C.dateDigits.size);
+  });
 
   return doc.save();
 }

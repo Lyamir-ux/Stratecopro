@@ -1,5 +1,6 @@
-// Onglet Enquête sociale (syndic) - consultation seule : profils MPR, réponses
-// (sans le RFR - donnée sensible réservée à l'AMO et à l'intéressé),
+// Onglet Enquête sociale (syndic) - consultation seule : répartition des profils
+// MPR (comptages uniquement), état des réponses (sans le RFR ni le profil par
+// copropriétaire - données sensibles réservées à l'AMO et à l'intéressé),
 // questionnaire et état de la campagne. Aucune action possible : l'enquête est
 // pilotée par l'AMO (pas de bouton d'envoi ni de saisie côté syndic).
 import { useMemo } from "react";
@@ -18,6 +19,16 @@ const PROFIL_META: { p: Profil; label: string; color: string }[] = [
   { p: "Violet", label: "Intermédiaire", color: "#7A5AE0" },
   { p: "Rose", label: "Supérieur", color: "#DC6FA8" },
 ];
+
+/** « Bailleur » / « Occupant » depuis les codes actuels (bailleur, occupant) ou
+ *  les anciens libellés d'enquête (« Proprietaire bailleur (logement loue) »). */
+function libelleOccupation(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const s = v.toLowerCase();
+  if (s.includes("bailleur")) return "Bailleur";
+  if (s.includes("occupant")) return "Occupant";
+  return null;
+}
 
 export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
   const { data: enquete, isLoading } = useEnqueteSyndic(c.id);
@@ -103,38 +114,23 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
                       <th>Copropriétaire</th>
                       <th>Foyer</th>
                       <th>Occupation</th>
-                      <th>Profil</th>
                       <th>Réponse</th>
                     </tr>
                   </thead>
                   <tbody>
                     {coproprietaires.map((cp) => {
                       const r = repondus.get(cp.id) ?? null;
-                      const profil = (r?.profil_mpr ?? null) as Profil | null;
-                      const meta = PROFIL_META.find((m) => m.p === profil);
+                      const repondu = r?.profil_mpr != null;
+                      // Bailleur / occupant : statut déclaré dans l'enquête, sinon
+                      // celui de la fiche copropriétaire (feedback du 03/09/2026)
+                      const occupation = libelleOccupation(r?.statut_occupation ?? cp.type);
                       return (
                         <tr key={cp.id} style={{ cursor: "default" }}>
                           <td style={{ fontWeight: 600 }}>{cp.nom}</td>
                           <td>{r?.nb_personnes != null ? r.nb_personnes + " pers." : "-"}</td>
+                          <td>{occupation ?? "-"}</td>
                           <td>
-                            {r?.statut_occupation === "occupant"
-                              ? "Occupant"
-                              : r?.statut_occupation === "bailleur"
-                                ? "Bailleur"
-                                : "-"}
-                          </td>
-                          <td>
-                            {meta ? (
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 13 }}>
-                                <span style={{ width: 10, height: 10, borderRadius: "50%", background: meta.color }}></span>
-                                {meta.label}
-                              </span>
-                            ) : (
-                              <span style={{ color: "var(--fg-muted)" }}>-</span>
-                            )}
-                          </td>
-                          <td>
-                            {profil ? (
+                            {repondu ? (
                               <Badge kind="success" dot>Reçue</Badge>
                             ) : (
                               <Badge kind="neutral">En attente</Badge>
@@ -148,8 +144,9 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
               </div>
             )}
             <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
-              Les revenus fiscaux de référence ne sont pas communiqués au syndic - seuls l'AMO et le
-              copropriétaire concerné y ont accès.
+              Le profil MaPrimeRénov' et le revenu fiscal de référence de chaque copropriétaire ne sont pas
+              communiqués au syndic - seuls l'AMO et le copropriétaire concerné y ont accès. Le panneau
+              ci-dessus n'en donne que les comptages.
             </p>
           </div>
         </div>

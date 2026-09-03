@@ -898,7 +898,9 @@ export function Adhesion({
       const ctxBase = {
         adresseImmeuble: copro.adresse ?? copro.name,
         nomSyndic: copro.syndic_name ?? "",
-        interlocuteur: "Strat Eco (AMO)",
+        // L'interlocuteur du bulletin est le gestionnaire de la copropriété chez
+        // le syndic (pas l'AMO) - feedback du 03/09/2026
+        interlocuteur: copro.gestionnaire_nom?.trim() || copro.syndic_name || "",
       };
       for (const lot of lotsHab) {
         const tantiemes = tantiemesAvecRattaches(membership.lots, lot, cle);

@@ -232,21 +232,75 @@ const PRET_SECTIONS: SectionDef[] = [
 
 // ========== Pré-remplissage depuis la base projet ==========
 
+// Champs communs aux deux formulaires : ce que le syndic a saisi dans l'un
+// complète automatiquement l'autre (feedback du 03/09/2026). Clé du formulaire
+// courant → clé du formulaire source (identique quand le nom est le même).
+const CHAMPS_PARTAGES: Record<FormulaireType, Record<string, string>> = {
+  fiche_avant_ag: {
+    syndic_nom: "syndic_nom",
+    syndic_siren: "pro_siren",
+    syndic_adresse: "syndic_adresse",
+    syndic_interlocuteur: "syndic_interlocuteur",
+    syndic_tel: "syndic_tel",
+    syndic_email: "syndic_email",
+    copro_nom: "sdc_designation",
+    copro_adresse: "sdc_adresse",
+    copro_nb_coproprietaires: "imm_nb_coproprietaires",
+    copro_nature_travaux: "trav_nature",
+    budget_ttc: "trav_cout_total",
+  },
+  demande_pret: {
+    syndic_nom: "syndic_nom",
+    pro_siren: "syndic_siren",
+    syndic_adresse: "syndic_adresse",
+    syndic_interlocuteur: "syndic_interlocuteur",
+    syndic_tel: "syndic_tel",
+    syndic_email: "syndic_email",
+    sdc_designation: "copro_nom",
+    sdc_adresse: "copro_adresse",
+    imm_nb_coproprietaires: "copro_nb_coproprietaires",
+    trav_nature: "copro_nature_travaux",
+    trav_cout_total: "budget_ttc",
+    pf_cout_total: "budget_ttc",
+  },
+};
+
+/** Valeurs reprises de l'autre formulaire déjà saisi par le syndic. */
+function reprisesAutreFormulaire(
+  type: FormulaireType,
+  autre: Record<string, string> | null
+): Record<string, string> {
+  if (!autre) return {};
+  const out: Record<string, string> = {};
+  for (const [cible, source] of Object.entries(CHAMPS_PARTAGES[type])) {
+    const v = autre[source];
+    if (v != null && String(v).trim() !== "") out[cible] = String(v);
+  }
+  return out;
+}
+
 function usePrefill(c: SyndicCopro, type: FormulaireType): Record<string, string> {
   const { data: scenarios } = useScenariosPartages(c.id);
   const { data: finConfig } = useFinancementConfig(c.id);
+  const { data: forms } = useFormulairesMontage(c.id);
   return useMemo((): Record<string, string> => {
     const scenario = scenarios?.[0] ?? null;
     const res = (scenario?.resultat ?? null) as FinanceResult | null;
     const params = (scenario?.params ?? null) as FinanceParams | null;
     const n = (x: number | null | undefined) =>
       x != null && Number.isFinite(x) ? String(Math.round(x)) : "";
+    // Fiche copro : code postal + ville, gestionnaire chez le syndic
+    const villeCp = [c.code_postal, c.city].filter(Boolean).join(" ");
+    const autre = (forms?.find((f) => f.type !== type)?.data ?? null) as Record<string, string> | null;
+    const reprises = reprisesAutreFormulaire(type, autre);
     if (type === "fiche_avant_ag") {
       return {
         syndic_nom: c.syndic_name ?? "",
+        syndic_interlocuteur: c.gestionnaire_nom ?? "",
+        syndic_email: c.gestionnaire_email ?? "",
         copro_nom: c.name,
         copro_adresse: c.adresse ?? "",
-        copro_ville_cp: c.city ?? "",
+        copro_ville_cp: villeCp,
         copro_nb_coproprietaires: n(c.stats?.coproprietaires),
         copro_nature_travaux: "Rénovation énergétique globale",
         amo_nom: AMO.nom,
@@ -266,14 +320,16 @@ function usePrefill(c: SyndicCopro, type: FormulaireType): Record<string, string
           ? String(params.ecoPtzDuree ?? finConfig?.duree_annees ?? "")
           : "",
         pret_compl: params ? (params.pretComplActif ? "OUI" : "NON") : "",
+        ...reprises,
       };
     }
     return {
       sdc_designation: c.name,
       sdc_adresse: c.adresse ?? "",
+      sdc_cp: c.code_postal ?? "",
       sdc_ville: c.city ?? "",
       imm_lots_principaux: n(c.stats?.lots),
-      imm_logements: n(c.stats?.lots_hab),
+      imm_logements: n(c.nb_logements ?? c.stats?.lots_hab),
       imm_nb_coproprietaires: n(c.stats?.coproprietaires),
       imm_usage: "Habitation",
       trav_nature: "Rénovation énergétique globale",
@@ -281,14 +337,17 @@ function usePrefill(c: SyndicCopro, type: FormulaireType): Record<string, string
       amo_nom: AMO.nom,
       amo_contact: `${AMO.interlocuteur} - ${AMO.tel} - ${AMO.email}`,
       syndic_nom: c.syndic_name ?? "",
+      syndic_interlocuteur: c.gestionnaire_nom ?? "",
+      syndic_email: c.gestionnaire_email ?? "",
       pf_cout_total: n(res?.coutTotal),
       pf_subventions_total: res ? n(res.aidesColl + res.aidesIndiv) : "",
       pf_subv_collectives: n(res?.aidesColl),
       pf_subv_individuelles: n(res?.aidesIndiv),
       pf_prefinancement: params ? ((params.avancePct ?? 0) > 0 ? "OUI" : "NON") : "",
       pf_ecoptz_montant: n(res?.ecoPtzMontant),
+      ...reprises,
     };
-  }, [c, scenarios, finConfig, type]);
+  }, [c, scenarios, finConfig, forms, type]);
 }
 
 // ========== Rendu générique ==========
@@ -359,7 +418,8 @@ export function FormulaireMontage({
         </div>
         <div className="p-body">
           <p className="se-small" style={{ marginTop: 0, color: "var(--fg-muted)" }}>
-            {meta.sous} Les champs déjà connus du projet sont pré-remplis - vérifiez-les et complétez le
+            {meta.sous} Les champs déjà connus du projet sont pré-remplis (fiche de la copropriété, plan de
+            financement, et ce que vous avez déjà saisi dans l'autre formulaire) - vérifiez-les et complétez le
             reste.
           </p>
 

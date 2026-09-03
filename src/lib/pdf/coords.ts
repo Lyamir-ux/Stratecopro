@@ -65,14 +65,45 @@ export const BULLETIN_COORDS = {
 } as const;
 
 export const SEPA_COORDS = {
-  nom: { x: 150, y: 704, size: 9, max: 70 },
-  rue: { x: 150, y: 681, size: 9, max: 35 },
-  cp: { x: 140, y: 649, size: 9, max: 10 },
-  ville: { x: 218, y: 649, size: 9, max: 35 },
-  pays: { x: 150, y: 628, size: 9, max: 25 },
-  iban: { x0: 141, y: 592, pas: 14.45, size: 10 },
-  bic: { x0: 141, y: 561, pas: 14.45, size: 10 },
-  caseRecurrent: { x: 130, y: 411 },
-  lieu: { x: 152, y: 401, size: 9, max: 28 },
-  dateDigits: { xs: [297, 311, 338, 352, 380, 394, 408, 421], y: 402, size: 10 },
+  // Recalibré le 03/09/2026 (feedback : décalages code postal / IBAN / BIC / date)
+  // à partir des rectangles du gabarit TRA929 (11/2018) : chaque ligne a une
+  // zone de saisie (13-14 pt de haut) suivie d'un sous-libellé.
+  nom: { x: 143, y: 700.5, size: 9, max: 70 },
+  rue: { x: 143, y: 673, size: 9, max: 35 },
+  /** 5 cases individuelles (13 pt de large) - un chiffre centré par case */
+  cp: { xs: [139.8, 153.5, 167.1, 181.2, 194.9], w: 13, y: 645, size: 10 },
+  ville: { x: 213, y: 645, size: 9, max: 60 },
+  pays: { x: 143, y: 620, size: 9, max: 25 },
+  /** 33 cases de 10,4 pt (pas ≈ 11,45 pt), y de 591,4 à 604,4 */
+  iban: {
+    xs: [
+      139.1, 150.2, 161.4, 172.5, 184.1, 195.2, 206.8, 218.3, 229.8, 241.0, 252.5,
+      264.1, 275.6, 286.7, 298.3, 309.8, 320.9, 332.5, 344.0, 355.5, 366.7, 378.2,
+      389.8, 401.3, 412.8, 424.3, 435.5, 447.0, 458.6, 469.7, 481.2, 492.8, 503.9,
+    ],
+    w: 10.4,
+    y: 594.5,
+    size: 10,
+  },
+  /** 11 cases, même pas que l'IBAN, y de 562,6 à 575,6 */
+  bic: {
+    xs: [139.1, 150.2, 161.4, 172.5, 184.1, 195.2, 206.8, 218.3, 229.8, 241.0, 252.5],
+    w: 10.4,
+    y: 566,
+    size: 10,
+  },
+  /** Carré de 4,3 pt à DROITE du libellé « Paiement récurrent / répétitif » */
+  caseRecurrent: { x: 220.8, y: 410.9, w: 4.3 },
+  lieu: { x: 142, y: 395.5, size: 9, max: 30 },
+  /** JJ / MM / AAAA : 8 cases de 12,6 pt (les séparateurs sont des cases vides).
+   *  Les lettres-repères J/M/A imprimées dans les cases sont masquées en blanc
+   *  (boxY/boxH = emprise de la case) avant d'écrire le chiffre. */
+  dateDigits: {
+    xs: [291.1, 304.8, 332.5, 346.2, 373.2, 388.0, 401.3, 415.0],
+    w: 12.6,
+    y: 395,
+    size: 10,
+    boxY: 392.2,
+    boxH: 13,
+  },
 } as const;

@@ -253,7 +253,8 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                       <th>Mail</th>
                       <th>Tél.</th>
                       <th>Usage</th>
-                      {cleDefaut && <th>Tantièmes {cleDefaut}</th>}
+                      {/* Code de clé précisé seulement s'il y en a plusieurs (et jamais le « MUN » technique) */}
+                      {cleDefaut && <th>Tantièmes{cles.length > 1 && cleDefaut !== "MUN" ? ` ${cleDefaut}` : ""}</th>}
                     </tr>
                   </thead>
                   <tbody>

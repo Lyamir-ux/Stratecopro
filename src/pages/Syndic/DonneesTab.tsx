@@ -18,6 +18,9 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
   }
   const cleDefaut = cles.find((k) => k.is_default)?.code ?? cles[0]?.code;
   const totalCle = cleDefaut ? lots.reduce((s, l) => s + (l.tantiemes[cleDefaut] ?? 0), 0) : 0;
+  // Le code de la clé n'est précisé que s'il y a plusieurs clés et qu'il ne s'agit
+  // pas de la clé générale technique « MUN » (feedback du 03/09/2026)
+  const suffixeCle = cleDefaut && cles.length > 1 && cleDefaut !== "MUN" ? ` ${cleDefaut}` : "";
 
   return (
     <div className="detail-grid fade">
@@ -28,7 +31,7 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
             <h3>Lots</h3>
             <span style={{ flex: 1 }}></span>
             <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
-              {lots.length} lots{cleDefaut ? ` · ${totalCle.toLocaleString("fr-FR")} tantièmes ${cleDefaut}` : ""}
+              {lots.length} lots{cleDefaut ? ` · ${totalCle.toLocaleString("fr-FR")} tantièmes${suffixeCle}` : ""}
             </span>
           </div>
           <div className="p-body">
@@ -45,7 +48,7 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
                       <th>{lb.singulier}</th>
                       <th>Usage</th>
                       <th>Copropriétaire</th>
-                      <th style={{ textAlign: "right" }}>Tantièmes{cleDefaut ? ` ${cleDefaut}` : ""}</th>
+                      <th style={{ textAlign: "right" }}>Tantièmes{suffixeCle}</th>
                     </tr>
                   </thead>
                   <tbody>
