@@ -153,9 +153,33 @@ ayant été effacées le 15/08/2026) :
 | **IMMIUM Laemmel** | 22 copropriétés, 1 067 logements | Lucie Chatteleyn directrice (les 22), Claude Lobstein (7), Nicolas Schmieg (3) et Christine Vautier (1) gestionnaires |
 | **IMMIUM** | 19 copropriétés, 995 logements | Olivier Plat (9, dont BOUDHORS), Isabelle Gebel (3), Etienne Spenato, Gwennaelle Aubry, Marie Malard et Sofia Didou (1 chacun) — **aucun directeur désigné**, personne ne voit donc l'ensemble du portefeuille |
 | **GT Immo** | Renaissance | Camille Aubry (compte de démo), rattachée au dossier |
+| **SYNDIC HORIZON GRAND EST** | 7 copropriétés fictives, 379 logements (slugs `demo-*`, tag « Démo commerciale ») | Hélène Marchal directrice (les 7), Thomas Keller (4, Alsace), Nadia Benali (2, Lorraine), Claire Vasseur (1, Champagne) |
 
 Mots de passe provisoires : `Laemmel-2026!` pour IMMIUM Laemmel, `Immium-2026!`
 pour IMMIUM — à changer à la première connexion via « Mot de passe oublié ».
+
+## Organisation de démo commerciale — SYNDIC HORIZON GRAND EST
+
+Environnement 100 % fictif pour les présentations commerciales aux syndics et
+copropriétaires (seeds `seed_demo_horizon.sql` + `seed_demo_horizon_vitrine.sql`,
+purge/réinitialisation via `purge_demo_horizon.sql`). Sept copropriétés du Grand
+Est réparties sur tout le cycle (2 diagnostic, 3 études, 2 travaux). La copro
+vitrine **LE PARC DES CIGOGNES** (Strasbourg, 28 logements, phase travaux) est
+peuplée de bout en bout : 28 copropriétaires, 42 lots (garages et caves
+rattachés), tantièmes = 10 000, enquête sociale avec profils MPR, PF définitif
+validé (732 848 € TTC, 406 989 € d'aides MPR/CEE/Climaxion/EMS, F → C),
+plans individuels partagés au portail, messagerie amorcée.
+
+Comptes (mot de passe `Horizon-2026!`, portail `Horizon-Copro-2026!`) :
+
+| Compte | Ce qu'il montre |
+|---|---|
+| `helene.marchal@syndic-horizon-demo.fr` | Vue direction (les 7 dossiers) |
+| `thomas.keller@syndic-horizon-demo.fr` | Vue gestionnaire (ses 4 dossiers seulement) |
+| `coproprietaire@syndic-horizon-demo.fr` | Portail de Paul et Sophie WEBER (3 lots, quote-part 25 547 €) |
+
+Le domaine `@syndic-horizon-demo.fr` n'est pas routable : aucun e-mail réel ne
+peut partir vers ces adresses.
 
 IMMIUM et IMMIUM Laemmel sont **deux enseignes distinctes**, malgré la proximité
 des noms : la direction de l'une ne voit pas le portefeuille de l'autre.
