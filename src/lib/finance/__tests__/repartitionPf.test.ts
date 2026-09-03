@@ -75,6 +75,29 @@ describe("computePlansIndividuelsPf", () => {
     // 96 000 × (48 000 / 160 000) = 28 800 d'aides et fonds
     expect(dupont.aidesEtFonds).toBeCloseTo(28800, 2);
     expect(dupont.reste).toBeCloseTo(96000 - 28800, 2);
+    // sans prime CEE renseignée : rien à isoler
+    expect(dupont.primeCee).toBe(0);
+  });
+
+  it("isole la part de prime CEE (versée en fin de chantier) dans les aides", () => {
+    const cleParItem = { "lot:1": "GEN", "lot:2": "GEN", "moe:0": "GEN" };
+    const { plans } = computePlansIndividuelsPf({
+      items,
+      cleParItem,
+      copros,
+      totauxCles,
+      totalAides: 40000,
+      primeCee: 16000,
+      fondsTravaux: 8000,
+      totalPhaseTravauxTtc: 160000,
+    });
+    const dupont = plans.find((p) => p.nom === "Dupont")!;
+    // 96 000 × (16 000 / 160 000) = 9 600 de CEE, compris dans les 28 800
+    expect(dupont.primeCee).toBeCloseTo(9600, 2);
+    expect(dupont.aidesEtFonds).toBeCloseTo(28800, 2);
+    // à financer avant travaux (hors CEE) = 96 000 − (28 800 − 9 600)
+    expect(dupont.quotePartAvant - (dupont.aidesEtFonds - dupont.primeCee)).toBeCloseTo(76800, 2);
+    expect(dupont.reste).toBeCloseTo(67200, 2);
   });
 
   it("signale les items sans clé choisie ou dont la clé n'a aucun tantième", () => {

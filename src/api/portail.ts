@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import type { Tables, Enums, Json } from "@/lib/database.types";
 import { determineProfil, type Bareme, type FinanceParams, type Profil } from "@/lib/finance";
 import { readParams } from "./scenarios";
+import type { PlanDefinitifData, PlanDefinitifResult } from "@/lib/finance/planDefinitif";
 
 export type Copro = Tables<"coproprietes">;
 export type Scenario = Tables<"scenarios_financiers">;
@@ -107,6 +108,41 @@ export function useMesCopros() {
             }))
             .sort((a, b) => a.num.localeCompare(b.num, "fr", { numeric: true })),
         }));
+    },
+  });
+}
+
+export interface PlanDefinitifPartage {
+  id: string;
+  nom: string;
+  data: PlanDefinitifData;
+  resultat: PlanDefinitifResult;
+}
+
+/**
+ * Le PF définitif validé derrière un scénario « pont » partagé (0031) : lots de
+ * travaux et entreprises, honoraires, détail des aides - pour le plan de
+ * financement global du portail (policy plans_definitifs_copro_read, 0059).
+ * null quand le scénario partagé n'est pas issu d'un PF définitif.
+ */
+export function usePlanDefinitifPartage(planId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["portail", "pf-definitif", planId],
+    enabled: !!planId,
+    queryFn: async (): Promise<PlanDefinitifPartage | null> => {
+      const { data, error } = await supabase
+        .from("plans_definitifs")
+        .select("id, nom, data, resultat")
+        .eq("id", planId!)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data?.resultat) return null;
+      return {
+        id: data.id,
+        nom: data.nom,
+        data: data.data as unknown as PlanDefinitifData,
+        resultat: data.resultat as unknown as PlanDefinitifResult,
+      };
     },
   });
 }

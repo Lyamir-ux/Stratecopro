@@ -35,7 +35,7 @@ const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
   { id: "enquete", label: "Enquête sociale", icon: "clipboard" },
   { id: "pret", label: "Mon financement", icon: "trendingUp" },
   { id: "documents", label: "Mes documents", icon: "folder" },
-  { id: "plan-copro", label: "Plan de la copropriété", icon: "barChart" },
+  { id: "plan-copro", label: "Plan de financement global", icon: "barChart" },
   { id: "faq", label: "FAQ", icon: "help" },
 ];
 

@@ -60,8 +60,13 @@ export interface PlanIndividuelPf {
   nom: string;
   /** Quote-part de la phase travaux TTC avant déduction des aides. */
   quotePartAvant: number;
-  /** Part des aides et du fonds travaux (au prorata de la quote-part). */
+  /** Part des aides et du fonds travaux (au prorata de la quote-part) - prime CEE incluse. */
   aidesEtFonds: number;
+  /**
+   * Part de la prime CEE dans `aidesEtFonds` : versée en fin de chantier, elle
+   * ne réduit pas le montant à financer avant travaux (feedback du 03/09/2026).
+   */
+  primeCee: number;
   /** Reste à charge après aides et fonds travaux. */
   reste: number;
 }
@@ -81,11 +86,15 @@ export function computePlansIndividuelsPf(input: {
   copros: CoproTantiemes[];
   /** Total de tantièmes par code de clé (somme sur tous les lots de la copro). */
   totauxCles: Record<string, number>;
+  /** Total des aides (publiques + prime CEE). */
   totalAides: number;
+  /** Prime CEE comprise dans `totalAides` (0 si absente). */
+  primeCee?: number;
   fondsTravaux: number;
   totalPhaseTravauxTtc: number;
 }): { plans: PlanIndividuelPf[]; manquants: ItemRepartitionPf[] } {
   const { items, cleParItem, copros, totauxCles, totalAides, fondsTravaux, totalPhaseTravauxTtc } = input;
+  const primeCee = input.primeCee ?? 0;
   const cleDe = (it: ItemRepartitionPf) => cleParItem[it.id] ?? it.cle;
   const manquants = items.filter((it) => {
     const cle = cleDe(it);
@@ -104,6 +113,7 @@ export function computePlansIndividuelsPf(input: {
   }
 
   const tauxDeduction = totalPhaseTravauxTtc > 0 ? (totalAides + fondsTravaux) / totalPhaseTravauxTtc : 0;
+  const tauxCee = totalPhaseTravauxTtc > 0 ? primeCee / totalPhaseTravauxTtc : 0;
   const plans = copros
     .filter((co) => (parts.get(co.coproprietaireId) ?? 0) > 0)
     .map((co): PlanIndividuelPf => {
@@ -114,6 +124,7 @@ export function computePlansIndividuelsPf(input: {
         nom: co.nom,
         quotePartAvant: round2(quotePartAvant),
         aidesEtFonds: round2(aidesEtFonds),
+        primeCee: round2(quotePartAvant * tauxCee),
         reste: round2(quotePartAvant - aidesEtFonds),
       };
     })

@@ -238,6 +238,7 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
       copros: [...parCopro.values()],
       totauxCles,
       totalAides: pf.pv.totalAides,
+      primeCee: pf.pv.primeCee,
       fondsTravaux: pf.data.params.fondsTravaux,
       totalPhaseTravauxTtc: pf.pv.totalPhaseTravauxTtc,
     });

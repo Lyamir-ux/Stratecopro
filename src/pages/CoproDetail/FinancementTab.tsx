@@ -696,6 +696,7 @@ function PlansIndividuelsPfPanel({
     copros: [...parCopro.values()],
     totauxCles,
     totalAides: pv.totalAides,
+    primeCee: pv.primeCee,
     fondsTravaux: pvData.params.fondsTravaux,
     totalPhaseTravauxTtc: pv.totalPhaseTravauxTtc,
   });

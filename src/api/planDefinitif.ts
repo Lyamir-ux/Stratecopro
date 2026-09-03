@@ -298,8 +298,10 @@ export function usePartagerPfCopros(coproId: string) {
             tantiemes: input.tantiemesRef[p.coproprietaireId] ?? 0,
             quote_part: p.quotePartAvant,
             mpr_indiv: 0,
-            cee_part: 0,
-            subv_coll_part: p.aidesEtFonds,
+            // La prime CEE (versée en fin de chantier) est isolée : elle ne doit
+            // pas être déduite du montant à financer avant travaux (03/09/2026)
+            cee_part: p.primeCee,
+            subv_coll_part: round2(p.aidesEtFonds - p.primeCee),
             eco_ptz_part: 0,
             reste: p.reste,
             mensualite: 0,
