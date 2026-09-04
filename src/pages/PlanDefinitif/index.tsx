@@ -1110,7 +1110,7 @@ function VarianteCollectif({ r, data }: { r: NonNullable<ReturnType<typeof compu
         <Kv k="Reste à charge définitif collectif" v={fmtEuroFull(r.resteACharge)} />
         <Kv k="Reste à financer (prime CEE en fin de travaux)" v={fmtEuroFull(r.collectif.resteAFinancer)} strong />
         <Kv k={`Coût au tantième avant aides (/${data.params.totalTantiemes})`} v={fmtEuroFull(r.coutTantiemeAvant)} />
-        <Kv k="Coût au tantième après aides publiques et fonds" v={fmtEuroFull(r.collectif.coutTantiemeApres)} />
+        <Kv k="Coût au tantième après aides publiques et fonds travaux déduits" v={fmtEuroFull(r.collectif.coutTantiemeApres)} />
         <ExemplesTable
           head={["Tantièmes", "Quote-part avant aides", "Reste à financer", `Mensualité ${data.params.dureeEcoPtzAns} ans`, "Coût prêt avance", "Prime CEE", "Prix de revient"]}
           rows={r.collectif.exemples.map((e) => [
@@ -1145,7 +1145,7 @@ function VarianteCollectifSansAvance({ r, data }: { r: NonNullable<ReturnType<ty
         <Kv k="Reste à charge définitif collectif" v={fmtEuroFull(r.resteACharge)} />
         <Kv k="Reste à financer (prime CEE en fin de travaux)" v={fmtEuroFull(v.resteAFinancer)} strong />
         <Kv k={`Coût au tantième avant aides (/${data.params.totalTantiemes})`} v={fmtEuroFull(r.coutTantiemeAvant)} />
-        <Kv k="Coût au tantième après aides publiques et fonds" v={fmtEuroFull(v.coutTantiemeApres)} />
+        <Kv k="Coût au tantième après aides publiques et fonds travaux déduits" v={fmtEuroFull(v.coutTantiemeApres)} />
         <ExemplesTable
           head={["Tantièmes", "Quote-part avant aides", "Reste à financer", `Mensualité ${data.params.dureeEcoPtzAns} ans`, "Prime CEE", "Prix de revient"]}
           rows={v.exemples.map((e) => [
@@ -1179,7 +1179,7 @@ function VarianteIndividuel({ r, data }: { r: NonNullable<ReturnType<typeof comp
         <Kv k={`${100 - pct} % remboursés en fin de chantier`} v={fmtEuroFull(r.individuel.aidesFinChantier)} />
         <Kv k="Reste à charge définitif collectif" v={fmtEuroFull(r.resteACharge)} />
         <Kv k={`Appels de fonds (${pct} % des aides déduits)`} v={fmtEuroFull(r.individuel.appelsFonds)} strong />
-        <Kv k="Coût au tantième après toutes aides et fonds" v={fmtEuroFull(r.individuel.coutTantiemeApresAides)} />
+        <Kv k="Coût au tantième après toutes aides et fonds travaux déduits" v={fmtEuroFull(r.individuel.coutTantiemeApresAides)} />
         <Kv k={`Coût au tantième avec ${pct} % des aides déduites`} v={fmtEuroFull(r.individuel.coutTantiemeAvecAvance)} />
         <ExemplesTable
           head={["Tantièmes", "Quote-part avant aides", "Appels de fonds", "Remboursé fin de chantier", `Mensualité ${data.params.dureeEcoPtzAns} ans`, "Prix de revient"]}

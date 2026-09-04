@@ -203,8 +203,12 @@ function classifyMoe(
       eligibleMprAmo: false,
     };
   }
-  if (n.includes("maitrise d'oeuvre"))
-    return { montant: forfait(10), tvaPct: 10, eligibleMprEtudes: true, eligibleMprAmo: false };
+  if (n.includes("maitrise d'oeuvre")) {
+    // TVA 10 % dans la nomenclature de référence (Les Violettes), mais certains
+    // classeurs appliquent 20 % (Boudhors) : le taux qui redonne un HT rond l'emporte
+    const tva = tvaVraisemblable(ttc, [10, 20], 10);
+    return { montant: forfait(tva), tvaPct: tva, eligibleMprEtudes: true, eligibleMprAmo: false };
+  }
   if (n.includes("controle technique") || n.includes("csps"))
     return { montant: forfait(20), tvaPct: 20, eligibleMprEtudes: true, eligibleMprAmo: false };
   if (n.includes("dommage") && n.includes("ouvrage"))
@@ -227,6 +231,88 @@ function classifyMoe(
     return { montant: forfait(20), tvaPct: 20, eligibleMprEtudes: false, eligibleMprAmo: false };
   avert.push(`MOE « ${designation} » : ligne non reconnue, importée en forfait TVA 20 %.`);
   return { montant: forfait(20), tvaPct: 20, eligibleMprEtudes: false, eligibleMprAmo: false };
+}
+
+/**
+ * Parmi les taux candidats, celui qui redonne un HT « rond » (entier, sinon au
+ * centime) depuis le TTC du classeur ; en cas d'égalité, le taux par défaut.
+ */
+function tvaVraisemblable(ttc: number, candidats: number[], defaut: number): number {
+  const score = (tva: number) => {
+    const ht = ttc / (1 + tva / 100);
+    if (Math.abs(ht - Math.round(ht)) < 0.005) return 2;
+    if (Math.abs(ht * 100 - Math.round(ht * 100)) < 0.005) return 1;
+    return 0;
+  };
+  let meilleur = defaut;
+  let meilleurScore = score(defaut);
+  for (const t of candidats) {
+    const s = score(t);
+    if (s > meilleurScore) {
+      meilleur = t;
+      meilleurScore = s;
+    }
+  }
+  return meilleur;
+}
+
+const fmtEuro = (n: number) => n.toLocaleString("fr-FR", { maximumFractionDigits: 0 });
+
+/**
+ * Calibre les aides à formule sur les montants du classeur : tous les chefs de
+ * projet n'appliquent pas le coefficient de prudence 0,9 ni le CEE à 27 €/m².
+ * On retient le coefficient qui redonne le montant du fichier ; à défaut le
+ * montant est repris tel quel (mode manuel). Cas particulier : une aide MPR
+ * calculée dans le classeur sur une assiette non plafonnée est conservée en
+ * formule (le logiciel applique le plafond, cf. garde-fous) avec un avertissement.
+ */
+function calibrerAides(data: PlanDefinitifData, valeurs: (number | null)[], avert: string[]): void {
+  const proche = (a: number, b: number) => Math.abs(a - b) <= 1;
+  for (let i = 0; i < data.aides.length; i++) {
+    const cible = valeurs[i];
+    const aide = data.aides[i];
+    const c = aide.calcul;
+    if (cible == null || c.mode === "manuel" || c.mode === "info") continue;
+    const montant = () => computePlanDefinitif(data).aides[i].montant ?? 0;
+    if (proche(montant(), cible)) continue;
+    if (c.mode !== "parM2Shab" && c.mode !== "pctAssietteTravaux" && c.mode !== "pctEtudes") {
+      aide.calcul = { mode: "manuel", montant: cible };
+      avert.push(`Aide « ${aide.libelle} » : la formule standard ne redonne pas le montant du classeur (${fmtEuro(cible)} €) - montant repris tel quel.`);
+      continue;
+    }
+    const coefInitial = c.coef;
+    let calibre = false;
+    for (const coef of [coefInitial, 1, 0.9]) {
+      c.coef = coef;
+      const m = montant();
+      if (proche(m, cible)) {
+        if (coef !== coefInitial)
+          avert.push(`Aide « ${aide.libelle} » : coefficient de prudence ${String(coef).replace(".", ",")} retenu d'après le montant du classeur.`);
+        calibre = true;
+        break;
+      }
+      // Classeur calculé sur les travaux retenus sans plafonner l'assiette MPR
+      // (prorata énergétique compris) : le logiciel conserve le plafond
+      if (c.mode !== "parM2Shab") {
+        const r = computePlanDefinitif(data);
+        if (r.travauxRetenusHt > r.assietteMprTravaux && r.assietteMprTravaux > 0) {
+          const nonPlafonne = m * (r.travauxRetenusHt / r.assietteMprTravaux);
+          if (proche(nonPlafonne, cible)) {
+            avert.push(
+              `Aide « ${aide.libelle} » : le classeur la calcule sur ${fmtEuro(r.travauxRetenusHt)} € HT de travaux retenus sans plafonner l'assiette MaPrimeRénov' ; le logiciel applique le plafond de ${fmtEuro(data.params.plafondTravauxParLogement)} € HT/logement (assiette ${fmtEuro(r.assietteMprTravaux)} €), soit ${fmtEuro(m)} € au lieu de ${fmtEuro(cible)} €.`
+            );
+            calibre = true;
+            break;
+          }
+        }
+      }
+    }
+    if (!calibre) {
+      c.coef = coefInitial;
+      aide.calcul = { mode: "manuel", montant: cible };
+      avert.push(`Aide « ${aide.libelle} » : la formule standard ne redonne pas le montant du classeur (${fmtEuro(cible)} €) - montant repris tel quel.`);
+    }
+  }
 }
 
 /** Reconnaissance d'une aide d'après son libellé - repli en montant manuel si la formule standard ne colle pas. */
@@ -362,6 +448,8 @@ export function importPlanDefinitif(wb: WorkBook): ImportPlanResult {
   // --- Aides ---
   const iAides = pf.findRow("aides mobilisables");
   const iAidesFin = pf.findRow("total aides", iAides + 1);
+  /** Montants du classeur, dans l'ordre de data.aides (calibrage des formules). */
+  const valeursAides: (number | null)[] = [];
   if (iAides >= 0 && iAidesFin > iAides) {
     data.aides = [];
     let groupe = "";
@@ -370,15 +458,27 @@ export function importPlanDefinitif(wb: WorkBook): ImportPlanResult {
       if (a) groupe = a;
       const libelle = pf.libelle(i);
       if (!libelle || norm(libelle) === "scenario 1") continue;
-      const aide = classifyAide(groupe, libelle, pf.valeur(i));
+      const valeur = pf.valeur(i);
+      const aide = classifyAide(groupe, libelle, valeur);
       aide.commentaire = pf.commentaire(i) || undefined;
       data.aides.push(aide);
+      valeursAides.push(valeur);
     }
   } else {
     avert.push("Section « Aides mobilisables » introuvable - catalogue par défaut appliqué.");
   }
 
   // --- Paramètres de financement ---
+  // Imprévus : « Total travaux TTC € y compris imprévus 7% » (repli : rapport
+  // entre le TTC avec imprévus et le TTC travaux)
+  const iImprevus = pf.findRow("y compris imprevus");
+  if (iImprevus >= 0) {
+    const mImprevus = /imprevus\s*(\d+(?:[.,]\d+)?)\s*%/.exec(norm(pf.libelle(iImprevus)));
+    const ttcImprevus = pf.valeur(iImprevus);
+    if (mImprevus) data.params.imprevusPct = parseFloat(mImprevus[1].replace(",", "."));
+    else if (ttcImprevus != null && cachedTravauxTtc > 0)
+      data.params.imprevusPct = Math.round((ttcImprevus / cachedTravauxTtc - 1) * 1000) / 10;
+  }
   const iFonds = pf.findRow("fonds travaux");
   if (iFonds >= 0) {
     data.params.fondsTravaux = pf.valeur(iFonds) ?? 0;
@@ -415,6 +515,9 @@ export function importPlanDefinitif(wb: WorkBook): ImportPlanResult {
       }
     }
   }
+
+  // --- Calibrage des aides à formule sur les montants du classeur ---
+  calibrerAides(data, valeursAides, avert);
 
   // --- Contrôles : recalcul du moteur vs valeurs du fichier ---
   const r = computePlanDefinitif(data);

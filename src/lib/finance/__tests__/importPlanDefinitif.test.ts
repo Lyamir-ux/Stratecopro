@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { read, write } from "xlsx";
 import { computePlanDefinitif } from "../planDefinitif";
 import { exportPlanDefinitif } from "../exportPlanDefinitif";
-import { importPlanDefinitif } from "../importPlanDefinitif";
+import { importPlanDefinitif, norm } from "../importPlanDefinitif";
 import { makeViolettes } from "./fixtureViolettes";
 
 describe("export puis import du plan définitif (nomenclature Strat Eco)", () => {
@@ -61,5 +61,71 @@ describe("export puis import du plan définitif (nomenclature Strat Eco)", () =>
       expect(c.ok, `${c.libelle}: fichier=${c.fichier} recalc=${c.recalcule}`).toBe(true);
     }
     expect(avertissements).toEqual([]);
+  });
+});
+
+// Classeurs qui s'écartent de la nomenclature de référence (feedback Amir 04/09/2026,
+// PF Boudhors) : imprévus différents de 7 %, MOE à 20 % de TVA, CEE saisi, MPR sans
+// coefficient de prudence, assiette MPR non plafonnée dans le classeur.
+describe("import d'un classeur s'écartant de la nomenclature de référence", () => {
+  const source = makeViolettes();
+  source.params.imprevusPct = 5;
+  const etudes = source.moe.find((l) => l.designation.startsWith("Maîtrise d'œuvre phase études"))!;
+  etudes.tvaPct = 20;
+  etudes.montant = { mode: "forfait", montantHt: 4500 };
+  const conception = source.moe.find((l) => l.designation.startsWith("Maîtrise d'oeuvre phase conception"))!;
+  conception.tvaPct = 20;
+  conception.montant = { mode: "forfait", montantHt: 30000 };
+  source.aides.find((a) => a.id === "cee")!.calcul = { mode: "manuel", montant: 18000 };
+  source.aides.find((a) => a.id === "mpr-travaux")!.calcul = { mode: "pctAssietteTravaux", taux: 45, coef: 1 };
+  const attendu = computePlanDefinitif(source);
+  const buf = write(exportPlanDefinitif(source), { type: "buffer", bookType: "xlsx" });
+  const { data, avertissements, controles } = importPlanDefinitif(read(buf, { type: "buffer" }));
+  const relu = computePlanDefinitif(data);
+
+  it("relit le taux d'imprévus du libellé « y compris imprévus N% »", () => {
+    expect(data.params.imprevusPct).toBe(5);
+    expect(relu.totalTravauxTtcImprevus).toBeCloseTo(attendu.totalTravauxTtcImprevus, 2);
+    expect(relu.totalPhaseTravauxTtc).toBeCloseTo(attendu.totalPhaseTravauxTtc, 2);
+  });
+
+  it("retient la TVA qui redonne un HT rond sur la maîtrise d'œuvre", () => {
+    const e = data.moe.find((l) => l.designation.startsWith("Maîtrise d'œuvre phase études"))!;
+    expect(e.tvaPct).toBe(20);
+    expect(e.montant.mode === "forfait" && e.montant.montantHt).toBeCloseTo(4500, 6);
+    const c = data.moe.find((l) => l.designation.startsWith("Maîtrise d'oeuvre phase conception"))!;
+    expect(c.tvaPct).toBe(20);
+    expect(c.montant.mode === "forfait" && c.montant.montantHt).toBeCloseTo(30000, 6);
+    // les lignes à 10 % de la référence restent à 10 %
+    const ref = importPlanDefinitif(read(write(exportPlanDefinitif(makeViolettes()), { type: "buffer", bookType: "xlsx" }), { type: "buffer" }));
+    expect(ref.data.moe.find((l) => l.designation.startsWith("Maîtrise d'œuvre phase études"))!.tvaPct).toBe(10);
+  });
+
+  it("calibre les aides sur les montants du classeur (CEE saisi, MPR sans coefficient 0,9)", () => {
+    const cee = data.aides.find((a) => norm(a.libelle).includes("cee"))!;
+    expect(cee.calcul).toEqual({ mode: "manuel", montant: 18000 });
+    const mpr = data.aides.find((a) => norm(a.libelle).includes("travaux") && norm(a.libelle).includes("maprimerenov"))!;
+    expect(mpr.calcul).toEqual({ mode: "pctAssietteTravaux", taux: 45, coef: 1 });
+    expect(relu.totalAides).toBeCloseTo(attendu.totalAides, 2);
+    expect(relu.resteACharge).toBeCloseTo(attendu.resteACharge, 2);
+    expect(relu.tauxCouverture).toBeCloseTo(attendu.tauxCouverture, 8);
+    for (const c of controles) expect(c.ok, `${c.libelle}: fichier=${c.fichier} recalc=${c.recalcule}`).toBe(true);
+    expect(avertissements.some((a) => a.includes("coefficient de prudence 1"))).toBe(true);
+    expect(avertissements.some((a) => a.includes("montant repris tel quel"))).toBe(true);
+  });
+
+  it("conserve le plafond de l'assiette MPR quand le classeur ne l'applique pas, avec avertissement", () => {
+    const sansPlafond = makeViolettes();
+    sansPlafond.params.plafondTravauxParLogement = 1_000_000; // le classeur calcule sur tout le retenu (614 208 €)
+    sansPlafond.aides.find((a) => a.id === "mpr-travaux")!.calcul = { mode: "pctAssietteTravaux", taux: 45, coef: 1 };
+    const wb = read(write(exportPlanDefinitif(sansPlafond), { type: "buffer", bookType: "xlsx" }), { type: "buffer" });
+    const res = importPlanDefinitif(wb);
+    const mpr = res.data.aides.find((a) => norm(a.libelle).includes("travaux") && norm(a.libelle).includes("maprimerenov"))!;
+    expect(mpr.calcul).toEqual({ mode: "pctAssietteTravaux", taux: 45, coef: 1 });
+    expect(res.data.params.plafondTravauxParLogement).toBe(25000);
+    const r = computePlanDefinitif(res.data);
+    expect(r.assietteMprTravaux).toBeCloseTo(600000, 2);
+    expect(r.aides.find((a) => a.id === mpr.id)!.montant).toBeCloseTo(270000, 2);
+    expect(res.avertissements.some((a) => a.includes("sans plafonner l'assiette"))).toBe(true);
   });
 });
