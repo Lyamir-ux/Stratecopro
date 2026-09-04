@@ -539,18 +539,35 @@ export function importPlanDefinitif(wb: WorkBook): ImportPlanResult {
   ctrl("Total travaux TTC avec imprévus", pf.valD("y compris imprevus"), r.totalTravauxTtcImprevus);
   ctrl("Total MOE et annexes TTC", pf.valD("total moe"), r.totalMoeTtc);
   ctrl("Total opération TTC", pf.valD("toutes les phases"), r.totalOperationTtc);
-  ctrl("Total phase travaux TTC", pf.valD("total restant en phase travaux"), r.totalPhaseTravauxTtc);
+  // Base des indicateurs : total de l'opération TTC (classeurs récents, où le
+  // « total restant en phase travaux » vaut le total de l'opération). Les
+  // classeurs antérieurs calculaient sur la seule phase travaux : ces valeurs
+  // sont acceptées en variante pour ne pas signaler de faux écarts.
+  const ecartPhase = r.totalOperationTtc - r.totalPhaseTravauxTtc;
+  const ctrl2 = (libelle: string, fichier: number | null, recalcule: number, variante: number) => {
+    if (fichier == null) return;
+    if (Math.abs(fichier - variante) <= 1 && Math.abs(fichier - recalcule) > 1) {
+      controles.push({ libelle, fichier, recalcule: variante, ok: true });
+      avert.push(
+        `« ${libelle} » : le classeur calcule sur la seule phase travaux (${fichier.toFixed(2)} €) ; le logiciel retient le total de l'opération (${recalcule.toFixed(2)} €).`
+      );
+      return;
+    }
+    ctrl(libelle, fichier, recalcule);
+  };
+  ctrl2("Total phase travaux TTC", pf.valD("total restant en phase travaux"), r.totalOperationTtc, r.totalPhaseTravauxTtc);
   ctrl("Total aides NET", pf.valD("total aides net"), r.totalAides);
   ctrl("Total aides publiques", pf.valD("total aides publiques"), r.totalAidesPubliques);
-  ctrl("Reste à charge collectif", pf.valD("reste a charge definitif"), r.resteACharge);
+  ctrl2("Reste à charge collectif", pf.valD("reste a charge definitif"), r.resteACharge, r.resteACharge - ecartPhase);
   // le reste à financer est identique avec ou sans avance de subventions
   if (pfCollectif || pfSansAvance)
-    ctrl("Reste à financer", pf.valD("reste a financer"), r.collectif.resteAFinancer);
+    ctrl2("Reste à financer", pf.valD("reste a financer"), r.collectif.resteAFinancer, r.collectif.resteAFinancer - ecartPhase);
   if (pfIndiv)
-    ctrl(
+    ctrl2(
       "Appels de fonds (70 % des aides déduits)",
       pfIndiv.valD("appels de fonds avec deduction"),
-      r.individuel.appelsFonds
+      r.individuel.appelsFonds,
+      r.individuel.appelsFonds - ecartPhase
     );
 
   for (const c of controles) {

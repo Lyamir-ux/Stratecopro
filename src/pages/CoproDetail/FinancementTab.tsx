@@ -14,6 +14,7 @@ import { fmtEuro, fmtEuroFull } from "@/lib/format";
 import type { DpeClass } from "@/lib/referentiels";
 import {
   computeFinance,
+  computePlanDefinitif,
   computePlansIndividuelsPf,
   itemsARepartirPf,
   readPlanDefinitif,
@@ -86,8 +87,11 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   const planValide = (pfPlans ?? [])
     .filter((p) => p.statut === "valide")
     .sort((a, b) => (b.updated_at > a.updated_at ? 1 : -1))[0];
-  const pv = (planValide?.resultat ?? null) as unknown as PlanDefinitifResult | null;
-  const pvData = planValide && pv ? readPlanDefinitif(planValide.data) : null;
+  // Recalcul depuis les données du plan (moteur pur) plutôt que l'instantané
+  // `resultat` : un instantané figé avec une ancienne version du moteur
+  // afficherait des montants périmés.
+  const pvData = planValide ? readPlanDefinitif(planValide.data) : null;
+  const pv: PlanDefinitifResult | null = pvData ? computePlanDefinitif(pvData) : null;
   const openPfValide = () => planValide && navigate(`/copros/${c.id}/plan-definitif/${planValide.id}`);
 
   if (!active) {
@@ -493,7 +497,7 @@ function PlanDefinitifPanel({ coproId }: { coproId: string }) {
           </p>
         ) : (
           (plans ?? []).map((p, i, arr) => {
-            const res = p.resultat as unknown as PlanDefinitifResult | null;
+            const res: PlanDefinitifResult | null = p.data ? computePlanDefinitif(readPlanDefinitif(p.data)) : null;
             return (
               <div
                 key={p.id}
@@ -607,7 +611,7 @@ function PanelIngenieriePf({
   fondsTravaux: number;
   onOpen: () => void;
 }) {
-  const total = pv.totalPhaseTravauxTtc;
+  const total = pv.totalOperationTtc;
   return (
     <div className="panel">
       <div className="p-head">
@@ -698,7 +702,7 @@ function PlansIndividuelsPfPanel({
     totalAides: pv.totalAides,
     primeCee: pv.primeCee,
     fondsTravaux: pvData.params.fondsTravaux,
-    totalPhaseTravauxTtc: pv.totalPhaseTravauxTtc,
+    totalOperationTtc: pv.totalOperationTtc,
   });
 
   // Le choix est porté par les lignes du PF définitif (ids « lot:<numero>:<index> »
@@ -891,7 +895,7 @@ function RepartitionClesDialog({
   return (
     <Modal title="Clés de répartition des plans individuels" onClose={onClose} width={760} closeOnBackdrop={false}>
       <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 0 }}>
-        Chaque ligne de devis (remise et imprévus inclus) et chaque frais de la phase travaux est réparti
+        Chaque ligne de devis (remise et imprévus inclus) et chaque ligne de MOE ou frais annexe est répartie
         entre les copropriétaires suivant la clé choisie pour la ligne. Le choix est enregistré sur le PF
         définitif et reste modifiable dans son éditeur.
       </p>

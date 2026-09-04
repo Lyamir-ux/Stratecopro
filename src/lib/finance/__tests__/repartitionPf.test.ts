@@ -30,7 +30,7 @@ describe("computePlansIndividuelsPf", () => {
       totauxCles,
       totalAides: 0,
       fondsTravaux: 0,
-      totalPhaseTravauxTtc: 160000,
+      totalOperationTtc: 160000,
     });
     expect(manquants).toHaveLength(0);
     expect(plans).toHaveLength(2);
@@ -47,7 +47,7 @@ describe("computePlansIndividuelsPf", () => {
       totauxCles,
       totalAides: 0,
       fondsTravaux: 0,
-      totalPhaseTravauxTtc: 160000,
+      totalOperationTtc: 160000,
     });
     expect(manquants).toHaveLength(0);
     const dupont = plans.find((p) => p.nom === "Dupont")!;
@@ -69,7 +69,7 @@ describe("computePlansIndividuelsPf", () => {
       totauxCles,
       totalAides: 40000,
       fondsTravaux: 8000,
-      totalPhaseTravauxTtc: 160000,
+      totalOperationTtc: 160000,
     });
     const dupont = plans.find((p) => p.nom === "Dupont")!;
     // 96 000 × (48 000 / 160 000) = 28 800 d'aides et fonds
@@ -89,7 +89,7 @@ describe("computePlansIndividuelsPf", () => {
       totalAides: 40000,
       primeCee: 16000,
       fondsTravaux: 8000,
-      totalPhaseTravauxTtc: 160000,
+      totalOperationTtc: 160000,
     });
     const dupont = plans.find((p) => p.nom === "Dupont")!;
     // 96 000 × (16 000 / 160 000) = 9 600 de CEE, compris dans les 28 800
@@ -109,7 +109,7 @@ describe("computePlansIndividuelsPf", () => {
       totauxCles: { GEN: 1000, VIDE: 0 },
       totalAides: 0,
       fondsTravaux: 0,
-      totalPhaseTravauxTtc: 160000,
+      totalOperationTtc: 160000,
     });
     expect(manquants.map((m) => m.id)).toEqual(["lot:2", "moe:0"]);
     // les items affectés sont quand même répartis (plan partiel)
@@ -128,7 +128,7 @@ describe("computePlansIndividuelsPf", () => {
       totauxCles,
       totalAides: 0,
       fondsTravaux: 0,
-      totalPhaseTravauxTtc: 150000,
+      totalOperationTtc: 150000,
     });
     expect(manquants).toHaveLength(0);
     // Dupont : 60 % de 100 000 (GEN) + 30 % de 50 000 (CHAUF)
@@ -146,7 +146,7 @@ describe("computePlansIndividuelsPf", () => {
       totauxCles,
       totalAides: 0,
       fondsTravaux: 0,
-      totalPhaseTravauxTtc: 100000,
+      totalOperationTtc: 100000,
     });
     expect(plans.find((p) => p.nom === "Dupont")?.quotePartAvant).toBeCloseTo(60000, 2);
   });
@@ -193,7 +193,9 @@ describe("itemsARepartirPf", () => {
     const r = computePlanDefinitif(data);
     const items = itemsARepartirPf(data, r);
 
-    expect(items.map((it) => it.id)).toEqual(["lot:1:0", "lot:1:1", "moe:0"]);
+    // toutes les phases MOE sont réparties (base = total de l'opération depuis le 04/09/2026)
+    expect(items.map((it) => it.id)).toEqual(["lot:1:0", "lot:1:1", "moe:0", "moe:1"]);
+    expect(items[3].montantTtc).toBeCloseTo(360, 6);
     // ITE : (1000 × 0,9 + 1000 × 5,5 %) × 1,10 - remise sur le HT, TVA avant remise, imprévus
     expect(items[0]).toMatchObject({ cle: "GEN" });
     expect(items[0].montantTtc).toBeCloseTo((1000 * 0.9 + 55) * 1.1, 6);

@@ -134,11 +134,28 @@ export default function PlanDefinitifPage() {
 
   const r = useMemo(() => (data ? computePlanDefinitif(data) : null), [data]);
 
+  // Resynchronisation de l'instantané `resultat` figé en base quand le moteur
+  // a changé (ex. base des indicateurs = total de l'opération depuis le 04/09/2026) :
+  // les lecteurs SQL (statistiques) et le portail retrouvent les montants recalculés
+  // sans réenregistrement manuel du plan.
+  useEffect(() => {
+    if (!plan || !r || dirty || update.isPending) return;
+    const fige = plan.resultat as unknown as { resteACharge?: unknown; tauxCouverture?: unknown } | null;
+    const aJour =
+      !!fige &&
+      typeof fige.resteACharge === "number" &&
+      Math.abs(fige.resteACharge - r.resteACharge) <= 0.01 &&
+      typeof fige.tauxCouverture === "number" &&
+      Math.abs(fige.tauxCouverture - r.tauxCouverture) <= 1e-6;
+    if (!aJour) update.mutate({ id: plan.id, data: readPlanDefinitif(plan.data) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan?.id, plan?.updated_at, r]);
+
   if (isLoading || !plan || !data || !r)
     return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
   // Copropriétés à plusieurs clés de répartition : la clé se choisit ligne par
-  // ligne (lignes de devis + lignes MOE phase travaux) et alimente les plans
+  // ligne (lignes de devis + lignes MOE, toutes phases) et alimente les plans
   // individuels du financement.
   const cles: CleCopro[] = donnees?.cles ?? [];
   const multiCles = cles.length > 1;
@@ -547,7 +564,7 @@ export default function PlanDefinitifPage() {
                     AMO
                   </th>
                   {multiCles && (
-                    <th style={{ width: 170 }} title="Clé de répartition de la ligne (phase travaux uniquement) pour les plans individuels">
+                    <th style={{ width: 170 }} title="Clé de répartition de la ligne pour les plans individuels">
                       Clé de répartition
                     </th>
                   )}
@@ -643,17 +660,11 @@ export default function PlanDefinitifPage() {
                     </td>
                     {multiCles && (
                       <td>
-                        {l.phase === "travaux" ? (
-                          <CleSelect
-                            cles={cles}
-                            value={l.cleRepartition ?? data.repartitionCles?.[`moe:${i}`]}
-                            onChange={(code) => edit((d) => ((d.moe[i].cleRepartition = code), d))}
-                          />
-                        ) : (
-                          <span className="se-small" style={{ color: "var(--fg-muted)" }} title="Seules les lignes de la phase travaux sont réparties dans les plans individuels">
-                            -
-                          </span>
-                        )}
+                        <CleSelect
+                          cles={cles}
+                          value={l.cleRepartition ?? data.repartitionCles?.[`moe:${i}`]}
+                          onChange={(code) => edit((d) => ((d.moe[i].cleRepartition = code), d))}
+                        />
                       </td>
                     )}
                     <td className="mono" style={tdR}>
@@ -678,7 +689,7 @@ export default function PlanDefinitifPage() {
 
       {/* ---- répartition par clé (copros à plusieurs clés) ----
           Le choix se fait ligne par ligne dans les tableaux ci-dessus ; ce
-          panneau récapitule les montants TTC phase travaux par clé - ce sont
+          panneau récapitule les montants TTC par clé - ce sont
           ces clés qui servent aux plans individuels du financement. */}
       {multiCles && (
         <div className="panel">
@@ -697,7 +708,7 @@ export default function PlanDefinitifPage() {
           <div className="p-body">
             <p className="se-small" style={{ color: "var(--fg-muted)", margin: "0 0 10px" }}>
               La copropriété a {cles.length} clés de répartition : choisissez sur chaque ligne de devis et
-              chaque ligne MOE de la phase travaux la clé à appliquer. Ces choix servent au calcul des plans
+              chaque ligne MOE la clé à appliquer. Ces choix servent au calcul des plans
               de financement individuels (onglet Financement de la copropriété).
             </p>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
@@ -717,7 +728,7 @@ export default function PlanDefinitifPage() {
                 onClick={() =>
                   edit((d) => {
                     for (const lot of d.lots) for (const l of lot.lignes) l.cleRepartition = cleGlobale;
-                    for (const l of d.moe) if (l.phase === "travaux") l.cleRepartition = cleGlobale;
+                    for (const l of d.moe) l.cleRepartition = cleGlobale;
                     return d;
                   })
                 }

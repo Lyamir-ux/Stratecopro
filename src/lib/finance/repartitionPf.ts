@@ -1,5 +1,5 @@
 // Plans individuels générés depuis le PF définitif validé.
-// Le total de la phase travaux TTC (lots avec imprévus + MOE phase travaux)
+// Le total de l'opération TTC (lots avec imprévus + MOE et frais annexes, toutes phases)
 // est réparti ligne par ligne suivant une clé de répartition de la copropriété :
 // s'il n'y a qu'une seule clé, tout passe par elle sans question ; sinon
 // l'AMO choisit la clé sur chaque ligne de devis et chaque ligne MOE
@@ -7,18 +7,18 @@
 import type { PlanDefinitifData, PlanDefinitifResult } from "./planDefinitif";
 import { round2 } from "./round";
 
-/** Ligne du PF à répartir suivant une clé (ligne de devis ou ligne MOE phase travaux). */
+/** Ligne du PF à répartir suivant une clé (ligne de devis ou ligne MOE, toute phase). */
 export interface ItemRepartitionPf {
   /** « lot:<numero>:<index ligne> » ou « moe:<index> ». */
   id: string;
   libelle: string;
-  /** Montant TTC phase travaux de la ligne (remise et imprévus inclus pour les lots). */
+  /** Montant TTC de la ligne (remise et imprévus inclus pour les lots). */
   montantTtc: number;
   /** Clé (code) choisie sur la ligne - repli : choix legacy par lot entier (repartitionCles). */
   cle?: string;
 }
 
-/** Lignes de devis (remise du lot et imprévus au prorata), puis lignes MOE de la phase travaux. */
+/** Lignes de devis (remise du lot et imprévus au prorata), puis toutes les lignes MOE. */
 export function itemsARepartirPf(data: PlanDefinitifData, r: PlanDefinitifResult): ItemRepartitionPf[] {
   const coefImprevus = 1 + data.params.imprevusPct / 100;
   const legacy = data.repartitionCles ?? {};
@@ -36,8 +36,10 @@ export function itemsARepartirPf(data: PlanDefinitifData, r: PlanDefinitifResult
       });
     });
   }
+  // Toutes les phases MOE (étude, projet, travaux) : le reste à charge est
+  // calculé sur le total de l'opération depuis le 04/09/2026.
   r.moe.forEach((m, i) => {
-    if (m.phase === "travaux" && m.montantTtc !== 0)
+    if (m.montantTtc !== 0)
       items.push({
         id: `moe:${i}`,
         libelle: m.designation || `Ligne MOE ${i + 1}`,
@@ -58,7 +60,7 @@ export interface CoproTantiemes {
 export interface PlanIndividuelPf {
   coproprietaireId: string;
   nom: string;
-  /** Quote-part de la phase travaux TTC avant déduction des aides. */
+  /** Quote-part de l'opération TTC avant déduction des aides. */
   quotePartAvant: number;
   /** Part des aides et du fonds travaux (au prorata de la quote-part) - prime CEE incluse. */
   aidesEtFonds: number;
@@ -91,9 +93,9 @@ export function computePlansIndividuelsPf(input: {
   /** Prime CEE comprise dans `totalAides` (0 si absente). */
   primeCee?: number;
   fondsTravaux: number;
-  totalPhaseTravauxTtc: number;
+  totalOperationTtc: number;
 }): { plans: PlanIndividuelPf[]; manquants: ItemRepartitionPf[] } {
-  const { items, cleParItem, copros, totauxCles, totalAides, fondsTravaux, totalPhaseTravauxTtc } = input;
+  const { items, cleParItem, copros, totauxCles, totalAides, fondsTravaux, totalOperationTtc } = input;
   const primeCee = input.primeCee ?? 0;
   const cleDe = (it: ItemRepartitionPf) => cleParItem[it.id] ?? it.cle;
   const manquants = items.filter((it) => {
@@ -112,8 +114,8 @@ export function computePlansIndividuelsPf(input: {
     }
   }
 
-  const tauxDeduction = totalPhaseTravauxTtc > 0 ? (totalAides + fondsTravaux) / totalPhaseTravauxTtc : 0;
-  const tauxCee = totalPhaseTravauxTtc > 0 ? primeCee / totalPhaseTravauxTtc : 0;
+  const tauxDeduction = totalOperationTtc > 0 ? (totalAides + fondsTravaux) / totalOperationTtc : 0;
+  const tauxCee = totalOperationTtc > 0 ? primeCee / totalOperationTtc : 0;
   const plans = copros
     .filter((co) => (parts.get(co.coproprietaireId) ?? 0) > 0)
     .map((co): PlanIndividuelPf => {

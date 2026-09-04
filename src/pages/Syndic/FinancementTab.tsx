@@ -240,7 +240,7 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
       totalAides: pf.pv.totalAides,
       primeCee: pf.pv.primeCee,
       fondsTravaux: pf.data.params.fondsTravaux,
-      totalPhaseTravauxTtc: pf.pv.totalPhaseTravauxTtc,
+      totalOperationTtc: pf.pv.totalOperationTtc,
     });
     // Répartition incomplète (clé manquante sur une ligne) : ne rien afficher
     // plutôt que des montants faux.

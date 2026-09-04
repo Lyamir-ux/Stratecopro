@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import type { Tables, Enums, Json } from "@/lib/database.types";
 import { determineProfil, type Bareme, type FinanceParams, type Profil } from "@/lib/finance";
 import { readParams } from "./scenarios";
-import type { PlanDefinitifData, PlanDefinitifResult } from "@/lib/finance/planDefinitif";
+import { computePlanDefinitif, readPlanDefinitif, type PlanDefinitifData, type PlanDefinitifResult } from "@/lib/finance/planDefinitif";
 
 export type Copro = Tables<"coproprietes">;
 export type Scenario = Tables<"scenarios_financiers">;
@@ -136,12 +136,15 @@ export function usePlanDefinitifPartage(planId: string | null | undefined) {
         .eq("id", planId!)
         .maybeSingle();
       if (error) throw error;
-      if (!data?.resultat) return null;
+      if (!data?.data) return null;
+      // Recalcul depuis les données (moteur pur) plutôt que l'instantané
+      // `resultat`, qui peut être figé avec une ancienne version du moteur.
+      const plan = readPlanDefinitif(data.data);
       return {
         id: data.id,
         nom: data.nom,
-        data: data.data as unknown as PlanDefinitifData,
-        resultat: data.resultat as unknown as PlanDefinitifResult,
+        data: plan,
+        resultat: computePlanDefinitif(plan),
       };
     },
   });

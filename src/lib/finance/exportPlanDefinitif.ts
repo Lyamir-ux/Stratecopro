@@ -114,7 +114,8 @@ export function exportPlanDefinitif(data: PlanDefinitifData): WorkBook {
     }
     push(null, "Total MOE et annexes TTC", null, r.totalMoeTtc);
     push(null, "Total de toutes les phases de l'opération TTC avec imprévus", null, r.totalOperationTtc);
-    push(null, `Total restant en phase travaux TTC y compris imprévus ${fmtTaux(data.params.imprevusPct)}%`, null, r.totalPhaseTravauxTtc);
+    // = total de l'opération : base des indicateurs depuis le 04/09/2026 (classeur Boudhors 5)
+    push(null, `Total restant en phase travaux TTC y compris imprévus ${fmtTaux(data.params.imprevusPct)}%`, null, r.totalOperationTtc);
     push(null);
     push(null);
 

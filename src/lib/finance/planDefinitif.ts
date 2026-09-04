@@ -70,7 +70,7 @@ export interface LigneMoe {
   eligibleMprEtudes: boolean;
   /** Prestation AMO - assiette MaPrimeRénov' AMO (50 % du HT). */
   eligibleMprAmo: boolean;
-  /** Code de la clé de répartition de la ligne (phase travaux uniquement) - voir LigneLot. */
+  /** Code de la clé de répartition de la ligne - voir LigneLot. */
   cleRepartition?: string;
   commentaire?: string;
 }
@@ -277,9 +277,13 @@ export interface PlanDefinitifResult {
   totalTravauxTtcImprevus: number;
   moe: MoeLigneResult[];
   totalMoeTtc: number;
-  /** Toutes phases : travaux TTC avec imprévus + MOE et annexes. */
+  /**
+   * Toutes phases : travaux TTC avec imprévus + MOE et annexes. Base de tous
+   * les indicateurs (taux de couverture, reste à charge, coûts au tantième,
+   * appels de fonds) depuis le 04/09/2026.
+   */
   totalOperationTtc: number;
-  /** Total restant en phase travaux TTC (travaux + imprévus + MOE phase travaux). */
+  /** Informatif : travaux + imprévus + MOE phase travaux (sans les phases étude et projet). */
   totalPhaseTravauxTtc: number;
   aides: AideResult[];
   totalAides: number;
@@ -427,11 +431,14 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
   const totalAidesPubliques = aides.reduce((s, a) => s + (a.publique ? (a.montant ?? 0) : 0), 0);
   const primeCee = totalAides - totalAidesPubliques;
 
-  // Indicateurs communs
-  const tauxCouverture = totalPhaseTravauxTtc > 0 ? totalAides / totalPhaseTravauxTtc : 0;
-  const resteACharge = totalPhaseTravauxTtc - (totalAides + params.fondsTravaux);
+  // Indicateurs communs - base : total de l'opération TTC (travaux TTC avec
+  // imprévus + MOE et frais annexes TTC toutes phases), cf. formules d'Amir
+  // (04/09/2026) et classeur Boudhors (5) où « total restant en phase travaux »
+  // = total de l'opération.
+  const tauxCouverture = totalOperationTtc > 0 ? totalAides / totalOperationTtc : 0;
+  const resteACharge = totalOperationTtc - (totalAides + params.fondsTravaux);
   const T = params.totalTantiemes || 10000;
-  const coutTantiemeAvant = totalPhaseTravauxTtc / T;
+  const coutTantiemeAvant = totalOperationTtc / T;
   const mois = params.dureeEcoPtzAns * 12;
 
   // Variante prêt collectif + avance de subventions
@@ -446,7 +453,7 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
       const primeCeePart = primeCee * part;
       return {
         tantiemes: t,
-        quotePartAvant: totalPhaseTravauxTtc * part,
+        quotePartAvant: totalOperationTtc * part,
         resteAFinancer: resteAFinancerPart,
         mensualiteEcoPtz: mois > 0 ? (resteAFinancerPart / mois) * params.coefAssurance : 0,
         subventionsPubliques: totalAidesPubliques * part,
@@ -469,7 +476,7 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
       const primeCeePart = primeCee * part;
       return {
         tantiemes: t,
-        quotePartAvant: totalPhaseTravauxTtc * part,
+        quotePartAvant: totalOperationTtc * part,
         resteAFinancer: resteAFinancerPart,
         mensualiteEcoPtz: mois > 0 ? (resteAFinancerPart / mois) * params.coefAssurance : 0,
         subventionsPubliques: totalAidesPubliques * part,
@@ -482,7 +489,7 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
   // Variante éco-PTZ individuel : appels de fonds avec avance partielle des aides
   const aidesAvancees = totalAidesPubliques * (params.pctAvanceAides / 100);
   const aidesFinChantier = totalAidesPubliques - aidesAvancees;
-  const appelsFonds = totalPhaseTravauxTtc - (aidesAvancees + params.fondsTravaux);
+  const appelsFonds = totalOperationTtc - (aidesAvancees + params.fondsTravaux);
   const coutTantiemeApresAides = resteACharge / T;
   const coutTantiemeAvecAvance = appelsFonds / T;
   const individuel = {

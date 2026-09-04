@@ -82,30 +82,33 @@ describe("planDefinitif - aides", () => {
   });
 });
 
+// Depuis le 04/09/2026 (formules d'Amir), les indicateurs sont calculés sur le total de
+// l'opération TTC (et non la seule phase travaux comme dans le classeur Les Violettes) :
+// les valeurs ci-dessous sont celles du moteur sur cette base.
 describe("planDefinitif - variante éco-PTZ collectif + avance de subventions", () => {
   it("calcule couverture, reste à charge et reste à financer", () => {
-    expect(r.tauxCouverture).toBeCloseTo(0.4586663888, 6);
-    expect(r.resteACharge).toBeCloseTo(524659.3578, 2);
-    expect(r.collectif.resteAFinancer).toBeCloseTo(560147.0778, 2);
-    expect(r.coutTantiemeAvant).toBeCloseTo(97.96196039, 4);
-    expect(r.collectif.coutTantiemeApres).toBeCloseTo(56.01470778, 4);
+    expect(r.tauxCouverture).toBeCloseTo(0.4396747583, 6);
+    expect(r.resteACharge).toBeCloseTo(566973.7578, 2);
+    expect(r.collectif.resteAFinancer).toBeCloseTo(602461.4778, 2);
+    expect(r.coutTantiemeAvant).toBeCloseTo(102.1934004, 4);
+    expect(r.collectif.coutTantiemeApres).toBeCloseTo(60.24614778, 4);
   });
 
   it("reproduit les exemples par tantièmes (310 / 348 / 386)", () => {
     const [e310, e348, e386] = r.collectif.exemples;
-    expect(e310.quotePartAvant).toBeCloseTo(30368.20772, 2);
-    expect(e348.quotePartAvant).toBeCloseTo(34090.76222, 2);
-    expect(e386.quotePartAvant).toBeCloseTo(37813.31671, 2);
-    expect(e310.resteAFinancer).toBeCloseTo(17364.55941, 2);
-    expect(e310.mensualiteEcoPtz).toBeCloseTo(74.52290081, 4);
-    expect(e348.mensualiteEcoPtz).toBeCloseTo(83.65796607, 4);
-    expect(e386.mensualiteEcoPtz).toBeCloseTo(92.79303133, 4);
+    expect(e310.quotePartAvant).toBeCloseTo(31679.95412, 2);
+    expect(e348.quotePartAvant).toBeCloseTo(35563.30334, 2);
+    expect(e386.quotePartAvant).toBeCloseTo(39446.65255, 2);
+    expect(e310.resteAFinancer).toBeCloseTo(18676.30581, 2);
+    expect(e310.mensualiteEcoPtz).toBeCloseTo(80.15247911, 4);
+    expect(e348.mensualiteEcoPtz).toBeCloseTo(89.97762171, 4);
+    expect(e386.mensualiteEcoPtz).toBeCloseTo(99.80276431, 4);
     expect(e310.subventionsPubliques).toBeCloseTo(12828.75685, 2);
     expect(e310.coutPretAvance).toBeCloseTo(699.1672484, 3); // 5,45 % des aides publiques
     expect(e310.primeCee).toBeCloseTo(1100.11932, 3);
-    expect(e310.prixRevient).toBeCloseTo(16963.60734, 2);
-    expect(e348.prixRevient).toBeCloseTo(19043.01727, 2);
-    expect(e386.prixRevient).toBeCloseTo(21122.4272, 2);
+    expect(e310.prixRevient).toBeCloseTo(18275.35374, 2);
+    expect(e348.prixRevient).toBeCloseTo(20515.55839, 2);
+    expect(e386.prixRevient).toBeCloseTo(22755.76304, 2);
   });
 });
 
@@ -120,7 +123,7 @@ describe("planDefinitif - variante éco-PTZ collectif sans avance de subventions
     expect(s310.mensualiteEcoPtz).toBeCloseTo(e310.mensualiteEcoPtz, 6);
     // …mais le prix de revient baisse exactement du coût du prêt d'avance (5,45 %)
     expect(s310.prixRevient).toBeCloseTo(e310.prixRevient - e310.coutPretAvance, 6);
-    expect(s310.prixRevient).toBeCloseTo(16264.44009, 2);
+    expect(s310.prixRevient).toBeCloseTo(17576.18649, 2);
   });
 });
 
@@ -128,21 +131,21 @@ describe("planDefinitif - variante éco-PTZ individuel (70 % / 30 %)", () => {
   it("calcule les appels de fonds avec 70 % des aides déduites", () => {
     expect(r.individuel.aidesAvancees).toBeCloseTo(289681.6063, 2);
     expect(r.individuel.aidesFinChantier).toBeCloseTo(124149.2598, 2);
-    expect(r.individuel.appelsFonds).toBeCloseTo(684296.3376, 2);
-    expect(r.individuel.coutTantiemeApresAides).toBeCloseTo(52.46593578, 4);
-    expect(r.individuel.coutTantiemeAvecAvance).toBeCloseTo(68.42963376, 4);
+    expect(r.individuel.appelsFonds).toBeCloseTo(726610.7376, 2);
+    expect(r.individuel.coutTantiemeApresAides).toBeCloseTo(56.69737578, 4);
+    expect(r.individuel.coutTantiemeAvecAvance).toBeCloseTo(72.66107376, 4);
   });
 
   it("reproduit les exemples par tantièmes", () => {
     const [e310, e348, e386] = r.individuel.exemples;
-    expect(e310.prixRevient).toBeCloseTo(16264.44009, 2);
-    expect(e348.prixRevient).toBeCloseTo(18258.14565, 2);
-    expect(e386.prixRevient).toBeCloseTo(20251.85121, 2);
-    expect(e310.appelsFonds).toBeCloseTo(21213.18647, 2);
+    expect(e310.prixRevient).toBeCloseTo(17576.18649, 2);
+    expect(e348.prixRevient).toBeCloseTo(19730.68677, 2);
+    expect(e386.prixRevient).toBeCloseTo(21885.18705, 2);
+    expect(e310.appelsFonds).toBeCloseTo(22524.93287, 2);
     expect(e310.remboursementFinChantier).toBeCloseTo(4948.746375, 2);
-    expect(e310.mensualiteEcoPtz).toBeCloseTo(91.03992525, 4);
-    expect(e348.mensualiteEcoPtz).toBeCloseTo(102.199658, 4);
-    expect(e386.mensualiteEcoPtz).toBeCloseTo(113.3593908, 4);
+    expect(e310.mensualiteEcoPtz).toBeCloseTo(96.66950355, 4);
+    expect(e348.mensualiteEcoPtz).toBeCloseTo(108.5193137, 4);
+    expect(e386.mensualiteEcoPtz).toBeCloseTo(120.3691238, 4);
   });
 });
 
