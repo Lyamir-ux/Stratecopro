@@ -319,13 +319,17 @@ export async function genererPlanIndividuelPdf(input: PlanIndividuelPdfInput): P
   f.ligne("Votre quote-part de travaux T.T.C.", euro(indiv.quotePart), { bold: true });
   f.ligne(
     "MaPrimeRénov' individuelle" + (profil ? ` (${(PROFILS_MPR[profil]?.desc ?? "").toLowerCase()})` : ""),
-    euro(indiv.mprIndiv),
-    { moins: true }
+    indiv.mprIndetermine ? "À déterminer (enquête sociale à compléter)" : euro(indiv.mprIndiv),
+    { moins: !indiv.mprIndetermine }
   );
   f.ligne("Subvention collective affectée", euro(indiv.subvColl - indiv.fondsPart), { moins: true });
   f.ligne("Fonds travaux déjà versés (à titre indicatif)", euro(indiv.fondsPart), { moins: true });
   f.y -= 2;
-  f.encadreTotal("À financer avant travaux (hors CEE)", euro(indiv.resteAvantTravaux), true);
+  f.encadreTotal(
+    "À financer avant travaux (hors CEE" + (indiv.mprIndetermine ? ", hors aide individuelle)" : ")"),
+    euro(indiv.resteAvantTravaux),
+    true
+  );
   f.paragraphe(
     `Après le chantier : vos CEE (${euro(indiv.cee)}) sont versés une fois les travaux réceptionnés. Ils ne réduisent pas le montant à financer avant travaux, mais viendront en déduction une fois perçus.`,
     { size: 9, color: GRIS }

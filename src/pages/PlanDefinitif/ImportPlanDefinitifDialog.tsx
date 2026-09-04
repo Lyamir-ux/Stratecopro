@@ -12,13 +12,16 @@ import { useCreatePlanDefinitif } from "@/api/planDefinitif";
 
 interface Props {
   coproId: string;
+  /** Nom du dossier - préfixe du classeur archivé dans l'onglet Fichiers. */
+  coproNom?: string;
   onClose: () => void;
 }
 
-export function ImportPlanDefinitifDialog({ coproId, onClose }: Props) {
+export function ImportPlanDefinitifDialog({ coproId, coproNom, onClose }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const [fileName, setFileName] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<ImportPlanResult | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
   const create = useCreatePlanDefinitif(coproId);
@@ -30,6 +33,7 @@ export function ImportPlanDefinitifDialog({ coproId, onClose }: Props) {
       const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
       setResult(importPlanDefinitif(wb));
       setFileName(f.name);
+      setFile(f);
     } catch (e) {
       setFileName(f.name);
       setParseError(e instanceof Error ? e.message : String(e));
@@ -41,7 +45,13 @@ export function ImportPlanDefinitifDialog({ coproId, onClose }: Props) {
     const nom = result.data.infos.nomCopro
       ? `PF définitif - ${result.data.infos.nomCopro}`
       : "Plan de financement définitif";
-    const row = await create.mutateAsync({ nom, data: result.data, sourceFichier: fileName ?? undefined });
+    const row = await create.mutateAsync({
+      nom,
+      data: result.data,
+      sourceFichier: fileName ?? undefined,
+      file: file ?? undefined,
+      coproNom,
+    });
     onClose();
     navigate(`/copros/${coproId}/plan-definitif/${row.id}`);
   };
@@ -67,7 +77,8 @@ export function ImportPlanDefinitifDialog({ coproId, onClose }: Props) {
           <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
             Nomenclature attendue : onglets « PF définitif Eco PTZ collectif / individuel »
             <br />+ un onglet par lot de travaux avec la colonne « Retenu » (assiette MaPrimeRénov').
-          </p>
+            <br />Le classeur source est archivé dans l'onglet Fichiers (dossier Plans de financement).
+            </p>
           <input
             ref={fileRef}
             type="file"

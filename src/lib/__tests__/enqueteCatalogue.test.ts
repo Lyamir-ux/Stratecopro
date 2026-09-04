@@ -29,7 +29,11 @@ describe("catalogue", () => {
       for (const c of q.cond ?? []) {
         expect(ids.has(c.qid), `${q.id} → ${c.qid}`).toBe(true);
         const ref = CATALOGUE.find((r) => r.id === c.qid)!;
-        for (const v of c.vals) expect(ref.options, `${q.id} : valeur « ${v} »`).toContain(v);
+        for (const v of c.vals) {
+          // question de référence numérique (montant, nombre) : la valeur est un nombre en texte
+          if (ref.type === "montant" || ref.type === "nombre") expect(v, `${q.id} : valeur « ${v} »`).toMatch(/^\d+$/);
+          else expect(ref.options, `${q.id} : valeur « ${v} »`).toContain(v);
+        }
       }
     }
   });
@@ -47,9 +51,22 @@ describe("catalogue", () => {
     expect(menage.defaultOn).toBe(true);
     expect(rfr.defaultOn).toBe(true);
     // juste après les coordonnées : premières questions de la section « situation »
+    // (ménage, composition, personnes à charge, RFR N-1 - feedback Théa 03/09/2026)
     const firstSituation = ids.findIndex((id) => CATALOGUE.find((q) => q.id === id)!.section === "situation");
     expect(ids[firstSituation]).toBe("nb-personnes-foyer");
-    expect(ids[firstSituation + 1]).toBe("rfr-foyer");
+    expect(ids.slice(firstSituation, firstSituation + 4)).toContain("rfr-foyer");
+    expect(ids.slice(firstSituation, firstSituation + 4)).toContain("composition-menage");
+    expect(ids.slice(firstSituation, firstSituation + 4)).toContain("nb-personnes-charge");
+  });
+
+  it("libellés Anah des ressources et justification d'un RFR nul (feedback Théa 03/09/2026)", () => {
+    const rfr = CATALOGUE.find((q) => q.id === "rfr-foyer")!;
+    expect(rfr.tag).toBe("Revenu fiscal de référence (RFR) de l'avis d'imposition N-1");
+    const n2 = CATALOGUE.find((q) => q.id === "rfr-n2")!;
+    expect(n2.tag).toBe("Revenu fiscal de référence N-2");
+    const motif = CATALOGUE.find((q) => q.id === "rfr-zero-motif")!;
+    expect(motif.cond).toContainEqual({ qid: "rfr-foyer", vals: ["0"] });
+    expect(motif.locked).toBe(true);
   });
 
   it("pas de question déclarative de profil (calcul automatique) ni de couleurs MPR dans les libellés", () => {

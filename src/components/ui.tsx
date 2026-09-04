@@ -66,7 +66,7 @@ export function Progress({ value, blue }: { value: number; blue?: boolean }) {
   // mais rien du tout à zéro (sinon une barre fantôme apparaît).
   return (
     <div className={"prog" + (blue ? " blue" : "")}>
-      <i style={{ width: (value > 0 ? Math.max(2, value) : 0) + "%" }}></i>
+      <i style={{ width: (value > 0 ? Math.min(100, Math.max(2, value)) : 0) + "%" }}></i>
     </div>
   );
 }

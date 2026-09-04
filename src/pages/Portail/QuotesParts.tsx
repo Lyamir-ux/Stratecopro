@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { Cascade } from "@/components/Cascade";
-import { fmtEuro } from "@/lib/format";
+import { fmtDate, fmtEuro } from "@/lib/format";
 import {
   computeIndiv,
   lotsRattaches,
@@ -14,6 +14,7 @@ import {
   useMonPlan,
   useRattacherLot,
   type Membership,
+  type ProfilMeta,
   type Scenario,
 } from "@/api/portail";
 import { readParams } from "@/api/scenarios";
@@ -27,6 +28,7 @@ export function QuotesParts({
   scenarios,
   bareme,
   profil,
+  profilMeta,
   go,
 }: {
   membership: Membership;
@@ -35,6 +37,7 @@ export function QuotesParts({
   bareme: Bareme | null;
   plan: unknown;
   profil: Profil | null;
+  profilMeta: ProfilMeta;
   go: (s: SectionId) => void;
 }) {
   const lots = membership.lots;
@@ -138,11 +141,16 @@ export function QuotesParts({
             <Cascade
               total={{ l: lot ? "Quote-part de travaux du lot n°" + lot.num : "Quote-part de travaux", v: indiv.quotePart }}
               rows={[
-                { l: "MaPrimeRénov' individuelle" + (profil ? " (" + PROFILS_MPR[profil].desc.toLowerCase() + ")" : ""), v: indiv.mprIndiv, k: "primary" },
-                { l: "Subvention collective affectée", v: indiv.subvColl - indiv.fondsPart, k: "primary" },
+                indiv.mprIndetermine
+                  ? { l: "MaPrimeRénov' individuelle", v: 0, k: "primary", texte: "à déterminer" }
+                  : { l: "MaPrimeRénov' individuelle" + (profil ? " (" + PROFILS_MPR[profil].desc.toLowerCase() + ")" : ""), v: indiv.mprIndiv, k: "primary" },
+                { l: "Subvention collective affectée (MaPrimeRénov' Copropriété)", v: indiv.subvColl - indiv.fondsPart, k: "primary" },
                 { l: "Fonds travaux déjà versés (à titre indicatif)", v: indiv.fondsPart, k: "blue" },
               ]}
-              reste={{ l: "À financer avant travaux (hors CEE)", v: indiv.resteAvantTravaux }}
+              reste={{
+                l: "À financer avant travaux (hors CEE" + (indiv.mprIndetermine ? ", hors aide individuelle" : "") + ")",
+                v: indiv.resteAvantTravaux,
+              }}
             />
             <div className="apres-chantier">
               <div className="ac-head">
@@ -159,14 +167,25 @@ export function QuotesParts({
                 <b>{fmtEuro(indiv.reste)}</b>
               </div>
             </div>
-            {!profil && (
+            {indiv.mprIndetermine && (
               <div className="cc-next" style={{ marginTop: 18 }}>
                 <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
                 <span>
-                  Estimation basée sur un ménage aux <b>revenus modestes</b>. Complétez l'enquête sociale pour affiner vos aides.
+                  Votre aide individuelle MaPrimeRénov' est <b>à déterminer</b> : elle dépend de vos ressources.
+                  Complétez l'enquête sociale pour qu'elle soit calculée - les montants ci-dessus ne comprennent
+                  que les aides collectives, au prorata de vos tantièmes.
                 </span>
               </div>
             )}
+            <p className="se-small" style={{ marginTop: 14, marginBottom: 0, color: "var(--fg3)" }}>
+              Plan de financement « {scn.name} » publié le {fmtDate(scn.updated_at)} · profil de ressources{" "}
+              {profilMeta.statut === "verifie"
+                ? `vérifié par votre AMO le ${fmtDate(profilMeta.date)}`
+                : profilMeta.statut === "declaratif"
+                  ? `déclaratif (enquête du ${fmtDate(profilMeta.date)})`
+                  : "non renseigné"}
+              .
+            </p>
             {!indiv.exact && profil && (
               <div className="cc-next" style={{ marginTop: 18 }}>
                 <Icon name="alert" size={15} className="ico" />
@@ -220,7 +239,16 @@ export function QuotesParts({
               <div className="kv">
                 <span className="k">Profil MaPrimeRénov'</span>
                 <span className="v">
-                  {profil ? <Badge kind="primary" dot>{PROFILS_MPR[profil].desc}</Badge> : <span style={{ color: "var(--fg-muted)" }}>à déterminer</span>}
+                  {profil ? (
+                    <>
+                      <Badge kind="primary" dot>{PROFILS_MPR[profil].desc}</Badge>{" "}
+                      <Badge kind={profilMeta.statut === "verifie" ? "success" : "warn"}>
+                        {profilMeta.statut === "verifie" ? "Vérifié" : "Déclaratif"}
+                      </Badge>
+                    </>
+                  ) : (
+                    <span style={{ color: "var(--fg-muted)" }}>à déterminer</span>
+                  )}
                 </span>
               </div>
             </div>

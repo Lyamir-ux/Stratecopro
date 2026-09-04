@@ -15,10 +15,9 @@ import type { DpeClass } from "@/lib/referentiels";
 import {
   computeFinance,
   computePlanDefinitif,
-  computePlansIndividuelsPf,
   itemsARepartirPf,
   readPlanDefinitif,
-  type CoproTantiemes,
+  repartirPfDepuisLots,
   type FinanceResult,
   type PlanDefinitifData,
 } from "@/lib/finance";
@@ -33,6 +32,7 @@ import {
   type PlanDefinitif,
 } from "@/api/planDefinitif";
 import { useDonnees } from "@/api/donnees";
+import { useProfilsCopro } from "@/api/enquete";
 import { Modal } from "@/components/Modal";
 import { fmtDate } from "@/lib/format";
 import type { CoproWithStats } from "@/api/copros";
@@ -97,7 +97,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   if (!active) {
     return (
       <div className="fade" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        <PlanDefinitifPanel coproId={c.id} />
+        <PlanDefinitifPanel coproId={c.id} coproNom={c.name} />
         {planValide && pv && pvData ? (
           <div className="detail-grid">
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -141,7 +141,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   return (
     <div className="detail-grid fade">
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        <PlanDefinitifPanel coproId={c.id} />
+        <PlanDefinitifPanel coproId={c.id} coproNom={c.name} />
         {planValide && pv ? (
           <PanelCoutOperationPf plan={planValide} pv={pv} />
         ) : (
@@ -470,7 +470,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
  * Plans de financement définitifs (nomenclature chef de projet) : import du
  * classeur Excel, liste des plans, ouverture de l'éditeur avec recalcul.
  */
-function PlanDefinitifPanel({ coproId }: { coproId: string }) {
+function PlanDefinitifPanel({ coproId, coproNom }: { coproId: string; coproNom: string }) {
   const navigate = useNavigate();
   const { data: plans } = usePlansDefinitifs(coproId);
   const del = useDeletePlanDefinitif(coproId);
@@ -515,6 +515,10 @@ function PlanDefinitifPanel({ coproId }: { coproId: string }) {
                       ? `Opération ${fmtEuro(res.totalOperationTtc)} · aides ${fmtEuro(res.totalAides)} · reste à charge ${fmtEuro(res.resteACharge)}`
                       : "À compléter"}
                     {" · maj " + fmtDate(p.updated_at)}
+                    {p.statut === "valide" &&
+                      (p.valide_fichier_id
+                        ? ` · v${p.version} archivée dans Fichiers${p.valide_le ? ` le ${fmtDate(p.valide_le)}` : ""}`
+                        : " · non archivé dans Fichiers (ouvrir le plan pour l'archiver)")}
                   </div>
                 </div>
                 <span className="spacer"></span>
@@ -540,7 +544,7 @@ function PlanDefinitifPanel({ coproId }: { coproId: string }) {
                     disabled={valider.isPending}
                     onClick={(e) => {
                       e.stopPropagation();
-                      valider.mutate({ id: p.id, valider: true });
+                      valider.mutate({ id: p.id, valider: true, coproNom });
                     }}
                   >
                     <Icon name="checkCircle" size={14} />
@@ -562,7 +566,7 @@ function PlanDefinitifPanel({ coproId }: { coproId: string }) {
           })
         )}
       </div>
-      {importOpen && <ImportPlanDefinitifDialog coproId={coproId} onClose={() => setImportOpen(false)} />}
+      {importOpen && <ImportPlanDefinitifDialog coproId={coproId} coproNom={coproNom} onClose={() => setImportOpen(false)} />}
     </div>
   );
 }
@@ -639,7 +643,8 @@ function PanelIngenieriePf({
           </div>
         ))}
         <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
-          Champs remplis automatiquement à partir du plan de financement définitif validé.
+          Champs remplis automatiquement à partir du plan de financement définitif validé. Barres à échelle unique :
+          part du coût total de l'opération TTC ({fmtEuro(total)}).
         </p>
       </div>
     </div>
@@ -666,44 +671,24 @@ function PlansIndividuelsPfPanel({
   const navigate = useNavigate();
   const { data: donnees } = useDonnees(coproId);
   const { data: bareme } = useBareme();
+  const { data: profils } = useProfilsCopro(coproId);
   const { data: scenarioPf } = usePfPartage(plan.id);
   const update = useUpdatePlanDefinitif(coproId);
   const partagerMut = usePartagerPfCopros(coproId);
   const [configOpen, setConfigOpen] = useState(false);
 
   const cles = donnees?.cles ?? [];
-  const items = itemsARepartirPf(pvData, pv);
-
-  // Tantièmes par copropriétaire (sommés sur ses lots) et totaux par clé.
-  const totauxCles: Record<string, number> = {};
-  const parCopro = new Map<string, CoproTantiemes>();
-  for (const lot of donnees?.lots ?? []) {
-    for (const [code, t] of Object.entries(lot.tantiemes)) totauxCles[code] = (totauxCles[code] ?? 0) + t;
-    if (!lot.coproprietaire_id) continue;
-    const co =
-      parCopro.get(lot.coproprietaire_id) ??
-      { coproprietaireId: lot.coproprietaire_id, nom: lot.coproprietaire?.nom ?? "-", tantiemes: {} };
-    for (const [code, t] of Object.entries(lot.tantiemes)) co.tantiemes[code] = (co.tantiemes[code] ?? 0) + t;
-    parCopro.set(lot.coproprietaire_id, co);
-  }
-
-  // Clé unique : tout passe par elle. Sinon la clé de chaque ligne vient du PF
-  // définitif (choix ligne par ligne, repli legacy par lot) - déjà portée par les items.
-  const cleUnique = cles.length === 1 ? cles[0].code : null;
-  const cleParItem: Record<string, string> = cleUnique
-    ? Object.fromEntries(items.map((it) => [it.id, cleUnique]))
-    : {};
-
-  const { plans, manquants } = computePlansIndividuelsPf({
-    items,
-    cleParItem,
-    copros: [...parCopro.values()],
-    totauxCles,
-    totalAides: pv.totalAides,
-    primeCee: pv.primeCee,
-    fondsTravaux: pvData.params.fondsTravaux,
-    totalOperationTtc: pv.totalOperationTtc,
-  });
+  // Même répartition que la vue Copropriétaires et les exports (une seule
+  // fonction) : tantièmes par copropriétaire, clé unique ou clé par ligne.
+  const { plans, manquants, items, cleUnique, cleRef, totauxCles, parCopro } = repartirPfDepuisLots(
+    pvData,
+    pv,
+    donnees?.lots ?? [],
+    cles
+  );
+  // Copropriétaires dont le profil de ressources n'est pas renseigné : leur
+  // aide individuelle s'affichera « à déterminer » au portail (feedback Théa).
+  const sansProfil = plans.filter((p) => !profils?.has(p.coproprietaireId));
 
   // Le choix est porté par les lignes du PF définitif (ids « lot:<numero>:<index> »
   // / « moe:<index> ») - il reste ainsi visible et modifiable dans l'éditeur du plan.
@@ -724,11 +709,21 @@ function PlansIndividuelsPfPanel({
 
   // Partage au portail copropriétaire : clé de référence pour la mise à
   // l'échelle par lot (clé unique, sinon clé par défaut de la copro).
-  const cleRef = cleUnique ?? cles.find((k) => k.is_default)?.code ?? cles[0]?.code ?? null;
   const partage = scenarioPf?.statut === "partage";
   const partageable = plans.length > 0 && manquants.length === 0 && !!cleRef && !!bareme;
   const togglePartage = (partager: boolean) => {
     if (!cleRef || !bareme) return;
+    // Verrou souple : publier sans profil de ressources fait apparaître des
+    // aides individuelles « à déterminer » - l'AMO confirme en connaissance de cause.
+    if (partager && sansProfil.length > 0) {
+      const noms = sansProfil.slice(0, 8).map((p) => p.nom).join(", ") + (sansProfil.length > 8 ? "…" : "");
+      const ok = window.confirm(
+        `${sansProfil.length} copropriétaire${sansProfil.length > 1 ? "s" : ""} sur ${plans.length} n'${sansProfil.length > 1 ? "ont" : "a"} pas de profil de ressources (enquête sociale non renseignée) : ${noms}.\n\n` +
+          "Leur portail affichera la quote-part et les aides collectives, mais une aide individuelle « à déterminer ». " +
+          "Publier quand même ? (Les profils peuvent être saisis ensuite dans l'onglet Copropriétaires : le portail se met à jour.)"
+      );
+      if (!ok) return;
+    }
     const tantiemesRef = Object.fromEntries(
       [...parCopro.values()].map((co) => [co.coproprietaireId, co.tantiemes[cleRef] ?? 0])
     );
@@ -820,6 +815,12 @@ function PlansIndividuelsPfPanel({
               <p className="se-small" style={{ margin: "0 0 6px", color: "var(--fg-muted)" }}>
                 Répartition automatique - clé unique « {cles[0].label || cles[0].code} »
                 {" "}(total {totauxCles[cleUnique] ?? 0}).
+              </p>
+            )}
+            {sansProfil.length > 0 && (
+              <p className="se-small" style={{ margin: "0 0 6px", color: "var(--color-warning-700)" }}>
+                <Icon name="alert" size={12} /> {sansProfil.length} copropriétaire{sansProfil.length > 1 ? "s" : ""} sans profil de
+                ressources : aide individuelle « à déterminer » au portail (onglet Copropriétaires pour saisir).
               </p>
             )}
             {plans.map((p, i, arr) => (

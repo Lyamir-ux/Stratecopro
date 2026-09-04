@@ -14,6 +14,7 @@ import {
   useMonPlan,
   useMesPieces,
   PIECES,
+  profilMetaDepuisReponse,
   type Membership,
   type Scenario,
 } from "@/api/portail";
@@ -309,6 +310,7 @@ export default function Portail() {
 
   const copro = membership.copro;
   const profil = (reponse?.profil_mpr as Profil | null) ?? null;
+  const profilMeta = profilMetaDepuisReponse(reponse);
   const enqueteComplete = !!(reponse?.reponses as { complet?: boolean } | null)?.complet;
   const reqPieces = PIECES.filter((p) => p.required);
   const piecesDone = reqPieces.filter((p) => (pieces ?? []).some((x) => x.type === p.type)).length;
@@ -323,7 +325,7 @@ export default function Portail() {
     document.querySelector(".portal-main")?.scrollTo?.(0, 0);
   };
 
-  const common = { membership, scenarios: scenarios ?? [], scenario, bareme: bareme ?? null, plan: plan ?? null, profil, go };
+  const common = { membership, scenarios: scenarios ?? [], scenario, bareme: bareme ?? null, plan: plan ?? null, profil, profilMeta, go };
 
   return (
     <div className="portal">

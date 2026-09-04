@@ -2,9 +2,16 @@
 // étiquette énergie visée du bâtiment, à-faire.
 import { Icon } from "@/components/Icon";
 import { Badge, DpeChip } from "@/components/ui";
-import { fmtEuro } from "@/lib/format";
+import { fmtDate, fmtEuro } from "@/lib/format";
 import { PHASES, PROFILS_MPR, type DpeClass } from "@/lib/referentiels";
-import { computeIndiv, totalTantiemes, type ChoixFinancement, type Membership, type Scenario } from "@/api/portail";
+import {
+  computeIndiv,
+  totalTantiemes,
+  type ChoixFinancement,
+  type Membership,
+  type ProfilMeta,
+  type Scenario,
+} from "@/api/portail";
 import { readParams } from "@/api/scenarios";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Tables } from "@/lib/database.types";
@@ -16,6 +23,7 @@ export function Accueil({
   bareme,
   plan,
   profil,
+  profilMeta,
   userName,
   piecesDone,
   piecesReq,
@@ -28,6 +36,7 @@ export function Accueil({
   bareme: Bareme | null;
   plan: Tables<"plans_individuels"> | null;
   profil: Profil | null;
+  profilMeta: ProfilMeta;
   userName: string;
   piecesDone: number;
   piecesReq: number;
@@ -50,10 +59,12 @@ export function Accueil({
           profil
         )
       : null;
-  // Aides collectives uniquement (MPR Copro + fonds travaux + CEE) : la prime
-  // individuelle dépend du profil de l'enquête, elle reste détaillée dans
-  // « Vos quotes-parts » (feedback 28/08).
+  // Aides collectives (MPR Copro + fonds travaux + CEE, prorata des tantièmes)
+  // et aide individuelle (profil de ressources) sont présentées séparément :
+  // sans profil, l'aide individuelle est « à déterminer », jamais un montant
+  // présumé (feedback Théa 03/09/2026 - contradiction avec l'enquête à 0/15).
   const aidesCollectives = indiv ? indiv.cee + indiv.subvColl : null;
+  const planPublieLe = scenario?.updated_at ?? null;
 
   const todos: { id: SectionId; done: boolean; ico: string; title: string; sub: string }[] = [
     {
@@ -64,8 +75,8 @@ export function Accueil({
       sub: enqueteComplete
         ? (profil ? PROFILS_MPR[profil].menage : "Questionnaire complet")
         : profil
-          ? "En cours - répondez à toutes les questions"
-          : "Pour estimer vos aides individuelles",
+          ? "En cours - transmettez le questionnaire complet"
+          : "Indispensable pour déterminer votre aide individuelle (à déterminer tant qu'il n'est pas rempli)",
     },
     {
       id: "documents",
@@ -105,26 +116,69 @@ export function Accueil({
       </div>
 
       {indiv ? (
-        <div className="tiles" style={{ marginBottom: 26 }}>
-          <div className="tile">
-            <div className="t-lbl"><Icon name="euro" size={16} />Votre quote-part de travaux</div>
-            <div className="t-val">{fmtEuro(indiv.quotePart)}</div>
-            <div className="t-foot">
-              Tantièmes {totalTantiemes(membership.lots, bareme && scenario ? readParams(scenario.params, bareme).cle : "MUN").toLocaleString("fr-FR")}
-              {!indiv.exact && " · estimation"}
+        <>
+          <div className="tiles tiles-4" style={{ marginBottom: 26 }}>
+            <div className="tile">
+              <div className="t-lbl"><Icon name="euro" size={16} />Votre quote-part de travaux</div>
+              <div className="t-val">{fmtEuro(indiv.quotePart)}</div>
+              <div className="t-foot">
+                Tantièmes {totalTantiemes(membership.lots, bareme && scenario ? readParams(scenario.params, bareme).cle : "MUN").toLocaleString("fr-FR")}
+                {!indiv.exact && " · estimation"}
+              </div>
+            </div>
+            <div className="tile">
+              <div className="t-lbl"><Icon name="leaf" size={16} />Aides collectives affectées à vos lots</div>
+              <div className="t-val accent">{fmtEuro(aidesCollectives)}</div>
+              <div className="t-foot">MaPrimeRénov' Copropriété + fonds travaux + CEE, au prorata de vos tantièmes</div>
+            </div>
+            <div className="tile">
+              <div className="t-lbl"><Icon name="user" size={16} />Votre aide individuelle</div>
+              {indiv.mprIndetermine ? (
+                <>
+                  <div className="t-val indetermine">À déterminer</div>
+                  <div className="t-foot">Complétez l'enquête sociale : elle dépend de vos ressources</div>
+                </>
+              ) : indiv.mprIndiv > 0 ? (
+                <>
+                  <div className="t-val accent">{fmtEuro(indiv.mprIndiv)}</div>
+                  <div className="t-foot">MaPrimeRénov' individuelle · {profil ? PROFILS_MPR[profil].menage.toLowerCase() : ""}</div>
+                </>
+              ) : (
+                <>
+                  <div className="t-val indetermine">À confirmer</div>
+                  <div className="t-foot">
+                    Profil {profil ? PROFILS_MPR[profil].desc.toLowerCase() : ""} connu - montant fixé par votre AMO à l'instruction
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="tile">
+              <div className="t-lbl"><Icon name="trendingUp" size={16} />À financer avant travaux</div>
+              <div className="t-val">{fmtEuro(indiv.resteAvantTravaux)}</div>
+              <div className="t-foot">
+                Hors CEE (versés à la fin du chantier)
+                {indiv.mprIndetermine ? " et hors aide individuelle" : ""}
+              </div>
             </div>
           </div>
-          <div className="tile">
-            <div className="t-lbl"><Icon name="leaf" size={16} />Vos aides collectives estimées</div>
-            <div className="t-val accent">{fmtEuro(aidesCollectives)}</div>
-            <div className="t-foot">MaPrimeRénov' Copro + fonds travaux + CEE</div>
+          <div className="portail-source">
+            <span>
+              <Icon name="fileCheck" size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+              Plan de financement « {scenario?.name} »{planPublieLe ? ` publié le ${fmtDate(planPublieLe)}` : ""}
+              {indiv.exact ? "" : " · estimation au prorata des tantièmes"}
+            </span>
+            <span>
+              Profil de ressources :{" "}
+              {profilMeta.statut === "verifie" ? (
+                <Badge kind="success" dot>Vérifié par votre AMO le {fmtDate(profilMeta.date)}</Badge>
+              ) : profilMeta.statut === "declaratif" ? (
+                <Badge kind="warn">Déclaratif - enquête du {fmtDate(profilMeta.date)}</Badge>
+              ) : (
+                <Badge kind="neutral">Non renseigné</Badge>
+              )}
+            </span>
           </div>
-          <div className="tile">
-            <div className="t-lbl"><Icon name="trendingUp" size={16} />À financer avant travaux</div>
-            <div className="t-val">{fmtEuro(indiv.resteAvantTravaux)}</div>
-            <div className="t-foot">Hors CEE, versés à la fin du chantier</div>
-          </div>
-        </div>
+        </>
       ) : (
         <div className="cc-next" style={{ marginBottom: 26 }}>
           <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />

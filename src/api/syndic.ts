@@ -219,8 +219,9 @@ export function useDocumentsSyndic(coproId: string | undefined) {
 export function useUploadDocumentSyndic(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ file, dossier, nameOriginal }: { file: File; dossier: string; nameOriginal?: string }) =>
-      uploadFichierDirect(coproId, file, dossier, nameOriginal),
+    mutationFn: async ({ file, dossier, nameOriginal }: { file: File; dossier: string; nameOriginal?: string }) => {
+      await uploadFichierDirect(coproId, file, dossier, nameOriginal);
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["syndic", "documents", coproId] });
       void qc.invalidateQueries({ queryKey: ["fichiers", coproId] });

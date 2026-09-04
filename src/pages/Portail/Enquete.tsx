@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
-import { fmtEuro } from "@/lib/format";
+import { fmtDate, fmtEuro } from "@/lib/format";
 import { PROFILS_MPR } from "@/lib/referentiels";
 import { determineProfil } from "@/lib/finance";
 import {
@@ -59,6 +59,11 @@ function toggleMulti(cur: string[], opt: string): string[] {
   return [...cur.filter((x) => !EXCLUSIVE.test(x)), opt];
 }
 
+/** Durée indicative de saisie : ~20 s par question, arrondie aux 5 minutes, 5 minutes minimum. */
+function dureeEstimee(nbQuestions: number): number {
+  return Math.max(5, Math.ceil((nbQuestions / 3) / 5) * 5);
+}
+
 function answered(v: Val | undefined): boolean {
   if (v === undefined || v === "") return false;
   return !(Array.isArray(v) && v.length === 0);
@@ -70,6 +75,8 @@ function isVisible(q: ResolvedQuestion, get: (qid: string) => Val | undefined): 
   return (q.cond ?? []).every((c) => {
     const v = get(c.qid);
     if (typeof v === "string" && v !== "") return c.vals.includes(v);
+    // réponse numérique (ex. RFR = 0 → justification demandée)
+    if (typeof v === "number") return c.vals.includes(String(v));
     if (Array.isArray(v) && v.length > 0) return v.some((x) => c.vals.includes(x));
     // question de référence pas encore répondue
     return c.defaut === true;
@@ -175,11 +182,17 @@ function QuestionBloc({
   answers,
   onSet,
   lotsPrincipaux,
+  erreur,
+  anchor,
 }: {
   q: ResolvedQuestion;
   answers: Answers;
   onSet: (qid: string, v: Val | undefined) => void;
   lotsPrincipaux?: { id: string; label: string }[];
+  /** message d'erreur de validation (question obligatoire sans réponse, incohérence) */
+  erreur?: string;
+  /** id DOM pour le défilement vers la première erreur */
+  anchor?: string;
 }) {
   const value = answers[q.id];
   const needsPrecision =
@@ -187,9 +200,10 @@ function QuestionBloc({
     ((typeof value === "string" && q.precision!.includes(value)) ||
       (Array.isArray(value) && value.some((v) => q.precision!.includes(v))));
   return (
-    <div className="eq-q">
+    <div className={"eq-q" + (erreur ? " eq-q-erreur" : "")} id={anchor}>
       <label className="eq-label">
         {q.q}
+        <span className="eq-req" title="Réponse obligatoire">*</span>
         {q.aide && (
           <span className="qc-help" title={q.aide}>
             <Icon name="help" size={13} />
@@ -205,6 +219,12 @@ function QuestionBloc({
           placeholder="Précisez…"
           onChange={(e) => onSet(q.id + "__p", e.target.value === "" ? undefined : e.target.value)}
         />
+      )}
+      {erreur && (
+        <p className="eq-erreur" role="alert">
+          <Icon name="alert" size={13} />
+          {erreur}
+        </p>
       )}
     </div>
   );
@@ -222,7 +242,12 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
 
   const [rep, setRep] = useState<ReponsesJson | null>(null);
   const [profilSauve, setProfilSauve] = useState<Profil | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState<"brouillon" | "transmis" | null>(null);
+  // Validation à la transmission : erreurs par question (clé « copro:<qid> » ou
+  // « lot:<lotId>:<qid> ») + attestation d'exactitude obligatoire.
+  const [erreurs, setErreurs] = useState<Record<string, string>>({});
+  const [atteste, setAtteste] = useState(false);
+  const [erreurAttestation, setErreurAttestation] = useState(false);
 
   // Initialisation : réponses enregistrées par-dessus les défauts (nom, usage des lots).
   useEffect(() => {
@@ -236,12 +261,16 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
     setProfilSauve((reponse?.profil_mpr as Profil | null) ?? null);
   }, [enquete, isFetched, rep, reponse, membership]);
 
+  const effacerErreur = (k: string) =>
+    setErreurs((e) => (e[k] ? Object.fromEntries(Object.entries(e).filter(([x]) => x !== k)) : e));
   const setCopro = (qid: string, v: Val | undefined) => {
-    setSaved(false);
+    setSaved(null);
+    effacerErreur("copro:" + qid);
     setRep((r) => (r ? { ...r, copro: { ...r.copro, [qid]: v } } : r));
   };
   const setLot = (lotId: string) => (qid: string, v: Val | undefined) => {
-    setSaved(false);
+    setSaved(null);
+    effacerErreur(`lot:${lotId}:${qid}`);
     setRep((r) => (r ? { ...r, lots: { ...r.lots, [lotId]: { ...r.lots[lotId], [qid]: v } } } : r));
   };
 
@@ -284,8 +313,57 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
       })
       .map((l) => ({ id: l.id, label: `Lot ${l.num}${l.batiment ? ` - bât. ${l.batiment}` : ""}` }));
 
-  const doSave = () => {
+  const anchorId = (k: string) => "eq-" + k.replace(/[^a-zA-Z0-9-]/g, "_");
+
+  /**
+   * Contrôle avant transmission : toutes les questions posées doivent avoir une
+   * réponse (feedback Théa 03/09/2026 - la soumission n'est plus acceptée avec
+   * des cases obligatoires vides) + cohérence ménage / personnes à charge.
+   * Retourne les erreurs par question ; vide = questionnaire transmissible.
+   */
+  const controler = (): Record<string, string> => {
+    if (!rep) return {};
+    const errs: Record<string, string> = {};
+    const lib = (q: ResolvedQuestion) => (q.tag || "cette question").toLowerCase();
+    for (const q of visiblesCopro) {
+      if (!answered(rep.copro[q.id])) errs["copro:" + q.id] = `Réponse obligatoire : ${lib(q)}.`;
+    }
+    for (const q of customQs) {
+      if (!answered(rep.copro[q.id])) errs["copro:" + q.id] = "Réponse obligatoire (question de votre AMO).";
+    }
+    for (const { lot, qs } of visiblesParLot) {
+      for (const q of qs) {
+        if (!answered(rep.lots[lot.id]?.[q.id])) errs[`lot:${lot.id}:${q.id}`] = `Réponse obligatoire pour le lot ${lot.num} : ${lib(q)}.`;
+      }
+    }
+    const nb = rep.copro["nb-personnes-foyer"];
+    const charge = rep.copro["nb-personnes-charge"];
+    if (typeof nb === "number" && nb < 1 && visiblesCopro.some((q) => q.id === "nb-personnes-foyer")) {
+      errs["copro:nb-personnes-foyer"] = "Le ménage compte au moins une personne.";
+    }
+    if (typeof nb === "number" && typeof charge === "number" && nb > 0 && charge >= nb) {
+      errs["copro:nb-personnes-charge"] =
+        `Les personnes à charge (${charge}) sont comprises dans le ménage (${nb} personne${nb > 1 ? "s" : ""}) : ce nombre doit être inférieur.`;
+    }
+    return errs;
+  };
+
+  const doSave = (mode: "brouillon" | "transmis") => {
     if (!rep || !enquete) return;
+    if (mode === "transmis") {
+      const errs = controler();
+      setErreurs(errs);
+      setErreurAttestation(!atteste);
+      const premiere = Object.keys(errs)[0];
+      if (premiere) {
+        document.getElementById(anchorId(premiere))?.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      if (!atteste) return;
+    } else {
+      setErreurs({});
+      setErreurAttestation(false);
+    }
     // colonnes historiques : foyer / occupation / RFR (vue AMO + profil MPR)
     let statutOccupation: string | null = null;
     for (const l of membership.lots) {
@@ -301,18 +379,27 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
       if (typeof nb === "number") nbPersonnes = nb;
     }
     const rfr = typeof rep.copro["rfr-foyer"] === "number" ? rep.copro["rfr-foyer"] : null;
+    const rfrN2 = typeof rep.copro["rfr-n2"] === "number" ? rep.copro["rfr-n2"] : null;
+    // « complet » = questionnaire transmis avec toutes ses réponses ; un
+    // brouillon, même sans question restante, n'est pas transmis.
+    const transmis = mode === "transmis" && complet;
     save.mutate(
       {
-        reponses: { ...rep, complet } as unknown as Json,
+        reponses: {
+          ...rep,
+          complet: transmis,
+          ...(transmis ? { transmisLe: new Date().toISOString(), attestation: true } : {}),
+        } as unknown as Json,
         nbPersonnes,
         statutOccupation,
         rfr,
+        rfrN2,
         bareme,
       },
       {
         onSuccess: (p) => {
           if (p) setProfilSauve(p);
-          setSaved(true);
+          setSaved(mode);
         },
       }
     );
@@ -325,6 +412,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
     qs: ResolvedQuestion[],
     answers: Answers,
     onSet: (qid: string, v: Val | undefined) => void,
+    cle: (qid: string) => string,
     lotsP?: { id: string; label: string }[]
   ) => {
     let lastSection: SectionId | null = null;
@@ -335,18 +423,41 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
       return (
         <div key={q.id}>
           {head}
-          <QuestionBloc q={q} answers={answers} onSet={onSet} lotsPrincipaux={lotsP} />
+          <QuestionBloc
+            q={q}
+            answers={answers}
+            onSet={onSet}
+            lotsPrincipaux={lotsP}
+            erreur={erreurs[cle(q.id)]}
+            anchor={anchorId(cle(q.id))}
+          />
         </div>
       );
     });
   };
+  const nbErreurs = Object.keys(erreurs).length;
+  const profilStatut = reponse?.profil_statut ?? null;
+  const profilVerifieLe = reponse?.profil_verifie_le ?? null;
 
   return (
     <div className="fade">
       <h1 className="sec-title">Enquête sociale & technique</h1>
       <p className="sec-sub">
-        Vos réponses aident l'équipe AMO à préparer le projet : profil d'aides, état des logements,
-        organisation des visites. Elles sont confidentielles.
+        {enquete && rep && allVisible.length > 0 ? (
+          <>
+            Ces <b>{allVisible.length} questions</b>
+            {membership.lots.length > 1 ? ` (dont ${visiblesParLot.reduce((n, x) => n + x.qs.length, 0)} sur vos ${membership.lots.length} lots)` : ""}{" "}
+            permettent de vérifier votre éligibilité aux aides de l'Anah et de calculer votre aide individuelle
+            MaPrimeRénov'. Comptez <b>{dureeEstimee(allVisible.length)} minutes</b>. Vos réponses
+            sont confidentielles : seule l'équipe Strat Eco les consulte, pour préparer le projet (profil
+            d'aides, état des logements, organisation des visites).
+          </>
+        ) : (
+          <>
+            Ce questionnaire permet de vérifier votre éligibilité aux aides de l'Anah et de calculer votre aide
+            individuelle. Comptez 5 minutes. Vos réponses sont confidentielles.
+          </>
+        )}
       </p>
 
       {!isLoading && !enquete && (
@@ -365,12 +476,19 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                 <h2>Vous</h2>
               </div>
               <div className="cx-body">
-                {renderGroupe(visiblesCopro, rep.copro, setCopro)}
+                {renderGroupe(visiblesCopro, rep.copro, setCopro, (qid) => "copro:" + qid)}
                 {customQs.length > 0 && (
                   <>
                     <div className="eq-sec">Questions de votre AMO</div>
                     {customQs.map((q) => (
-                      <QuestionBloc key={q.id} q={q} answers={rep.copro} onSet={setCopro} />
+                      <QuestionBloc
+                        key={q.id}
+                        q={q}
+                        answers={rep.copro}
+                        onSet={setCopro}
+                        erreur={erreurs["copro:" + q.id]}
+                        anchor={anchorId("copro:" + q.id)}
+                      />
                     ))}
                   </>
                 )}
@@ -387,7 +505,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                   </h2>
                 </div>
                 <div className="cx-body">
-                  {renderGroupe(qs, rep.lots[lot.id] ?? {}, setLot(lot.id), lotsPrincipaux(lot.id))}
+                  {renderGroupe(qs, rep.lots[lot.id] ?? {}, setLot(lot.id), (qid) => `lot:${lot.id}:${qid}`, lotsPrincipaux(lot.id))}
                 </div>
               </div>
             ))}
@@ -414,20 +532,76 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                     </Badge>
                   )}
                 </div>
+                <label className={"eq-atteste" + (erreurAttestation ? " ko" : "")}>
+                  <input
+                    type="checkbox"
+                    checked={atteste}
+                    onChange={(e) => {
+                      setAtteste(e.target.checked);
+                      if (e.target.checked) setErreurAttestation(false);
+                    }}
+                  />
+                  <span>
+                    J'atteste que ces informations sont exactes et complètes, et j'accepte qu'elles servent au
+                    calcul de mes aides. <b>*</b>
+                  </span>
+                </label>
+                {erreurAttestation && (
+                  <p className="eq-erreur" role="alert">
+                    <Icon name="alert" size={13} />
+                    Case obligatoire : cochez l'attestation pour transmettre votre questionnaire.
+                  </p>
+                )}
                 <button
                   className="se-btn se-btn-primary"
-                  style={{ width: "100%", marginTop: 16, justifyContent: "center" }}
-                  onClick={doSave}
+                  style={{ width: "100%", marginTop: 12, justifyContent: "center" }}
+                  onClick={() => doSave("transmis")}
                   disabled={save.isPending}
                 >
                   <Icon name="checkCircle" size={17} />
-                  {save.isPending ? "Enregistrement…" : "Enregistrer mes réponses"}
+                  {save.isPending ? "Enregistrement…" : "Transmettre mon questionnaire"}
                 </button>
-                {saved && (
+                <button
+                  className="se-btn se-btn-ghost btn-sm"
+                  style={{ width: "100%", marginTop: 8, justifyContent: "center" }}
+                  onClick={() => doSave("brouillon")}
+                  disabled={save.isPending}
+                >
+                  Enregistrer un brouillon et finir plus tard
+                </button>
+                {nbErreurs > 0 && (
+                  <div className="eq-erreurs" role="alert">
+                    <b>
+                      {nbErreurs} réponse{nbErreurs > 1 ? "s" : ""} manquante{nbErreurs > 1 ? "s" : ""} ou à corriger
+                    </b>{" "}
+                    - le questionnaire ne peut pas être transmis en l'état :
+                    <ul>
+                      {Object.entries(erreurs).slice(0, 6).map(([k, msg]) => (
+                        <li key={k}>
+                          <a
+                            href={"#" + anchorId(k)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              document.getElementById(anchorId(k))?.scrollIntoView({ behavior: "smooth", block: "center" });
+                            }}
+                          >
+                            {msg}
+                          </a>
+                        </li>
+                      ))}
+                      {nbErreurs > 6 && <li>… et {nbErreurs - 6} autre{nbErreurs - 6 > 1 ? "s" : ""}.</li>}
+                    </ul>
+                  </div>
+                )}
+                {saved === "transmis" && (
                   <p className="se-small" style={{ color: "var(--color-success-700)", marginTop: 10, marginBottom: 0 }}>
-                    {complet
-                      ? "Merci ! Votre questionnaire est complet et enregistré."
-                      : "Réponses enregistrées - l'enquête sera considérée comme faite quand toutes les questions auront une réponse."}
+                    Merci ! Votre questionnaire est complet et transmis à votre AMO.
+                  </p>
+                )}
+                {saved === "brouillon" && (
+                  <p className="se-small" style={{ color: "var(--fg2)", marginTop: 10, marginBottom: 0 }}>
+                    Brouillon enregistré - l'enquête sera considérée comme faite quand vous aurez transmis le
+                    questionnaire complet.
                   </p>
                 )}
                 {save.isError && (
@@ -459,9 +633,22 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                       <span className="v">{fmtEuro(rfrFoyer)} / an</span>
                     </div>
                   )}
+                  <div className="kv">
+                    <span className="k">Statut du profil</span>
+                    <span className="v">
+                      {profilStatut === "verifie" && profilVerifieLe ? (
+                        <Badge kind="success" dot>Vérifié le {fmtDate(profilVerifieLe)}</Badge>
+                      ) : (
+                        <Badge kind="warn">Déclaratif</Badge>
+                      )}
+                    </span>
+                  </div>
                   <p className="se-small" style={{ marginTop: 12, marginBottom: 0 }}>
                     Catégorie déterminée selon les plafonds Anah {bareme?.millesime ?? ""}
                     {bareme?.zone === "hors_idf" ? " (hors Île-de-France)" : bareme?.zone === "idf" ? " (Île-de-France)" : ""}.
+                    {profilStatut === "verifie"
+                      ? " Votre AMO l'a vérifiée sur votre avis d'imposition."
+                      : " Elle repose sur vos déclarations : votre AMO la vérifiera sur votre avis d'imposition (Mes documents)."}{" "}
                     Votre plan de financement individuel utilise ce profil.
                   </p>
                 </div>

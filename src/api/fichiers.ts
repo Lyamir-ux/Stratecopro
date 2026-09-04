@@ -101,31 +101,42 @@ export function useFichiers(coproId: string | undefined) {
 
 /** Dépôt d'un fichier hors hook - sert aussi à l'import des documents de
  *  passation à la création du dossier (NewCoproDialog). */
-export async function uploadFichierDirect(coproId: string, file: File, dossier: string, nameOriginal?: string) {
+export async function uploadFichierDirect(
+  coproId: string,
+  file: File,
+  dossier: string,
+  nameOriginal?: string
+): Promise<{ id: string }> {
   const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${coproId}/${dossier.replace(/[^a-zA-Z0-9-]/g, "_")}/${Date.now()}-${safe}`;
   const { error: eUp } = await supabase.storage.from("copro-files").upload(path, file);
   if (eUp) throw eUp;
   const { data: session } = await supabase.auth.getSession();
-  const { error: eDb } = await supabase.from("fichiers").insert({
-    copro_id: coproId,
-    dossier,
-    name: file.name,
-    name_original: nameOriginal && nameOriginal !== file.name ? nameOriginal : null,
-    storage_path: path,
-    size: file.size,
-    mime: file.type || null,
-    uploaded_by: session.session?.user.id ?? null,
-  });
+  const { data: row, error: eDb } = await supabase
+    .from("fichiers")
+    .insert({
+      copro_id: coproId,
+      dossier,
+      name: file.name,
+      name_original: nameOriginal && nameOriginal !== file.name ? nameOriginal : null,
+      storage_path: path,
+      size: file.size,
+      mime: file.type || null,
+      uploaded_by: session.session?.user.id ?? null,
+    })
+    .select("id")
+    .single();
   if (eDb) throw eDb;
+  return { id: row.id };
 }
 
 export function useUploadFichier(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
     // nameOriginal : nom du fichier avant renommage assisté (traçabilité)
-    mutationFn: ({ file, dossier, nameOriginal }: { file: File; dossier: string; nameOriginal?: string }) =>
-      uploadFichierDirect(coproId, file, dossier, nameOriginal),
+    mutationFn: async ({ file, dossier, nameOriginal }: { file: File; dossier: string; nameOriginal?: string }) => {
+      await uploadFichierDirect(coproId, file, dossier, nameOriginal);
+    },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["fichiers", coproId] }),
   });
 }

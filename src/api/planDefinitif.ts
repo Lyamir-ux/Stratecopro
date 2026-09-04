@@ -13,8 +13,49 @@ import {
   type PlanIndividuelPf,
 } from "@/lib/finance";
 import { makeDefaultParams } from "./scenarios";
+import { uploadFichierDirect } from "./fichiers";
+import { construireNomFichier } from "@/lib/nommage";
+import { exportPlanDefinitif } from "@/lib/finance/exportPlanDefinitif";
 
 export type PlanDefinitif = Tables<"plans_definitifs">;
+
+const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+/**
+ * Archive un classeur du PF définitif dans l'onglet Fichiers (dossier « Plans
+ * de financement »), sous la nomenclature de la plateforme - feedback Théa
+ * 03/09/2026 : le classeur importé puis validé n'était archivé nulle part.
+ * `file` : classeur source tel qu'importé ; sinon export de l'état `data`.
+ */
+export async function archiverClasseurPf(input: {
+  coproId: string;
+  coproNom: string;
+  data: PlanDefinitifData;
+  version: number;
+  etat: "source import" | "validé" | "état courant";
+  file?: File;
+}): Promise<{ id: string }> {
+  let file = input.file;
+  if (!file) {
+    const XLSX = await import("xlsx");
+    const wb = exportPlanDefinitif(input.data);
+    const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+    file = new File([buf], "pf.xlsx", { type: MIME_XLSX });
+  }
+  const nom = construireNomFichier(
+    {
+      prefixe: input.coproNom,
+      type: "plan_financement",
+      objet: `PF définitif ${input.data.infos.nomCopro || input.coproNom} v${input.version}`,
+      emetteur: "Strat Eco",
+      date: new Date().toISOString().slice(0, 10),
+      etat: input.etat,
+    },
+    "xlsx"
+  );
+  const renomme = new File([file], nom, { type: file.type || MIME_XLSX });
+  return uploadFichierDirect(input.coproId, renomme, "Plans de financement", input.file ? input.file.name : undefined);
+}
 
 export function usePlansDefinitifs(coproId: string | undefined) {
   return useQuery({
@@ -53,7 +94,14 @@ function invalidate(qc: ReturnType<typeof useQueryClient>, coproId: string, plan
 export function useCreatePlanDefinitif(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { nom: string; data: PlanDefinitifData; sourceFichier?: string }) => {
+    mutationFn: async (input: {
+      nom: string;
+      data: PlanDefinitifData;
+      sourceFichier?: string;
+      /** Classeur importé : archivé tel quel dans l'onglet Fichiers. */
+      file?: File;
+      coproNom?: string;
+    }) => {
       const { data: row, error } = await supabase
         .from("plans_definitifs")
         .insert({
@@ -66,9 +114,58 @@ export function useCreatePlanDefinitif(coproId: string) {
         .select()
         .single();
       if (error) throw error;
+      if (input.file) {
+        // Archivage du classeur source - meilleur effort : le plan est créé même
+        // si le dépôt échoue (l'AMO peut réarchiver depuis l'éditeur).
+        try {
+          const f = await archiverClasseurPf({
+            coproId,
+            coproNom: input.coproNom ?? input.data.infos.nomCopro ?? "copro",
+            data: input.data,
+            version: 1,
+            etat: "source import",
+            file: input.file,
+          });
+          await supabase.from("plans_definitifs").update({ source_fichier_id: f.id }).eq("id", row.id);
+        } catch {
+          /* archivage facultatif */
+        }
+      }
       return row;
     },
-    onSuccess: () => invalidate(qc, coproId),
+    onSuccess: () => {
+      invalidate(qc, coproId);
+      void qc.invalidateQueries({ queryKey: ["fichiers", coproId] });
+    },
+  });
+}
+
+/** Archive l'état courant d'un plan (export .xlsx) dans l'onglet Fichiers, sans changer son statut. */
+export function useArchiverPlanDefinitif(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { plan: PlanDefinitif; coproNom: string }) => {
+      const data = readPlanDefinitif(input.plan.data);
+      const f = await archiverClasseurPf({
+        coproId,
+        coproNom: input.coproNom,
+        data,
+        version: input.plan.version,
+        etat: input.plan.statut === "valide" ? "validé" : "état courant",
+      });
+      if (input.plan.statut === "valide") {
+        const { error } = await supabase
+          .from("plans_definitifs")
+          .update({ valide_fichier_id: f.id, valide_le: input.plan.valide_le ?? new Date().toISOString() })
+          .eq("id", input.plan.id);
+        if (error) throw error;
+      }
+      return f;
+    },
+    onSuccess: (_r, v) => {
+      invalidate(qc, coproId, v.plan.id);
+      void qc.invalidateQueries({ queryKey: ["fichiers", coproId] });
+    },
   });
 }
 
@@ -106,7 +203,7 @@ export function useUpdatePlanDefinitif(coproId: string) {
 export function useValiderPlanDefinitif(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { id: string; valider: boolean }) => {
+    mutationFn: async (input: { id: string; valider: boolean; coproNom?: string }) => {
       if (input.valider) {
         const { error: errAutres } = await supabase
           .from("plans_definitifs")
@@ -127,12 +224,32 @@ export function useValiderPlanDefinitif(coproId: string) {
         // remontent sur le dossier (cartes du tableau de bord, hero, exports).
         const { data: row, error: errRow } = await supabase
           .from("plans_definitifs")
-          .select("data, resultat")
+          .select("data, resultat, version, nom")
           .eq("id", input.id)
           .single();
         if (errRow) throw errRow;
-        const infos = readPlanDefinitif(row.data).infos;
+        const pdata = readPlanDefinitif(row.data);
+        const infos = pdata.infos;
         const res = row.resultat as unknown as PlanDefinitifResult | null;
+
+        // Archivage et versionnage automatiques de l'état validé (feedback
+        // Théa 03/09/2026) : un export .xlsx daté par validation dans Fichiers.
+        try {
+          const version = (row.version ?? 0) + 1;
+          const f = await archiverClasseurPf({
+            coproId,
+            coproNom: input.coproNom ?? infos.nomCopro ?? "copro",
+            data: pdata,
+            version,
+            etat: "validé",
+          });
+          await supabase
+            .from("plans_definitifs")
+            .update({ valide_fichier_id: f.id, valide_le: new Date().toISOString(), version })
+            .eq("id", input.id);
+        } catch {
+          /* l'archivage ne bloque pas la validation */
+        }
         const lireEtiquette = (s: string): string | null => {
           const l = (s ?? "").trim().toUpperCase().slice(0, 1);
           return l && "ABCDEFG".includes(l) ? l : null;
@@ -163,6 +280,7 @@ export function useValiderPlanDefinitif(coproId: string) {
       invalidate(qc, coproId, v.id);
       void qc.invalidateQueries({ queryKey: ["copro", coproId] });
       void qc.invalidateQueries({ queryKey: ["copros"] });
+      void qc.invalidateQueries({ queryKey: ["fichiers", coproId] });
     },
   });
 }
@@ -260,7 +378,8 @@ export function usePartagerPfCopros(coproId: string) {
         ecoPtz: true,
         ecoPtzDuree: pvData.params.dureeEcoPtzAns,
       };
-      const nom = `PF définitif - ${input.plan.nom}`;
+      // Le nom du plan importé commence déjà par « PF définitif - … » : pas de double préfixe.
+      const nom = /^PF d[ée]finitif/i.test(input.plan.nom) ? input.plan.nom : `PF définitif - ${input.plan.nom}`;
 
       let scenarioId: string;
       if (existant) {

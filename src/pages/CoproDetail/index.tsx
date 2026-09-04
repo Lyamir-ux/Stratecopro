@@ -15,6 +15,7 @@ import { PrestatairesTab } from "./PrestatairesTab";
 import { DonneesTab } from "./DonneesTab";
 import { FinancementTab } from "./FinancementTab";
 import { EnqueteTab } from "./EnqueteTab";
+import { CoproprietairesTab } from "./CoproprietairesTab";
 import { FichiersTab } from "./FichiersTab";
 import { CommunicationsTab } from "./CommunicationsTab";
 
@@ -23,6 +24,7 @@ const TABS = [
   { id: "donnees", label: "Données de la copro" },
   { id: "financement", label: "Plans de financement" },
   { id: "enquete", label: "Enquête sociale" },
+  { id: "coproprietaires", label: "Copropriétaires" },
   { id: "prestataires", label: "Prestataires" },
   { id: "fichiers", label: "Fichiers" },
   { id: "communications", label: "Communications" },
@@ -147,7 +149,10 @@ export default function CoproDetail() {
               <div className="v">{s?.batiments ?? 0}</div>
               <div className="l">{c.denomination_batiments === "entree" ? "entrées" : "bâtiments"}</div>
             </div>
-            <div className="dh-stat">
+            <div
+              className="dh-stat"
+              title={`${s?.taches_faites ?? 0} tâche${(s?.taches_faites ?? 0) > 1 ? "s" : ""} faite${(s?.taches_faites ?? 0) > 1 ? "s" : ""} sur ${s?.taches_total ?? 0} (plan de tâches de l'onglet Projet, toutes phases)`}
+            >
               <div className="v">{avancementAmo(c)}%</div>
               <div className="l">avancement</div>
             </div>
@@ -213,6 +218,7 @@ export default function CoproDetail() {
       {tab === "donnees" && <DonneesTab c={c} />}
       {tab === "financement" && <FinancementTab c={c} />}
       {tab === "enquete" && <EnqueteTab c={c} />}
+      {tab === "coproprietaires" && <CoproprietairesTab c={c} />}
       {tab === "prestataires" && <PrestatairesTab c={c} />}
       {tab === "fichiers" && <FichiersTab c={c} />}
       {tab === "communications" && <CommunicationsTab c={c} />}

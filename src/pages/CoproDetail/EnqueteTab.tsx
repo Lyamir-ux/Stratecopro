@@ -10,7 +10,7 @@ import { fmtDate } from "@/lib/format";
 import type { Profil } from "@/lib/finance";
 import { useBareme } from "@/api/scenarios";
 import { useDonnees } from "@/api/donnees";
-import { useEnquete, useReponses, useSaveReponse, useUpdateEnquete } from "@/api/enquete";
+import { useEnquete, useReponses, useSaveReponse, useUpdateEnquete, useVerifierProfil } from "@/api/enquete";
 import {
   SECTIONS,
   describeType,
@@ -40,12 +40,20 @@ function ReponseRow({
 }: {
   coproprietaireId: string;
   nom: string;
-  existing: { nb_personnes: number | null; statut_occupation: string | null; rfr: number | null; profil_mpr: string | null } | null;
+  existing: {
+    nb_personnes: number | null;
+    statut_occupation: string | null;
+    rfr: number | null;
+    profil_mpr: string | null;
+    profil_statut?: string;
+    profil_verifie_le?: string | null;
+  } | null;
   enqueteId: string;
   coproId: string;
 }) {
   const { data: bareme } = useBareme();
   const save = useSaveReponse(enqueteId, coproId);
+  const verifier = useVerifierProfil(enqueteId, coproId);
   const [nb, setNb] = useState<string>(existing?.nb_personnes?.toString() ?? "");
   const [statut, setStatut] = useState<string>(existing?.statut_occupation ?? "");
   const [rfr, setRfr] = useState<string>(existing?.rfr?.toString() ?? "");
@@ -53,15 +61,19 @@ function ReponseRow({
     nb !== (existing?.nb_personnes?.toString() ?? "") ||
     statut !== (existing?.statut_occupation ?? "") ||
     rfr !== (existing?.rfr?.toString() ?? "");
+  const verifie = existing?.profil_statut === "verifie" && !!existing?.profil_verifie_le;
 
   const doSave = () => {
     if (!bareme) return;
+    // Saisie AMO d'après l'avis d'imposition : le profil reste au statut courant
+    // (vérifié si déjà vérifié) ; la case « Vérifié » se coche à part.
     void save.mutateAsync({
       coproprietaireId,
       nbPersonnes: nb === "" ? null : Number(nb),
       statutOccupation: statut || null,
       rfr: rfr === "" ? null : Number(rfr),
       bareme,
+      verifie,
     });
   };
 
@@ -90,6 +102,24 @@ function ReponseRow({
             <span style={{ width: 10, height: 10, borderRadius: "50%", background: meta.color }}></span>
             {meta.label}
           </span>
+        ) : (
+          <span style={{ color: "var(--fg-muted)" }}>-</span>
+        )}
+      </td>
+      <td>
+        {profil ? (
+          <label
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}
+            title={verifie ? `Vérifié sur l'avis d'imposition le ${fmtDate(existing?.profil_verifie_le)}` : "Déclaré par le copropriétaire (ou saisi) - cochez après contrôle de l'avis d'imposition"}
+          >
+            <input
+              type="checkbox"
+              checked={verifie}
+              disabled={verifier.isPending}
+              onChange={(e) => verifier.mutate({ coproprietaireId, verifie: e.target.checked })}
+            />
+            {verifie ? "Vérifié" : "Déclaratif"}
+          </label>
         ) : (
           <span style={{ color: "var(--fg-muted)" }}>-</span>
         )}
@@ -384,8 +414,9 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
                       <th>Copropriétaire</th>
                       <th>Foyer</th>
                       <th>Occupation</th>
-                      <th>RFR (€)</th>
+                      <th title="Revenu fiscal de référence de l'avis d'imposition N-1">RFR avis N-1 (€)</th>
                       <th>Profil</th>
+                      <th title="Déclaratif = déclaré par le copropriétaire ; Vérifié = contrôlé par l'AMO sur l'avis d'imposition">Statut</th>
                       <th></th>
                     </tr>
                   </thead>

@@ -134,3 +134,66 @@ export function computePlansIndividuelsPf(input: {
 
   return { plans, manquants };
 }
+
+/** Lot tel que servi par useDonnees (sous-ensemble utile à la répartition). */
+export interface LotPourRepartition {
+  coproprietaire_id: string | null;
+  coproprietaire?: { nom: string } | null;
+  tantiemes: Record<string, number>;
+}
+
+export interface RepartitionPfCopro {
+  plans: PlanIndividuelPf[];
+  manquants: ItemRepartitionPf[];
+  items: ItemRepartitionPf[];
+  /** Code de la clé unique de la copro (null si plusieurs clés). */
+  cleUnique: string | null;
+  /** Clé de référence pour la mise à l'échelle par lot au portail (clé unique, sinon clé par défaut). */
+  cleRef: string | null;
+  totauxCles: Record<string, number>;
+  parCopro: Map<string, CoproTantiemes>;
+  cleParItem: Record<string, string>;
+}
+
+/**
+ * Répartition complète d'un PF définitif entre les copropriétaires d'après les
+ * lots importés : tantièmes sommés par copropriétaire et par clé, clé unique
+ * forcée sur toutes les lignes, sinon clé portée par chaque ligne du PF.
+ * Une seule fonction pour l'onglet Financement, la vue Copropriétaires et les
+ * exports : les trois lisent les mêmes montants, au centime.
+ */
+export function repartirPfDepuisLots(
+  data: PlanDefinitifData,
+  r: PlanDefinitifResult,
+  lots: LotPourRepartition[],
+  cles: { code: string; is_default: boolean }[]
+): RepartitionPfCopro {
+  const items = itemsARepartirPf(data, r);
+  const totauxCles: Record<string, number> = {};
+  const parCopro = new Map<string, CoproTantiemes>();
+  for (const lot of lots) {
+    for (const [code, t] of Object.entries(lot.tantiemes)) totauxCles[code] = (totauxCles[code] ?? 0) + t;
+    if (!lot.coproprietaire_id) continue;
+    const co =
+      parCopro.get(lot.coproprietaire_id) ??
+      { coproprietaireId: lot.coproprietaire_id, nom: lot.coproprietaire?.nom ?? "-", tantiemes: {} };
+    for (const [code, t] of Object.entries(lot.tantiemes)) co.tantiemes[code] = (co.tantiemes[code] ?? 0) + t;
+    parCopro.set(lot.coproprietaire_id, co);
+  }
+  const cleUnique = cles.length === 1 ? cles[0].code : null;
+  const cleParItem: Record<string, string> = cleUnique
+    ? Object.fromEntries(items.map((it) => [it.id, cleUnique]))
+    : {};
+  const { plans, manquants } = computePlansIndividuelsPf({
+    items,
+    cleParItem,
+    copros: [...parCopro.values()],
+    totauxCles,
+    totalAides: r.totalAides,
+    primeCee: r.primeCee,
+    fondsTravaux: data.params.fondsTravaux,
+    totalOperationTtc: r.totalOperationTtc,
+  });
+  const cleRef = cleUnique ?? cles.find((k) => k.is_default)?.code ?? cles[0]?.code ?? null;
+  return { plans, manquants, items, cleUnique, cleRef, totauxCles, parCopro, cleParItem };
+}

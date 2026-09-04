@@ -1153,8 +1153,12 @@ export type Database = {
           id: string
           nb_personnes: number | null
           profil_mpr: string | null
+          profil_statut: string
+          profil_verifie_le: string | null
+          profil_verifie_par: string | null
           reponses: Json | null
           rfr: number | null
+          rfr_n2: number | null
           statut_occupation: string | null
           updated_at: string
         }
@@ -1164,8 +1168,12 @@ export type Database = {
           id?: string
           nb_personnes?: number | null
           profil_mpr?: string | null
+          profil_statut?: string
+          profil_verifie_le?: string | null
+          profil_verifie_par?: string | null
           reponses?: Json | null
           rfr?: number | null
+          rfr_n2?: number | null
           statut_occupation?: string | null
           updated_at?: string
         }
@@ -1175,8 +1183,12 @@ export type Database = {
           id?: string
           nb_personnes?: number | null
           profil_mpr?: string | null
+          profil_statut?: string
+          profil_verifie_le?: string | null
+          profil_verifie_par?: string | null
           reponses?: Json | null
           rfr?: number | null
+          rfr_n2?: number | null
           statut_occupation?: string | null
           updated_at?: string
         }
@@ -1942,9 +1954,13 @@ export type Database = {
           nom: string
           resultat: Json | null
           source_fichier: string | null
+          source_fichier_id: string | null
           statut: string
           updated_at: string
           updated_by: string | null
+          valide_fichier_id: string | null
+          valide_le: string | null
+          version: number
         }
         Insert: {
           copro_id: string
@@ -1954,9 +1970,13 @@ export type Database = {
           nom?: string
           resultat?: Json | null
           source_fichier?: string | null
+          source_fichier_id?: string | null
           statut?: string
           updated_at?: string
           updated_by?: string | null
+          valide_fichier_id?: string | null
+          valide_le?: string | null
+          version?: number
         }
         Update: {
           copro_id?: string
@@ -1966,9 +1986,13 @@ export type Database = {
           nom?: string
           resultat?: Json | null
           source_fichier?: string | null
+          source_fichier_id?: string | null
           statut?: string
           updated_at?: string
           updated_by?: string | null
+          valide_fichier_id?: string | null
+          valide_le?: string | null
+          version?: number
         }
         Relationships: [
           {

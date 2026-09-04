@@ -17,7 +17,8 @@ export type QuestionType =
   | "multi" // QCM à choix multiples
   | "lotParent"; // sélection d'un lot principal du copropriétaire
 
-/** Condition d'affichage : la question ne se pose que si `qid` a l'une des valeurs `vals` (ET entre conditions). */
+/** Condition d'affichage : la question ne se pose que si `qid` a l'une des valeurs `vals` (ET entre conditions).
+ *  Une réponse numérique est comparée à sa forme texte (ex. vals: ["0"] pour un montant nul). */
 export interface Condition {
   qid: string;
   vals: string[];
@@ -68,6 +69,8 @@ export const TYPES_COPRO = [
 export const USAGES_LOT = ["Habitation", "Commerce", "Stationnement", "Garage", "Cave", "Box", "Autre"];
 
 const SCI = ["SCI soumise à l'impôt sur le revenu", "SCI soumise à l'impôt sur les sociétés"];
+/** Questions de ressources : personnes physiques et indivisions (posées tant que le type n'est pas répondu). */
+const MENAGE: Condition = { qid: "type-coproprietaire", vals: ["Personne physique", "Indivision"], defaut: true };
 const HAB = { qid: "usage-lot", vals: ["Habitation"] };
 const HAB_COM = { qid: "usage-lot", vals: ["Habitation", "Commerce"] };
 
@@ -85,15 +88,41 @@ export const CATALOGUE: CatalogueQuestion[] = [
   // ========== Situation & aides ==========
   {
     id: "nb-personnes-foyer", section: "situation", tag: "Personnes composant le ménage", q: "Combien de personnes composent votre ménage ?", type: "nombre",
-    cond: [{ qid: "type-coproprietaire", vals: ["Personne physique", "Indivision"], defaut: true }],
+    cond: [MENAGE],
     aide: "Toutes les personnes figurant sur le ou les avis d'imposition du ménage. Avec le revenu fiscal de référence, cette réponse détermine votre profil d'aides (plafonds Anah).",
     locked: true, defaultOn: true,
   },
   {
-    id: "rfr-foyer", section: "situation", tag: "Revenu fiscal de référence du ménage", q: "Quel est le revenu fiscal de référence de votre ménage ?", type: "montant",
-    cond: [{ qid: "type-coproprietaire", vals: ["Personne physique", "Indivision"], defaut: true }],
-    aide: "Ligne « Revenu fiscal de référence » de l'avis d'imposition (total du ménage si plusieurs avis). Donnée confidentielle, visible uniquement par l'AMO - elle détermine automatiquement votre catégorie d'aides (plafonds Anah).",
+    id: "composition-menage", section: "situation", tag: "Composition du ménage", q: "Quelle est la composition de votre ménage (foyer fiscal) ?", type: "choix",
+    options: ["Personne seule", "Couple sans enfant", "Couple avec enfant(s)", "Famille monoparentale", "Autre (colocation, hébergement familial…)"],
+    cond: [MENAGE],
+    aide: "Composition du foyer fiscal telle qu'elle figure sur l'avis d'imposition. Avec le nombre de personnes et le revenu fiscal de référence, elle conditionne le barème Anah.",
     locked: true, defaultOn: true,
+  },
+  {
+    id: "nb-personnes-charge", section: "situation", tag: "Personnes à charge", q: "Combien de personnes à charge (enfants, ascendants…) figurent sur votre avis d'imposition ?", type: "nombre",
+    cond: [MENAGE],
+    aide: "Personnes à charge au sens fiscal (rubrique « personnes à charge » de l'avis d'imposition). Ce nombre est compris dans le nombre de personnes du ménage.",
+    locked: true, defaultOn: true,
+  },
+  {
+    id: "rfr-foyer", section: "situation", tag: "Revenu fiscal de référence (RFR) de l'avis d'imposition N-1", q: "Quel est le revenu fiscal de référence (RFR) de l'avis d'imposition N-1 de votre ménage ?", type: "montant",
+    cond: [MENAGE],
+    aide: "Ligne « Revenu fiscal de référence » du dernier avis d'imposition reçu (avis N-1, portant sur les revenus de l'année N-2) - total du ménage si plusieurs avis. Donnée confidentielle, visible uniquement par l'AMO : c'est ce RFR que l'Anah retient pour déterminer votre catégorie d'aides.",
+    locked: true, defaultOn: true,
+  },
+  {
+    id: "rfr-zero-motif", section: "situation", tag: "Justification d'un RFR nul", q: "Vous déclarez un revenu fiscal de référence de 0 € : pour quelle raison ?", type: "choix",
+    options: ["Sans activité professionnelle", "Étudiant(e)", "Revenus perçus à l'étranger, non imposables en France", "Première déclaration / changement de situation", "Autre (précisez)"], precision: ["Autre (précisez)"],
+    cond: [MENAGE, { qid: "rfr-foyer", vals: ["0"] }],
+    aide: "Un RFR nul est possible mais doit être justifié : l'Anah demande un justificatif de situation.",
+    locked: true, defaultOn: true,
+  },
+  {
+    id: "rfr-n2", section: "situation", tag: "Revenu fiscal de référence N-2", q: "Quel est le revenu fiscal de référence N-2 de votre ménage (avant-dernier avis d'imposition) ?", type: "montant",
+    cond: [MENAGE],
+    aide: "RFR de l'avant-dernier avis d'imposition. L'Anah peut le demander en cas de baisse de revenus ou de changement de situation. Donnée confidentielle, visible uniquement par l'AMO.",
+    defaultOn: true,
   },
   {
     id: "accord-visite", section: "situation", tag: "Accord pour la visite", q: "Seriez-vous d'accord pour qu'un de vos lots fasse l'objet d'une visite dans le cadre du projet de rénovation ?", type: "choix",

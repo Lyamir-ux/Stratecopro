@@ -202,8 +202,14 @@ export interface IndivBreakdown {
   reste: number;
   /** true = calculée depuis plans_individuels (étape 7 AMO), false = estimation prorata. */
   exact: boolean;
-  /** profil utilisé pour l'estimation quand l'enquête n'est pas remplie */
-  profilEstime: Profil | null;
+  /**
+   * true = l'aide individuelle MaPrimeRénov' n'est pas déterminable : aucun
+   * profil de ressources (enquête sociale non renseignée) - le portail affiche
+   * « à déterminer » et aucune prime n'est déduite (feedback Théa 03/09/2026).
+   * Avant : un ménage « modeste » était présumé, ce qui faisait apparaître une
+   * aide individuelle sans aucune donnée de ressources.
+   */
+  mprIndetermine: boolean;
 }
 
 /**
@@ -229,7 +235,9 @@ export function computeIndiv(
   if (plan && Number(plan.tantiemes) > 0) {
     const f = tantiemes / Number(plan.tantiemes);
     const quotePart = Number(plan.quote_part) * f;
-    const mprIndiv = Number(plan.mpr_indiv) * f;
+    // Sans profil de ressources, aucune prime individuelle n'est affichée même
+    // si le plan en portait une (calculée sur un profil depuis effacé).
+    const mprIndiv = profil ? Number(plan.mpr_indiv) * f : 0;
     const cee = Number(plan.cee_part) * f;
     const subvColl = Number(plan.subv_coll_part) * f;
     return {
@@ -241,14 +249,13 @@ export function computeIndiv(
       resteAvantTravaux: Math.max(0, quotePart - mprIndiv - subvColl),
       reste: Math.max(0, quotePart - mprIndiv - cee - subvColl),
       exact: true,
-      profilEstime: null,
+      mprIndetermine: !profil,
     };
   }
   const coutTotal = params.travaux + params.honoraires + params.aleas;
   const frac = tantiemes / (params.totalCle || 1000);
-  const p = profil ?? "Jaune";
   const quotePart = coutTotal * frac;
-  const mprIndiv = params.primeIndiv[p] ?? 0;
+  const mprIndiv = profil ? params.primeIndiv[profil] ?? 0 : 0;
   const cee = params.cee * frac;
   const subvColl = (mprCopro + params.fonds) * frac;
   return {
@@ -260,7 +267,27 @@ export function computeIndiv(
     resteAvantTravaux: Math.max(0, quotePart - mprIndiv - subvColl),
     reste: Math.max(0, quotePart - mprIndiv - cee - subvColl),
     exact: false,
-    profilEstime: profil ? null : "Jaune",
+    mprIndetermine: !profil,
+  };
+}
+
+/** Statut du profil de ressources tel qu'affiché au copropriétaire (et dans les exports AMO). */
+export interface ProfilMeta {
+  /** null = aucun profil (enquête non renseignée) */
+  profil: Profil | null;
+  statut: "declaratif" | "verifie" | null;
+  /** date de la déclaration (enquête) ou de la vérification AMO */
+  date: string | null;
+}
+
+export function profilMetaDepuisReponse(reponse: Tables<"enquete_reponses"> | null | undefined): ProfilMeta {
+  const profil = (reponse?.profil_mpr as Profil | null) ?? null;
+  if (!profil || !reponse) return { profil: null, statut: null, date: null };
+  const verifie = reponse.profil_statut === "verifie" && !!reponse.profil_verifie_le;
+  return {
+    profil,
+    statut: verifie ? "verifie" : "declaratif",
+    date: verifie ? reponse.profil_verifie_le : reponse.updated_at,
   };
 }
 
@@ -313,6 +340,8 @@ export function useSaveMaReponse(enqueteId: string, coproprietaireId: string) {
       nbPersonnes: number | null;
       statutOccupation: string | null;
       rfr: number | null;
+      /** Revenu fiscal de référence N-2 (avant-dernier avis) - informatif pour l'Anah. */
+      rfrN2?: number | null;
       bareme: Bareme | null;
     }): Promise<Profil | null> => {
       const profil =
@@ -327,8 +356,12 @@ export function useSaveMaReponse(enqueteId: string, coproprietaireId: string) {
           nb_personnes: input.nbPersonnes,
           statut_occupation: input.statutOccupation,
           rfr: input.rfr,
+          rfr_n2: input.rfrN2 ?? null,
           // ne pas écraser un profil existant (saisie AMO) quand il n'est pas calculable
           ...(profil ? { profil_mpr: profil } : {}),
+          // Toute déclaration du copropriétaire repasse le profil en DÉCLARATIF :
+          // l'AMO le revérifie sur l'avis d'imposition (feedback Théa 03/09/2026).
+          ...(profil ? { profil_statut: "declaratif", profil_verifie_le: null, profil_verifie_par: null } : {}),
         },
         { onConflict: "enquete_id,coproprietaire_id" }
       );

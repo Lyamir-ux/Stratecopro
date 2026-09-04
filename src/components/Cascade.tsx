@@ -5,6 +5,8 @@ interface Row {
   l: string;
   v: number;
   k?: "primary" | "blue" | "dark";
+  /** Affiché à la place du montant (ex. « à déterminer ») - la barre reste vide. */
+  texte?: string;
 }
 
 const COLOR: Record<string, string> = {
@@ -34,12 +36,12 @@ export function Cascade({ total, rows, reste }: { total: Row; rows: Row[]; reste
             <span className="cr-lbl">
               <span className="sw" style={{ background: COLOR[r.k ?? "primary"] }}></span>− {r.l}
             </span>
-            <span className="cr-val minus">− {fmtEuro(r.v)}</span>
+            <span className="cr-val minus">{r.texte ? r.texte : "− " + fmtEuro(r.v)}</span>
           </div>
           <div className="casc-track">
             <i
               style={{
-                width: (total.v > 0 ? Math.max(3, (r.v / total.v) * 100) : 3) + "%",
+                width: (r.texte ? 0 : total.v > 0 ? Math.max(3, (r.v / total.v) * 100) : 3) + "%",
                 background: COLOR[r.k ?? "primary"],
               }}
             ></i>

@@ -9,7 +9,7 @@ import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { useCopro } from "@/api/copros";
 import { useDonnees } from "@/api/donnees";
-import { usePlanDefinitif, useUpdatePlanDefinitif, useValiderPlanDefinitif } from "@/api/planDefinitif";
+import { useArchiverPlanDefinitif, usePlanDefinitif, useUpdatePlanDefinitif, useValiderPlanDefinitif } from "@/api/planDefinitif";
 import { fmtEuro, fmtEuroFull } from "@/lib/format";
 import {
   computePlanDefinitif,
@@ -113,6 +113,7 @@ export default function PlanDefinitifPage() {
   const { data: plan, isLoading } = usePlanDefinitif(planId);
   const update = useUpdatePlanDefinitif(coproId ?? "");
   const valider = useValiderPlanDefinitif(coproId ?? "");
+  const archiver = useArchiverPlanDefinitif(coproId ?? "");
 
   const [data, setData] = useState<PlanDefinitifData | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -190,7 +191,14 @@ export default function PlanDefinitifPage() {
         <h1 style={{ margin: 0, fontSize: 20, fontFamily: "var(--font-display)" }}>{plan.nom}</h1>
         {plan.source_fichier && (
           <span className="se-small" style={{ color: "var(--fg-muted)" }}>
-            importé de « {plan.source_fichier} »
+            importé de « {plan.source_fichier} »{plan.source_fichier_id ? " (archivé dans Fichiers)" : ""}
+          </span>
+        )}
+        {plan.statut === "valide" && (
+          <span className="se-small" style={{ color: plan.valide_fichier_id ? "var(--fg-muted)" : "var(--color-warning-700)" }}>
+            {plan.valide_fichier_id
+              ? `v${plan.version} archivée${plan.valide_le ? ` le ${new Date(plan.valide_le).toLocaleDateString("fr-FR")}` : ""}`
+              : "version validée non archivée"}
           </span>
         )}
         <span style={{ flex: 1 }}></span>
@@ -203,6 +211,15 @@ export default function PlanDefinitifPage() {
         <button className="se-btn se-btn-secondary btn-sm" onClick={doExport}>
           <Icon name="download" size={15} />
           Exporter .xlsx
+        </button>
+        <button
+          className="se-btn se-btn-ghost btn-sm"
+          disabled={dirty || archiver.isPending}
+          title="Dépose l'export .xlsx de l'état actuel dans l'onglet Fichiers (dossier Plans de financement), daté et versionné"
+          onClick={() => archiver.mutate({ plan, coproNom: c?.name ?? data.infos.nomCopro })}
+        >
+          <Icon name="folder" size={15} />
+          {archiver.isPending ? "Archivage…" : archiver.isSuccess ? "Archivé dans Fichiers" : "Archiver dans Fichiers"}
         </button>
         {plan.statut === "valide" ? (
           <button
@@ -222,7 +239,7 @@ export default function PlanDefinitifPage() {
                 ? "Enregistrez d'abord vos modifications pour pouvoir valider"
                 : "Valider ce plan : les panneaux du financement se remplissent automatiquement"
             }
-            onClick={() => valider.mutate({ id: plan.id, valider: true })}
+            onClick={() => valider.mutate({ id: plan.id, valider: true, coproNom: c?.name })}
           >
             <Icon name="checkCircle" size={15} />
             Valider
