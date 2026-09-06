@@ -456,9 +456,13 @@ function VueTableau({
 
 export function Portefeuille({
   copros,
+  syndicNom,
   onGestionnaire,
 }: {
   copros: SyndicCopro[];
+  /** Enseigne du syndic affichée à la suite du titre - on sait de quel
+   *  portefeuille on parle (feedback Amir 06/09). */
+  syndicNom?: string;
   /** Aperçu AMO : clic sur un gestionnaire = entrer dans son portefeuille. */
   onGestionnaire?: (key: string, nom: string) => void;
 }) {
@@ -553,7 +557,10 @@ export function Portefeuille({
     <div className="page syndic-dash fade" style={{ padding: 0 }}>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Votre portefeuille</h1>
+          <h1 className="page-title">
+            Votre portefeuille
+            {syndicNom && <span className="page-title-org"> - {syndicNom}</span>}
+          </h1>
           <p className="page-sub">
             {copros.length} copropriété{copros.length > 1 ? "s" : ""} · {totalLogements} logements ·{" "}
             {systemes.length} gestionnaire{systemes.length > 1 ? "s" : ""}

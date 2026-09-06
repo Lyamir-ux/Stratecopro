@@ -199,6 +199,8 @@ export default function Syndic() {
     sectionParam === "taches" ? "taches" : sectionParam === "messages" ? "messages" : "portefeuille";
   const { profile, session } = useAuth();
   const { data: copros, isLoading } = useCoprosSyndic();
+  const { data: monOrg } = useMonOrganisation();
+  const { data: organisations } = useOrganisations();
   // Filtre d'enseigne : réservé à l'aperçu AMO, qui voit tous les portefeuilles.
   const [orgId, setOrgIdBrut] = useState<string | null>(() => lireVue<string>("syndic-apercu-org"));
   // Vue gestionnaire (aperçu AMO) : clic sur un gestionnaire = exactement son
@@ -231,6 +233,18 @@ export default function Syndic() {
 
   const nonLus = compteNonLus(messagesSyndic, lectures, session?.user.id);
 
+  // Enseigne affichée à la suite du titre du portefeuille : l'organisation du
+  // syndic connecté ; en aperçu AMO, l'enseigne filtrée ; à défaut le syndic
+  // commun à tous les dossiers visibles (rien si plusieurs enseignes).
+  const syndicsVisibles = [...new Set(visibles.map((c) => c.syndic_name?.trim()).filter(Boolean))];
+  const syndicNom = !apercuAmo
+    ? monOrg?.nom ?? (syndicsVisibles.length === 1 ? syndicsVisibles[0] : undefined)
+    : orgId && orgId !== "__sans__"
+      ? organisations?.find((o) => o.id === orgId)?.nom
+      : syndicsVisibles.length === 1
+        ? syndicsVisibles[0]
+        : undefined;
+
   return (
     <SyndicShell
       active={section}
@@ -257,6 +271,7 @@ export default function Syndic() {
       {section === "portefeuille" && (
         <Portefeuille
           copros={visibles}
+          syndicNom={syndicNom}
           onGestionnaire={apercuAmo && !gest ? (key, nom) => setGest({ key, nom }) : undefined}
         />
       )}

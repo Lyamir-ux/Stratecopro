@@ -6,7 +6,9 @@
 -- Isolation : slugs préfixés demo-, tag « Démo commerciale », e-mails sur le
 -- domaine non routable @syndic-horizon-demo.fr. Purge : purge_demo_horizon.sql.
 -- La copro vitrine (LE PARC DES CIGOGNES) est peuplée par
--- seed_demo_horizon_vitrine.sql (généré) - à jouer APRÈS ce fichier.
+-- seed_demo_horizon_vitrine.sql (généré) - à jouer APRÈS ce fichier. Les trois
+-- dossiers en phase études reçoivent leurs montants (PF définitif validé) par
+-- seed_demo_horizon_etudes.sql (généré lui aussi) - à jouer APRÈS ce fichier.
 --
 -- Comptes (mot de passe commun Horizon-2026!, à changer si diffusé) :
 --   helene.marchal@syndic-horizon-demo.fr  directrice (voit les 7 dossiers)

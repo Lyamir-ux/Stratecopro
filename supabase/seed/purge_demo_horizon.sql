@@ -2,8 +2,8 @@
 -- Supprime les 7 copropriétés demo-*, tout ce qui s'y rattache (y compris ce
 -- que les commerciaux ont créé pendant leurs démos : fichiers, checklists,
 -- notes, bulletins…), les comptes @syndic-horizon-demo.fr et l'organisation.
--- Rejouer ensuite seed_demo_horizon.sql puis seed_demo_horizon_vitrine.sql
--- pour repartir d'un état propre.
+-- Rejouer ensuite seed_demo_horizon.sql, seed_demo_horizon_vitrine.sql puis
+-- seed_demo_horizon_etudes.sql pour repartir d'un état propre.
 --
 -- Ne touche à RIEN d'autre : tout est filtré par le slug demo-syndic-horizon
 -- et le domaine @syndic-horizon-demo.fr.

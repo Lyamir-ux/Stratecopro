@@ -42,6 +42,9 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
   if (isLoading || !data) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
   const { lots, batiments, coproprietaires, cles } = data;
+  const sansEmail = [...coproprietaires]
+    .filter((cp) => !cp.email?.trim())
+    .sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
   const totalLots = lots.length;
   // Usages présents dans le dossier (l'habitation reste toujours affichée)
   const usageCounts = USAGES_LOTS.map((u) => ({
@@ -233,6 +236,29 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
             <Icon name="users" size={18} />
             <h3>Copropriétaires &amp; lots</h3>
             <span style={{ flex: 1 }}></span>
+            {coproprietaires.length > 0 && (
+              // Qui n'a pas d'e-mail : compteur et liste des noms (feedback Amir 03/09)
+              <details className="dd-mini" title="Copropriétaires sans adresse e-mail">
+                <summary className={sansEmail.length ? "warn" : ""}>
+                  <Icon name={sansEmail.length ? "alert" : "check"} size={13} />
+                  E-mail manquant ({sansEmail.length})
+                  <Icon name="chevronDown" size={12} />
+                </summary>
+                <div className="dd-mini-pop">
+                  {sansEmail.length === 0 ? (
+                    <p className="se-small" style={{ margin: 0, color: "var(--fg-muted)" }}>
+                      Tous les copropriétaires ont une adresse e-mail.
+                    </p>
+                  ) : (
+                    <ul>
+                      {sansEmail.map((cp) => (
+                        <li key={cp.id}>{cp.nom}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </details>
+            )}
             <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
               {coproprietaires.length} copropriétaires · {totalLots} lots
             </span>
