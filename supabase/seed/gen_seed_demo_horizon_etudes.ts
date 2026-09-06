@@ -1,16 +1,17 @@
-// Générateur du seed « montants fictifs des copropriétés en phase études » de
-// l'organisation de démo commerciale SYNDIC HORIZON GRAND EST
-// (voir seed_demo_horizon.sql pour l'organisation, gen_seed_demo_horizon.ts
-// pour la copro vitrine LE PARC DES CIGOGNES).
+// Générateur du seed « montants fictifs » des copropriétés de l'organisation de
+// démo commerciale SYNDIC HORIZON GRAND EST qui n'en avaient pas : les trois
+// dossiers en phase études et RESIDENCE STANISLAS (travaux). Voir
+// seed_demo_horizon.sql pour l'organisation, gen_seed_demo_horizon.ts pour la
+// copro vitrine LE PARC DES CIGOGNES.
 //
 // Feedback Amir 06/09/2026 : le portefeuille /syndic n'affichait aucun montant
-// (travaux, honoraires) pour les trois dossiers en phase études. Le portefeuille
-// lit le total de l'opération TTC et les honoraires syndic dans le PF définitif
-// validé (vue copro_stats + useHonorairesSyndic) : on dote donc chaque dossier
-// en études d'un PF définitif validé fictif - c'est bien en phase études que le
-// PF est établi (tâche « Plans de financement généraux et individuels »), avant
-// la liasse pour l'AG. Pas de copropriétaires ni de plans individuels : le
-// partage au portail n'intervient qu'ensuite.
+// (travaux, honoraires) pour ces dossiers. Le portefeuille lit le total de
+// l'opération TTC et les honoraires syndic dans le PF définitif validé (vue
+// copro_stats + useHonorairesSyndic) : on dote donc chaque dossier d'un PF
+// définitif validé fictif - c'est en phase études que le PF est établi (tâche
+// « Plans de financement généraux et individuels »), avant la liasse pour l'AG ;
+// un dossier en travaux l'a forcément derrière lui. Pas de copropriétaires ni
+// de plans individuels : seule la vitrine porte le partage au portail.
 //
 // Comme pour la vitrine, on passe par le vrai moteur (computePlanDefinitif) pour
 // que data et resultat soient rigoureusement ce que l'app aurait produit.
@@ -370,7 +371,92 @@ const saintLivier: Copro = {
 };
 
 // ---------------------------------------------------------------------------
-// 4. Calcul et émission du SQL
+// 4. RESIDENCE STANISLAS - Nancy, 72 logements, F -> B (travaux en cours)
+// ---------------------------------------------------------------------------
+const stanislas: Copro = {
+  slug: "demo-residence-stanislas",
+  nomPlan: "PF définitif - Résidence Stanislas",
+  data: {
+    infos: {
+      nomCopro: "RESIDENCE STANISLAS",
+      adresse: "15 rue de la Commanderie 54000 Nancy",
+      nbLogements: 72,
+      nbLogementsEquiv: 72,
+      surfaceHabitable: 4890,
+      nbEtages: 8,
+      nbEntrees: 2,
+      typeChauffage: "Fioul collectif",
+      cepInitial: 356,
+      cepProjet: 114,
+      dispositifClimaxion: true,
+      etiquetteInitiale: "F",
+      etiquetteProjet: "B",
+    },
+    lots: [
+      {
+        numero: 1, titre: "Isolation thermique par l'exterieur", entreprise: "FACADES LORRAINES", remisePct: 1.5,
+        lignes: [
+          L(true, 5.5, 96000, "Echafaudages"),
+          L(true, 5.5, 486000, "Isolation thermique par l'exterieur en laine de roche 200 mm"),
+          L(true, 5.5, 78000, "Traitement des balcons et loggias"),
+          L(true, 5.5, 52000, "Garde-corps et separatifs"),
+          L(true, 5.5, 21000, "Bandeaux, appuis et departs"),
+          L(false, 10, 12800, "Soubassements"),
+          L(false, 10, 16500, "Remise en peinture des halls et cages"),
+        ],
+      },
+      {
+        numero: 2, titre: "Toiture terrasse", entreprise: "TOITURES DE MOSELLE", remisePct: 0,
+        lignes: [
+          L(true, 5.5, 21000, "Depose des complexes existants"),
+          L(true, 5.5, 108000, "Isolation polyurethane 220 mm et etancheite bicouche"),
+          L(true, 5.5, 15600, "Releves, acroteres et couvertines"),
+          L(false, 10, 8900, "Reprise des edicules et sorties de toiture"),
+        ],
+      },
+      {
+        numero: 3, titre: "Menuiseries exterieures", entreprise: "MENUISERIES DE LA SEILLE", remisePct: 0,
+        lignes: [
+          L(true, 5.5, 236000, "Remplacement des menuiseries des logements par PVC triple vitrage Uw 1,1"),
+          L(true, 5.5, 28000, "Volets roulants isolants"),
+          L(true, 5.5, 12400, "Portes de halls isolantes avec controle d'acces"),
+        ],
+      },
+      {
+        numero: 4, titre: "Chaufferie et reseaux", entreprise: "LORRAINE ENERGIES", remisePct: 0,
+        lignes: [
+          L(true, 5.5, 118000, "Raccordement au reseau de chaleur urbain et sous-station"),
+          L(true, 5.5, 14500, "Depose de la chaudiere fioul et neutralisation de la cuve"),
+          L(true, 5.5, 26000, "Calorifugeage des reseaux en sous-sol et gaines"),
+          L(true, 5.5, 34000, "Robinets thermostatiques, desembouage et equilibrage"),
+          L(false, 10, 6800, "Mise en securite des locaux techniques"),
+        ],
+      },
+      {
+        numero: 5, titre: "Ventilation", entreprise: "VENTIL'EST", remisePct: 0,
+        lignes: [
+          L(true, 5.5, 27000, "Caissons d'extraction hygroreglables en terrasse"),
+          L(true, 5.5, 34500, "Bouches hygroreglables et entrees d'air"),
+          L(true, 5.5, 7800, "Nettoyage et reprise des colonnes"),
+        ],
+      },
+      {
+        numero: 6, titre: "Etancheite a l'air", entreprise: "ISOL'AIR GRAND EST", remisePct: 0,
+        lignes: [
+          L(true, 5.5, 31000, "Travaux d'impermeabilite a l'air"),
+        ],
+      },
+    ],
+    moe: moe({ amoConseil: 2400, amoProjet: 7600, amoTravaux: 13200, moeEtudes: 13000, moeConception: 68000, moeTravauxPct: 3.5, audit: 1300, amiante: 5600, ctProjet: 3200, ctTravaux: 7000, cspsProjet: 1900, cspsTravaux: 3800, moeNom: "CABINET MOSELLE ARCHITECTES", climaxion: true }),
+    aides: aides({ mprPct: 45, cee: 52000, climaxionAmo: 5000, ems: false }),
+    params: params({ mprPct: 45, fondsTravaux: 64000, commentaireFonds: "Fonds travaux loi ALUR mobilise au vote des travaux", totalTantiemes: 10000, exemples: [110, 140, 185] }),
+    variantes: { collectif: true, collectifSansAvance: false, individuel: true },
+    repartitionCles: {},
+  },
+};
+
+// ---------------------------------------------------------------------------
+// 5. Calcul et émission du SQL
 // ---------------------------------------------------------------------------
 const q = (s: string) => s.replace(/'/g, "''");
 const jsonSql = (v: unknown) => `$json$${JSON.stringify(v)}$json$::jsonb`;
@@ -379,7 +465,7 @@ const fmt = (n: number) => round2(n).toLocaleString("fr-FR", { maximumFractionDi
 const blocs: string[] = [];
 const resume: string[] = [];
 
-for (const c of [graffenstaden, troisTours, saintLivier]) {
+for (const c of [graffenstaden, troisTours, saintLivier, stanislas]) {
   const data = readPlanDefinitif(c.data);
   const r = computePlanDefinitif(data);
   const gainPct = Math.round(r.performancePct * 10) / 10;
@@ -433,9 +519,10 @@ end $$;`);
   console.log(`  garde-fous : ${r.gardeFous.map((g) => `${g.libelle} ${g.ok ? "ok" : "DEPASSE"}`).join(" | ")}`);
 }
 
-const sql = `-- Montants fictifs des copropriétés en phase études de la démo commerciale
--- SYNDIC HORIZON GRAND EST : un PF définitif validé par dossier (feedback Amir
--- 06/09/2026 - le portefeuille /syndic n'affichait ni travaux ni honoraires).
+const sql = `-- Montants fictifs des copropriétés de la démo commerciale SYNDIC HORIZON
+-- GRAND EST qui n'en avaient pas (3 dossiers en études + Résidence Stanislas en
+-- travaux) : un PF définitif validé par dossier (feedback Amir 06/09/2026 - le
+-- portefeuille /syndic n'affichait ni travaux ni honoraires).
 -- GÉNÉRÉ par gen_seed_demo_horizon_etudes.ts - ne pas éditer à la main, relancer :
 --   npx vite-node supabase/seed/gen_seed_demo_horizon_etudes.ts
 -- Prérequis : seed_demo_horizon.sql (organisation, copropriétés, gestionnaires).
