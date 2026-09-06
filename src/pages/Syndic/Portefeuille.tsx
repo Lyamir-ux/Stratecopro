@@ -30,27 +30,6 @@ const COULEUR_PHASE: Record<PhaseId, string> = {
 
 const SANS_GESTIONNAIRE = "__sans__";
 const R_GESTIONNAIRE = 58;
-/** Rayon minimal d'un satellite : en dessous, le nombre de logements n'est plus lisible. */
-const R_SAT_MIN = 24;
-
-/**
- * Rayon d'une bulle copropriété : sa SURFACE est proportionnelle au nombre de
- * logements (feedback Amir 06/09), à l'échelle de tout le portefeuille visible
- * pour que deux bulles de gestionnaires différents restent comparables. La
- * plus grande copropriété prend `rMax`, les autres suivent en racine carrée.
- */
-function rayonSatellite(logements: number, logementsMax: number, rMax: number): number {
-  if (logementsMax <= 0) return R_SAT_MIN;
-  return Math.max(R_SAT_MIN, rMax * Math.sqrt(Math.max(0, logements) / logementsMax));
-}
-
-/** Taille de police d'un satellite : suit son rayon pour que le texte tienne. */
-function policeSatellite(r: number): { nom: number; sub: number } {
-  return {
-    nom: Math.round(Math.max(8.5, Math.min(12.5, r / 3.6)) * 10) / 10,
-    sub: Math.round(Math.max(8, Math.min(10, r / 4.6)) * 10) / 10,
-  };
-}
 
 /** Clé de regroupement d'un gestionnaire (e-mail, à défaut le nom). */
 export function cleGestionnaire(c: SyndicCopro): string {
@@ -97,20 +76,17 @@ function construireSystemes(copros: SyndicCopro[], phaseDe: (c: SyndicCopro) => 
     groupes.set(cle, g);
   }
 
-  // Échelle commune à tous les systèmes : la plus grosse copropriété du
-  // portefeuille visible fixe le rayon maximal ; plus le gestionnaire le plus
-  // chargé a de dossiers, plus ce plafond baisse, sans quoi son orbite devient
-  // si large que le système ne tient plus à l'écran.
-  const logementsMax = Math.max(0, ...copros.map((c) => nbLogements(c)));
-  const nMax = Math.max(0, ...[...groupes.values()].map((g) => g.copros.length));
-  const rMax = nMax <= 6 ? 56 : nMax <= 10 ? 46 : nMax <= 16 ? 40 : 34;
-
   return [...groupes.entries()]
     .map(([key, g]) => {
       const n = g.copros.length;
+      // Plus le gestionnaire a de dossiers, plus les satellites sont petits :
+      // sans cela l'orbite devient si large qu'un système ne tient plus à l'écran.
+      const rMax = n <= 6 ? 52 : n <= 10 ? 44 : n <= 16 ? 38 : 32;
       const tailles = g.copros.map((c) => {
         const logements = nbLogements(c);
-        return { c, logements, r: rayonSatellite(logements, logementsMax, rMax) };
+        // Plancher à 36 : en dessous, un nom d'un seul tenant (« STOSSWIHR »,
+        // « LAMARTINE ») ne rentre pas et se fait tronquer.
+        return { c, logements, r: Math.min(rMax, 36 + Math.min(16, logements / 10)) };
       });
       // Le plafond rMax borne la taille des satellites ; l'orbite se calcule sur
       // le plus gros satellite réellement présent, sinon un gestionnaire à un
@@ -652,7 +628,6 @@ export function Portefeuille({
                 {s.satellites.map((sat) => {
                   const ph = PHASES.find((x) => x.id === sat.phase);
                   const couleur = COULEUR_PHASE[sat.phase];
-                  const police = policeSatellite(sat.r);
                   return (
                     <div
                       key={sat.id}
@@ -671,8 +646,8 @@ export function Portefeuille({
                       onMouseLeave={() => setHoverId(null)}
                       onClick={() => navigate(`/syndic/copros/${sat.id}`)}
                     >
-                      <span className="b-name" style={{ fontSize: police.nom }}>{sat.name}</span>
-                      <span className="b-sub" style={{ fontSize: police.sub }}>{sat.logements} lgts</span>
+                      <span className="b-name">{sat.name}</span>
+                      <span className="b-sub">{sat.logements} lgts</span>
                       {sat.fragile && <span className="b-flag" title="Copropriété fragile">!</span>}
                     </div>
                   );
@@ -715,9 +690,8 @@ export function Portefeuille({
         </div>
       </div>
       <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12 }}>
-        Chaque bulle grise est un gestionnaire, entouré des copropriétés dont il a la charge - la taille d'un satellite
-        est proportionnelle à son nombre de logements, sa couleur donne l'état d'avancement du dossier (d'après les
-        tâches validées, comme dans les autres vues). Cliquez une
+        Chaque bulle grise est un gestionnaire, entouré des copropriétés dont il a la charge - la couleur d'un satellite
+        donne l'état d'avancement du dossier (d'après les tâches validées, comme dans les autres vues). Cliquez une
         copropriété pour ouvrir le dossier. Le montant est celui du scénario partagé, tant
         qu'il y en a un. La vue Tableau permet de trier, comparer les gestionnaires et exporter.
       </p>
