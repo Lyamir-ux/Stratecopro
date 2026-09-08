@@ -152,14 +152,17 @@ export function useCreerOrganisation() {
   });
 }
 
+/**
+ * Renomme l'enseigne. Le slug (clé technique, utilisée par les scripts de
+ * seed/purge) ne bouge pas. Côté base, le trigger organisations_propage_nom
+ * (0061) reporte le nouveau nom sur le nom de syndic des copropriétés
+ * rattachées qui portaient l'ancien - feedback d'Amir du 08/09/2026.
+ */
 export function useRenommerOrganisation() {
   const refresh = useRefreshOrganisations();
   return useMutation({
     mutationFn: async ({ id, nom }: { id: string; nom: string }) => {
-      const { error } = await supabase
-        .from("organisations")
-        .update({ nom: nom.trim(), slug: slugify(nom) })
-        .eq("id", id);
+      const { error } = await supabase.from("organisations").update({ nom: nom.trim() }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: refresh,

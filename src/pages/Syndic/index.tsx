@@ -216,8 +216,8 @@ export default function Syndic() {
     setGestBrut(v);
     ecrireVue("syndic-apercu-gest", v);
   };
-  // pastille « messages non lus » du menu
-  const { data: messagesSyndic } = useMessagesSyndic((copros ?? []).map((c) => c.id));
+  // pastille « messages non lus » du menu - sur les seuls dossiers ouvrables
+  const { data: messagesSyndic } = useMessagesSyndic((copros ?? []).filter((c) => c.acces).map((c) => c.id));
   const { data: lectures } = useLectures();
 
   if (isLoading) return <Loader />;
@@ -230,6 +230,9 @@ export default function Syndic() {
       ? copros.filter((c) => !c.organisation_id)
       : copros.filter((c) => c.organisation_id === orgId);
   const visibles = apercuAmo && gest ? parOrg.filter((c) => cleGestionnaire(c) === gest.key) : parOrg;
+  // Le portefeuille montre toute l'enseigne (feedback Amir 08/09) ; Tâches et
+  // Messages ne portent que sur les dossiers que l'utilisateur peut ouvrir.
+  const accessibles = visibles.filter((c) => c.acces);
 
   const nonLus = compteNonLus(messagesSyndic, lectures, session?.user.id);
 
@@ -275,8 +278,8 @@ export default function Syndic() {
           onGestionnaire={apercuAmo && !gest ? (key, nom) => setGest({ key, nom }) : undefined}
         />
       )}
-      {section === "taches" && <TachesSyndic copros={visibles} />}
-      {section === "messages" && <MessagesSyndic copros={visibles} />}
+      {section === "taches" && <TachesSyndic copros={accessibles} />}
+      {section === "messages" && <MessagesSyndic copros={accessibles} />}
     </SyndicShell>
   );
 }

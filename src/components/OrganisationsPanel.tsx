@@ -399,7 +399,7 @@ export function OrganisationsPanel() {
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 0 }}>
           Enseignes de gestion (cabinets de syndic). La direction accède à tous les dossiers de son enseigne ;
           gestionnaires, administratifs et comptables aux seuls dossiers dont ils ont la charge (rattachement
-          copro par copro).
+          copro par copro). Renommer une enseigne met à jour le nom du syndic affiché sur ses dossiers.
         </p>
 
         {creation && (

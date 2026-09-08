@@ -36,6 +36,10 @@ export function cleGestionnaire(c: SyndicCopro): string {
   return c.gestionnaire_email?.toLowerCase() || c.gestionnaire_nom || SANS_GESTIONNAIRE;
 }
 
+/** Info-bulle d'un dossier que l'utilisateur ne peut pas ouvrir. */
+const TITRE_VERROU = (c: SyndicCopro) =>
+  `dossier suivi par ${c.gestionnaire_nom || "un autre gestionnaire"} - accès réservé à la direction`;
+
 /** « Claude LOBSTEIN » → « CL ». Un seul mot → ses deux premières lettres. */
 function initiales(nom: string): string {
   const mots = nom.trim().split(/[\s-]+/).filter(Boolean);
@@ -49,6 +53,8 @@ interface Satellite {
   name: string;
   phase: PhaseId;
   fragile: boolean;
+  /** Dossier ouvrable par l'utilisateur (sinon grisé : suivi par un collègue). */
+  acces: boolean;
   logements: number;
   r: number;
   x: number;
@@ -119,6 +125,7 @@ function construireSystemes(copros: SyndicCopro[], phaseDe: (c: SyndicCopro) => 
               name: c.name,
               phase: phaseDe(c),
               fragile: c.fragile,
+              acces: c.acces,
               logements,
               r,
               x: centre + orbite * Math.cos(angle) - r,
@@ -171,9 +178,9 @@ function VueKanban({
                   <article
                     key={c.id}
                     className="panel"
-                    style={{ padding: "12px 14px", marginBottom: 10, cursor: "pointer" }}
-                    title={`Ouvrir le dossier ${c.name}`}
-                    onClick={() => navigate(`/syndic/copros/${c.id}`)}
+                    style={{ padding: "12px 14px", marginBottom: 10, cursor: c.acces ? "pointer" : "default", opacity: c.acces ? 1 : 0.55 }}
+                    title={c.acces ? `Ouvrir le dossier ${c.name}` : `${c.name} - ${TITRE_VERROU(c)}`}
+                    onClick={c.acces ? () => navigate(`/syndic/copros/${c.id}`) : undefined}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                       <span style={{ fontWeight: 700, fontSize: 14, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -402,7 +409,12 @@ function VueTableau({
                 {lignes.map((c) => {
                   const retard = retards.get(c.id) ?? 0;
                   return (
-                    <tr key={c.id} onClick={() => navigate(`/syndic/copros/${c.id}`)} style={{ cursor: "pointer" }}>
+                    <tr
+                      key={c.id}
+                      onClick={c.acces ? () => navigate(`/syndic/copros/${c.id}`) : undefined}
+                      style={{ cursor: c.acces ? "pointer" : "default", opacity: c.acces ? 1 : 0.55 }}
+                      title={c.acces ? undefined : TITRE_VERROU(c)}
+                    >
                       <td style={{ fontWeight: 600 }}>
                         {c.name}
                         {c.fragile && (
@@ -486,8 +498,12 @@ export function Portefeuille({
       /* stockage indisponible */
     }
   };
+  // dossiers ouvrables : les seuls dont on charge tâches et honoraires (les
+  // autres sont fermés par la RLS - on ne les interroge pas pour rien)
+  const ouvrables = useMemo(() => copros.filter((c) => c.acces), [copros]);
+  const verrouilles = copros.length - ouvrables.length;
   // tâches en retard par copro (sème le gabarit au passage - idempotent)
-  const { data: taches } = useSyndicTaches(copros.map((c) => c.id));
+  const { data: taches } = useSyndicTaches(ouvrables.map((c) => c.id));
   const retards = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of taches ?? []) if (enRetard(t)) m.set(t.copro_id, (m.get(t.copro_id) ?? 0) + 1);
@@ -507,7 +523,7 @@ export function Portefeuille({
   const systemes = useMemo(() => construireSystemes(copros, phaseDe), [copros, phaseDe]);
 
   // honoraires du syndic (ligne « syndic » des frais annexes du PF validé)
-  const { data: honorairesData } = useHonorairesSyndic(copros.map((c) => c.id));
+  const { data: honorairesData } = useHonorairesSyndic(ouvrables.map((c) => c.id));
   const honoraires = honorairesData ?? new Map<string, number>();
   const totalHonoraires = copros.reduce((s, c) => s + (honoraires.get(c.id) ?? 0), 0);
 
@@ -603,6 +619,20 @@ export function Portefeuille({
         </div>
       </div>
 
+      {verrouilles > 0 && (
+        <div
+          className="panel"
+          style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", marginBottom: 14 }}
+        >
+          <Icon name="lock" size={15} style={{ color: "var(--fg-muted)", flex: "none" }} />
+          <span style={{ fontSize: 13 }}>
+            Vous voyez tout le portefeuille de votre enseigne. {verrouilles} dossier{verrouilles > 1 ? "s" : ""} grisé
+            {verrouilles > 1 ? "s" : ""} {verrouilles > 1 ? "sont suivis" : "est suivi"} par vos collègues : seule la
+            direction et le gestionnaire en charge peuvent {verrouilles > 1 ? "les" : "l'"}ouvrir.
+          </span>
+        </div>
+      )}
+
       {q && vue === "bulles" && (
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: -6, marginBottom: 10 }}>
           {visibles.length === 0
@@ -631,7 +661,7 @@ export function Portefeuille({
                   return (
                     <div
                       key={sat.id}
-                      className={"bubble orbite-sat clickable" + (hoverId === sat.id ? " hover" : "")}
+                      className={"bubble orbite-sat" + (sat.acces ? " clickable" : " verrou") + (hoverId === sat.id ? " hover" : "")}
                       style={{
                         left: sat.x,
                         top: sat.y,
@@ -641,10 +671,13 @@ export function Portefeuille({
                         borderColor: couleur,
                         color: "#fff",
                       }}
-                      title={`${sat.name} · ${sat.logements} logements${ph ? " · " + ph.label : ""}`}
+                      title={
+                        `${sat.name} · ${sat.logements} logements${ph ? " · " + ph.label : ""}` +
+                        (sat.acces ? "" : " · accès réservé à la direction et au gestionnaire en charge")
+                      }
                       onMouseEnter={() => setHoverId(sat.id)}
                       onMouseLeave={() => setHoverId(null)}
-                      onClick={() => navigate(`/syndic/copros/${sat.id}`)}
+                      onClick={sat.acces ? () => navigate(`/syndic/copros/${sat.id}`) : undefined}
                     >
                       <span className="b-name">{sat.name}</span>
                       <span className="b-sub">{sat.logements} lgts</span>

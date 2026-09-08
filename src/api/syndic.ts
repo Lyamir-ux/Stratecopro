@@ -13,6 +13,33 @@ export type CoproStats = Tables<"copro_stats">;
 
 export interface SyndicCopro extends CoproRow {
   stats: CoproStats | null;
+  /** L'utilisateur connecté peut ouvrir le dossier : direction de l'enseigne,
+   *  dossier rattaché à son compte, ou aperçu AMO. Les autres dossiers de
+   *  l'enseigne restent visibles au niveau du portefeuille, sans accès au détail. */
+  acces: boolean;
+}
+
+/**
+ * Prédicat d'accès au détail d'un dossier. Feedback d'Amir du 08/09/2026 :
+ * tous les membres d'une enseigne partagent la même vue du portefeuille (la
+ * fiche copropriété est lisible par toute l'enseigne, RLS 0062), mais seule
+ * la direction ouvre tous les dossiers ; un gestionnaire n'ouvre que ceux qui
+ * lui sont rattachés (copro_members). Les autres tables restent d'ailleurs
+ * fermées par la RLS : le verrou du front reflète le verrou de la base.
+ */
+async function chargerAcces(): Promise<(c: CoproRow) => boolean> {
+  const { data: session } = await supabase.auth.getSession();
+  const uid = session.session?.user.id;
+  if (!uid) return () => false;
+  const [{ data: profil }, { data: org }, { data: membres }] = await Promise.all([
+    supabase.from("profiles").select("role").eq("user_id", uid).maybeSingle(),
+    supabase.from("organisation_membres").select("organisation_id, org_role").eq("user_id", uid).maybeSingle(),
+    supabase.from("copro_members").select("copro_id").eq("user_id", uid).eq("member_role", "syndic"),
+  ]);
+  if (profil?.role === "amo") return () => true;
+  const rattachees = new Set((membres ?? []).map((m) => m.copro_id));
+  const directionDe = org?.org_role === "directeur" ? org.organisation_id : null;
+  return (c) => rattachees.has(c.id) || (directionDe !== null && c.organisation_id === directionDe);
 }
 
 export interface MonOrganisation {
@@ -46,19 +73,21 @@ export function useMonOrganisation() {
   });
 }
 
-/** Les copropriétés gérées par le syndic connecté (RLS = son portefeuille). */
+/** Le portefeuille de l'enseigne du syndic connecté (RLS), avec pour chaque
+ *  dossier le droit de l'ouvrir ou non (`acces`). */
 export function useCoprosSyndic() {
   return useQuery({
     queryKey: ["syndic", "copros"],
     queryFn: async (): Promise<SyndicCopro[]> => {
-      const [{ data: copros, error: e1 }, { data: stats, error: e2 }] = await Promise.all([
+      const [{ data: copros, error: e1 }, { data: stats, error: e2 }, acces] = await Promise.all([
         supabase.from("coproprietes").select("*").order("name"),
         supabase.from("copro_stats").select("*"),
+        chargerAcces(),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
       const statsById = new Map((stats ?? []).map((s) => [s.id, s]));
-      return (copros ?? []).map((c) => ({ ...c, stats: statsById.get(c.id) ?? null }));
+      return (copros ?? []).map((c) => ({ ...c, stats: statsById.get(c.id) ?? null, acces: acces(c) }));
     },
   });
 }
@@ -69,13 +98,14 @@ export function useCoproSyndic(id: string | undefined) {
     queryKey: ["syndic", "copro", id],
     enabled: !!id,
     queryFn: async (): Promise<SyndicCopro | null> => {
-      const [{ data: copro, error: e1 }, { data: stats, error: e2 }] = await Promise.all([
+      const [{ data: copro, error: e1 }, { data: stats, error: e2 }, acces] = await Promise.all([
         supabase.from("coproprietes").select("*").eq("id", id!).maybeSingle(),
         supabase.from("copro_stats").select("*").eq("id", id!).maybeSingle(),
+        chargerAcces(),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
-      return copro ? { ...copro, stats: stats ?? null } : null;
+      return copro ? { ...copro, stats: stats ?? null, acces: acces(copro) } : null;
     },
   });
 }

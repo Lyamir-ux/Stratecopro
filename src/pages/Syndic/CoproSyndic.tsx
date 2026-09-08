@@ -7,7 +7,7 @@ import { Badge, DpePair, PhaseBadge, THUMB_BG } from "@/components/ui";
 import type { DpeClass } from "@/lib/referentiels";
 import { avancementSyndic, usePhotoUrl } from "@/api/copros";
 import { phaseAvancement, useSyndicTaches } from "@/api/syndicTaches";
-import { useCoproSyndic } from "@/api/syndic";
+import { useCoproSyndic, type SyndicCopro } from "@/api/syndic";
 import { SyndicShell, Loader, AucuneCopro } from "./index";
 import { ProjetTabSyndic } from "./ProjetTab";
 import { DonneesTabSyndic } from "./DonneesTab";
@@ -29,6 +29,37 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
+/**
+ * Dossier du portefeuille de l'enseigne que l'utilisateur ne peut pas ouvrir
+ * (feedback Amir 08/09 : la vue portefeuille est commune à toute l'enseigne,
+ * l'ouverture des dossiers reste réservée à la direction et au gestionnaire
+ * rattaché). La RLS ferme de toute façon les données du dossier.
+ */
+function AccesReserve({ c }: { c: SyndicCopro }) {
+  const navigate = useNavigate();
+  return (
+    <SyndicShell active={null}>
+      <div className="page fade" style={{ padding: 0 }}>
+        <button className="se-btn se-btn-ghost btn-sm" style={{ marginBottom: 14 }} onClick={() => navigate("/syndic")}>
+          <Icon name="chevronLeft" size={15} />
+          Portefeuille
+        </button>
+        <div className="panel" style={{ padding: "22px 24px", display: "flex", gap: 14, alignItems: "flex-start" }}>
+          <Icon name="lock" size={22} style={{ color: "var(--fg-muted)", flex: "none" }} />
+          <div>
+            <h2 style={{ margin: "0 0 6px", fontSize: 18, fontFamily: "var(--font-display)" }}>{c.name}</h2>
+            <p className="se-body" style={{ margin: 0 }}>
+              Ce dossier fait partie du portefeuille de votre enseigne, mais il est suivi par{" "}
+              <b>{c.gestionnaire_nom || "un autre gestionnaire"}</b>. Seule la direction et le gestionnaire en
+              charge peuvent l'ouvrir.
+            </p>
+          </div>
+        </div>
+      </div>
+    </SyndicShell>
+  );
+}
+
 export default function CoproSyndic() {
   const { id, tab: tabParam } = useParams();
   const navigate = useNavigate();
@@ -42,6 +73,7 @@ export default function CoproSyndic() {
 
   if (isLoading) return <Loader />;
   if (!c) return <AucuneCopro />;
+  if (!c.acces) return <AccesReserve c={c} />;
   const s = c.stats;
   const phase = phaseAvancement(c.phase, taches ?? []);
 
