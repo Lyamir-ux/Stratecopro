@@ -1,10 +1,16 @@
-// Edge function « creer-collaborateur » - création d'un compte collaborateur
-// depuis la page /collaborateurs (demande d'Amir du 02/09/2026). Réservée au
-// dirigeant : crée l'utilisateur Supabase (e-mail confirmé d'office) avec un
-// mot de passe provisoire généré ici, puis sa fiche profil AMO (niveau
-// pièces 2 par défaut, le plus restrictif). Le mot de passe est renvoyé UNE
-// SEULE FOIS au dirigeant pour transmission ; le compte est marqué
-// « mot_de_passe_provisoire » : le collaborateur est bloqué à sa première
+// Edge function « creer-collaborateur » - création d'un compte utilisateur.
+// Réservée au dirigeant. Deux usages :
+//   • role "amo" (défaut) : collaborateur Strat Eco depuis /collaborateurs
+//     (demande d'Amir du 02/09/2026), fiche profil AMO au niveau pièces 2
+//     par défaut (le plus restrictif) ;
+//   • role "syndic" : membre d'une enseigne de gestion depuis
+//     Paramètres → Organisations (feedback d'Amir du 08/09/2026) : le compte
+//     est créé ET rattaché à l'organisation avec son rôle (direction,
+//     gestionnaire…) en une seule opération.
+// Dans les deux cas : utilisateur Supabase créé avec e-mail confirmé d'office
+// et un mot de passe provisoire généré ici, renvoyé UNE SEULE FOIS à
+// l'appelant pour transmission ; le compte est marqué
+// « mot_de_passe_provisoire » : l'utilisateur est bloqué à sa première
 // connexion tant qu'il n'a pas défini son mot de passe personnel via le
 // parcours « Mot de passe oublié ».
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -58,14 +64,32 @@ Deno.serve(async (req: Request) => {
     .eq("user_id", userData.user.id)
     .maybeSingle();
   if (!appelant || !appelant.active || appelant.role !== "amo" || !appelant.dirigeant) {
-    return json(403, { error: "Seul le dirigeant peut créer un collaborateur" });
+    return json(403, { error: "Seul le dirigeant peut créer un compte" });
   }
 
-  const { email, full_name, job_title } = await req.json().catch(() => ({}));
+  const { email, full_name, job_title, role, organisation_id, org_role } = await req.json().catch(() => ({}));
   const nom = typeof full_name === "string" ? full_name.trim() : "";
   const adresse = typeof email === "string" ? email.trim().toLowerCase() : "";
   if (!nom || !adresse) return json(400, { error: "email et full_name requis" });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adresse)) return json(400, { error: "Adresse e-mail invalide" });
+
+  const roleCompte: "amo" | "syndic" = role === "syndic" ? "syndic" : "amo";
+
+  // --- Compte syndic : l'enseigne et le rôle dans l'enseigne sont requis ---
+  const ROLES_ORG = ["directeur", "gestionnaire", "administratif", "comptable"] as const;
+  type OrgRole = (typeof ROLES_ORG)[number];
+  let orgId: string | null = null;
+  let roleOrg: OrgRole = "gestionnaire";
+  if (roleCompte === "syndic") {
+    if (typeof organisation_id !== "string" || !organisation_id) {
+      return json(400, { error: "organisation_id requis pour un compte syndic" });
+    }
+    if (!ROLES_ORG.includes(org_role)) return json(400, { error: "Rôle dans l'enseigne invalide" });
+    const { data: org } = await admin.from("organisations").select("id").eq("id", organisation_id).maybeSingle();
+    if (!org) return json(404, { error: "Organisation introuvable" });
+    orgId = org.id;
+    roleOrg = org_role;
+  }
 
   // --- Compte Supabase : e-mail confirmé d'office (connexion immédiate avec
   //     le mot de passe provisoire), marqueur de première connexion ---
@@ -83,19 +107,33 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // --- Fiche profil AMO (niveau_pieces reste au défaut 2, le plus restrictif) ---
+  // --- Fiche profil (pour un AMO, niveau_pieces reste au défaut 2, le plus restrictif) ---
   const { error: profilErr } = await admin.from("profiles").insert({
     user_id: cree.user.id,
     full_name: nom,
     initials: initialesDe(nom),
-    role: "amo",
+    role: roleCompte,
     job_title: typeof job_title === "string" && job_title.trim() ? job_title.trim() : null,
   });
   if (profilErr) {
     // rollback : pas de compte orphelin sans fiche
     await admin.auth.admin.deleteUser(cree.user.id);
     console.error("Création du profil :", profilErr.message);
-    return json(500, { error: "La création de la fiche collaborateur a échoué" });
+    return json(500, { error: "La création de la fiche a échoué" });
+  }
+
+  // --- Compte syndic : rattachement immédiat à l'enseigne ---
+  if (roleCompte === "syndic" && orgId) {
+    const { error: membreErr } = await admin
+      .from("organisation_membres")
+      .insert({ organisation_id: orgId, user_id: cree.user.id, org_role: roleOrg });
+    if (membreErr) {
+      // rollback complet : le membre doit exister dans son enseigne ou pas du tout
+      await admin.from("profiles").delete().eq("user_id", cree.user.id);
+      await admin.auth.admin.deleteUser(cree.user.id);
+      console.error("Rattachement à l'organisation :", membreErr.message);
+      return json(500, { error: "Le rattachement à l'organisation a échoué" });
+    }
   }
 
   return json(200, { user_id: cree.user.id, email: adresse, mot_de_passe: motDePasse });

@@ -28,25 +28,36 @@ export interface CollaborateurCree {
   mot_de_passe: string;
 }
 
-/** Création d'un compte collaborateur (edge function, réservée au dirigeant). */
+/**
+ * Appel de l'edge function creer-collaborateur (réservée au dirigeant) : compte
+ * Supabase + fiche profil, mot de passe provisoire renvoyé une seule fois.
+ * Sert aux collaborateurs AMO (/collaborateurs) et aux membres d'enseigne
+ * syndic (Paramètres → Organisations, voir api/organisations).
+ */
+export async function creerCompte(body: {
+  email: string;
+  full_name: string;
+  job_title?: string;
+  role?: "amo" | "syndic";
+  organisation_id?: string;
+  org_role?: string;
+}): Promise<CollaborateurCree> {
+  const { data, error } = await supabase.functions.invoke("creer-collaborateur", { body });
+  if (error) {
+    // le corps d'erreur de l'edge function porte le message à afficher
+    const ctx = (error as { context?: Response }).context;
+    const parsed = ctx ? await ctx.json().catch(() => null) : null;
+    throw new Error(parsed?.error ?? "La création du compte a échoué. Réessayez.");
+  }
+  if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+  return data as CollaborateurCree;
+}
+
+/** Création d'un compte collaborateur AMO (edge function, réservée au dirigeant). */
 export function useCreerCollaborateur() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: {
-      email: string;
-      full_name: string;
-      job_title?: string;
-    }): Promise<CollaborateurCree> => {
-      const { data, error } = await supabase.functions.invoke("creer-collaborateur", { body });
-      if (error) {
-        // le corps d'erreur de l'edge function porte le message à afficher
-        const ctx = (error as { context?: Response }).context;
-        const parsed = ctx ? await ctx.json().catch(() => null) : null;
-        throw new Error(parsed?.error ?? "La création du collaborateur a échoué. Réessayez.");
-      }
-      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
-      return data as CollaborateurCree;
-    },
+    mutationFn: (body: { email: string; full_name: string; job_title?: string }) => creerCompte({ ...body, role: "amo" }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["team-profiles"] }),
   });
 }

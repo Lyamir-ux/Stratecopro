@@ -5,9 +5,12 @@
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
+import { useAuth } from "@/auth/AuthProvider";
+import type { CollaborateurCree } from "@/api/profiles";
 import {
   useAjouterMembre,
   useCoprosRattachables,
+  useCreerMembre,
   useCreerOrganisation,
   useMajRoleMembre,
   useMembresOrganisation,
@@ -20,6 +23,7 @@ import {
   type Organisation,
   type OrgRole,
 } from "@/api/organisations";
+import type { Tables } from "@/lib/database.types";
 
 const ROLE_LABEL: Record<OrgRole, string> = {
   directeur: "Direction - tout le portefeuille",
@@ -40,14 +44,193 @@ const ROLE_COURT: Record<OrgRole, string> = {
 
 const EYEBROW: React.CSSProperties = { color: "var(--fg-muted)", margin: "14px 0 8px" };
 
-function Membres({ org }: { org: Organisation }) {
-  const { data: membres } = useMembresOrganisation(org.id);
-  const { data: libres } = useProfilsSyndicLibres();
+const INPUT_FULL: React.CSSProperties = { maxWidth: "none" };
+
+/** Choix du rôle dans l'enseigne (commun à l'ajout et à la modification). */
+function SelectRole({ value, onChange, style }: { value: OrgRole; onChange: (r: OrgRole) => void; style?: React.CSSProperties }) {
+  return (
+    <select className="edit-inp sm" style={{ maxWidth: 210, ...style }} value={value} onChange={(e) => onChange(e.target.value as OrgRole)}>
+      {(Object.keys(ROLE_LABEL) as OrgRole[]).map((r) => (
+        <option key={r} value={r}>
+          {ROLE_LABEL[r]}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/**
+ * Identifiants du compte qui vient d'être créé : affichés une seule fois (le
+ * mot de passe provisoire n'est jamais reproposé), avec copie en un clic.
+ */
+function IdentifiantsCrees({ cree, nom, onClose }: { cree: CollaborateurCree; nom: string; onClose: () => void }) {
+  const [copie, setCopie] = useState(false);
+  return (
+    <div
+      style={{
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-md)",
+        padding: "12px 14px",
+        marginTop: 10,
+        background: "var(--bg-soft)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <div style={{ fontSize: 13.5 }}>
+        Le compte de <strong>{nom}</strong> est créé et rattaché à l'enseigne. Transmettez-lui ses identifiants :
+        le mot de passe provisoire ne sera <strong>plus jamais affiché</strong> après fermeture.
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, flexWrap: "wrap" }}>
+        <Icon name="mail" size={15} />
+        <span style={{ color: "var(--fg-muted)" }}>E-mail :</span>
+        <strong>{cree.email}</strong>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, flexWrap: "wrap" }}>
+        <Icon name="lock" size={15} />
+        <span style={{ color: "var(--fg-muted)" }}>Mot de passe provisoire :</span>
+        <strong style={{ fontFamily: "var(--font-mono, monospace)", letterSpacing: 0.5 }}>{cree.mot_de_passe}</strong>
+        <button
+          className="icon-btn"
+          title="Copier le mot de passe"
+          onClick={() => void navigator.clipboard.writeText(cree.mot_de_passe).then(() => setCopie(true))}
+        >
+          <Icon name={copie ? "check" : "copy"} size={15} />
+        </button>
+      </div>
+      <div className="se-small" style={{ color: "var(--fg-muted)" }}>
+        À sa première connexion, il devra définir son mot de passe personnel via « Mot de passe oublié » : l'accès reste
+        bloqué tant que le mot de passe provisoire n'a pas été remplacé.
+      </div>
+      <button className="se-btn se-btn-primary btn-sm" style={{ alignSelf: "flex-start" }} onClick={onClose}>
+        <Icon name="check" size={14} />
+        J'ai transmis les identifiants
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Ajout d'un membre : nom + e-mail + rôle → compte syndic créé et rattaché à
+ * l'enseigne en une fois (réservé au dirigeant, comme toute création de compte).
+ */
+function NouveauMembre({ org }: { org: Organisation }) {
+  const creer = useCreerMembre();
+  const [nom, setNom] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<OrgRole>("gestionnaire");
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [cree, setCree] = useState<{ res: CollaborateurCree; nom: string } | null>(null);
+
+  const valid = nom.trim().length > 1 && /\S+@\S+\.\S+/.test(email);
+
+  const submit = async () => {
+    if (!valid || creer.isPending) return;
+    setErreur(null);
+    const nomPropre = nom.trim();
+    try {
+      const res = await creer.mutateAsync({
+        organisation_id: org.id,
+        full_name: nomPropre,
+        email: email.trim().toLowerCase(),
+        org_role: role,
+      });
+      setCree({ res, nom: nomPropre });
+      setNom("");
+      setEmail("");
+      setRole("gestionnaire");
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "La création du compte a échoué. Réessayez.");
+    }
+  };
+
+  if (cree) return <IdentifiantsCrees cree={cree.res} nom={cree.nom} onClose={() => setCree(null)} />;
+
+  return (
+    <>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
+        <input
+          className="edit-inp sm"
+          style={{ ...INPUT_FULL, flex: 1, minWidth: 150 }}
+          placeholder="Prénom Nom"
+          value={nom}
+          onChange={(e) => setNom(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && void submit()}
+        />
+        <input
+          className="edit-inp sm"
+          style={{ ...INPUT_FULL, flex: 1.3, minWidth: 200 }}
+          type="email"
+          placeholder="Adresse e-mail (identifiant de connexion)"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && void submit()}
+        />
+        <SelectRole value={role} onChange={setRole} />
+        <button className="se-btn se-btn-primary btn-sm" disabled={!valid || creer.isPending} onClick={() => void submit()}>
+          <Icon name="plus" size={14} />
+          {creer.isPending ? "Création…" : "Ajouter un membre"}
+        </button>
+      </div>
+      {erreur ? (
+        <p
+          style={{
+            margin: "8px 0 0",
+            padding: "8px 12px",
+            borderRadius: "var(--radius-md)",
+            background: "var(--color-error-50)",
+            color: "var(--color-error-700)",
+            fontSize: 13,
+          }}
+        >
+          {erreur}
+        </p>
+      ) : (
+        <p className="se-small" style={{ color: "var(--fg-muted)", margin: "6px 0 0" }}>
+          Le compte est créé immédiatement avec un mot de passe provisoire, affiché une seule fois à l'étape suivante.
+        </p>
+      )}
+    </>
+  );
+}
+
+/** Rattachement d'un compte syndic déjà existant et encore sans enseigne. */
+function RattacherCompteExistant({ org, libres }: { org: Organisation; libres: Tables<"profiles">[] }) {
   const ajouter = useAjouterMembre();
-  const majRole = useMajRoleMembre();
-  const retirer = useRetirerMembre();
   const [nouveau, setNouveau] = useState("");
   const [role, setRole] = useState<OrgRole>("gestionnaire");
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
+      <select className="edit-inp sm" style={{ flex: 1, minWidth: 160 }} value={nouveau} onChange={(e) => setNouveau(e.target.value)}>
+        <option value="">Ou rattacher un compte existant…</option>
+        {libres.map((p) => (
+          <option key={p.user_id} value={p.user_id}>
+            {p.full_name}
+          </option>
+        ))}
+      </select>
+      <SelectRole value={role} onChange={setRole} />
+      <button
+        className="se-btn se-btn-secondary btn-sm"
+        disabled={!nouveau || ajouter.isPending}
+        onClick={() =>
+          void ajouter.mutateAsync({ organisation_id: org.id, user_id: nouveau, org_role: role }).then(() => setNouveau(""))
+        }
+      >
+        <Icon name="plus" size={14} />
+        Rattacher
+      </button>
+    </div>
+  );
+}
+
+function Membres({ org }: { org: Organisation }) {
+  const { profile: me } = useAuth();
+  const { data: membres } = useMembresOrganisation(org.id);
+  const { data: libres } = useProfilsSyndicLibres();
+  const majRole = useMajRoleMembre();
+  const retirer = useRetirerMembre();
 
   return (
     <>
@@ -71,20 +254,10 @@ function Membres({ org }: { org: Organisation }) {
               </div>
             </div>
             <span className="spacer"></span>
-            <select
-              className="edit-inp sm"
-              style={{ maxWidth: 210 }}
+            <SelectRole
               value={m.org_role}
-              onChange={(e) =>
-                void majRole.mutateAsync({ organisation_id: org.id, user_id: m.user_id, org_role: e.target.value as OrgRole })
-              }
-            >
-              {(Object.keys(ROLE_LABEL) as OrgRole[]).map((r) => (
-                <option key={r} value={r}>
-                  {ROLE_LABEL[r]}
-                </option>
-              ))}
-            </select>
+              onChange={(r) => void majRole.mutateAsync({ organisation_id: org.id, user_id: m.user_id, org_role: r })}
+            />
             <button
               className="icon-btn"
               title="Retirer de l'organisation"
@@ -99,41 +272,14 @@ function Membres({ org }: { org: Organisation }) {
         ))
       )}
 
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
-        <select className="edit-inp sm" style={{ flex: 1, minWidth: 160 }} value={nouveau} onChange={(e) => setNouveau(e.target.value)}>
-          <option value="">Ajouter un membre…</option>
-          {(libres ?? []).map((p) => (
-            <option key={p.user_id} value={p.user_id}>
-              {p.full_name}
-            </option>
-          ))}
-        </select>
-        <select className="edit-inp sm" style={{ maxWidth: 210 }} value={role} onChange={(e) => setRole(e.target.value as OrgRole)}>
-          {(Object.keys(ROLE_LABEL) as OrgRole[]).map((r) => (
-            <option key={r} value={r}>
-              {ROLE_LABEL[r]}
-            </option>
-          ))}
-        </select>
-        <button
-          className="se-btn se-btn-secondary btn-sm"
-          disabled={!nouveau || ajouter.isPending}
-          onClick={() =>
-            void ajouter
-              .mutateAsync({ organisation_id: org.id, user_id: nouveau, org_role: role })
-              .then(() => setNouveau(""))
-          }
-        >
-          <Icon name="plus" size={14} />
-          Ajouter
-        </button>
-      </div>
-      {(libres ?? []).length === 0 && (
-        <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 8 }}>
-          Aucun compte syndic disponible - un compte n'appartient qu'à une seule enseigne, et la création d'un compte
-          passe encore par le tableau de bord Supabase.
+      {me?.dirigeant ? (
+        <NouveauMembre org={org} />
+      ) : (
+        <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10 }}>
+          La création d'un compte membre (nom + e-mail) est réservée au dirigeant.
         </p>
       )}
+      {(libres ?? []).length > 0 && <RattacherCompteExistant org={org} libres={libres ?? []} />}
     </>
   );
 }
@@ -227,6 +373,17 @@ export function OrganisationsPanel() {
     });
   };
 
+  /** Feedback d'Amir du 08/09/2026 : un clic sur le nom suffit pour le modifier en direct. */
+  const commencerRenommage = (o: Organisation) => {
+    setRenommage(o.id);
+    setNomEdite(o.nom);
+  };
+  const validerRenommage = (o: Organisation) => {
+    const propre = nomEdite.trim();
+    if (propre && propre !== o.nom) void renommer.mutateAsync({ id: o.id, nom: propre });
+    setRenommage(null);
+  };
+
   return (
     <div className="panel">
       <div className="p-head">
@@ -283,15 +440,23 @@ export function OrganisationsPanel() {
                   value={nomEdite}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => setNomEdite(e.target.value)}
+                  onBlur={() => validerRenommage(o)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && nomEdite.trim())
-                      void renommer.mutateAsync({ id: o.id, nom: nomEdite }).then(() => setRenommage(null));
+                    if (e.key === "Enter") validerRenommage(o);
                     if (e.key === "Escape") setRenommage(null);
                   }}
                 />
               ) : (
                 <div>
-                  <div className="t-title" style={{ fontSize: 14 }}>
+                  <div
+                    className="t-title"
+                    style={{ fontSize: 14, cursor: "text" }}
+                    title="Cliquer pour renommer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      commencerRenommage(o);
+                    }}
+                  >
                     {o.nom}
                   </div>
                   <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
@@ -306,8 +471,8 @@ export function OrganisationsPanel() {
                 title="Renommer"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setRenommage(renommage === o.id ? null : o.id);
-                  setNomEdite(o.nom);
+                  if (renommage === o.id) setRenommage(null);
+                  else commencerRenommage(o);
                 }}
               >
                 <Icon name="edit" size={15} />

@@ -4,6 +4,7 @@
 // organisations_amo_all / org_membres_amo_all autorisent ces écritures.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { creerCompte, type CollaborateurCree } from "@/api/profiles";
 import type { Enums, Tables } from "@/lib/database.types";
 
 export type OrgRole = Enums<"org_role">;
@@ -184,6 +185,22 @@ export function useAjouterMembre() {
       const { error } = await supabase.from("organisation_membres").insert(m);
       if (error) throw error;
     },
+    onSuccess: refresh,
+  });
+}
+
+/**
+ * Crée un compte syndic (nom + e-mail) et le rattache d'emblée à l'enseigne
+ * avec son rôle - en une seule opération côté serveur (edge function réservée
+ * au dirigeant). Le mot de passe provisoire renvoyé n'est affiché qu'une fois.
+ * Feedback d'Amir du 08/09/2026 : « Ajouter un membre » doit permettre de
+ * saisir le nom et l'adresse e-mail, sans passer par le tableau de bord Supabase.
+ */
+export function useCreerMembre() {
+  const refresh = useRefreshOrganisations();
+  return useMutation({
+    mutationFn: (m: { organisation_id: string; full_name: string; email: string; org_role: OrgRole }): Promise<CollaborateurCree> =>
+      creerCompte({ role: "syndic", ...m }),
     onSuccess: refresh,
   });
 }
