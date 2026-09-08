@@ -251,6 +251,18 @@ function Membres({ org }: { org: Organisation }) {
               </div>
               <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
                 {m.org_role === "gestionnaire" ? m.job_title || ROLE_COURT[m.org_role] : ROLE_COURT[m.org_role]}
+                {m.org_role !== "directeur" && (
+                  <>
+                    {" · "}
+                    {m.copros === 0 ? (
+                      <span style={{ color: "var(--color-error-700)" }} title="Aucun dossier ne porte son e-mail comme gestionnaire : il voit le portefeuille mais n'ouvre rien">
+                        aucun dossier ouvrable
+                      </span>
+                    ) : (
+                      `${m.copros} dossier${m.copros > 1 ? "s" : ""} ouvrable${m.copros > 1 ? "s" : ""}`
+                    )}
+                  </>
+                )}
               </div>
             </div>
             <span className="spacer"></span>
@@ -280,6 +292,11 @@ function Membres({ org }: { org: Organisation }) {
         </p>
       )}
       {(libres ?? []).length > 0 && <RattacherCompteExistant org={org} libres={libres ?? []} />}
+      <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10, marginBottom: 0 }}>
+        Tous les membres voient le portefeuille de l'enseigne. La direction ouvre tous les dossiers ; les autres
+        n'ouvrent que ceux dont ils sont le gestionnaire : renseignez leur e-mail comme gestionnaire dans l'onglet
+        Données de la copropriété, le rattachement est automatique.
+      </p>
     </>
   );
 }

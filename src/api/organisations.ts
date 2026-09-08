@@ -20,6 +20,9 @@ export interface MembreOrganisation {
   full_name: string;
   initials: string;
   job_title: string | null;
+  /** Dossiers que le membre peut ouvrir (copro_members 'syndic') - la direction
+   *  ouvre tout le portefeuille sans rattachement. */
+  copros: number;
 }
 
 export interface CoproRattachable {
@@ -66,11 +69,20 @@ export function useMembresOrganisation(orgId: string | undefined) {
     queryKey: ["organisation-membres", orgId],
     enabled: !!orgId,
     queryFn: async (): Promise<MembreOrganisation[]> => {
-      const { data, error } = await supabase
-        .from("organisation_membres")
-        .select("user_id, org_role, profiles(full_name, initials, job_title)")
-        .eq("organisation_id", orgId!);
+      const [{ data, error }, { data: rattachements, error: e2 }] = await Promise.all([
+        supabase
+          .from("organisation_membres")
+          .select("user_id, org_role, profiles(full_name, initials, job_title)")
+          .eq("organisation_id", orgId!),
+        supabase.from("copro_members").select("user_id, coproprietes!inner(organisation_id, deleted_at)").eq("member_role", "syndic"),
+      ]);
       if (error) throw error;
+      if (e2) throw e2;
+      const nbCopros = new Map<string, number>();
+      for (const r of rattachements ?? []) {
+        if (r.coproprietes?.organisation_id !== orgId || r.coproprietes?.deleted_at) continue;
+        nbCopros.set(r.user_id, (nbCopros.get(r.user_id) ?? 0) + 1);
+      }
       return (data ?? [])
         .map((m) => ({
           user_id: m.user_id,
@@ -78,6 +90,7 @@ export function useMembresOrganisation(orgId: string | undefined) {
           full_name: m.profiles?.full_name ?? "-",
           initials: m.profiles?.initials ?? "?",
           job_title: m.profiles?.job_title ?? null,
+          copros: nbCopros.get(m.user_id) ?? 0,
         }))
         .sort((a, b) => {
           // direction en tête, puis gestionnaires, puis administratifs et comptables

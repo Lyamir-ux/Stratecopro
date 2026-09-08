@@ -384,7 +384,13 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
           <div className="kv">
             <span className="k">Mail gestionnaire</span>
             {editingSynth ? (
-              <input className="edit-inp" type="email" value={synth.gestionnaireEmail} onChange={(e) => setSynth((s) => ({ ...s, gestionnaireEmail: e.target.value }))} />
+              <input
+                className="edit-inp"
+                type="email"
+                value={synth.gestionnaireEmail}
+                onChange={(e) => setSynth((s) => ({ ...s, gestionnaireEmail: e.target.value }))}
+                title="Le compte syndic portant cet e-mail est rattaché au dossier automatiquement (il peut l'ouvrir dans son espace)"
+              />
             ) : (
               <span className="v" style={{ textAlign: "right", overflowWrap: "anywhere" }}>{c.gestionnaire_email ?? "-"}</span>
             )}
