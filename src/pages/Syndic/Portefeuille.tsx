@@ -628,7 +628,7 @@ export function Portefeuille({
           <span style={{ fontSize: 13 }}>
             Vous voyez tout le portefeuille de votre enseigne. {verrouilles} dossier{verrouilles > 1 ? "s" : ""} grisé
             {verrouilles > 1 ? "s" : ""} {verrouilles > 1 ? "sont suivis" : "est suivi"} par vos collègues : seule la
-            direction et le gestionnaire en charge peuvent {verrouilles > 1 ? "les" : "l'"}ouvrir.
+            direction et le gestionnaire en charge peuvent {verrouilles > 1 ? "les ouvrir" : "l'ouvrir"}.
           </span>
         </div>
       )}

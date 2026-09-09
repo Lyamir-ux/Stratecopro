@@ -221,6 +221,31 @@ export function useCreerMembre() {
   });
 }
 
+/** Initiales : première lettre du premier et du dernier mot du nom (même règle que creer-collaborateur). */
+function initialesDe(nom: string): string {
+  const mots = nom.trim().split(/\s+/);
+  const premiere = mots[0]?.[0] ?? "";
+  const derniere = mots.length > 1 ? mots[mots.length - 1][0] : (mots[0]?.[1] ?? "");
+  return (premiere + derniere).toUpperCase();
+}
+
+/** Renomme un membre (fiche profil) - feedback d'Amir du 08/09/2026 : un clic sur le nom suffit. */
+export function useRenommerMembre() {
+  const refresh = useRefreshOrganisations();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ user_id, full_name }: { user_id: string; full_name: string }) => {
+      const nom = full_name.trim();
+      const { error } = await supabase.from("profiles").update({ full_name: nom, initials: initialesDe(nom) }).eq("user_id", user_id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      refresh();
+      void qc.invalidateQueries({ queryKey: ["team-profiles"] });
+    },
+  });
+}
+
 export function useMajRoleMembre() {
   const refresh = useRefreshOrganisations();
   return useMutation({

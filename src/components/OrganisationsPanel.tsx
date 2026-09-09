@@ -17,9 +17,11 @@ import {
   useOrganisations,
   useProfilsSyndicLibres,
   useRattacherCopro,
+  useRenommerMembre,
   useRenommerOrganisation,
   useRetirerMembre,
   useSupprimerOrganisation,
+  type MembreOrganisation,
   type Organisation,
   type OrgRole,
 } from "@/api/organisations";
@@ -231,6 +233,15 @@ function Membres({ org }: { org: Organisation }) {
   const { data: libres } = useProfilsSyndicLibres();
   const majRole = useMajRoleMembre();
   const retirer = useRetirerMembre();
+  const renommer = useRenommerMembre();
+  // renommage en ligne d'un membre : clic sur le nom, Entrée ou sortie du champ enregistre
+  const [renommage, setRenommage] = useState<string | null>(null);
+  const [nomEdite, setNomEdite] = useState("");
+  const validerRenommage = (m: MembreOrganisation) => {
+    const propre = nomEdite.trim();
+    if (propre.length > 1 && propre !== m.full_name) void renommer.mutateAsync({ user_id: m.user_id, full_name: propre });
+    setRenommage(null);
+  };
 
   return (
     <>
@@ -246,9 +257,32 @@ function Membres({ org }: { org: Organisation }) {
           <div key={m.user_id} className="task-row" style={{ padding: "8px 4px", borderBottom: "1px solid var(--border)" }}>
             <Avatar who={m.initials} name={m.full_name} sm />
             <div>
-              <div className="t-title" style={{ fontSize: 14 }}>
-                {m.full_name}
-              </div>
+              {renommage === m.user_id ? (
+                <input
+                  className="edit-inp sm"
+                  style={{ maxWidth: 260 }}
+                  autoFocus
+                  value={nomEdite}
+                  onChange={(e) => setNomEdite(e.target.value)}
+                  onBlur={() => validerRenommage(m)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") validerRenommage(m);
+                    if (e.key === "Escape") setRenommage(null);
+                  }}
+                />
+              ) : (
+                <div
+                  className="t-title"
+                  style={{ fontSize: 14, cursor: "text" }}
+                  title="Cliquer pour renommer"
+                  onClick={() => {
+                    setRenommage(m.user_id);
+                    setNomEdite(m.full_name);
+                  }}
+                >
+                  {m.full_name}
+                </div>
+              )}
               <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
                 {m.org_role === "gestionnaire" ? m.job_title || ROLE_COURT[m.org_role] : ROLE_COURT[m.org_role]}
                 {m.org_role !== "directeur" && (
