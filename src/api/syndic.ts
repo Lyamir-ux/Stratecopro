@@ -279,7 +279,7 @@ export function useSupprimerDocumentSyndic(coproId: string) {
 /** Télécharge un document du dossier (URL signée 5 min, bucket privé). */
 export async function telechargerDocument(d: DocumentSyndic) {
   const a = document.createElement("a");
-  a.href = await urlSigneeFichier(d.path);
+  a.href = await urlSigneeFichier(d.path, d.name);
   a.download = d.name;
   a.target = "_blank";
   a.click();

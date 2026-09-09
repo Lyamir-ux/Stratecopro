@@ -718,7 +718,9 @@ export function useSetDocNonApplicable(coproId: string, montage: MontageId) {
 
 /** Télécharge un fichier déposé (URL signée 5 min). */
 export async function downloadMontageFile(f: MontageFile) {
-  const { data, error } = await supabase.storage.from("copro-files").createSignedUrl(f.path, 300);
+  // `download` côté Storage : le fichier arrive sous son nom affiché (l'attribut download
+  // d'un lien est ignoré sur une URL cross-origin)
+  const { data, error } = await supabase.storage.from("copro-files").createSignedUrl(f.path, 300, { download: f.name });
   if (error || !data) throw error ?? new Error("URL de téléchargement indisponible");
   const a = document.createElement("a");
   a.href = data.signedUrl;

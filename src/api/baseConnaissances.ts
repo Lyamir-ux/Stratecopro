@@ -71,7 +71,9 @@ export function useDeleteDocumentReference() {
 }
 
 export async function downloadDocumentReference(doc: DocumentReference) {
-  const { data, error } = await supabase.storage.from("base-connaissances").createSignedUrl(doc.storage_path, 300);
+  const { data, error } = await supabase.storage
+    .from("base-connaissances")
+    .createSignedUrl(doc.storage_path, 300, { download: doc.name });
   if (error || !data) throw error ?? new Error("URL de document indisponible");
   const a = document.createElement("a");
   a.href = data.signedUrl;

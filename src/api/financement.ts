@@ -64,7 +64,7 @@ export function useAdhesions(coproId: string | undefined) {
 
 /** Télécharge un document généré (bulletin signé / mandat) - accès AMO au bucket. */
 export async function downloadAdhesionDoc(path: string, filename: string) {
-  const { data, error } = await supabase.storage.from("pieces-copro").createSignedUrl(path, 300);
+  const { data, error } = await supabase.storage.from("pieces-copro").createSignedUrl(path, 300, { download: filename });
   if (error) throw error;
   const a = document.createElement("a");
   a.href = data.signedUrl;

@@ -165,17 +165,25 @@ export function useDeleteFichier(coproId: string) {
   });
 }
 
+/** Télécharge un fichier sous le nom affiché sur la plateforme (pas le nom de l'objet stocké). */
 export async function downloadFichier(f: Fichier) {
   const a = document.createElement("a");
-  a.href = await urlSigneeFichier(f.storage_path);
+  a.href = await urlSigneeFichier(f.storage_path, f.name);
   a.download = f.name;
   a.target = "_blank";
   a.click();
 }
 
-/** URL signée (5 min) d'un objet du bucket privé copro-files. */
-export async function urlSigneeFichier(path: string): Promise<string> {
-  const { data, error } = await supabase.storage.from("copro-files").createSignedUrl(path, 300);
+/**
+ * URL signée (5 min) d'un objet du bucket privé copro-files. Avec `download`,
+ * Storage répond en Content-Disposition attachment sous ce nom : l'attribut
+ * download d'un lien est ignoré par les navigateurs sur une URL cross-origin,
+ * le fichier arrivait sous son nom de stockage (feedback d'Amir du 09/09/2026).
+ */
+export async function urlSigneeFichier(path: string, download?: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from("copro-files")
+    .createSignedUrl(path, 300, download ? { download } : undefined);
   if (error || !data) throw error ?? new Error("URL de document indisponible");
   return data.signedUrl;
 }
