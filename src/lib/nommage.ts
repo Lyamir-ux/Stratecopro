@@ -109,6 +109,30 @@ export function construireNomFichier(champs: ChampsNom, extension: string): stri
   return extension ? `${nom}.${extension}` : nom;
 }
 
+/**
+ * Nom de fichier sans accent ni caractère spécial (feedback d'Amir du
+ * 09/09/2026) : les en-têtes de téléchargement encodent les accents en
+ * « %C3%A9 » et certains systèmes les refusent. On garde lettres, chiffres,
+ * espaces, points, tirets, soulignés et parenthèses ; le reste devient un tiret.
+ * Appliqué au dépôt (nom enregistré) et au téléchargement (fichiers anciens).
+ */
+export function nomFichierSansAccents(nom: string): string {
+  const propre = nom
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/œ/g, "oe")
+    .replace(/Œ/g, "OE")
+    .replace(/æ/g, "ae")
+    .replace(/Æ/g, "AE")
+    .replace(/ß/g, "ss")
+    .replace(/[^A-Za-z0-9 ._()-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/ {2,}/g, " ")
+    .replace(/ ?- ?\./g, ".")
+    .trim();
+  return propre || "fichier";
+}
+
 /** Recrée un File du même contenu sous un autre nom. */
 export function renommerFile(file: File, nouveauNom: string): File {
   return new File([file], nouveauNom, { type: file.type, lastModified: file.lastModified });

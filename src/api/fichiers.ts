@@ -1,6 +1,7 @@
 // Fichiers du projet (bucket privé copro-files) + checklists de pièces par dispositif.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { nomFichierSansAccents } from "@/lib/nommage";
 import type { Tables } from "@/lib/database.types";
 
 export type Fichier = Tables<"fichiers">;
@@ -107,7 +108,9 @@ export async function uploadFichierDirect(
   dossier: string,
   nameOriginal?: string
 ): Promise<{ id: string }> {
-  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  // nom enregistré sans accent ni caractère spécial (feedback Amir 09/09)
+  const nom = nomFichierSansAccents(file.name);
+  const safe = nom.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${coproId}/${dossier.replace(/[^a-zA-Z0-9-]/g, "_")}/${Date.now()}-${safe}`;
   const { error: eUp } = await supabase.storage.from("copro-files").upload(path, file);
   if (eUp) throw eUp;
@@ -117,8 +120,8 @@ export async function uploadFichierDirect(
     .insert({
       copro_id: coproId,
       dossier,
-      name: file.name,
-      name_original: nameOriginal && nameOriginal !== file.name ? nameOriginal : null,
+      name: nom,
+      name_original: nameOriginal && nameOriginal !== nom ? nameOriginal : null,
       storage_path: path,
       size: file.size,
       mime: file.type || null,
@@ -183,7 +186,7 @@ export async function downloadFichier(f: Fichier) {
 export async function urlSigneeFichier(path: string, download?: string): Promise<string> {
   const { data, error } = await supabase.storage
     .from("copro-files")
-    .createSignedUrl(path, 300, download ? { download } : undefined);
+    .createSignedUrl(path, 300, download ? { download: nomFichierSansAccents(download) } : undefined);
   if (error || !data) throw error ?? new Error("URL de document indisponible");
   return data.signedUrl;
 }

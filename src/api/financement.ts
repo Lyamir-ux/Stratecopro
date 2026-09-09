@@ -1,6 +1,7 @@
 // Côté AMO : configuration du prêt collectif par copro + suivi des adhésions.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { nomFichierSansAccents } from "@/lib/nommage";
 import type { Tables } from "@/lib/database.types";
 
 export type FinancementConfig = Tables<"copro_financement_config">;
@@ -64,7 +65,7 @@ export function useAdhesions(coproId: string | undefined) {
 
 /** Télécharge un document généré (bulletin signé / mandat) - accès AMO au bucket. */
 export async function downloadAdhesionDoc(path: string, filename: string) {
-  const { data, error } = await supabase.storage.from("pieces-copro").createSignedUrl(path, 300, { download: filename });
+  const { data, error } = await supabase.storage.from("pieces-copro").createSignedUrl(path, 300, { download: nomFichierSansAccents(filename) });
   if (error) throw error;
   const a = document.createElement("a");
   a.href = data.signedUrl;

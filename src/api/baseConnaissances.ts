@@ -4,6 +4,7 @@
 // réservés à l'équipe AMO. Feedback Wafaa du 24/08/2026.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { nomFichierSansAccents } from "@/lib/nommage";
 import type { Tables } from "@/lib/database.types";
 
 export type DocumentReference = Tables<"documents_reference">;
@@ -38,14 +39,15 @@ export function useUploadDocumentReference() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ file, secteur, description }: { file: File; secteur: string; description?: string }) => {
-      const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const nom = nomFichierSansAccents(file.name);
+      const safe = nom.replace(/[^a-zA-Z0-9._-]/g, "_");
       const path = `${secteur.replace(/[^a-zA-Z0-9-]/g, "_")}/${Date.now()}-${safe}`;
       const { error: eUp } = await supabase.storage.from("base-connaissances").upload(path, file);
       if (eUp) throw eUp;
       const { data: session } = await supabase.auth.getSession();
       const { error: eDb } = await supabase.from("documents_reference").insert({
         secteur,
-        name: file.name,
+        name: nom,
         description: description?.trim() || null,
         storage_path: path,
         size: file.size,
@@ -73,7 +75,7 @@ export function useDeleteDocumentReference() {
 export async function downloadDocumentReference(doc: DocumentReference) {
   const { data, error } = await supabase.storage
     .from("base-connaissances")
-    .createSignedUrl(doc.storage_path, 300, { download: doc.name });
+    .createSignedUrl(doc.storage_path, 300, { download: nomFichierSansAccents(doc.name) });
   if (error || !data) throw error ?? new Error("URL de document indisponible");
   const a = document.createElement("a");
   a.href = data.signedUrl;

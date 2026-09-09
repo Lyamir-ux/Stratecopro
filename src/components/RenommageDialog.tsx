@@ -10,6 +10,7 @@ import {
   construireNomFichier,
   dossierSuggere,
   extensionDe,
+  nomFichierSansAccents,
   renommerFile,
   TYPES_DOCUMENT,
 } from "@/lib/nommage";
@@ -77,9 +78,12 @@ export function RenommageDialog({
     });
   };
 
-  const nomPropose = construireNomFichier(
-    { prefixe, type: champs.type, objet: champs.objet || null, emetteur: champs.emetteur || null, date: champs.date || null, etat: champs.etat || null },
-    extensionDe(file.name)
+  // sans accent ni caractère spécial : ce que l'utilisateur voit est exactement le nom enregistré
+  const nomPropose = nomFichierSansAccents(
+    construireNomFichier(
+      { prefixe, type: champs.type, objet: champs.objet || null, emetteur: champs.emetteur || null, date: champs.date || null, etat: champs.etat || null },
+      extensionDe(file.name)
+    )
   );
 
   const suivant = () => {
@@ -91,7 +95,8 @@ export function RenommageDialog({
     setEnvoi(true);
     setErreur(null);
     try {
-      await onConfirm(nom === file.name ? file : renommerFile(file, nom), {
+      const propre = nomFichierSansAccents(nom);
+      await onConfirm(propre === file.name ? file : renommerFile(file, propre), {
         dossier: dossiers ? dossier : null,
         nameOriginal: file.name,
       });

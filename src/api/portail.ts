@@ -1,6 +1,7 @@
 // Espace copropriétaire : données du user connecté (RLS = son périmètre uniquement).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { nomFichierSansAccents } from "@/lib/nommage";
 import type { Tables, Enums, Json } from "@/lib/database.types";
 import { determineProfil, type Bareme, type FinanceParams, type Profil } from "@/lib/finance";
 import { readParams } from "./scenarios";
@@ -643,7 +644,7 @@ export async function downloadFromPieces(path: string, filename: string) {
   // download d'un lien est ignoré par les navigateurs sur une URL cross-origin
   const { data, error } = await supabase.storage
     .from("pieces-copro")
-    .createSignedUrl(path, 300, { download: filename });
+    .createSignedUrl(path, 300, { download: nomFichierSansAccents(filename) });
   if (error) throw error;
   const a = document.createElement("a");
   a.href = data.signedUrl;

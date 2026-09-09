@@ -5,6 +5,7 @@
 // copro-files sous montage/<copro_id>/<montage>/<doc_key>/…
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { nomFichierSansAccents } from "@/lib/nommage";
 import type { Json, Tables } from "@/lib/database.types";
 import type { IconName } from "@/components/Icon";
 
@@ -621,7 +622,8 @@ export function useUploadMontageDoc(coproId: string, montage: MontageId) {
   return useMutation({
     mutationFn: async ({ docKey, file, nameOriginal }: { docKey: string; file: File; nameOriginal?: string }) => {
       const uid = await currentUid();
-      const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const nom = nomFichierSansAccents(file.name);
+      const safe = nom.replace(/[^a-zA-Z0-9._-]/g, "_");
       const path = `montage/${coproId}/${montage}/${docKey}/${Date.now()}-${safe}`;
       const { error: eUp } = await supabase.storage.from("copro-files").upload(path, file);
       if (eUp) throw eUp;
@@ -633,8 +635,8 @@ export function useUploadMontageDoc(coproId: string, montage: MontageId) {
         .eq("doc_key", docKey)
         .maybeSingle();
       const entry: MontageFile = {
-        name: file.name,
-        name_original: nameOriginal && nameOriginal !== file.name ? nameOriginal : null,
+        name: nom,
+        name_original: nameOriginal && nameOriginal !== nom ? nameOriginal : null,
         path,
         size: file.size,
         mime: file.type || null,
@@ -720,7 +722,7 @@ export function useSetDocNonApplicable(coproId: string, montage: MontageId) {
 export async function downloadMontageFile(f: MontageFile) {
   // `download` côté Storage : le fichier arrive sous son nom affiché (l'attribut download
   // d'un lien est ignoré sur une URL cross-origin)
-  const { data, error } = await supabase.storage.from("copro-files").createSignedUrl(f.path, 300, { download: f.name });
+  const { data, error } = await supabase.storage.from("copro-files").createSignedUrl(f.path, 300, { download: nomFichierSansAccents(f.name) });
   if (error || !data) throw error ?? new Error("URL de téléchargement indisponible");
   const a = document.createElement("a");
   a.href = data.signedUrl;
