@@ -10,7 +10,7 @@ import { fmtDate, fmtEuroFull } from "@/lib/format";
 import { telechargerCsv } from "@/lib/csv";
 import { useAuth } from "@/auth/AuthProvider";
 import { useDonnees } from "@/api/donnees";
-import { useChoixFinancementScenario } from "@/api/scenarios";
+import { readParams, useBareme, useChoixFinancementScenario } from "@/api/scenarios";
 import { useScenariosPartages, useFinancementConfig, useSaveChoixGestionnaire } from "@/api/portail";
 import { usePlansDefinitifs, type PlanDefinitif } from "@/api/planDefinitif";
 import {
@@ -23,7 +23,8 @@ import {
   type PlanDefinitifResult,
 } from "@/lib/finance";
 import type { Enums } from "@/lib/database.types";
-import type { SyndicCopro } from "@/api/syndic";
+import { useReponsesSyndic, type SyndicCopro } from "@/api/syndic";
+import { round2, type Profil } from "@/lib/finance";
 
 type TypeFinancement = Enums<"type_financement">;
 
@@ -187,6 +188,10 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
   const { data: donnees, isLoading } = useDonnees(c.id);
   const { data: finConfig } = useFinancementConfig(c.id);
   const saveChoix = useSaveChoixGestionnaire(scenario?.id);
+  // prime MaPrimeRénov' individuelle : profil (RPC syndic, sans RFR) x barème du scénario partagé
+  const { data: bareme } = useBareme();
+  const { data: reponses } = useReponsesSyndic(c.id);
+  const params = scenario && bareme ? readParams(scenario.params, bareme) : null;
   // saisie du mode d'un copropriétaire (le scénario partagé est requis)
   const [editId, setEditId] = useState<string | null>(null);
   const [draftType, setDraftType] = useState<TypeFinancement>("fonds");
@@ -211,9 +216,12 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
   const coproprietaires = donnees?.coproprietaires ?? [];
   const lots = donnees?.lots ?? [];
 
-  // Appel de fonds par copropriétaire : son reste à charge d'après le PF
-  // définitif validé (quote-part - aides et fonds travaux au prorata), même
-  // répartition que les plans individuels côté AMO (feedback 29/08).
+  // Appel de fonds par copropriétaire = ce qu'il doit financer avant travaux,
+  // exactement le « À financer avant travaux (hors CEE) » de la fiche AMO et du
+  // portail (feedback d'Amir du 09/09/2026) : quote-part du PF définitif validé
+  // moins aides collectives et fonds travaux au prorata, moins la prime
+  // individuelle quand le profil est connu. La prime CEE, versée en fin de
+  // chantier, ne réduit pas l'appel de fonds.
   const appelsDeFonds = useMemo(() => {
     if (!pf || !donnees) return null;
     const items = itemsARepartirPf(pf.data, pf.pv);
@@ -245,8 +253,19 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
     // Répartition incomplète (clé manquante sur une ligne) : ne rien afficher
     // plutôt que des montants faux.
     if (manquants.length > 0) return null;
-    return new Map(plans.map((p) => [p.coproprietaireId, p.reste]));
-  }, [pf, donnees]);
+    const profilDe = new Map((reponses ?? []).map((r) => [r.coproprietaire_id, r.profil_mpr]));
+    return new Map(
+      plans.map((p) => {
+        const profil = (profilDe.get(p.coproprietaireId) ?? null) as Profil | null;
+        // mêmes arrondis que la fiche AMO (api/dossiersCopros) : concordance au centime
+        const mprIndiv = round2(profil && params ? params.primeIndiv[profil] ?? 0 : 0);
+        const aidesColl = round2(p.aidesEtFonds - p.primeCee);
+        const appel = round2(Math.max(0, p.quotePartAvant - aidesColl - mprIndiv));
+        return [p.coproprietaireId, { appel, primeCee: p.primeCee, mprIndiv, horsAideIndiv: !profil }];
+      })
+    );
+  }, [pf, donnees, reponses, params]);
+  const nbHorsAideIndiv = [...(appelsDeFonds?.values() ?? [])].filter((a) => a.horsAideIndiv).length;
 
   const lotsByCp = useMemo(() => {
     const m = new Map<string, number>();
@@ -334,14 +353,15 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                 onClick={() =>
                   telechargerCsv(
                     `financement-${c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.csv`,
-                    ["Copropriétaire", "Lots", "Mode de financement", "Appel de fonds", "Durée (ans)", "Transmis le", "Saisi par"],
+                    ["Copropriétaire", "Lots", "Mode de financement", "Appel de fonds (à financer avant travaux, hors CEE)", "Prime CEE (fin de chantier)", "Durée (ans)", "Transmis le", "Saisi par"],
                     coproprietaires.map((cp) => {
                       const ch = choixByCp.get(cp.id) ?? null;
                       return [
                         cp.nom,
                         lotsByCp.get(cp.id) ?? 0,
                         ch ? TYPE_META[ch.type].label : "En attente",
-                        appelsDeFonds?.get(cp.id) != null ? Math.round(appelsDeFonds.get(cp.id)! * 100) / 100 : "",
+                        appelsDeFonds?.get(cp.id)?.appel ?? "",
+                        appelsDeFonds?.get(cp.id) ? Math.round(appelsDeFonds.get(cp.id)!.primeCee * 100) / 100 : "",
                         ch?.type === "collectif"
                           ? (finConfig?.duree_annees ?? ch.duree_annees ?? "")
                           : (ch?.duree_annees ?? ""),
@@ -370,7 +390,9 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                       <th>Copropriétaire</th>
                       <th>Lots</th>
                       <th>Mode de financement</th>
-                      <th>Appel de fonds</th>
+                      <th title="À financer avant travaux : quote-part du PF définitif validé moins aides collectives, fonds travaux et prime individuelle connue. La prime CEE arrive en fin de chantier.">
+                        Appel de fonds
+                      </th>
                       <th>Transmis le</th>
                       {scenario && <th style={{ width: 40 }}></th>}
                     </tr>
@@ -421,7 +443,7 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                                 ) : null}
                               </span>
                             </td>
-                            <td>{appelsDeFonds?.get(cp.id) != null ? fmtEuroFull(appelsDeFonds.get(cp.id)!) : "-"}</td>
+                            <td>{appelsDeFonds?.get(cp.id) ? fmtEuroFull(appelsDeFonds.get(cp.id)!.appel) : "-"}</td>
                             <td colSpan={2}>
                               <span style={{ display: "inline-flex", gap: 6 }}>
                                 <button
@@ -472,8 +494,17 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                               <Badge kind="warn">En attente</Badge>
                             )}
                           </td>
-                          <td title="Reste à charge du copropriétaire d'après le plan de financement définitif validé">
-                            {appelsDeFonds?.get(cp.id) != null ? fmtEuroFull(appelsDeFonds.get(cp.id)!) : "-"}
+                          <td
+                            title={
+                              appelsDeFonds?.get(cp.id)
+                                ? `À financer avant travaux (hors CEE${appelsDeFonds.get(cp.id)!.horsAideIndiv ? ", hors aide individuelle : profil non renseigné" : ""}) · prime CEE en fin de chantier : ${fmtEuroFull(appelsDeFonds.get(cp.id)!.primeCee)}`
+                                : undefined
+                            }
+                          >
+                            {appelsDeFonds?.get(cp.id) ? fmtEuroFull(appelsDeFonds.get(cp.id)!.appel) : "-"}
+                            {appelsDeFonds?.get(cp.id)?.horsAideIndiv && (
+                              <span style={{ display: "block", fontSize: 11, color: "var(--fg-muted)" }}>hors aide individuelle</span>
+                            )}
                           </td>
                           <td>
                             {ch ? fmtDate(ch.transmitted_at) : "-"}
@@ -520,9 +551,18 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
               Chaque copropriétaire transmet son choix depuis son portail - si vous avez l'information en direct
               (ex. paiement sur fonds propres), vous pouvez l'enregistrer ici (✎) : la saisie est tracée et le
               copropriétaire peut toujours la modifier depuis son portail. L'éco-PTZ individuel saisi ici porte
-              sur l'ensemble de ses lots. L'appel de fonds est le reste à charge du copropriétaire d'après le
-              plan de financement définitif validé (quote-part moins aides et fonds travaux) ; le détail est
-              géré par l'équipe Strat Eco.
+              sur l'ensemble de ses lots. L'appel de fonds est ce que le copropriétaire doit financer avant
+              travaux d'après le plan de financement définitif validé : sa quote-part moins les aides collectives,
+              le fonds travaux et sa prime MaPrimeRénov' individuelle quand son profil est connu - le même montant
+              que sur sa fiche et son portail. La prime CEE est versée en fin de chantier : elle ne réduit pas
+              l'appel de fonds.
+              {nbHorsAideIndiv > 0 && (
+                <>
+                  {" "}
+                  Pour {nbHorsAideIndiv} copropriétaire{nbHorsAideIndiv > 1 ? "s" : ""} sans profil de ressources
+                  renseigné, la prime individuelle n'est pas encore déduite.
+                </>
+              )}
             </p>
           </div>
         </div>
