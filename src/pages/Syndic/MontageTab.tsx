@@ -15,6 +15,7 @@ import {
   MONTAGES,
   PARCOURS,
   docFiles,
+  docsOfEtape,
   downloadMontageFile,
   etapeProgress,
   useFormulairesMontage,
@@ -208,6 +209,7 @@ function MontageParcours({
         <RenommageDialog
           files={[depot.file]}
           prefixe={c.name}
+          typeInitial={parcours.etapes.flatMap(docsOfEtape).find((d) => d.key === depot.docKey)?.type}
           onConfirm={(file, meta) =>
             upload.mutateAsync({ docKey: depot.docKey, file, nameOriginal: meta.nameOriginal })
           }

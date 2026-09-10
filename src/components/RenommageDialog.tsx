@@ -12,7 +12,7 @@ import {
   extensionDe,
   nomFichierSansAccents,
   renommerFile,
-  TYPES_DOCUMENT,
+  TYPES_DOCUMENT_TRIES,
 } from "@/lib/nommage";
 
 interface Champs {
@@ -123,7 +123,7 @@ export function RenommageDialog({
         <div className="cs-field">
           <label>Type de document</label>
           <select className="edit-inp" style={{ maxWidth: "none", width: "100%" }} value={champs.type} onChange={(e) => set("type", e.target.value)}>
-            {TYPES_DOCUMENT.map((t) => (
+            {TYPES_DOCUMENT_TRIES.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.label}
               </option>

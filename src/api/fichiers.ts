@@ -80,7 +80,13 @@ export const DISPOSITIFS_RECAP: { id: string; label: string; types: string[] }[]
   {
     id: "eco_ptz",
     label: "Éco-PTZ",
-    types: ["devis", "marche_travaux", "attestation_rge", "pv_ag", "offre_pret"],
+    types: [
+      "devis", "marche_travaux", "attestation_rge", "pv_ag", "offre_pret",
+      // pièces du montage bancaire CEGEE (types ajoutés le 10/09/2026)
+      "fiche_renseignements", "attestation_impayes", "fiche_synthetique", "attestation_registre",
+      "avis_sirene", "annexes_comptables", "delegation_pouvoirs", "formulaire_ppe", "demande_pret",
+      "cerfa_ecoptz", "attestation_non_recours", "attestation_caution", "fiche_etat_anah",
+    ],
   },
 ];
 

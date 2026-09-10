@@ -34,11 +34,38 @@ export const TYPES_DOCUMENT: { id: string; label: string; dossier: string }[] = 
   { id: "cadre_cee", label: "Cadre contribution CEE", dossier: "Plans de financement" },
   // Administratif / financement
   { id: "kbis", label: "Kbis", dossier: "Marchés de travaux" },
+  { id: "beneficiaires_effectifs", label: "Liste des bénéficiaires effectifs", dossier: "Marchés de travaux" },
   { id: "rib", label: "RIB", dossier: "Plans de financement" },
   { id: "immatriculation", label: "Immatriculation registre", dossier: "Plans de financement" },
   { id: "plan_financement", label: "Plan de financement", dossier: "Plans de financement" },
   { id: "accord_subvention", label: "Accord de subvention", dossier: "Plans de financement" },
   { id: "offre_pret", label: "Offre de prêt", dossier: "Plans de financement" },
+  // Montage bancaire éco-PTZ collectif (feedback Amir 10/09/2026 : les types du
+  // menu de dépôt reflètent les pièces demandées par la banque)
+  { id: "fiche_renseignements", label: "Fiche de renseignements", dossier: "Plans de financement" },
+  { id: "attestation_impayes", label: "Attestation du taux d'impayés", dossier: "Plans de financement" },
+  { id: "reglement_copropriete", label: "Règlement de copropriété", dossier: "Passation" },
+  { id: "fiche_synthetique", label: "Fiche synthétique de la copropriété", dossier: "Plans de financement" },
+  { id: "attestation_registre", label: "Attestation registre national", dossier: "Plans de financement" },
+  { id: "avis_sirene", label: "Avis de situation SIRENE", dossier: "Plans de financement" },
+  { id: "annexes_comptables", label: "Annexes comptables", dossier: "Plans de financement" },
+  { id: "attestation_assurance", label: "Attestation d'assurance", dossier: "Plans de financement" },
+  { id: "contrat_syndic", label: "Contrat de syndic", dossier: "Passation" },
+  { id: "delegation_pouvoirs", label: "Délégation de pouvoirs", dossier: "Plans de financement" },
+  { id: "formulaire_ppe", label: "Formulaire PPE", dossier: "Plans de financement" },
+  { id: "demande_pret", label: "Demande de prêt", dossier: "Plans de financement" },
+  { id: "cerfa_ecoptz", label: "Formulaire éco-PTZ (CERFA)", dossier: "Plans de financement" },
+  { id: "attestation_non_recours", label: "Attestation de non-recours", dossier: "Plans de financement" },
+  { id: "attestation_caution", label: "Attestation de cautionnement", dossier: "Plans de financement" },
+  { id: "fiche_etat_anah", label: "Fiche État ANAH", dossier: "Plans de financement" },
+  // Assurance dommages-ouvrage
+  { id: "questionnaire_assurance", label: "Questionnaire assurance chantier", dossier: "Devis des études techniques et Frais Annexes" },
+  { id: "offre_assurance", label: "Offre d'assurance", dossier: "Devis des études techniques et Frais Annexes" },
+  { id: "autorisation_urbanisme", label: "Autorisation d'urbanisme", dossier: "Devis des études techniques et Frais Annexes" },
+  { id: "declaration_chantier", label: "Déclaration d'ouverture de chantier", dossier: "Marchés de travaux" },
+  { id: "rapport_ct", label: "Rapport de contrôle technique", dossier: "Marchés de travaux" },
+  { id: "convention_ct", label: "Convention de contrôle technique", dossier: "Devis des études techniques et Frais Annexes" },
+  { id: "etude_sol", label: "Étude de sol", dossier: "Devis des études techniques et Frais Annexes" },
   // Justificatifs personnels (portail copropriétaire)
   { id: "avis_imposition", label: "Avis d'imposition", dossier: "Plans de financement" },
   { id: "piece_identite", label: "Pièce d'identité", dossier: "Plans de financement" },
@@ -51,6 +78,13 @@ export const TYPES_DOCUMENT: { id: string; label: string; dossier: string }[] = 
   { id: "plan", label: "Plan", dossier: "Devis des études techniques et Frais Annexes" },
   { id: "courrier", label: "Courrier", dossier: "Assemblée générale" },
   { id: "autre", label: "Autre document", dossier: "Diagnostic & audit" },
+];
+
+/** Même liste, classée par ordre alphabétique pour les menus déroulants
+ *  (feedback Amir 10/09/2026) - « Autre document » reste en dernier, c'est le repli. */
+export const TYPES_DOCUMENT_TRIES: typeof TYPES_DOCUMENT = [
+  ...TYPES_DOCUMENT.filter((t) => t.id !== "autre").sort((a, b) => a.label.localeCompare(b.label, "fr", { sensitivity: "base" })),
+  ...TYPES_DOCUMENT.filter((t) => t.id === "autre"),
 ];
 
 export const typeLabel = (id: string): string => TYPES_DOCUMENT.find((t) => t.id === id)?.label ?? id;
