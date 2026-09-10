@@ -4,11 +4,14 @@
 // un parcours en étapes décrit dans le registre PARCOURS. Chaque étape liste
 // les documents attendus : le syndic dépose les siens (clic ou glissé-déposé
 // directement sur la ligne du document), les pièces Strat Eco / maîtrise
-// d'œuvre sont affichées pour suivi.
+// d'œuvre sont affichées pour suivi. Chaque fichier déposé s'ouvre en aperçu
+// (œil) sans téléchargement - feedback Amir 10/09/2026.
 import { useMemo, useRef, useState, type DragEvent } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge, Progress } from "@/components/ui";
 import { RenommageDialog } from "@/components/RenommageDialog";
+import { ApercuDocument } from "@/components/ApercuDocument";
+import { estVisualisable } from "@/api/fichiers";
 import { fmtDate } from "@/lib/format";
 import { useAuth } from "@/auth/AuthProvider";
 import {
@@ -27,6 +30,7 @@ import {
   type EtapeDef,
   type FormulaireType,
   type MontageDoc,
+  type MontageFile,
   type MontageFormulaire,
   type MontageId,
 } from "@/api/montage";
@@ -108,6 +112,8 @@ function MontageParcours({
   const [dropError, setDropError] = useState<string | null>(null);
   // Fichier en attente de renommage assisté avant dépôt
   const [depot, setDepot] = useState<{ docKey: string; file: File } | null>(null);
+  // Fichier déposé ouvert en aperçu (sans téléchargement)
+  const [apercu, setApercu] = useState<MontageFile | null>(null);
 
   const docsByKey = useMemo(
     () => new Map((docs ?? []).map((d) => [d.doc_key, d])),
@@ -193,6 +199,7 @@ function MontageParcours({
           onOpenForm={setFormOpen}
           onRemove={(docKey, path) => removeFile.mutate({ docKey, path })}
           onToggleNa={(docKey, na) => setNa.mutate({ docKey, nonApplicable: na })}
+          onApercu={setApercu}
         />
       ))}
 
@@ -203,6 +210,15 @@ function MontageParcours({
         <p className="se-small" style={{ color: "var(--color-error-700)" }}>
           L'opération a échoué. Vérifiez le fichier et réessayez.
         </p>
+      )}
+
+      {apercu && (
+        <ApercuDocument
+          name={apercu.name}
+          path={apercu.path}
+          onClose={() => setApercu(null)}
+          onTelecharger={() => void downloadMontageFile(apercu)}
+        />
       )}
 
       {depot && (
@@ -233,6 +249,7 @@ function EtapePanel({
   onOpenForm,
   onRemove,
   onToggleNa,
+  onApercu,
 }: {
   etape: EtapeDef;
   open: boolean;
@@ -246,6 +263,7 @@ function EtapePanel({
   onOpenForm: (t: FormulaireType) => void;
   onRemove: (docKey: string, path: string) => void;
   onToggleNa: (docKey: string, na: boolean) => void;
+  onApercu: (f: MontageFile) => void;
 }) {
   const p = etapeProgress(etape, docsByKey, formsByType);
   const complete = p.done >= p.total && p.total > 0;
@@ -319,6 +337,7 @@ function EtapePanel({
                     onDrop={(file) => onDrop(d.key, file)}
                     onRemove={(path) => onRemove(d.key, path)}
                     onToggleNa={(na) => onToggleNa(d.key, na)}
+                    onApercu={onApercu}
                   />
                 ))}
               </div>
@@ -345,6 +364,7 @@ function DocRow({
   onDrop,
   onRemove,
   onToggleNa,
+  onApercu,
 }: {
   def: DocDef;
   row: MontageDoc | undefined;
@@ -354,6 +374,7 @@ function DocRow({
   onDrop: (file: File) => void;
   onRemove: (path: string) => void;
   onToggleNa: (na: boolean) => void;
+  onApercu: (f: MontageFile) => void;
 }) {
   const files = docFiles(row);
   const na = row?.statut === "non_applicable";
@@ -433,6 +454,13 @@ function DocRow({
               <span className="fmeta">
                 {[fmtSize(f.size), fmtDate(f.uploaded_at)].filter(Boolean).join(" · ")}
               </span>
+              <button
+                className="icon-btn"
+                title={estVisualisable(f.name) ? "Aperçu sans téléchargement" : "Ce format ne s'affiche pas dans le navigateur"}
+                onClick={() => onApercu(f)}
+              >
+                <Icon name="eye" size={15} />
+              </button>
               <button className="icon-btn" title="Télécharger" onClick={() => void downloadMontageFile(f)}>
                 <Icon name="download" size={15} />
               </button>
