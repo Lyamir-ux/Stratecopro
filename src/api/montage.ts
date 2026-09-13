@@ -49,7 +49,13 @@ export const MONTAGES: {
   },
   { id: "anah", label: "ANAH - MaPrimeRénov' Copro", sub: "Subvention collective de l'Anah", icon: "fileCheck", dispo: true },
   { id: "cee", label: "CEE", sub: "Certificats d'économies d'énergie", icon: "zap", dispo: false },
-  { id: "climaxion", label: "Climaxion", sub: "Eurométropole de Strasbourg / Région Grand Est", icon: "leaf", dispo: false },
+  {
+    id: "climaxion",
+    label: "EMS & Climaxion",
+    sub: "Eurométropole de Strasbourg et Région Grand Est - dossier commun",
+    icon: "leaf",
+    dispo: true,
+  },
   { id: "do", label: "Dommages-ouvrage", sub: "ROEDERER - assurances de chantier", icon: "hammer", dispo: true },
 ];
 
@@ -734,6 +740,259 @@ export const ANAH_ETAPES: EtapeDef[] = [
   },
 ];
 
+// ========== Catalogue documentaire EMS & Climaxion ==========
+// Source : checklist commune Eurométropole de Strasbourg / Climaxion fournie
+// par Amir le 13/09/2026 (25 pièces, même liste que la checklist AMO
+// « EMS & Climaxion » de CHECKLIST_TEMPLATES). Déposants fixés pièce par pièce.
+// Quatre pièces reposent sur un modèle à télécharger (attestation logement
+// décent, mandat de délégation de dépôt, attestation et rapport de conformité
+// des offres) : fichiers à venir dans public/modeles - renseigner `modele`
+// dès qu'ils y sont. Le mandat de délégation sera à terme pré-rempli et signé
+// électroniquement par le syndic (chantier séparé) : dépôt classique en
+// attendant.
+
+export const CLIMAXION_ETAPES: EtapeDef[] = [
+  {
+    id: "copropriete",
+    num: 1,
+    label: "Copropriété",
+    intro:
+      "Pièces d'identité du syndicat des copropriétaires, toutes à déposer par le syndic. L'attestation logement décent suit un modèle fourni par Strat Eco.",
+    groupes: [
+      {
+        docs: [
+          {
+            key: "fiche_synthetique",
+            name: "Fiche synthétique de la copropriété",
+            hint: "Extraite du Registre national des copropriétés, avec le numéro d'immatriculation",
+            fournisseur: "syndic",
+            type: "fiche_synthetique",
+          },
+          {
+            key: "attestation_registre",
+            name: "Attestation de mise à jour du registre de copropriété",
+            fournisseur: "syndic",
+            lien: { label: "registre-coproprietes.gouv.fr", url: "https://www.registre-coproprietes.gouv.fr/" },
+            type: "attestation_registre",
+          },
+          {
+            key: "attestation_composition",
+            name: "Attestation de composition de la copropriété",
+            hint: "Nombre de lots et de logements, répartition des tantièmes - signée par le syndic",
+            fournisseur: "syndic",
+            type: "attestation_composition",
+          },
+          {
+            key: "reglement_copropriete",
+            name: "Règlement de copropriété",
+            hint: "Dans son intégralité",
+            fournisseur: "syndic",
+            type: "reglement_copropriete",
+          },
+          {
+            key: "attestation_logement_decent",
+            name: "Attestation logement décent",
+            hint: "Sur le modèle fourni par Strat Eco (à venir dans cette ligne) - complétée et signée par le syndic",
+            fournisseur: "syndic",
+            type: "attestation_logement_decent",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "lancement_amo",
+    num: 2,
+    label: "Lancement de l'AMO",
+    intro:
+      "Décision de l'assemblée générale de confier l'assistance à maîtrise d'ouvrage à Strat Eco, et pièces qui permettent à Strat Eco de déposer le dossier au nom de la copropriété.",
+    groupes: [
+      {
+        docs: [
+          {
+            key: "pv_age_lancement_amo",
+            name: "PV d'AGE validant le lancement de l'AMO",
+            hint: "Signé, cacheté et certifié conforme",
+            fournisseur: "syndic",
+            type: "pv_ag",
+          },
+          {
+            key: "rib_compte_travaux",
+            name: "RIB du compte travaux",
+            hint: "Compte ouvert au nom du syndicat des copropriétaires",
+            fournisseur: "syndic",
+            type: "rib",
+          },
+          {
+            key: "convention_amo",
+            name: "Convention de l'AMO",
+            hint: "Convention d'assistance à maîtrise d'ouvrage Strat Eco, signée par le syndic",
+            fournisseur: "syndic",
+            type: "contrat_amo",
+          },
+          {
+            key: "mandat_delegation_depot",
+            name: "Mandat de délégation de dépôt à l'AMO",
+            hint: "Pré-rempli par Strat Eco sur le modèle EMS / Climaxion - le syndic n'a qu'à le signer puis le déposer ici (signature électronique à venir)",
+            fournisseur: "syndic",
+            type: "mandat_delegation_depot",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "etudes_moe",
+    num: 3,
+    label: "Études et maîtrise d'œuvre",
+    intro:
+      "Pièces du choix de la maîtrise d'œuvre et des études : le PV d'AG relève du syndic, le reste est versé par Strat Eco ou la maîtrise d'œuvre et suivi ici.",
+    groupes: [
+      {
+        docs: [
+          {
+            key: "pv_ag_moe",
+            name: "PV d'AG validant la maîtrise d'œuvre",
+            hint: "Signé, cacheté et certifié conforme",
+            fournisseur: "syndic",
+            type: "pv_ag",
+          },
+          {
+            key: "audit_reglementaire_sources",
+            name: "Audit énergétique réglementaire et fichiers sources",
+            hint: "Rapport d'audit (loi ELAN) et fichiers de calcul du bureau d'études",
+            fournisseur: "amo_moe",
+            type: "audit_energetique",
+          },
+          {
+            key: "offre_moe",
+            name: "Offre de la maîtrise d'œuvre",
+            hint: "Offre retenue lors de la consultation - déjà au dossier projet",
+            fournisseur: "amo",
+            type: "offre_moe",
+          },
+          {
+            key: "pf_definitif",
+            name: "Plan de financement définitif de l'opération",
+            hint: "Classeur exporté du plan de financement définitif validé - produit par Strat Eco",
+            fournisseur: "amo",
+            type: "plan_financement",
+          },
+          {
+            key: "tests_etancheite",
+            name: "Rapport des tests initiaux d'étanchéité à l'air",
+            hint: "Mesures avant travaux",
+            fournisseur: "amo_moe",
+            type: "test_etancheite",
+          },
+          {
+            key: "memoire_technique",
+            name: "Mémoire technique",
+            hint: "Mémoire technique du projet établi par la maîtrise d'œuvre",
+            fournisseur: "moe",
+            type: "memoire_technique",
+          },
+          {
+            key: "plans_coupes_photos",
+            name: "Plans, coupes et photos des bâtiments",
+            fournisseur: "moe",
+            type: "plan",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "travaux",
+    num: 4,
+    label: "Travaux",
+    intro:
+      "Décision de travaux et pièces des marchés. L'attestation et le rapport de conformité des offres suivent deux modèles fournis par Strat Eco, complétés par la maîtrise d'œuvre.",
+    groupes: [
+      {
+        docs: [
+          {
+            key: "pv_age_travaux",
+            name: "PV d'AGE validant les travaux",
+            hint: "Signé, cacheté et certifié conforme",
+            fournisseur: "syndic",
+            type: "pv_ag",
+          },
+          {
+            key: "attestation_conformite_offres",
+            name: "Attestation de conformité des offres",
+            hint: "Sur le modèle fourni par Strat Eco (à venir dans cette ligne) - établie par la maîtrise d'œuvre",
+            fournisseur: "moe",
+            type: "attestation_conformite_offres",
+          },
+          {
+            key: "rapport_conformite_offres",
+            name: "Rapport de conformité des offres",
+            hint: "Sur le modèle fourni par Strat Eco (à venir dans cette ligne) - analyse des offres par la maîtrise d'œuvre",
+            fournisseur: "moe",
+            type: "rapport_conformite_offres",
+          },
+          {
+            key: "cctp_dpgf_energetiques",
+            name: "CCTP et DPGF des lots énergétiques",
+            fournisseur: "amo_moe",
+            type: "cctp_dce",
+          },
+          {
+            key: "devis_fenetres",
+            name: "Devis de remplacement des fenêtres",
+            hint: "Devis des entreprises RGE pour les menuiseries",
+            fournisseur: "amo_moe",
+            type: "devis",
+          },
+          {
+            key: "planning_previsionnel",
+            name: "Planning prévisionnel de l'opération",
+            fournisseur: "moe",
+            type: "planning",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "aides_individuelles",
+    num: 5,
+    label: "Aides individuelles",
+    intro:
+      "Pièces établies par Strat Eco à partir de l'enquête sociale. Les avis d'imposition et le tableau des primes individuelles restent confidentiels : ni visibles ni téléchargeables depuis l'espace syndic.",
+    groupes: [
+      {
+        docs: [
+          {
+            key: "avis_imposition",
+            name: "Avis d'imposition des personnes éligibles aux aides",
+            hint: "Justificatifs déposés par les copropriétaires depuis leur espace et centralisés par Strat Eco - pièce confidentielle",
+            fournisseur: "amo",
+            confidentiel: true,
+            type: "avis_imposition",
+          },
+          {
+            key: "tableau_primes_individuelles",
+            name: "Tableau récapitulatif des primes individuelles",
+            hint: "Primes individuelles par copropriétaire éligible, établi par Strat Eco - pièce confidentielle",
+            fournisseur: "amo",
+            confidentiel: true,
+            type: "plan_financement",
+          },
+          {
+            key: "liste_beneficiaires",
+            name: "Liste des bénéficiaires",
+            hint: "Copropriétaires bénéficiaires des aides individuelles - établie par Strat Eco",
+            fournisseur: "amo",
+            type: "liste_beneficiaires",
+          },
+        ],
+      },
+    ],
+  },
+];
+
 // ========== Registre des parcours ==========
 
 export interface ParcoursDef {
@@ -754,6 +1013,12 @@ export const PARCOURS: Partial<Record<MontageId, ParcoursDef>> = {
     intro:
       "Subvention collective de l'Anah accordée au syndicat des copropriétaires. Le dossier reprend les 15 pièces de la checklist MaPrimeRénov' du projet : déposez celles qui relèvent du syndic, les autres sont versées par Strat Eco ou la maîtrise d'œuvre et suivies ici.",
     etapes: ANAH_ETAPES,
+  },
+  climaxion: {
+    titre: "EMS & Climaxion",
+    intro:
+      "Aides de l'Eurométropole de Strasbourg et de la Région Grand Est (Climaxion), instruites sur un dossier commun de 25 pièces. Déposez celles qui relèvent du syndic ; les autres sont versées par Strat Eco ou la maîtrise d'œuvre et suivies ici. Quatre pièces suivent un modèle fourni par Strat Eco.",
+    etapes: CLIMAXION_ETAPES,
   },
   do: {
     titre: "Assurance dommages-ouvrage - ROEDERER",

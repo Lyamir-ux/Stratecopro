@@ -58,6 +58,16 @@ export const TYPES_DOCUMENT: { id: string; label: string; dossier: string }[] = 
   { id: "attestation_non_recours", label: "Attestation de non-recours", dossier: "Plans de financement" },
   { id: "attestation_caution", label: "Attestation de cautionnement", dossier: "Plans de financement" },
   { id: "fiche_etat_anah", label: "Fiche État ANAH", dossier: "Plans de financement" },
+  // Dossier EMS & Climaxion (feedback Amir 13/09/2026)
+  { id: "attestation_composition", label: "Attestation de composition de la copropriété", dossier: "Plans de financement" },
+  { id: "attestation_logement_decent", label: "Attestation logement décent", dossier: "Plans de financement" },
+  { id: "mandat_delegation_depot", label: "Mandat de délégation de dépôt", dossier: "Plans de financement" },
+  { id: "offre_moe", label: "Offre de maîtrise d'œuvre", dossier: "Devis des études techniques et Frais Annexes" },
+  { id: "memoire_technique", label: "Mémoire technique", dossier: "Marchés de travaux" },
+  { id: "attestation_conformite_offres", label: "Attestation de conformité des offres", dossier: "Marchés de travaux" },
+  { id: "rapport_conformite_offres", label: "Rapport de conformité des offres", dossier: "Marchés de travaux" },
+  { id: "planning", label: "Planning prévisionnel", dossier: "Marchés de travaux" },
+  { id: "liste_beneficiaires", label: "Liste des bénéficiaires", dossier: "Plans de financement" },
   // Assurance dommages-ouvrage
   { id: "questionnaire_assurance", label: "Questionnaire assurance chantier", dossier: "Devis des études techniques et Frais Annexes" },
   { id: "offre_assurance", label: "Offre d'assurance", dossier: "Devis des études techniques et Frais Annexes" },

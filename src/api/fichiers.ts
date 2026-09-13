@@ -60,17 +60,18 @@ export const DISPOSITIFS_RECAP: { id: string; label: string; types: string[] }[]
     ],
   },
   {
+    // Eurométropole de Strasbourg et Climaxion (Région Grand Est) : un seul
+    // dossier depuis le 13/09/2026 (feedback Amir) - même checklist.
     id: "climaxion",
-    label: "Climaxion",
+    label: "EMS & Climaxion",
     types: [
       "devis", "audit_energetique", "etude_thermique", "pv_ag",
       "plan_financement", "rib", "accord_subvention",
+      "fiche_synthetique", "attestation_registre", "attestation_composition", "reglement_copropriete",
+      "attestation_logement_decent", "contrat_amo", "mandat_delegation_depot", "offre_moe",
+      "test_etancheite", "memoire_technique", "plan", "photo", "attestation_conformite_offres",
+      "rapport_conformite_offres", "cctp_dce", "planning", "avis_imposition", "liste_beneficiaires",
     ],
-  },
-  {
-    id: "eurometropole",
-    label: "Eurométropole",
-    types: ["devis", "pv_ag", "plan_financement", "rib", "accord_subvention"],
   },
   {
     id: "autre",
@@ -248,33 +249,43 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: st
       "Plan de financement définitif de la copropriété (Excel)",
     ],
   },
-  // Climaxion, Eurométropole et Autre (feedback du 31/08/2026) : listes de
-  // pièces indicatives - modifiez librement les items ci-dessous.
   {
+    // Checklist commune Eurométropole de Strasbourg (EMS) et Climaxion (Région
+    // Grand Est), fournie par Amir le 13/09/2026 - remplace les anciennes
+    // listes « Climaxion » et « Eurométropole » (fusionnées, migration 0067).
+    // La clé `dispositif` reste « climaxion » : c'est l'identifiant stocké en
+    // base. Les mêmes 25 pièces forment le dossier syndic (CLIMAXION_ETAPES).
     dispositif: "climaxion",
-    label: "Climaxion",
+    label: "EMS & Climaxion",
     items: [
-      "Dossier de demande de subvention Climaxion",
-      "Audit énergétique / étude thermique",
-      "PV d'AG votant les travaux",
-      "Devis / DPGF des travaux",
-      "Plan de financement",
+      "Fiche synthétique de la copropriété",
+      "Attestation de mise à jour du registre de copropriété",
+      "Attestation de composition de la copropriété signée par le syndic",
+      "Règlement de copropriété",
+      "Attestation logement décent (modèle)",
+      "PV d'AGE validant le lancement de l'AMO",
       "RIB du compte travaux",
-      "Notification d'accord de subvention",
+      "Convention AMO",
+      "Mandat de délégation de dépôt à l'AMO (modèle)",
+      "PV d'AG validant la maîtrise d'œuvre",
+      "Audit énergétique réglementaire et fichiers sources",
+      "Offre de la maîtrise d'œuvre",
+      "Plan de financement définitif de l'opération",
+      "Rapport des tests initiaux d'étanchéité à l'air",
+      "Mémoire technique",
+      "Plans, coupes et photos des bâtiments",
+      "PV d'AGE validant les travaux",
+      "Attestation de conformité des offres (modèle)",
+      "Rapport de conformité des offres (modèle)",
+      "CCTP et DPGF des lots énergétiques",
+      "Devis de remplacement des fenêtres",
+      "Planning prévisionnel de l'opération",
+      "Avis d'imposition des personnes éligibles aux aides (espace copropriétaires)",
+      "Tableau récapitulatif des primes individuelles",
+      "Liste des bénéficiaires",
     ],
   },
-  {
-    dispositif: "eurometropole",
-    label: "Eurométropole",
-    items: [
-      "Dossier de demande d'aide Eurométropole",
-      "PV d'AG votant les travaux",
-      "Devis / DPGF des travaux",
-      "Plan de financement",
-      "RIB du compte travaux",
-      "Notification d'accord de subvention",
-    ],
-  },
+  // Autre (feedback du 31/08/2026) : liste indicative - modifiez librement.
   {
     dispositif: "autre",
     label: "Autre",
@@ -330,6 +341,35 @@ export function useChecklists(coproId: string | undefined) {
         for (const r of results) if (r.error) throw r.error;
         const byId = new Map(renames.map((r) => [r.id, r.label]));
         lists = lists.map((l) => (byId.has(l.id) ? { ...l, label: byId.get(l.id)! } : l));
+      }
+      // Les pièces aussi suivent le gabarit tant que rien n'a été coché ni lié
+      // (ex. fusion Climaxion + Eurométropole du 13/09/2026, ou checklist
+      // recréée à l'ancien gabarit par un bundle déployé en retard). Dès qu'une
+      // case est cochée ou un fichier lié, la liste n'est plus touchée.
+      let itemsResync = false;
+      for (const l of lists) {
+        const t = CHECKLIST_TEMPLATES.find((x) => x.dispositif === l.dispositif);
+        const items = ((l as { checklist_items?: Tables<"checklist_items">[] }).checklist_items ?? [])
+          .slice()
+          .sort((a, b) => a.position - b.position);
+        if (!t || items.some((i) => i.done || i.fichier_id)) continue;
+        const identiques = items.length === t.items.length && items.every((i, k) => i.label === t.items[k]);
+        if (identiques) continue;
+        const { error: eDel } = await supabase.from("checklist_items").delete().eq("checklist_id", l.id);
+        if (eDel) throw eDel;
+        const { error: eIns } = await supabase
+          .from("checklist_items")
+          .insert(t.items.map((label, i) => ({ checklist_id: l.id, label, position: i })));
+        if (eIns) throw eIns;
+        itemsResync = true;
+      }
+      if (itemsResync) {
+        const { data: reloaded, error: e3 } = await supabase
+          .from("checklists")
+          .select("*, checklist_items(*)")
+          .eq("copro_id", coproId!);
+        if (e3) throw e3;
+        lists = reloaded ?? [];
       }
       const missing = CHECKLIST_TEMPLATES.filter((t) => !lists.some((l) => l.dispositif === t.dispositif));
       if (missing.length) {
