@@ -2738,6 +2738,14 @@ export type Database = {
     Functions: {
       a_postule: { Args: { p_consultation_id: string }; Returns: boolean }
       copro_visible_presta: { Args: { p_copro_id: string }; Returns: boolean }
+      checklist_cocher_pieces: {
+        Args: { p_copro_id: string; p_labels: string[]; p_fichier_id?: string | null }
+        Returns: number
+      }
+      checklist_delier_fichier: {
+        Args: { p_fichier_id: string }
+        Returns: number
+      }
       documents_dossier: {
         Args: { p_copro_id: string }
         Returns: {

@@ -5,7 +5,7 @@
 // enquete_reponses_syndic qui exclut le RFR (donnée sensible).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { uploadFichierDirect, urlSigneeFichier } from "@/api/fichiers";
+import { invaliderPieces, uploadFichierEtPropager, urlSigneeFichier } from "@/api/fichiers";
 import type { Tables } from "@/lib/database.types";
 
 export type CoproRow = Tables<"coproprietes">;
@@ -249,13 +249,22 @@ export function useDocumentsSyndic(coproId: string | undefined) {
 export function useUploadDocumentSyndic(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ file, dossier, nameOriginal }: { file: File; dossier: string; nameOriginal?: string }) => {
-      await uploadFichierDirect(coproId, file, dossier, nameOriginal);
+    mutationFn: async ({
+      file,
+      dossier,
+      nameOriginal,
+      type,
+    }: {
+      file: File;
+      dossier: string;
+      nameOriginal?: string;
+      type?: string | null;
+    }) => {
+      // Propagation comprise : pièces de checklist cochées et dossiers de
+      // montage de même type complétés (feedback Amir 13/09/2026)
+      await uploadFichierEtPropager(coproId, file, dossier, nameOriginal, type);
     },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["syndic", "documents", coproId] });
-      void qc.invalidateQueries({ queryKey: ["fichiers", coproId] });
-    },
+    onSuccess: () => invaliderPieces(qc, coproId),
   });
 }
 

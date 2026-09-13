@@ -15,8 +15,10 @@ describe("dossier ANAH - MaPrimeRénov' Copro", () => {
     expect(new Set(docsAnah.map((d) => d.key)).size).toBe(docsAnah.length);
     // Chaque libellé du parcours reprend l'intitulé de la checklist (mot-clé)
     for (const item of checklist.items) {
-      const mot = item.replace(/\(.*\)/, "").split(" ").filter((m) => m.length > 4)[0];
-      expect(docsAnah.some((d) => d.name.includes(mot)), item).toBe(true);
+      const mot = item.label.replace(/\(.*\)/, "").split(" ").filter((m) => m.length > 4)[0];
+      expect(docsAnah.some((d) => d.name.includes(mot)), item.label).toBe(true);
+      // même type de document côté checklist et côté dossier syndic : un dépôt coche les deux
+      expect(docsAnah.some((d) => d.type === item.type), item.label + " / " + item.type).toBe(true);
     }
   });
 

@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { nomFichierSansAccents } from "@/lib/nommage";
 import type { Json, Tables } from "@/lib/database.types";
 import type { IconName } from "@/components/Icon";
+import { propagerDocument, retirerFichierDesMontages } from "@/api/propagation";
 
 export type MontageId = "ecoptz" | "anah" | "cee" | "climaxion" | "do";
 export type MontageDoc = Tables<"montage_docs">;
@@ -187,14 +188,14 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
             name: "PV d'AG - mandat du syndic",
             hint: "Signé(s), cacheté(s) et certifié(s) conforme(s) : désignation et renouvellement du mandat pour la période en cours",
             fournisseur: "syndic",
-            type: "pv_ag",
+            type: "pv_ag_mandat",
           },
           {
             key: "pv_ag_travaux",
             name: "PV d'AG - vote des travaux et de la résolution d'emprunt",
             hint: "Signé(s), cacheté(s) et certifié(s) conforme(s)",
             fournisseur: "syndic",
-            type: "pv_ag",
+            type: "pv_ag_travaux",
           },
           {
             key: "annexes_comptables",
@@ -289,28 +290,28 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
             name: "Devis des travaux ou ordres de service",
             hint: "Datés de moins d'un an, correspondant aux montants votés en AG - fournis par la maîtrise d'œuvre",
             fournisseur: "moe",
-            type: "devis",
+            type: "devis_travaux",
           },
           {
             key: "rib_entreprises",
             name: "RIB des entreprises intervenantes",
             hint: "Format IBAN-BIC - fournis par la maîtrise d'œuvre",
             fournisseur: "moe",
-            type: "rib",
+            type: "rib_entreprises",
           },
           {
             key: "cerfa_emprunteur",
             name: "Formulaire réglementaire éco-PTZ « Emprunteur »",
             hint: "Fourni par Strat Eco - complété, tamponné et signé par le syndic",
             fournisseur: "amo",
-            type: "cerfa_ecoptz",
+            type: "cerfa_ecoptz_emprunteur",
           },
           {
             key: "cerfa_entreprises",
             name: "Formulaires réglementaires éco-PTZ « Entreprises »",
             hint: "Fournis par Strat Eco, signés par les entreprises RGE. Les cases « coût total éligible revenant aux seuls copropriétaires participant au prêt » restent vides jusqu'à la fin de l'instruction.",
             fournisseur: "amo",
-            type: "cerfa_ecoptz",
+            type: "cerfa_ecoptz_entreprise",
           },
           {
             key: "attestation_impayes_offre",
@@ -403,7 +404,7 @@ export const DO_ETAPES: EtapeDef[] = [
             name: "Détail du coût total prévisionnel des travaux (plan de financement)",
             hint: "Y compris honoraires techniques - le descriptif sommaire des travaux y figure. Fourni par Strat Eco.",
             fournisseur: "amo",
-            type: "plan_financement",
+            type: "pf_definitif",
           },
           {
             key: "permis_construire",
@@ -490,7 +491,7 @@ export const DO_ETAPES: EtapeDef[] = [
             name: "Conventions ou notes d'honoraires des BET de l'opération",
             hint: "Déjà versées au dossier projet - suivies par Strat Eco",
             fournisseur: "amo",
-            type: "contrat_moe",
+            type: "devis_honoraires_moe",
           },
           {
             key: "liste_intervenants_lots",
@@ -604,14 +605,14 @@ export const ANAH_ETAPES: EtapeDef[] = [
             name: "PV d'AG ayant décidé de réaliser les travaux",
             hint: "Signé, cacheté et certifié conforme - résolutions de vote des travaux et de demande des subventions",
             fournisseur: "syndic",
-            type: "pv_ag",
+            type: "pv_ag_travaux",
           },
           {
             key: "pv_ag_representant",
             name: "PV d'AG nommant le représentant légal",
             hint: "Désignation ou renouvellement du mandat du syndic pour la période en cours - signé, cacheté et certifié conforme",
             fournisseur: "syndic",
-            type: "pv_ag",
+            type: "pv_ag_mandat",
           },
           {
             key: "attestation_registre",
@@ -633,7 +634,7 @@ export const ANAH_ETAPES: EtapeDef[] = [
             name: "RIB du compte travaux",
             hint: "Compte ouvert au nom du syndicat des copropriétaires - c'est sur ce compte que l'Anah verse la subvention",
             fournisseur: "syndic",
-            type: "rib",
+            type: "rib_compte_travaux",
           },
         ],
       },
@@ -653,14 +654,14 @@ export const ANAH_ETAPES: EtapeDef[] = [
             name: "Pièces marchés : devis détaillés / DPGF des travaux",
             hint: "Devis détaillés ou DPGF de chaque lot, établis par les entreprises RGE retenues",
             fournisseur: "amo_moe",
-            type: "devis",
+            type: "devis_travaux",
           },
           {
             key: "devis_honoraires_moe",
             name: "Devis détaillés des honoraires de MOE et des autres études",
             hint: "Maîtrise d'œuvre, bureaux d'études, contrôle technique, coordination SPS, diagnostics",
             fournisseur: "amo",
-            type: "devis",
+            type: "devis_honoraires_moe",
           },
           {
             key: "contrat_moe",
@@ -709,7 +710,7 @@ export const ANAH_ETAPES: EtapeDef[] = [
             name: "Rapport d'enquête sociale",
             hint: "Répartition des profils MaPrimeRénov' des ménages de la copropriété - produit par Strat Eco",
             fournisseur: "amo",
-            type: "rapport",
+            type: "rapport_enquete_sociale",
           },
           {
             key: "avis_imposition",
@@ -725,14 +726,14 @@ export const ANAH_ETAPES: EtapeDef[] = [
             hint: "Primes MaPrimeRénov' individuelles par copropriétaire éligible, établie par Strat Eco - pièce confidentielle",
             fournisseur: "amo",
             confidentiel: true,
-            type: "plan_financement",
+            type: "liste_primes_individuelles",
           },
           {
             key: "pf_definitif",
             name: "Plan de financement définitif de la copropriété (Excel)",
             hint: "Classeur exporté du plan de financement définitif validé - produit par Strat Eco",
             fournisseur: "amo",
-            type: "plan_financement",
+            type: "pf_definitif",
           },
         ],
       },
@@ -814,14 +815,14 @@ export const CLIMAXION_ETAPES: EtapeDef[] = [
             name: "PV d'AGE validant le lancement de l'AMO",
             hint: "Signé, cacheté et certifié conforme",
             fournisseur: "syndic",
-            type: "pv_ag",
+            type: "pv_ag_lancement_amo",
           },
           {
             key: "rib_compte_travaux",
             name: "RIB du compte travaux",
             hint: "Compte ouvert au nom du syndicat des copropriétaires",
             fournisseur: "syndic",
-            type: "rib",
+            type: "rib_compte_travaux",
           },
           {
             key: "convention_amo",
@@ -855,7 +856,7 @@ export const CLIMAXION_ETAPES: EtapeDef[] = [
             name: "PV d'AG validant la maîtrise d'œuvre",
             hint: "Signé, cacheté et certifié conforme",
             fournisseur: "syndic",
-            type: "pv_ag",
+            type: "pv_ag_moe",
           },
           {
             key: "audit_reglementaire_sources",
@@ -876,7 +877,7 @@ export const CLIMAXION_ETAPES: EtapeDef[] = [
             name: "Plan de financement définitif de l'opération",
             hint: "Classeur exporté du plan de financement définitif validé - produit par Strat Eco",
             fournisseur: "amo",
-            type: "plan_financement",
+            type: "pf_definitif",
           },
           {
             key: "tests_etancheite",
@@ -916,7 +917,7 @@ export const CLIMAXION_ETAPES: EtapeDef[] = [
             name: "PV d'AGE validant les travaux",
             hint: "Signé, cacheté et certifié conforme",
             fournisseur: "syndic",
-            type: "pv_ag",
+            type: "pv_ag_travaux",
           },
           {
             key: "attestation_conformite_offres",
@@ -943,7 +944,7 @@ export const CLIMAXION_ETAPES: EtapeDef[] = [
             name: "Devis de remplacement des fenêtres",
             hint: "Devis des entreprises RGE pour les menuiseries",
             fournisseur: "amo_moe",
-            type: "devis",
+            type: "devis_fenetres",
           },
           {
             key: "planning_previsionnel",
@@ -978,7 +979,7 @@ export const CLIMAXION_ETAPES: EtapeDef[] = [
             hint: "Primes individuelles par copropriétaire éligible, établi par Strat Eco - pièce confidentielle",
             fournisseur: "amo",
             confidentiel: true,
-            type: "plan_financement",
+            type: "liste_primes_individuelles",
           },
           {
             key: "liste_beneficiaires",
@@ -1126,7 +1127,18 @@ function notifierDepot(coproId: string, montage: MontageId, docKey: string, file
 export function useUploadMontageDoc(coproId: string, montage: MontageId) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ docKey, file, nameOriginal }: { docKey: string; file: File; nameOriginal?: string }) => {
+    mutationFn: async ({
+      docKey,
+      file,
+      nameOriginal,
+      type,
+    }: {
+      docKey: string;
+      file: File;
+      nameOriginal?: string;
+      /** Type choisi dans le dialogue de nommage (défaut : celui de la pièce). */
+      type?: string | null;
+    }) => {
       const uid = await currentUid();
       const nom = nomFichierSansAccents(file.name);
       const safe = nom.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -1166,41 +1178,29 @@ export function useUploadMontageDoc(coproId: string, montage: MontageId) {
       if (eDb) throw eDb;
       // Notifie l'équipe AMO (chef de projet) - la fonction ignore les dépôts AMO.
       notifierDepot(coproId, montage, docKey, file.name);
+      // La même pièce est attendue ailleurs (checklists, autres dossiers de
+      // montage) : elle y est cochée / ajoutée (feedback Amir 13/09/2026).
+      await propagerDocument(coproId, type ?? docDef(montage, docKey)?.type, entry, { montageSource: montage });
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["montage", "docs", coproId, montage] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["montage", "docs", coproId] });
+      void qc.invalidateQueries({ queryKey: ["checklists", coproId] });
+      void qc.invalidateQueries({ queryKey: ["syndic", "documents", coproId] });
+    },
   });
 }
 
 /** Retire un fichier déposé (Storage + ligne). */
-export function useRemoveMontageFile(coproId: string, montage: MontageId) {
+export function useRemoveMontageFile(coproId: string, _montage: MontageId) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ docKey, path }: { docKey: string; path: string }) => {
-      const uid = await currentUid();
-      const { data: row, error: eSel } = await supabase
-        .from("montage_docs")
-        .select("id, files")
-        .eq("copro_id", coproId)
-        .eq("montage", montage)
-        .eq("doc_key", docKey)
-        .maybeSingle();
-      if (eSel) throw eSel;
-      if (!row) return;
-      const files = (Array.isArray(row.files) ? (row.files as unknown as MontageFile[]) : []).filter(
-        (f) => f.path !== path
-      );
-      const { error: eDb } = await supabase
-        .from("montage_docs")
-        .update({
-          files: files as unknown as Json,
-          statut: files.length > 0 ? "depose" : "a_fournir",
-          updated_by: uid,
-        })
-        .eq("id", row.id);
-      if (eDb) throw eDb;
+    mutationFn: async ({ path }: { docKey: string; path: string }) => {
+      // Le fichier peut être référencé par plusieurs dossiers de montage
+      // (propagation) : il est retiré de tous avant suppression du Storage.
+      await retirerFichierDesMontages(coproId, path);
       await supabase.storage.from("copro-files").remove([path]);
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["montage", "docs", coproId, montage] }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["montage", "docs", coproId] }),
   });
 }
 

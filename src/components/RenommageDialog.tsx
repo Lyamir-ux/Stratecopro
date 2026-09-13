@@ -33,7 +33,9 @@ interface RenommageDialogProps {
   dossiers?: readonly string[];
   dossierInitial?: string;
   /** Dépose le fichier (déjà renommé). Appelé une fois par fichier validé. */
-  onConfirm: (file: File, meta: { dossier: string | null; nameOriginal: string }) => Promise<void> | void;
+  /** meta.type : type de document choisi (id TYPES_DOCUMENT) - sert à cocher la
+   *  pièce dans toutes les checklists et dossiers qui l'attendent. */
+  onConfirm: (file: File, meta: { dossier: string | null; nameOriginal: string; type: string }) => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -99,6 +101,7 @@ export function RenommageDialog({
       await onConfirm(propre === file.name ? file : renommerFile(file, propre), {
         dossier: dossiers ? dossier : null,
         nameOriginal: file.name,
+        type: champs.type,
       });
       suivant();
     } catch (e) {

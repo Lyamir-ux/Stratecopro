@@ -231,7 +231,7 @@ function MontageParcours({
           prefixe={c.name}
           typeInitial={parcours.etapes.flatMap(docsOfEtape).find((d) => d.key === depot.docKey)?.type}
           onConfirm={(file, meta) =>
-            upload.mutateAsync({ docKey: depot.docKey, file, nameOriginal: meta.nameOriginal })
+            upload.mutateAsync({ docKey: depot.docKey, file, nameOriginal: meta.nameOriginal, type: meta.type })
           }
           onClose={() => setDepot(null)}
         />

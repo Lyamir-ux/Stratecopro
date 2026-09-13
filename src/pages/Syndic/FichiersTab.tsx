@@ -312,7 +312,7 @@ export function FichiersTabSyndic({ c }: { c: SyndicCopro }) {
           dossiers={DOSSIERS}
           dossierInitial={depot.dossier}
           onConfirm={(file, meta) =>
-            upload.mutateAsync({ file, dossier: meta.dossier ?? depot.dossier, nameOriginal: meta.nameOriginal })
+            upload.mutateAsync({ file, dossier: meta.dossier ?? depot.dossier, nameOriginal: meta.nameOriginal, type: meta.type })
           }
           onClose={() => setDepot(null)}
         />

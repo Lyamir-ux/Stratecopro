@@ -385,6 +385,11 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                         <span style={{ textDecoration: it.done ? "line-through" : "none", color: it.done ? "var(--fg-muted)" : "var(--fg1)" }}>
                           {it.label}
                         </span>
+                        {it.fichier_id && (
+                          <span title="Cochée automatiquement au dépôt du fichier" style={{ color: "var(--fg-muted)", display: "inline-flex" }}>
+                            <Icon name="link" size={12} />
+                          </span>
+                        )}
                       </label>
                     ))}
                   </div>
@@ -424,7 +429,7 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
           dossiers={DOSSIERS}
           dossierInitial={depot.dossier}
           onConfirm={(file, meta) =>
-            upload.mutateAsync({ file, dossier: meta.dossier ?? depot.dossier, nameOriginal: meta.nameOriginal })
+            upload.mutateAsync({ file, dossier: meta.dossier ?? depot.dossier, nameOriginal: meta.nameOriginal, type: meta.type })
           }
           onClose={() => setDepot(null)}
         />

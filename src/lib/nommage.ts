@@ -58,6 +58,28 @@ export const TYPES_DOCUMENT: { id: string; label: string; dossier: string }[] = 
   { id: "attestation_non_recours", label: "Attestation de non-recours", dossier: "Plans de financement" },
   { id: "attestation_caution", label: "Attestation de cautionnement", dossier: "Plans de financement" },
   { id: "fiche_etat_anah", label: "Fiche État ANAH", dossier: "Plans de financement" },
+  // Pièces communes à plusieurs dispositifs (feedback Amir 13/09/2026 : un
+  // type par pièce de checklist, pour qu'un dépôt coche la pièce partout où
+  // elle est attendue - ANAH, EMS & Climaxion, éco-PTZ, CEE, assurance)
+  { id: "pv_ag_travaux", label: "PV AG vote des travaux", dossier: "Assemblée générale" },
+  { id: "pv_ag_mandat", label: "PV AG mandat du syndic", dossier: "Assemblée générale" },
+  { id: "pv_ag_moe", label: "PV AG choix de la maîtrise d'œuvre", dossier: "Assemblée générale" },
+  { id: "pv_ag_lancement_amo", label: "PV AG lancement de l'AMO", dossier: "Assemblée générale" },
+  { id: "rib_compte_travaux", label: "RIB du compte travaux", dossier: "Plans de financement" },
+  { id: "rib_entreprises", label: "RIB entreprise", dossier: "Marchés de travaux" },
+  { id: "devis_travaux", label: "Devis / DPGF des travaux", dossier: "Marchés de travaux" },
+  { id: "devis_honoraires_moe", label: "Devis honoraires MOE et études", dossier: "Devis des études techniques et Frais Annexes" },
+  { id: "devis_fenetres", label: "Devis remplacement des fenêtres", dossier: "Marchés de travaux" },
+  { id: "pf_definitif", label: "Plan de financement définitif", dossier: "Plans de financement" },
+  { id: "liste_primes_individuelles", label: "Liste des primes individuelles", dossier: "Plans de financement" },
+  { id: "rapport_enquete_sociale", label: "Rapport d'enquête sociale", dossier: "Diagnostic & audit" },
+  { id: "ah_cee_a", label: "Attestation sur l'honneur CEE partie A", dossier: "Plans de financement" },
+  { id: "ah_cee_b", label: "Attestation sur l'honneur CEE partie B", dossier: "Plans de financement" },
+  { id: "attestation_rge_facture", label: "Attestation RGE à date de facture", dossier: "Marchés de travaux" },
+  { id: "cerfa_ecoptz_emprunteur", label: "Formulaire éco-PTZ emprunteur", dossier: "Plans de financement" },
+  { id: "cerfa_ecoptz_entreprise", label: "Formulaire éco-PTZ entreprise", dossier: "Plans de financement" },
+  { id: "liste_participants_pret", label: "Liste des copropriétaires participant au prêt", dossier: "Plans de financement" },
+  { id: "dossier_demande_aide", label: "Dossier de demande d'aide", dossier: "Plans de financement" },
   // Dossier EMS & Climaxion (feedback Amir 13/09/2026)
   { id: "attestation_composition", label: "Attestation de composition de la copropriété", dossier: "Plans de financement" },
   { id: "attestation_logement_decent", label: "Attestation logement décent", dossier: "Plans de financement" },
