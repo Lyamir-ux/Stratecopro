@@ -1,8 +1,10 @@
-// Formulaires du montage bancaire éco-PTZ collectif (CEGEE), côté syndic.
-// Deux formulaires pré-remplis depuis la base projet :
-//   - la fiche de renseignements avant AG (envoyée à la banque avant convocation) ;
+// Formulaires des montages (Documents à produire), côté syndic. Pré-remplis
+// depuis la base projet :
+//   - la fiche de renseignements avant AG (CEGEE, envoyée à la banque avant convocation) ;
 //   - l'onglet 1 « Demande de prêt » du classeur CEGEE (Strat Eco produit
-//     ensuite le fichier Excel à partir de ces réponses).
+//     ensuite le fichier Excel à partir de ces réponses) ;
+//   - le récapitulatif des coordonnées du syndic et de la copropriété pour la
+//     demande de cotation CEE (feedback Amir 13/09/2026).
 // Les valeurs saisies vivent dans montage_formulaires.data (jsonb).
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
@@ -233,6 +235,50 @@ const PRET_SECTIONS: SectionDef[] = [
 // ========== Pré-remplissage depuis la base projet ==========
 
 // Champs communs aux deux formulaires : ce que le syndic a saisi dans l'un
+// ========== Définition : récapitulatif des coordonnées (cotation CEE) ==========
+
+const COORD_SECTIONS: SectionDef[] = [
+  {
+    titre: "Votre cabinet (syndic)",
+    champs: [
+      { key: "syndic_nom", label: "Nom du syndic" },
+      { key: "syndic_siren", label: "SIREN du syndic" },
+      { key: "syndic_adresse", label: "Adresse" },
+      { key: "syndic_ville_cp", label: "Ville et code postal" },
+      { key: "syndic_interlocuteur", label: "Nom du gestionnaire" },
+      { key: "syndic_tel", label: "Téléphone" },
+      { key: "syndic_email", label: "Adresse e-mail", span2: true },
+    ],
+  },
+  {
+    titre: "La copropriété (bénéficiaire de la prime)",
+    champs: [
+      { key: "copro_nom", label: "Nom de la copropriété" },
+      { key: "copro_siret", label: "SIRET du syndicat des copropriétaires" },
+      { key: "copro_adresse", label: "Adresse de la copropriété" },
+      { key: "copro_ville_cp", label: "Ville et code postal" },
+      { key: "copro_immatriculation", label: "Numéro d'immatriculation au registre" },
+      { key: "copro_nb_logements", label: "Nombre de logements", type: "number" },
+      { key: "copro_nb_coproprietaires", label: "Nombre de copropriétaires", type: "number" },
+      { key: "copro_nature_travaux", label: "Nature des travaux" },
+      { key: "copro_date_ag_travaux", label: "Date de l'AG ayant voté les travaux", type: "date" },
+      { key: "copro_debut_travaux", label: "Date prévisionnelle de début des travaux", type: "date" },
+    ],
+  },
+  {
+    titre: "AMO / Opérateur",
+    note: "Renseigné par Strat Eco.",
+    champs: [
+      { key: "amo_nom", label: "Nom de l'organisme", readonly: true },
+      { key: "amo_interlocuteur", label: "Interlocuteur", readonly: true },
+      { key: "amo_adresse", label: "Adresse", readonly: true },
+      { key: "amo_ville_cp", label: "Ville et code postal", readonly: true },
+      { key: "amo_tel", label: "Portable", readonly: true },
+      { key: "amo_email", label: "Adresse e-mail", readonly: true },
+    ],
+  },
+];
+
 // complète automatiquement l'autre (feedback du 03/09/2026). Clé du formulaire
 // courant → clé du formulaire source (identique quand le nom est le même).
 const CHAMPS_PARTAGES: Record<FormulaireType, Record<string, string>> = {
@@ -263,18 +309,46 @@ const CHAMPS_PARTAGES: Record<FormulaireType, Record<string, string>> = {
     trav_cout_total: "budget_ttc",
     pf_cout_total: "budget_ttc",
   },
+  coordonnees_cee: {
+    syndic_nom: "syndic_nom",
+    syndic_siren: "syndic_siren",
+    syndic_adresse: "syndic_adresse",
+    syndic_ville_cp: "syndic_ville_cp",
+    syndic_interlocuteur: "syndic_interlocuteur",
+    syndic_tel: "syndic_tel",
+    syndic_email: "syndic_email",
+    copro_nom: "copro_nom",
+    copro_adresse: "copro_adresse",
+    copro_ville_cp: "copro_ville_cp",
+    copro_nb_coproprietaires: "copro_nb_coproprietaires",
+    copro_nature_travaux: "copro_nature_travaux",
+  },
 };
 
-/** Valeurs reprises de l'autre formulaire déjà saisi par le syndic. */
-function reprisesAutreFormulaire(
+/** Clés de la demande de prêt CEGEE équivalentes aux clés « fiche » (les
+ *  formulaires fiche avant AG et coordonnées CEE partagent le même nommage). */
+const EQUIV_DEMANDE_PRET: Record<string, string> = {
+  syndic_siren: "pro_siren",
+  copro_nom: "sdc_designation",
+  copro_adresse: "sdc_adresse",
+  copro_nb_coproprietaires: "imm_nb_coproprietaires",
+  copro_nature_travaux: "trav_nature",
+};
+
+/** Valeurs reprises des autres formulaires déjà saisis par le syndic (une
+ *  saisie dans l'un complète les autres). */
+function reprisesAutresFormulaires(
   type: FormulaireType,
-  autre: Record<string, string> | null
+  autres: { type: string; data: Record<string, string> }[]
 ): Record<string, string> {
-  if (!autre) return {};
   const out: Record<string, string> = {};
-  for (const [cible, source] of Object.entries(CHAMPS_PARTAGES[type])) {
-    const v = autre[source];
-    if (v != null && String(v).trim() !== "") out[cible] = String(v);
+  for (const autre of autres) {
+    for (const [cible, source] of Object.entries(CHAMPS_PARTAGES[type])) {
+      // même nommage entre formulaires « fiche » ; traduction vers la demande de prêt
+      const cle = autre.type === "demande_pret" && type !== "demande_pret" ? EQUIV_DEMANDE_PRET[source] ?? source : source;
+      const v = autre.data[cle];
+      if (v != null && String(v).trim() !== "" && out[cible] == null) out[cible] = String(v);
+    }
   }
   return out;
 }
@@ -291,8 +365,30 @@ function usePrefill(c: SyndicCopro, type: FormulaireType): Record<string, string
       x != null && Number.isFinite(x) ? String(Math.round(x)) : "";
     // Fiche copro : code postal + ville, gestionnaire chez le syndic
     const villeCp = [c.code_postal, c.city].filter(Boolean).join(" ");
-    const autre = (forms?.find((f) => f.type !== type)?.data ?? null) as Record<string, string> | null;
-    const reprises = reprisesAutreFormulaire(type, autre);
+    const autres = (forms ?? [])
+      .filter((f) => f.type !== type)
+      .map((f) => ({ type: f.type, data: (f.data ?? {}) as Record<string, string> }));
+    const reprises = reprisesAutresFormulaires(type, autres);
+    if (type === "coordonnees_cee") {
+      return {
+        syndic_nom: c.syndic_name ?? "",
+        syndic_interlocuteur: c.gestionnaire_nom ?? "",
+        syndic_email: c.gestionnaire_email ?? "",
+        copro_nom: c.name,
+        copro_adresse: c.adresse ?? "",
+        copro_ville_cp: villeCp,
+        copro_nb_logements: n(c.nb_logements ?? c.stats?.lots_hab),
+        copro_nb_coproprietaires: n(c.stats?.coproprietaires),
+        copro_nature_travaux: "Rénovation énergétique globale",
+        amo_nom: AMO.nom,
+        amo_adresse: AMO.adresse,
+        amo_ville_cp: AMO.ville_cp,
+        amo_interlocuteur: AMO.interlocuteur,
+        amo_tel: AMO.tel,
+        amo_email: AMO.email,
+        ...reprises,
+      };
+    }
     if (type === "fiche_avant_ag") {
       return {
         syndic_nom: c.syndic_name ?? "",
@@ -363,6 +459,18 @@ const FORM_META: Record<FormulaireType, { titre: string; sous: string; sections:
     sous: "Vos réponses permettent à Strat Eco de pré-remplir le classeur Excel « COPRO CEGEE Demande de prêt » que vous n'aurez plus qu'à tamponner et signer.",
     sections: PRET_SECTIONS,
   },
+  coordonnees_cee: {
+    titre: "Récapitulatif des coordonnées du syndic et de la copropriété",
+    sous: "Transmis au délégataire CEE avec les pièces techniques pour établir la cotation de la prime.",
+    sections: COORD_SECTIONS,
+  },
+};
+
+/** Libellé du bouton de retour : le montage auquel le formulaire appartient. */
+const FORM_MONTAGE: Record<FormulaireType, string> = {
+  fiche_avant_ag: "Montage Éco-PTZ",
+  demande_pret: "Montage Éco-PTZ",
+  coordonnees_cee: "Dossier CEE",
 };
 
 export function FormulaireMontage({
@@ -399,7 +507,7 @@ export function FormulaireMontage({
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <button className="se-btn se-btn-ghost btn-sm" onClick={onBack}>
           <Icon name="chevronLeft" size={15} />
-          Montage Éco-PTZ
+          {FORM_MONTAGE[type]}
         </button>
         <span style={{ flex: 1 }}></span>
         {transmis ? (

@@ -80,6 +80,11 @@ export const TYPES_DOCUMENT: { id: string; label: string; dossier: string }[] = 
   { id: "cerfa_ecoptz_entreprise", label: "Formulaire éco-PTZ entreprise", dossier: "Plans de financement" },
   { id: "liste_participants_pret", label: "Liste des copropriétaires participant au prêt", dossier: "Plans de financement" },
   { id: "dossier_demande_aide", label: "Dossier de demande d'aide", dossier: "Plans de financement" },
+  // Dossier CEE en 3 étapes (feedback Amir 13/09/2026)
+  { id: "aif_cee", label: "AIF CEE à signer", dossier: "Plans de financement" },
+  { id: "aif_cee_signee", label: "AIF CEE signée", dossier: "Plans de financement" },
+  { id: "rapport_cofrac_1", label: "Rapport complémentaire COFRAC 1", dossier: "Marchés de travaux" },
+  { id: "rapport_cofrac_2", label: "Rapport complémentaire COFRAC 2", dossier: "Marchés de travaux" },
   // Dossier EMS & Climaxion (feedback Amir 13/09/2026)
   { id: "attestation_composition", label: "Attestation de composition de la copropriété", dossier: "Plans de financement" },
   { id: "attestation_logement_decent", label: "Attestation logement décent", dossier: "Plans de financement" },

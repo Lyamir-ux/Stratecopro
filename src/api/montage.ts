@@ -13,7 +13,9 @@ import { propagerDocument, retirerFichierDesMontages } from "@/api/propagation";
 export type MontageId = "ecoptz" | "anah" | "cee" | "climaxion" | "do";
 export type MontageDoc = Tables<"montage_docs">;
 export type MontageFormulaire = Tables<"montage_formulaires">;
-export type FormulaireType = "fiche_avant_ag" | "demande_pret";
+/** Formulaires in-app du montage : fiche avant AG et demande de prêt (CEGEE),
+ *  récapitulatif des coordonnées pour la demande de cotation CEE (13/09/2026). */
+export type FormulaireType = "fiche_avant_ag" | "demande_pret" | "coordonnees_cee";
 
 /** Un fichier déposé sur un document du montage (montage_docs.files). */
 export interface MontageFile {
@@ -49,7 +51,7 @@ export const MONTAGES: {
     dispo: true,
   },
   { id: "anah", label: "ANAH - MaPrimeRénov' Copro", sub: "Subvention collective de l'Anah", icon: "fileCheck", dispo: true },
-  { id: "cee", label: "CEE", sub: "Certificats d'économies d'énergie", icon: "zap", dispo: false },
+  { id: "cee", label: "CEE", sub: "Certificats d'économies d'énergie - cotation, aides, solde", icon: "zap", dispo: true },
   {
     id: "climaxion",
     label: "EMS & Climaxion",
@@ -994,6 +996,146 @@ export const CLIMAXION_ETAPES: EtapeDef[] = [
   },
 ];
 
+// ========== Catalogue documentaire CEE ==========
+// Source : étapes du dossier de certificats d'économies d'énergie données par
+// Amir le 13/09/2026 - demande de cotation, validation des aides, demande de
+// solde. Déposants fixés pièce par pièce. Les pièces à signer (AIF, attestation
+// sur l'honneur) sont déposées pré-remplies par Strat Eco, puis téléchargées,
+// signées à la main et téléversées par le syndic sur la ligne suivante.
+
+export const CEE_ETAPES: EtapeDef[] = [
+  {
+    id: "cotation",
+    num: 1,
+    label: "Demande de cotation",
+    intro:
+      "Le délégataire CEE chiffre la prime à partir des coordonnées du syndic et de la copropriété, des pièces techniques du projet et de la décision de travaux. Complétez le récapitulatif ; les pièces techniques sont versées par Strat Eco ou la maîtrise d'œuvre.",
+    formulaires: [
+      {
+        type: "coordonnees_cee",
+        name: "Récapitulatif des coordonnées du syndic et de la copropriété",
+        hint: "Pré-rempli avec les données du projet - vérifiez et complétez",
+      },
+    ],
+    groupes: [
+      {
+        docs: [
+          {
+            key: "cctp_dpgf",
+            name: "CCTP et DPGF des travaux",
+            fournisseur: "amo_moe",
+            type: "cctp_dce",
+          },
+          {
+            key: "audit_reglementaire_sources",
+            name: "Audit énergétique réglementaire et fichiers sources",
+            hint: "Rapport d'audit (loi ELAN) et fichiers de calcul du bureau d'études",
+            fournisseur: "amo_moe",
+            type: "audit_energetique",
+          },
+          {
+            key: "attestations_rge",
+            name: "Attestations RGE des entreprises",
+            hint: "Qualifications RGE valides à la date du devis, pour chaque entreprise des lots énergétiques",
+            fournisseur: "amo_moe",
+            type: "attestation_rge",
+          },
+          {
+            key: "pv_ag_travaux",
+            name: "PV d'AG validant les travaux",
+            hint: "Signé, cacheté et certifié conforme - même pièce que dans les autres dossiers",
+            fournisseur: "syndic",
+            type: "pv_ag_travaux",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "validation_aides",
+    num: 2,
+    label: "Validation des aides",
+    intro:
+      "Après la cotation : le délégataire valide la prime sur la base de l'attestation d'incitation financière signée, des justificatifs des ménages et du premier contrôle de l'organisme accrédité (COFRAC).",
+    groupes: [
+      {
+        docs: [
+          {
+            key: "aif_a_signer",
+            name: "AIF pré-remplie (à signer)",
+            hint: "Attestation d'incitation financière du délégataire, préparée et déposée par Strat Eco - à télécharger pour signature",
+            fournisseur: "amo",
+            type: "aif_cee",
+          },
+          {
+            key: "aif_signee",
+            name: "AIF signée",
+            hint: "Téléchargez l'AIF déposée par Strat Eco à la ligne précédente, signez-la de façon manuscrite, puis téléversez-la ici",
+            fournisseur: "syndic",
+            type: "aif_cee_signee",
+          },
+          {
+            key: "avis_imposition",
+            name: "Avis d'imposition des copropriétaires",
+            hint: "Justificatifs déposés par les copropriétaires depuis leur espace et centralisés par Strat Eco - pièce confidentielle",
+            fournisseur: "amo",
+            confidentiel: true,
+            type: "avis_imposition",
+          },
+          {
+            key: "rapport_cofrac_1",
+            name: "Rapport complémentaire suite à COFRAC 1",
+            hint: "Établi après le premier contrôle de l'organisme accrédité",
+            fournisseur: "amo_moe",
+            type: "rapport_cofrac_1",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "solde",
+    num: 3,
+    label: "Demande de solde",
+    intro:
+      "À la réception des travaux énergétiques : le versement du solde de la prime est demandé sur la base des PV de réception, de l'attestation sur l'honneur signée et du second contrôle COFRAC.",
+    groupes: [
+      {
+        docs: [
+          {
+            key: "pv_reception",
+            name: "Procès-verbaux de réception des travaux énergétiques",
+            hint: "Établis par la maîtrise d'œuvre lot par lot - signés également par le syndic",
+            fournisseur: "amo_moe",
+            type: "pv_reception",
+          },
+          {
+            key: "ah_a_signer",
+            name: "Attestation sur l'honneur pré-remplie (à signer)",
+            hint: "Préparée et déposée par Strat Eco - à télécharger pour signature",
+            fournisseur: "amo",
+            type: "ah_cee",
+          },
+          {
+            key: "ah_signee",
+            name: "Attestation sur l'honneur signée",
+            hint: "Téléchargez l'attestation déposée par Strat Eco à la ligne précédente, signez-la de façon manuscrite, puis téléversez-la ici",
+            fournisseur: "syndic",
+            type: "ah_cee_b",
+          },
+          {
+            key: "rapport_cofrac_2",
+            name: "Rapport complémentaire suite à COFRAC 2",
+            hint: "Établi après le second contrôle de l'organisme accrédité",
+            fournisseur: "amo_moe",
+            type: "rapport_cofrac_2",
+          },
+        ],
+      },
+    ],
+  },
+];
+
 // ========== Registre des parcours ==========
 
 export interface ParcoursDef {
@@ -1014,6 +1156,12 @@ export const PARCOURS: Partial<Record<MontageId, ParcoursDef>> = {
     intro:
       "Subvention collective de l'Anah accordée au syndicat des copropriétaires. Le dossier reprend les 15 pièces de la checklist MaPrimeRénov' du projet : déposez celles qui relèvent du syndic, les autres sont versées par Strat Eco ou la maîtrise d'œuvre et suivies ici.",
     etapes: ANAH_ETAPES,
+  },
+  cee: {
+    titre: "Certificats d'économies d'énergie (CEE)",
+    intro:
+      "Prime CEE versée par le délégataire au syndicat des copropriétaires, en trois étapes : demande de cotation, validation des aides, demande de solde. Déposez les pièces qui relèvent du syndic ; celles de Strat Eco et de la maîtrise d'œuvre sont suivies ici. Les pièces à signer sont déposées pré-remplies par Strat Eco : téléchargez-les, signez-les et téléversez-les sur la ligne prévue.",
+    etapes: CEE_ETAPES,
   },
   climaxion: {
     titre: "EMS & Climaxion",

@@ -59,7 +59,7 @@ describe("pièces partagées entre dispositifs", () => {
       "ecoptz/pv_ag_mandat",
     ]);
     const travaux = ciblesMontagePourType("pv_ag_travaux").map((c) => c.montage).sort();
-    expect(travaux).toEqual(["anah", "climaxion", "ecoptz"]);
+    expect(travaux).toEqual(["anah", "cee", "climaxion", "ecoptz"]);
     expect(labelsChecklistPourType("pv_ag_travaux")).toHaveLength(4); // CEE, MPR, EMS & Climaxion, éco-PTZ
   });
 

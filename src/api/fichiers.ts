@@ -49,6 +49,8 @@ export const DISPOSITIFS_RECAP: { id: string; label: string; types: string[] }[]
     types: [
       "devis", "devis_travaux", "facture", "situation_travaux", "attestation_rge", "attestation_rge_facture",
       "etude_thermique", "cadre_cee", "ah_cee", "ah_cee_a", "ah_cee_b", "pv_ag", "pv_ag_travaux", "pv_reception",
+      // dossier CEE de la page Documents à produire (13/09/2026)
+      "cctp_dce", "audit_energetique", "aif_cee", "aif_cee_signee", "avis_imposition", "rapport_cofrac_1", "rapport_cofrac_2",
     ],
   },
   {
