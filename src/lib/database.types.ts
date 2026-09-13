@@ -1556,6 +1556,7 @@ export type Database = {
       montage_docs: {
         Row: {
           commentaire: string | null
+          confidentiel: boolean
           copro_id: string
           created_at: string
           doc_key: string
@@ -1568,6 +1569,7 @@ export type Database = {
         }
         Insert: {
           commentaire?: string | null
+          confidentiel?: boolean
           copro_id: string
           created_at?: string
           doc_key: string
@@ -1580,6 +1582,7 @@ export type Database = {
         }
         Update: {
           commentaire?: string | null
+          confidentiel?: boolean
           copro_id?: string
           created_at?: string
           doc_key?: string

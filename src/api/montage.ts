@@ -47,7 +47,7 @@ export const MONTAGES: {
     icon: "users",
     dispo: true,
   },
-  { id: "anah", label: "ANAH - MaPrimeRénov' Copro", sub: "Subvention collective de l'Anah", icon: "fileCheck", dispo: false },
+  { id: "anah", label: "ANAH - MaPrimeRénov' Copro", sub: "Subvention collective de l'Anah", icon: "fileCheck", dispo: true },
   { id: "cee", label: "CEE", sub: "Certificats d'économies d'énergie", icon: "zap", dispo: false },
   { id: "climaxion", label: "Climaxion", sub: "Eurométropole de Strasbourg / Région Grand Est", icon: "leaf", dispo: false },
   { id: "do", label: "Dommages-ouvrage", sub: "ROEDERER - assurances de chantier", icon: "hammer", dispo: true },
@@ -56,14 +56,18 @@ export const MONTAGES: {
 // ========== Catalogue documentaire de l'éco-PTZ collectif (CEGEE) ==========
 
 /** Qui produit le document : le syndic le dépose, l'AMO le fournit,
- *  la MOE l'a déjà versé au dossier projet. */
-export type Fournisseur = "syndic" | "amo" | "moe";
+ *  la MOE l'a déjà versé au dossier projet, ou l'un ou l'autre (amo_moe). */
+export type Fournisseur = "syndic" | "amo" | "moe" | "amo_moe";
 
 export interface DocDef {
   key: string;
   name: string;
   hint?: string;
   fournisseur: Fournisseur;
+  /** Pièce réservée à l'équipe AMO : ligne invisible et fichiers non
+   *  téléchargeables par le syndic (RLS + préfixe Storage montage-prive/, 0066).
+   *  Côté syndic, seule une mention « gérée par Strat Eco » s'affiche. */
+  confidentiel?: boolean;
   /** Modèle à télécharger (fichier de public/modeles). */
   modele?: string;
   /** Lien externe utile (ex. avis SIRENE). */
@@ -572,6 +576,164 @@ export const DO_ETAPES: EtapeDef[] = [
   },
 ];
 
+// ========== Catalogue documentaire ANAH - MaPrimeRénov' Copropriété ==========
+// Source : checklist MaPrimeRénov' du dossier (CHECKLIST_TEMPLATES, 15 pièces
+// obligatoires listées par les chefs de projet le 19/08/2026). Le déposant de
+// chaque pièce a été fixé par Amir le 13/09/2026, pièce par pièce. Les avis
+// d'imposition et la liste des primes individuelles sont confidentiels : ni
+// visibles ni téléchargeables par le syndic.
+
+export const ANAH_ETAPES: EtapeDef[] = [
+  {
+    id: "copropriete",
+    num: 1,
+    label: "Copropriété et gouvernance",
+    intro:
+      "Pièces qui attestent de la décision de l'assemblée générale, du mandat du syndic et de la situation administrative du syndicat des copropriétaires. Toutes relèvent du syndic.",
+    groupes: [
+      {
+        docs: [
+          {
+            key: "pv_ag_travaux",
+            name: "PV d'AG ayant décidé de réaliser les travaux",
+            hint: "Signé, cacheté et certifié conforme - résolutions de vote des travaux et de demande des subventions",
+            fournisseur: "syndic",
+            type: "pv_ag",
+          },
+          {
+            key: "pv_ag_representant",
+            name: "PV d'AG nommant le représentant légal",
+            hint: "Désignation ou renouvellement du mandat du syndic pour la période en cours - signé, cacheté et certifié conforme",
+            fournisseur: "syndic",
+            type: "pv_ag",
+          },
+          {
+            key: "attestation_registre",
+            name: "Attestation de mise à jour du registre de copropriété",
+            hint: "Registre national des copropriétés à jour pour l'exercice en cours",
+            fournisseur: "syndic",
+            lien: { label: "registre-coproprietes.gouv.fr", url: "https://www.registre-coproprietes.gouv.fr/" },
+            type: "attestation_registre",
+          },
+          {
+            key: "fiche_etat",
+            name: "Fiche « État de la copropriété »",
+            hint: "Complétée par le syndic puis signée par le président du conseil syndical avant dépôt - mentionne le taux d'impayés rapporté au budget de l'année n-1",
+            fournisseur: "syndic",
+            type: "fiche_etat_anah",
+          },
+          {
+            key: "rib_compte_travaux",
+            name: "RIB du compte travaux",
+            hint: "Compte ouvert au nom du syndicat des copropriétaires - c'est sur ce compte que l'Anah verse la subvention",
+            fournisseur: "syndic",
+            type: "rib",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "projet",
+    num: 2,
+    label: "Projet de travaux",
+    intro:
+      "Pièces techniques et contractuelles du projet. La plupart sont déjà au dossier projet, versées par Strat Eco ou la maîtrise d'œuvre : elles sont affichées ici pour suivi. Seule la convention AMO signée est à déposer par vos soins.",
+    groupes: [
+      {
+        docs: [
+          {
+            key: "devis_dpgf",
+            name: "Pièces marchés : devis détaillés / DPGF des travaux",
+            hint: "Devis détaillés ou DPGF de chaque lot, établis par les entreprises RGE retenues",
+            fournisseur: "amo_moe",
+            type: "devis",
+          },
+          {
+            key: "devis_honoraires_moe",
+            name: "Devis détaillés des honoraires de MOE et des autres études",
+            hint: "Maîtrise d'œuvre, bureaux d'études, contrôle technique, coordination SPS, diagnostics",
+            fournisseur: "amo",
+            type: "devis",
+          },
+          {
+            key: "contrat_moe",
+            name: "Contrat du maître d'œuvre",
+            hint: "Convention de maîtrise d'œuvre signée - déjà versée au dossier projet",
+            fournisseur: "amo",
+            type: "contrat_moe",
+          },
+          {
+            key: "convention_amo",
+            name: "Convention AMO signée",
+            hint: "Convention d'assistance à maîtrise d'ouvrage Strat Eco, signée par le syndic",
+            fournisseur: "syndic",
+            type: "contrat_amo",
+          },
+          {
+            key: "audit_reglementaire",
+            name: "Audit énergétique réglementaire",
+            hint: "Audit énergétique réglementaire (loi ELAN) justifiant le gain énergétique du scénario de travaux retenu",
+            fournisseur: "amo_moe",
+            type: "audit_energetique",
+          },
+          {
+            key: "urbanisme",
+            name: "Déclarations d'urbanisme",
+            hint: "Déclaration préalable ou permis de construire, avec récépissé de dépôt - « Non concerné » si les travaux n'y sont pas soumis",
+            fournisseur: "moe",
+            conditionnel: true,
+            type: "autorisation_urbanisme",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "social_financement",
+    num: 3,
+    label: "Volet social et plan de financement",
+    intro:
+      "Pièces établies par Strat Eco à partir de l'enquête sociale menée auprès des copropriétaires et du plan de financement définitif. Les justificatifs personnels des copropriétaires restent confidentiels : ils ne sont ni visibles ni téléchargeables depuis l'espace syndic.",
+    groupes: [
+      {
+        docs: [
+          {
+            key: "rapport_enquete_sociale",
+            name: "Rapport d'enquête sociale",
+            hint: "Répartition des profils MaPrimeRénov' des ménages de la copropriété - produit par Strat Eco",
+            fournisseur: "amo",
+            type: "rapport",
+          },
+          {
+            key: "avis_imposition",
+            name: "Avis d'imposition des personnes éligibles aux aides individuelles",
+            hint: "Justificatifs déposés par les copropriétaires depuis leur espace et centralisés par Strat Eco - pièce confidentielle",
+            fournisseur: "amo",
+            confidentiel: true,
+            type: "avis_imposition",
+          },
+          {
+            key: "liste_primes_individuelles",
+            name: "Liste des primes individuelles",
+            hint: "Primes MaPrimeRénov' individuelles par copropriétaire éligible, établie par Strat Eco - pièce confidentielle",
+            fournisseur: "amo",
+            confidentiel: true,
+            type: "plan_financement",
+          },
+          {
+            key: "pf_definitif",
+            name: "Plan de financement définitif de la copropriété (Excel)",
+            hint: "Classeur exporté du plan de financement définitif validé - produit par Strat Eco",
+            fournisseur: "amo",
+            type: "plan_financement",
+          },
+        ],
+      },
+    ],
+  },
+];
+
 // ========== Registre des parcours ==========
 
 export interface ParcoursDef {
@@ -587,6 +749,12 @@ export const PARCOURS: Partial<Record<MontageId, ParcoursDef>> = {
       "Prêt collectif souscrit par le syndicat des copropriétaires auprès de la Caisse d'Épargne Grand Est Europe. Préparez les trois étapes dans l'ordre - l'équipe Strat Eco est notifiée de vos dépôts.",
     etapes: ECOPTZ_ETAPES,
   },
+  anah: {
+    titre: "ANAH - MaPrimeRénov' Copropriété",
+    intro:
+      "Subvention collective de l'Anah accordée au syndicat des copropriétaires. Le dossier reprend les 15 pièces de la checklist MaPrimeRénov' du projet : déposez celles qui relèvent du syndic, les autres sont versées par Strat Eco ou la maîtrise d'œuvre et suivies ici.",
+    etapes: ANAH_ETAPES,
+  },
   do: {
     titre: "Assurance dommages-ouvrage - ROEDERER",
     intro:
@@ -600,13 +768,27 @@ export function docsOfEtape(etape: EtapeDef): DocDef[] {
   return etape.groupes.flatMap((g) => g.docs);
 }
 
-/** Avancement d'une étape : documents déposés ou non applicables / total. */
+/** Définition d'un document du montage, par clé. */
+export function docDef(montage: MontageId, docKey: string): DocDef | undefined {
+  return PARCOURS[montage]?.etapes.flatMap(docsOfEtape).find((d) => d.key === docKey);
+}
+
+/** Préfixe Storage d'un document : les pièces confidentielles vivent sous
+ *  montage-prive/ (aucun droit syndic), les autres sous montage/. */
+function prefixeStorage(montage: MontageId, docKey: string): string {
+  return docDef(montage, docKey)?.confidentiel ? "montage-prive" : "montage";
+}
+
+/** Avancement d'une étape : documents déposés ou non applicables / total.
+ *  Le syndic ne voit pas les pièces confidentielles : elles sortent de son
+ *  décompte (inclureConfidentiels = false). */
 export function etapeProgress(
   etape: EtapeDef,
   docs: Map<string, MontageDoc>,
-  forms: Map<FormulaireType, MontageFormulaire>
+  forms: Map<FormulaireType, MontageFormulaire>,
+  inclureConfidentiels = true
 ): { done: number; total: number } {
-  const defs = docsOfEtape(etape);
+  const defs = docsOfEtape(etape).filter((d) => inclureConfidentiels || !d.confidentiel);
   let done = defs.filter((d) => {
     const row = docs.get(d.key);
     return row && (docFiles(row).length > 0 || row.statut === "non_applicable");
@@ -663,8 +845,7 @@ async function currentUid(): Promise<string> {
  *  l'échec de la notification ne doit jamais faire échouer le dépôt lui-même. */
 function notifierDepot(coproId: string, montage: MontageId, docKey: string, fileName: string) {
   const montageLabel = MONTAGES.find((m) => m.id === montage)?.label ?? montage;
-  const docName =
-    PARCOURS[montage]?.etapes.flatMap(docsOfEtape).find((d) => d.key === docKey)?.name ?? fileName;
+  const docName = docDef(montage, docKey)?.name ?? fileName;
   void supabase.functions
     .invoke("notifier-depot-document", {
       body: {
@@ -684,7 +865,8 @@ export function useUploadMontageDoc(coproId: string, montage: MontageId) {
       const uid = await currentUid();
       const nom = nomFichierSansAccents(file.name);
       const safe = nom.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `montage/${coproId}/${montage}/${docKey}/${Date.now()}-${safe}`;
+      const confidentiel = !!docDef(montage, docKey)?.confidentiel;
+      const path = `${prefixeStorage(montage, docKey)}/${coproId}/${montage}/${docKey}/${Date.now()}-${safe}`;
       const { error: eUp } = await supabase.storage.from("copro-files").upload(path, file);
       if (eUp) throw eUp;
       const { data: prev } = await supabase
@@ -711,6 +893,7 @@ export function useUploadMontageDoc(coproId: string, montage: MontageId) {
           doc_key: docKey,
           statut: "depose",
           files: files as unknown as Json,
+          confidentiel,
           updated_by: uid,
         },
         { onConflict: "copro_id,montage,doc_key" }
@@ -768,6 +951,7 @@ export function useSetDocNonApplicable(coproId: string, montage: MontageId) {
           montage,
           doc_key: docKey,
           statut: nonApplicable ? "non_applicable" : "a_fournir",
+          confidentiel: !!docDef(montage, docKey)?.confidentiel,
           updated_by: uid,
         },
         { onConflict: "copro_id,montage,doc_key" }

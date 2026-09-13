@@ -5,7 +5,11 @@
 // les documents attendus : le syndic dépose les siens (clic ou glissé-déposé
 // directement sur la ligne du document), les pièces Strat Eco / maîtrise
 // d'œuvre sont affichées pour suivi. Chaque fichier déposé s'ouvre en aperçu
-// (œil) sans téléchargement - feedback Amir 10/09/2026.
+// (œil) sans téléchargement - feedback Amir 10/09/2026. Dossier ANAH -
+// MaPrimeRénov' Copro construit depuis la checklist MaPrimeRénov' (feedback Amir
+// 13/09/2026) : ses pièces confidentielles (avis d'imposition, primes
+// individuelles) n'apparaissent au syndic que comme « gérées par Strat Eco »,
+// sans fichier ni statut.
 import { useMemo, useRef, useState, type DragEvent } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge, Progress } from "@/components/ui";
@@ -129,7 +133,7 @@ function MontageParcours({
 
   const totaux = parcours.etapes.reduce(
     (acc, e) => {
-      const p = etapeProgress(e, docsByKey, formsByType);
+      const p = etapeProgress(e, docsByKey, formsByType, isAmo);
       return { done: acc.done + p.done, total: acc.total + p.total };
     },
     { done: 0, total: 0 }
@@ -265,7 +269,7 @@ function EtapePanel({
   onToggleNa: (docKey: string, na: boolean) => void;
   onApercu: (f: MontageFile) => void;
 }) {
-  const p = etapeProgress(etape, docsByKey, formsByType);
+  const p = etapeProgress(etape, docsByKey, formsByType, isAmo);
   const complete = p.done >= p.total && p.total > 0;
 
   return (
@@ -353,7 +357,32 @@ const FOURNISSEUR_LABEL: Record<DocDef["fournisseur"], string> = {
   syndic: "À déposer par vos soins",
   amo: "Fourni par Strat Eco",
   moe: "Via la maîtrise d'œuvre",
+  amo_moe: "Via Strat Eco ou la maîtrise d'œuvre",
 };
+
+/** Pièce confidentielle vue du syndic : la ligne existe pour que le dossier
+ *  soit complet à l'écran, mais ni statut, ni fichier, ni bouton - la ligne
+ *  correspondante n'est d'ailleurs pas lisible par lui (RLS 0066). */
+function DocRowConfidentiel({ def }: { def: DocDef }) {
+  return (
+    <div className="mdoc na" title="Pièce réservée à l'équipe Strat Eco">
+      <div className="mdoc-main">
+        <span className="dz-ico">
+          <Icon name="lock" size={18} />
+        </span>
+        <div style={{ minWidth: 0 }}>
+          <div className="dz-name">{def.name}</div>
+          <div className="dz-hint">
+            Pièce confidentielle gérée par Strat Eco - non visible et non téléchargeable depuis l'espace syndic.
+          </div>
+          <div className="mdoc-meta">
+            <Badge kind="neutral">Gérée par Strat Eco</Badge>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function DocRow({
   def,
@@ -382,6 +411,8 @@ function DocRow({
   const uploadable = def.fournisseur === "syndic" || isAmo;
   const droppable = uploadable && !na && !busy;
   const [dragOver, setDragOver] = useState(false);
+
+  if (def.confidentiel && !isAmo) return <DocRowConfidentiel def={def} />;
 
   const handleDragOver = (e: DragEvent) => {
     if (!droppable) return;
@@ -415,6 +446,11 @@ function DocRow({
             <Badge kind={def.fournisseur === "syndic" ? "blue" : "neutral"}>
               {FOURNISSEUR_LABEL[def.fournisseur]}
             </Badge>
+            {def.confidentiel && (
+              <Badge kind="warn">
+                <Icon name="lock" size={11} /> Confidentiel - invisible du syndic
+              </Badge>
+            )}
             {def.modele && (
               <a className="mdoc-link" href={`/modeles/${def.modele}`} download>
                 <Icon name="download" size={13} />
