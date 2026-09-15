@@ -23,7 +23,7 @@ import {
   type PlanDefinitifResult,
 } from "@/lib/finance";
 import type { Enums } from "@/lib/database.types";
-import type { SyndicCopro } from "@/api/syndic";
+import { appelsDepuisInscrits, useAppelsDeFondsInscrits, type SyndicCopro } from "@/api/syndic";
 import { round2 } from "@/lib/finance";
 
 type TypeFinancement = Enums<"type_financement">;
@@ -187,6 +187,9 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
   const { data: choix, isLoading: choixLoading } = useChoixFinancementScenario(scenario?.id);
   const { data: donnees, isLoading } = useDonnees(c.id);
   const { data: finConfig } = useFinancementConfig(c.id);
+  // Montants inscrits par l'AMO sur le scénario partagé (repli quand le PF ne
+  // peut pas être réparti par la plateforme - ex. Nouvelle Cité, 15/09/2026).
+  const { data: appelsInscrits } = useAppelsDeFondsInscrits(c.id);
   const saveChoix = useSaveChoixGestionnaire(scenario?.id);
   // saisie du mode d'un copropriétaire (le scénario partagé est requis)
   const [editId, setEditId] = useState<string | null>(null);
@@ -218,8 +221,12 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
   // de chantier, ne réduit pas l'appel. Le syndic n'appelle ni ne déduit les
   // aides individuelles (MaPrimeRénov' du ménage) : elles ne figurent pas ici,
   // sans mention particulière - c'est la règle, pas une exception.
+  // Sans PF répartissable (clés de répartition incomplètes, tantièmes
+  // partiels), l'appel de fonds est celui inscrit par l'AMO sur le scénario
+  // partagé (montants de la banque ou de l'appel du syndic) - RPC 0071.
   const appelsDeFonds = useMemo(() => {
-    if (!pf || !donnees) return null;
+    const inscrits = appelsInscrits?.length ? appelsDepuisInscrits(appelsInscrits) : null;
+    if (!pf || !donnees) return inscrits;
     const items = itemsARepartirPf(pf.data, pf.pv);
     const totauxCles: Record<string, number> = {};
     const parCopro = new Map<string, CoproTantiemes>();
@@ -246,9 +253,9 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
       fondsTravaux: pf.data.params.fondsTravaux,
       totalOperationTtc: pf.pv.totalOperationTtc,
     });
-    // Répartition incomplète (clé manquante sur une ligne) : ne rien afficher
-    // plutôt que des montants faux.
-    if (manquants.length > 0) return null;
+    // Répartition incomplète (clé manquante sur une ligne) : montants inscrits
+    // s'il y en a, sinon rien plutôt que des montants faux.
+    if (manquants.length > 0) return inscrits;
     return new Map(
       plans.map((p) => {
         // mêmes arrondis que la fiche AMO (api/dossiersCopros)
@@ -257,7 +264,7 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
         return [p.coproprietaireId, { appel, primeCee: p.primeCee }];
       })
     );
-  }, [pf, donnees]);
+  }, [pf, donnees, appelsInscrits]);
 
   const lotsByCp = useMemo(() => {
     const m = new Map<string, number>();
@@ -542,7 +549,8 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
               copropriétaire peut toujours la modifier depuis son portail. L'éco-PTZ individuel saisi ici porte
               sur l'ensemble de ses lots. L'appel de fonds est ce que vous appelez à chaque copropriétaire avant
               travaux d'après le plan de financement définitif validé : sa quote-part moins les aides collectives
-              et le fonds travaux. La prime CEE est versée en fin de chantier : elle ne réduit pas l'appel de fonds.
+              et le fonds travaux, ou le montant inscrit par Strat Eco quand la répartition est reprise du dossier
+              bancaire. La prime CEE est versée en fin de chantier : elle ne réduit pas l'appel de fonds.
             </p>
           </div>
         </div>

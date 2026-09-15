@@ -2758,6 +2758,15 @@ export type Database = {
           taille: number
         }[]
       }
+      appels_de_fonds_syndic: {
+        Args: { p_copro_id: string }
+        Returns: {
+          coproprietaire_id: string
+          appel: number
+          prime_cee: number
+          source: string
+        }[]
+      }
       enquete_reponses_syndic: {
         Args: { p_copro_id: string }
         Returns: {

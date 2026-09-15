@@ -179,6 +179,38 @@ export function useReponsesSyndic(coproId: string | undefined) {
   });
 }
 
+/** Appel de fonds inscrit par copropriétaire (RPC appels_de_fonds_syndic, 0071). */
+export interface AppelDeFondsInscrit {
+  coproprietaire_id: string;
+  appel: number;
+  prime_cee: number;
+  /** « pf » : PF définitif partagé, « appel_syndic » : appel de fonds du syndic repris tel quel, « scenario » : ingénierie 7 étapes. */
+  source: string;
+}
+
+/**
+ * Appels de fonds inscrits sur le scénario partagé (quote-part moins aides
+ * collectives, hors CEE) - repli de l'onglet Financement quand la plateforme
+ * ne peut pas répartir le PF définitif elle-même (clés de répartition
+ * incomplètes) : c'est alors le montant inscrit par l'AMO (banque, syndic).
+ */
+export function useAppelsDeFondsInscrits(coproId: string | undefined) {
+  return useQuery({
+    queryKey: ["syndic", "appels-fonds", coproId],
+    enabled: !!coproId,
+    queryFn: async (): Promise<AppelDeFondsInscrit[]> => {
+      const { data, error } = await supabase.rpc("appels_de_fonds_syndic", { p_copro_id: coproId! });
+      if (error) throw error;
+      return (data ?? []).map((r) => ({ ...r, appel: Number(r.appel), prime_cee: Number(r.prime_cee) }));
+    },
+  });
+}
+
+/** Table appel de fonds par copropriétaire depuis les montants inscrits (pure, testée). */
+export function appelsDepuisInscrits(rows: AppelDeFondsInscrit[]): Map<string, { appel: number; primeCee: number }> {
+  return new Map(rows.map((r) => [r.coproprietaire_id, { appel: Math.round(r.appel * 100) / 100, primeCee: Math.round(r.prime_cee * 100) / 100 }]));
+}
+
 // ========== Base documentaire du dossier ==========
 
 export type OrigineDocument = "amo" | "moe" | "syndic";
