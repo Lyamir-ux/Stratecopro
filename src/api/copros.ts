@@ -52,12 +52,15 @@ export function useCopros() {
  * Nombre de logements d'un dossier : les lots à usage d'habitation une fois le
  * tableau des lots importé, sinon le nombre déclaré au portefeuille. Les caves,
  * garages et parkings ne comptent pas - un dossier se raisonne en logements.
+ * Quand le nombre déclaré dépasse les lots importés, il fait foi : le tableau
+ * des lots peut être partiel (ex. Nouvelle Cité, seuls les 123 lots des
+ * adhérents au prêt sont connus sur 284 logements - Amir, 15/09/2026).
  */
 export function nbLogements(c: {
   nb_logements: number | null;
   stats: { lots_hab: number | null } | null;
 }): number {
-  return c.stats?.lots_hab || c.nb_logements || 0;
+  return Math.max(c.stats?.lots_hab ?? 0, c.nb_logements ?? 0);
 }
 
 /**
