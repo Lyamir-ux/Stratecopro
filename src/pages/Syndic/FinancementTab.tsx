@@ -28,6 +28,13 @@ import { round2 } from "@/lib/finance";
 
 type TypeFinancement = Enums<"type_financement">;
 
+/** Comparaison de recherche : minuscules, sans accents. */
+const normaliser = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+
 const TYPE_META: Record<TypeFinancement, { label: string; kind: BadgeKind; icon: "euro" | "users" | "user" }> = {
   fonds: { label: "Fonds propres", kind: "neutral", icon: "euro" },
   collectif: { label: "Éco-PTZ collectif", kind: "primary", icon: "users" },
@@ -196,6 +203,9 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
   const [draftType, setDraftType] = useState<TypeFinancement>("fonds");
   const [draftDuree, setDraftDuree] = useState(15);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Recherche d'un copropriétaire par son nom (feedback Amir du 15/09/2026) :
+  // la liste en dessous ne garde que les noms qui correspondent.
+  const [recherche, setRecherche] = useState("");
   // Le PF définitif validé est automatiquement partagé avec le syndic (RLS).
   const { data: pfPlans } = usePlansDefinitifs(c.id);
   const planValide = (pfPlans ?? [])
@@ -214,6 +224,8 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
 
   const coproprietaires = donnees?.coproprietaires ?? [];
   const lots = donnees?.lots ?? [];
+  const q = normaliser(recherche.trim());
+  const coproFiltres = q ? coproprietaires.filter((cp) => normaliser(cp.nom).includes(q)) : coproprietaires;
 
   // Appel de fonds par copropriétaire = ce que le syndic appelle avant travaux
   // (feedbacks d'Amir du 09/09/2026) : quote-part du PF définitif validé moins
@@ -341,8 +353,30 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
           <div className="p-head">
             <Icon name="trendingUp" size={18} />
             <h3>Mode de financement par copropriétaire</h3>
+            {coproprietaires.length > 0 && (
+              <div className="search" style={{ margin: 0, width: 230, padding: "6px 10px" }}>
+                <Icon name="search" size={15} />
+                <input
+                  placeholder="Rechercher un copropriétaire…"
+                  value={recherche}
+                  onChange={(e) => setRecherche(e.target.value)}
+                  style={{ fontSize: 13 }}
+                />
+                {recherche && (
+                  <button
+                    className="icon-btn"
+                    style={{ width: 20, height: 20, flex: "none" }}
+                    title="Effacer la recherche"
+                    onClick={() => setRecherche("")}
+                  >
+                    <Icon name="x" size={12} />
+                  </button>
+                )}
+              </div>
+            )}
             <span style={{ flex: 1 }}></span>
             <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
+              {q ? `${coproFiltres.length}/${coproprietaires.length} affichés · ` : ""}
               {(choix ?? []).length}/{coproprietaires.length} transmis
             </span>
             {coproprietaires.length > 0 && (
@@ -397,7 +431,14 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {coproprietaires.map((cp) => {
+                    {coproFiltres.length === 0 && (
+                      <tr style={{ cursor: "default" }}>
+                        <td colSpan={scenario ? 6 : 5} style={{ color: "var(--fg-muted)", textAlign: "center", padding: 18 }}>
+                          Aucun copropriétaire ne correspond à « {recherche.trim()} ».
+                        </td>
+                      </tr>
+                    )}
+                    {coproFiltres.map((cp) => {
                       const ch = choixByCp.get(cp.id) ?? null;
                       const meta = ch ? TYPE_META[ch.type] : null;
                       const enEdition = editId === cp.id;

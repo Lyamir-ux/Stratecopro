@@ -2,16 +2,22 @@
 // financement définitif validé (lots de travaux avec leur entreprise, MOE et
 // frais annexes) avec le montant voté. Le syndic, qui règle les situations
 // des entreprises, saisit le montant payé à chaque situation (1 à 10) :
-// total payé et montant restant se calculent seuls.
+// total payé et montant restant se calculent seuls. En tête, les aides
+// (MPR, Climaxion, EMS, CEE) : montant notifié repris du PF définitif validé
+// et montant payé saisi à la main par le syndic (feedback Amir du 15/09/2026).
 import { Fragment, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { fmtDate, fmtEuroFull } from "@/lib/format";
 import { telechargerCsv } from "@/lib/csv";
 import { usePlansDefinitifs } from "@/api/planDefinitif";
 import {
+  AIDES_SUIVI,
   NB_SITUATIONS,
+  aidePayee,
+  cleAidePayee,
   useSaveSuiviFinancier,
   useSuiviFinancier,
+  type AideSuiviId,
   type PaiementsSuivi,
 } from "@/api/suiviFinancier";
 import { computePlanDefinitif, readPlanDefinitif, regrouperAnnexes } from "@/lib/finance";
@@ -43,6 +49,24 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
     () => (planValide ? computePlanDefinitif(readPlanDefinitif(planValide.data)) : null),
     [planValide]
   );
+
+  // Montants notifiés par dispositif : aides du PF définitif validé regroupées
+  // par groupe (ANAH = MaPrimeRénov', EMS, Climaxion) ; la prime CEE est le
+  // total des aides privées, comme sur l'onglet Financement.
+  const aidesNotifiees = useMemo(() => {
+    const m = new Map<AideSuiviId, number>();
+    for (const a of AIDES_SUIVI) {
+      if (!pv) {
+        m.set(a.id, 0);
+        continue;
+      }
+      m.set(
+        a.id,
+        a.groupe === "CEE" ? pv.primeCee : pv.aides.reduce((s, x) => s + (x.groupe === a.groupe ? (x.montant ?? 0) : 0), 0)
+      );
+    }
+    return m;
+  }, [pv]);
 
   const { data: serveur, isLoading: suiviLoading } = useSuiviFinancier(c.id);
   const save = useSaveSuiviFinancier(c.id);
@@ -107,9 +131,17 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
     });
   };
 
+  const setAidePayee = (id: AideSuiviId, brut: string) => {
+    const v = brut.trim() === "" ? null : Number(brut);
+    setBrouillon((prev) => {
+      const base = prev ?? serveur ?? {};
+      return { ...base, [cleAidePayee(id)]: [v != null && Number.isFinite(v) ? v : null] };
+    });
+  };
+
   return (
     <div className="fade">
-      <div className="moe-fin-tiles" style={{ marginTop: 0, marginBottom: 22 }}>
+      <div className="moe-fin-tiles" style={{ marginTop: 0 }}>
         <div className="moe-tile">
           <div className="l">Montant voté TTC</div>
           <div className="v">{fmtEuroFull(totalVote)}</div>
@@ -126,6 +158,37 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
           <div className="l">Avancement des paiements</div>
           <div className="v">{totalVote > 0 ? Math.round((totalPaye / totalVote) * 100) : 0} %</div>
         </div>
+      </div>
+
+      <div className="moe-fin-tiles" style={{ marginTop: 12, marginBottom: 22 }}>
+        {AIDES_SUIVI.map((a) => {
+          const notifie = aidesNotifiees.get(a.id) ?? 0;
+          const paye = aidePayee(paiements, a.id);
+          return (
+            <Fragment key={a.id}>
+              <div className="moe-tile" title={`${a.titre} - montant notifié, repris du plan de financement définitif validé`}>
+                <div className="l">{a.label} notifié</div>
+                <div className="v">{fmtEuroFull(notifie)}</div>
+              </div>
+              <div className="moe-tile" title={`${a.titre} - montant effectivement versé, à saisir puis « Enregistrer »`}>
+                <div className="l">{a.label} payé</div>
+                <div className="v aide-paye">
+                  <input
+                    className="moe-tile-inp"
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="0"
+                    aria-label={`${a.titre} - montant payé`}
+                    value={paye ?? ""}
+                    onChange={(e) => setAidePayee(a.id, e.target.value)}
+                  />
+                  <span style={{ color: "var(--fg-muted)", fontSize: 14 }}>€</span>
+                </div>
+              </div>
+            </Fragment>
+          );
+        })}
       </div>
 
       <div className="panel">
@@ -178,6 +241,19 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
                     totalPaye,
                     totalVote - totalPaye,
                   ],
+                  ["Aides - notifié (PF définitif validé) / payé"],
+                  ...AIDES_SUIVI.map((a) => {
+                    const notifie = aidesNotifiees.get(a.id) ?? 0;
+                    const paye = aidePayee(paiements, a.id);
+                    return [
+                      a.titre,
+                      "",
+                      notifie,
+                      ...Array.from({ length: NB_SITUATIONS }, () => ""),
+                      paye ?? "",
+                      notifie - (paye ?? 0),
+                    ];
+                  }),
                 ]
               )
             }
@@ -284,7 +360,9 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
             <Icon name="help" size={13} /> Les montants votés TTC reprennent le plan de financement définitif
             validé le {fmtDate(planValide.updated_at)}. Saisissez le montant réglé à chaque situation de
-            travaux (1 à 10) - total payé et restant se calculent automatiquement, puis « Enregistrer ».
+            travaux (1 à 10) - total payé et restant se calculent automatiquement, puis « Enregistrer ». Les montants
+            d'aides notifiés (MPR, Climaxion, EMS, CEE) reprennent le plan de financement définitif validé ;
+            saisissez le montant payé à réception de chaque versement.
           </p>
         </div>
       </div>

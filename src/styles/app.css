@@ -830,6 +830,13 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .moe-tile .l { font-size: 12px; color: var(--fg-muted); margin-bottom: 5px; }
 .moe-tile .v { font-family: var(--font-display); font-weight: 700; font-size: 18px; color: var(--fg1); }
 .moe-tile .v.accent { color: var(--color-primary-700); }
+.moe-tile .v.aide-paye { display: flex; align-items: center; gap: 6px; }
+.moe-tile-inp {
+  width: 100%; min-width: 0; padding: 3px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg); font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--fg1);
+}
+.moe-tile-inp:focus { border-color: var(--accent); box-shadow: var(--shadow-focus); outline: none; }
+.moe-tile-inp::placeholder { color: var(--fg-muted); font-weight: 500; }
 @media (max-width: 1100px) {
   .moe-scn-grid { grid-template-columns: 1fr; }
   .moe-fin-tiles { grid-template-columns: 1fr 1fr; }

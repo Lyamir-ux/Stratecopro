@@ -41,7 +41,9 @@ export const DOSSIER_AIDE: Record<(typeof DOSSIERS)[number], string> = {
  *  nom normalisé, voir typeDepuisNom) concerne le dispositif. Un même fichier
  *  peut apparaître dans plusieurs dispositifs (ex. un devis de « Marchés de
  *  travaux » concerne CEE, MaPrimeRénov', Climaxion et Éco-PTZ).
- *  Modifiez librement les listes de types (ids de TYPES_DOCUMENT). */
+ *  Modifiez librement les listes de types (ids de TYPES_DOCUMENT).
+ *  Le dossier « Autre » a été retiré le 16/09/2026 (feedback Amir du 13/09) :
+ *  seuls les dispositifs d'aide réels sont récapitulés. */
 export const DISPOSITIFS_RECAP: { id: string; label: string; types: string[] }[] = [
   {
     id: "cee",
@@ -77,11 +79,6 @@ export const DISPOSITIFS_RECAP: { id: string; label: string; types: string[] }[]
       "test_etancheite", "memoire_technique", "plan", "photo", "attestation_conformite_offres",
       "rapport_conformite_offres", "cctp_dce", "planning", "avis_imposition", "liste_beneficiaires",
     ],
-  },
-  {
-    id: "autre",
-    label: "Autre",
-    types: ["devis", "devis_travaux", "pv_ag", "pv_ag_travaux", "plan_financement", "pf_definitif", "dossier_demande_aide", "accord_subvention"],
   },
   {
     id: "eco_ptz",
