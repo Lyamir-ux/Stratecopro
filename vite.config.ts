@@ -25,5 +25,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/__tests__/**/*.test.ts"],
+    // Les tests de sécurité tapent le réseau (projet Supabase réel) ou le build
+    // dist/ : on les sort du run standard, ils ont leur script `test:securite`.
+    exclude: ["node_modules/**", "src/__tests__/securite/**"],
   },
 });
