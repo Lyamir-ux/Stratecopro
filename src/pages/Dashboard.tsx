@@ -22,6 +22,7 @@ import {
   type CoproWithStats,
 } from "@/api/copros";
 import { useTeamProfiles } from "@/api/profiles";
+import { useOrganisations } from "@/api/organisations";
 import { fmtDate } from "@/lib/format";
 import { uploadFichierDirect } from "@/api/fichiers";
 
@@ -300,6 +301,7 @@ const DPE_CLASSES: DpeClass[] = ["A", "B", "C", "D", "E", "F", "G"];
 function NewCoproDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateCopro();
   const { data: team } = useTeamProfiles();
+  const { data: organisations } = useOrganisations();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: "",
@@ -437,7 +439,20 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
         )}
         {field(
           "Syndic (société en charge de la gestion)",
-          <input className="login-input" value={form.syndic_name} onChange={(e) => set({ syndic_name: e.target.value })} />
+          <>
+            {/* Suggestions = enseignes de Paramètres → Organisations : un nom reconnu rattache le dossier */}
+            <input
+              className="login-input"
+              list="syndics-suggestions-creation"
+              value={form.syndic_name}
+              onChange={(e) => set({ syndic_name: e.target.value })}
+            />
+            <datalist id="syndics-suggestions-creation">
+              {(organisations ?? []).map((o) => (
+                <option key={o.id} value={o.nom} />
+              ))}
+            </datalist>
+          </>
         )}
         <div
           style={{

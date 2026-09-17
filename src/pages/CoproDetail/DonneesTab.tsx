@@ -14,12 +14,15 @@ import {
 import { useDonnees, useSetNbBatiments, useSetUsageLot } from "@/api/donnees";
 import { notifierPassation, useUpdateCopro, type CoproWithStats, type PassationMailStatut } from "@/api/copros";
 import { useTeamProfiles } from "@/api/profiles";
+import { organisationIdPourSyndic, useOrganisations } from "@/api/organisations";
+import { trouverOrganisationParNom } from "@/lib/organisations";
 import type { Enums } from "@/lib/database.types";
 import { ImportLotsDialog } from "./ImportLotsDialog";
 
 export function DonneesTab({ c }: { c: CoproWithStats }) {
   const { data, isLoading } = useDonnees(c.id);
   const { data: team } = useTeamProfiles();
+  const { data: organisations } = useOrganisations();
   const update = useUpdateCopro(c.id);
   const [showImport, setShowImport] = useState(false);
   const [editingSynth, setEditingSynth] = useState(false);
@@ -74,6 +77,9 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
     cleCodes.map((code) => [code, lots.reduce((a, l) => a + (l.tantiemes[code] ?? 0), 0)])
   );
 
+  // Enseigne correspondant au nom de syndic en cours de saisie (aperçu du rattachement).
+  const enseigneSaisie = trouverOrganisationParNom(organisations ?? [], synth.syndic);
+
   const startSynth = () => {
     setSynth({
       adresse: c.adresse ?? "",
@@ -101,7 +107,13 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
     }
     const ancienChef = (c.chef_projet ?? "").trim();
     const nouveauChef = synth.chefProjet.trim();
+    // Changer le syndic pour le nom d'une enseigne déplace le dossier vers cette
+    // enseigne (c'est ce que lit l'espace syndic). Un nom inconnu conserve le
+    // rattachement actuel.
+    const syndicModifie = (synth.syndic.trim() || null) !== (c.syndic_name?.trim() || null);
+    const nouvelleOrganisation = syndicModifie ? await organisationIdPourSyndic(synth.syndic) : null;
     await update.mutateAsync({
+      ...(nouvelleOrganisation ? { organisation_id: nouvelleOrganisation } : {}),
       adresse: synth.adresse || null,
       syndic_name: synth.syndic || null,
       city: synth.city || null,
@@ -362,11 +374,36 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
           <div className="kv">
             <span className="k">Syndic</span>
             {editingSynth ? (
-              <input className="edit-inp" value={synth.syndic} onChange={(e) => setSynth((s) => ({ ...s, syndic: e.target.value }))} />
+              <>
+                {/* Suggestions = enseignes de Paramètres → Organisations : un nom reconnu rattache le dossier */}
+                <input
+                  className="edit-inp"
+                  list="syndics-suggestions"
+                  value={synth.syndic}
+                  onChange={(e) => setSynth((s) => ({ ...s, syndic: e.target.value }))}
+                />
+                <datalist id="syndics-suggestions">
+                  {(organisations ?? []).map((o) => (
+                    <option key={o.id} value={o.nom} />
+                  ))}
+                </datalist>
+              </>
             ) : (
               <span className="v">{c.syndic_name ?? "-"}</span>
             )}
           </div>
+          {editingSynth && synth.syndic.trim() && (
+            <div className="kv" style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+              <span className="k" />
+              <span className="v" style={{ textAlign: "right" }}>
+                {enseigneSaisie
+                  ? enseigneSaisie.id === c.organisation_id
+                    ? `Dossier rattaché à l'organisation ${enseigneSaisie.nom}.`
+                    : `À l'enregistrement, le dossier passera dans l'organisation ${enseigneSaisie.nom}.`
+                  : "Aucune organisation de ce nom : le rattachement actuel est conservé."}
+              </span>
+            </div>
+          )}
           {c.organisation && (
             <div className="kv">
               <span className="k">Organisation</span>

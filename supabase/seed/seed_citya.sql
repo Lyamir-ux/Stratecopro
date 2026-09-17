@@ -1,9 +1,10 @@
 -- Portefeuille CITYA Strasbourg - extraction du 16/09/2026
 -- (fichiers « Copros_Citya_Strasbourg_Immo4.csv » et « _1.csv », 27 copropriétés / 1 525 logements).
 --
--- Deux enseignes DISTINCTES : Citya Immo 4 (9 dossiers) et Citya Ruhl Segesca
--- (18 dossiers). Eric LEROUX gère des dossiers dans les deux : s'il reçoit un
--- compte un jour, il devra être membre des deux organisations.
+-- Deux enseignes DISTINCTES : Citya Immo 4 (10 dossiers) et Citya Ruhl Segesca
+-- (17 dossiers). LES ANEMONES (Reichstett) est chez Citya Immo 4 avec Eric LEROUX,
+-- qui n'exerce que dans cette enseigne (le fichier source la classait à tort chez
+-- Ruhl Segesca - corrigé par Amir le 17/09/2026).
 --
 -- La phase du dossier est celle de la colonne « Etape » du fichier (DIAGNOSTIC /
 -- ETUDES / TRAVAUX). La colonne « Etat base » (P2 voté, P3 prog, P3 voté, Done,
@@ -53,7 +54,7 @@ with src (org_slug, name, slug, nb_logements, adresse, code_postal, city, phase,
   ('citya-ruhl-segesca', 'LE COLISEE',                                           'le-colisee',                                       223, '6 rue de Rome',                                                                                    '67000', 'Strasbourg',             'travaux',    'Thuy NGUYEN',           'tnguyen@citya.com', 'Louaa'),
   ('citya-ruhl-segesca', 'LE LOUVOIS',                                           'le-louvois',                                       96,  '4-6-8 rue Paul Reiss / 20 rue de la 1ère Armée',                                                   '67000', 'Strasbourg',             'travaux',    'Edgar RATEVOSSIAN',     'eratevossian@citya.com', 'Louaa'),
   ('citya-ruhl-segesca', 'LE MURANO',                                            'le-murano',                                        34,  '82-84 rue des Jésuites',                                                                           '67100', 'Strasbourg',             'etudes',     'Gabrielle OLLAND',      'golland@citya.com', 'Louaa'),
-  ('citya-ruhl-segesca', 'LES ANEMONES',                                         'les-anemones',                                     20,  '5 et 7 rue des Anémones',                                                                          '67116', 'Reichstett',             'diagnostic', 'Eric LEROUX',           'erleroux@citya.com', 'Radia'),
+  ('citya-immo-4',       'LES ANEMONES',                                         'les-anemones',                                     20,  '5 et 7 rue des Anémones',                                                                          '67116', 'Reichstett',             'diagnostic', 'Eric LEROUX',           'erleroux@citya.com', 'Radia'),
   ('citya-ruhl-segesca', 'LILAS',                                                'lilas',                                            45,  '1-3-5 rue des Lilas',                                                                              '67400', 'Illkirch-Graffenstaden', 'travaux',    'Jean-François ROUSSET', 'jfrousset@citya.com', 'Radia'),
   ('citya-ruhl-segesca', 'Le Renaissance',                                       'le-renaissance',                                   101, '3 et 5 rue Saint-Pierre-le-Jeune',                                                                 '67000', 'Strasbourg',             'etudes',     'Jean-François ROUSSET', 'jfrousset@citya.com', 'Louaa'),
   ('citya-ruhl-segesca', 'MEINAU',                                               'meinau',                                           262, 'Cour de Bretagne, rue Prosper Mérimée',                                                            '67100', 'Strasbourg',             'travaux',    'Jean-Claude REHM',      'jcrehm@citya.com', 'Amir'),
@@ -70,6 +71,13 @@ select s.name, s.slug, s.nb_logements, s.adresse, s.code_postal, s.city, s.phase
 from src s
 join organisations o on o.slug = s.org_slug
 on conflict (slug) do nothing;
+
+-- ========== Correction du 17/09/2026 : LES ANEMONES chez Citya Immo 4 ==========
+update coproprietes c
+   set organisation_id = (select id from organisations where slug = 'citya-immo-4'),
+       syndic_name = 'Citya Immo 4'
+ where c.slug = 'les-anemones'
+   and c.organisation_id = (select id from organisations where slug = 'citya-ruhl-segesca');
 
 -- ========== Attribution des chefs de projet (dossiers déjà créés) ==========
 update coproprietes c set chef_projet = cp.chef

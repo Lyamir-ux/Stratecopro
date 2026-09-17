@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import type { Tables, TablesInsert } from "@/lib/database.types";
 import { buildTaskTemplate } from "@/lib/taskTemplate";
 import type { PhaseId } from "@/lib/referentiels";
+import { organisationIdPourSyndic } from "@/api/organisations";
 
 export type CoproRow = Tables<"coproprietes">;
 export type CoproStats = Tables<"copro_stats">;
@@ -139,6 +140,9 @@ export function useCreateCopro() {
         code_postal: input.code_postal || null,
         adresse: input.adresse || null,
         syndic_name: input.syndic_name || null,
+        // Un syndic dont le nom est celui d'une enseigne rattache d'emblée le dossier
+        // à cette enseigne (sinon rattachement manuel dans Paramètres → Organisations).
+        organisation_id: await organisationIdPourSyndic(input.syndic_name),
         gestionnaire_nom: input.gestionnaire_nom || null,
         gestionnaire_email: input.gestionnaire_email || null,
         nb_logements: input.nb_logements,
@@ -260,6 +264,9 @@ export function useUpdateCopro(id: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["copro", id] });
       void qc.invalidateQueries({ queryKey: ["copros"] });
+      // Le rattachement à une enseigne peut avoir changé avec le nom du syndic.
+      void qc.invalidateQueries({ queryKey: ["organisations"] });
+      void qc.invalidateQueries({ queryKey: ["copros-rattachables"] });
     },
   });
 }

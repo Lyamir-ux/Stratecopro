@@ -5,6 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { creerCompte, type CollaborateurCree } from "@/api/profiles";
+import { normaliserNomOrganisation, trouverOrganisationParNom } from "@/lib/organisations";
 import type { Enums, Tables } from "@/lib/database.types";
 
 export type OrgRole = Enums<"org_role">;
@@ -39,6 +40,18 @@ const slugify = (nom: string) =>
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+
+/**
+ * L'enseigne dont le nom correspond au syndic saisi sur un dossier (casse et
+ * accents ignorés), sinon null. Sert à garder organisation_id (ce que lit
+ * l'espace syndic) aligné sur syndic_name (ce que l'AMO tape sur la fiche).
+ */
+export async function organisationIdPourSyndic(syndicName: string | null | undefined): Promise<string | null> {
+  if (!normaliserNomOrganisation(syndicName ?? "")) return null;
+  const { data, error } = await supabase.from("organisations").select("id, nom");
+  if (error) throw error;
+  return trouverOrganisationParNom(data ?? [], syndicName)?.id ?? null;
+}
 
 /** Toutes les enseignes, avec leur nombre de dossiers et de membres. */
 export function useOrganisations() {
