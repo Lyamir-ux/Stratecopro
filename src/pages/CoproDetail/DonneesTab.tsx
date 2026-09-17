@@ -15,7 +15,7 @@ import { useDonnees, useSetNbBatiments, useSetUsageLot } from "@/api/donnees";
 import { notifierPassation, useUpdateCopro, type CoproWithStats, type PassationMailStatut } from "@/api/copros";
 import { useTeamProfiles } from "@/api/profiles";
 import { organisationIdPourSyndic, useOrganisations } from "@/api/organisations";
-import { trouverOrganisationParNom } from "@/lib/organisations";
+import { normaliserNomOrganisation, trouverOrganisationParNom, type OrganisationNommee } from "@/lib/organisations";
 import type { Enums } from "@/lib/database.types";
 import { ImportLotsDialog } from "./ImportLotsDialog";
 
@@ -40,6 +40,8 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
     denomination: "batiment",
     energyBefore: "",
     energyAfter: "",
+    /** Enseigne choisie explicitement dans la liste (null = aucune organisation). */
+    organisationId: null as string | null,
   });
 
   if (isLoading || !data) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
@@ -93,9 +95,22 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
       denomination: c.denomination_batiments ?? "batiment",
       energyBefore: c.energy_before ?? "",
       energyAfter: c.energy_after ?? "",
+      organisationId: c.organisation_id ?? null,
     });
     setEditingSynth(true);
   };
+  // Choix explicite d'une enseigne dans la liste : il prime sur le nom du syndic,
+  // et le nom du syndic suit s'il était vide ou égal à l'ancienne enseigne.
+  const choisirOrganisation = (organisationId: string | null) => {
+    const nouvelle = (organisations ?? []).find((o) => o.id === organisationId) ?? null;
+    setSynth((s) => {
+      const nomActuel = normaliserNomOrganisation(s.syndic);
+      const suitEnseigne = !nomActuel || nomActuel === normaliserNomOrganisation(c.organisation?.nom ?? "");
+      return { ...s, organisationId, syndic: nouvelle && suitEnseigne ? nouvelle.nom : s.syndic };
+    });
+  };
+  const organisationActuelle = c.organisation_id ?? null;
+  const organisationChoisie = synth.organisationId !== organisationActuelle;
   const saveSynth = async () => {
     if (synth.nbBatiments !== batiments.length) {
       // Peut échouer si on réduit alors que des bâtiments portent des lots - on reste en édition.
@@ -107,13 +122,17 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
     }
     const ancienChef = (c.chef_projet ?? "").trim();
     const nouveauChef = synth.chefProjet.trim();
-    // Changer le syndic pour le nom d'une enseigne déplace le dossier vers cette
-    // enseigne (c'est ce que lit l'espace syndic). Un nom inconnu conserve le
-    // rattachement actuel.
+    // Rattachement à l'enseigne (ce que lit l'espace syndic) : le choix explicite
+    // dans la liste prime ; sinon, changer le syndic pour le nom d'une enseigne
+    // déplace le dossier vers elle, et un nom inconnu conserve le rattachement.
     const syndicModifie = (synth.syndic.trim() || null) !== (c.syndic_name?.trim() || null);
-    const nouvelleOrganisation = syndicModifie ? await organisationIdPourSyndic(synth.syndic) : null;
+    const organisationCible = organisationChoisie
+      ? synth.organisationId
+      : syndicModifie
+        ? ((await organisationIdPourSyndic(synth.syndic)) ?? organisationActuelle)
+        : organisationActuelle;
     await update.mutateAsync({
-      ...(nouvelleOrganisation ? { organisation_id: nouvelleOrganisation } : {}),
+      ...(organisationCible !== organisationActuelle ? { organisation_id: organisationCible } : {}),
       adresse: synth.adresse || null,
       syndic_name: synth.syndic || null,
       city: synth.city || null,
@@ -392,23 +411,34 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
               <span className="v">{c.syndic_name ?? "-"}</span>
             )}
           </div>
-          {editingSynth && synth.syndic.trim() && (
-            <div className="kv" style={{ fontSize: 12, color: "var(--fg-muted)" }}>
-              <span className="k" />
-              <span className="v" style={{ textAlign: "right" }}>
-                {enseigneSaisie
-                  ? enseigneSaisie.id === c.organisation_id
-                    ? `Dossier rattaché à l'organisation ${enseigneSaisie.nom}.`
-                    : `À l'enregistrement, le dossier passera dans l'organisation ${enseigneSaisie.nom}.`
-                  : "Aucune organisation de ce nom : le rattachement actuel est conservé."}
-              </span>
-            </div>
-          )}
-          {c.organisation && (
+          {(editingSynth || c.organisation) && (
             <div className="kv">
               <span className="k">Organisation</span>
-              <span className="v">{c.organisation.nom}</span>
+              {editingSynth ? (
+                <select
+                  className="edit-inp"
+                  value={synth.organisationId ?? ""}
+                  onChange={(e) => choisirOrganisation(e.target.value || null)}
+                >
+                  <option value="">Aucune organisation</option>
+                  {(organisations ?? []).map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.nom}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="v">{c.organisation?.nom ?? "-"}</span>
+              )}
             </div>
+          )}
+          {editingSynth && (
+            <OrganisationApercu
+              actuelle={c.organisation ?? null}
+              choisie={organisationChoisie ? ((organisations ?? []).find((o) => o.id === synth.organisationId) ?? null) : undefined}
+              parNom={enseigneSaisie}
+              syndicSaisi={synth.syndic.trim()}
+            />
           )}
           <div className="kv">
             <span className="k">Gestionnaire</span>
@@ -559,6 +589,45 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
       {showImport && (
         <ImportLotsDialog coproId={c.id} hasExistingLots={totalLots > 0} onClose={() => setShowImport(false)} />
       )}
+    </div>
+  );
+}
+
+/**
+ * Aperçu du rattachement qui sera enregistré : enseigne choisie dans la liste
+ * (`choisie`, undefined = pas de choix explicite), sinon enseigne reconnue par
+ * le nom du syndic (`parNom`), sinon rattachement actuel conservé.
+ */
+function OrganisationApercu({
+  actuelle,
+  choisie,
+  parNom,
+  syndicSaisi,
+}: {
+  actuelle: OrganisationNommee | null;
+  choisie: OrganisationNommee | null | undefined;
+  parNom: OrganisationNommee | null;
+  syndicSaisi: string;
+}) {
+  let message: string | null = null;
+  if (choisie !== undefined) {
+    message = choisie
+      ? `À l'enregistrement, le dossier passera dans l'organisation ${choisie.nom}.`
+      : "À l'enregistrement, le dossier ne sera plus rattaché à aucune organisation.";
+  } else if (parNom && parNom.id !== actuelle?.id) {
+    message = `À l'enregistrement, le dossier passera dans l'organisation ${parNom.nom} (nom du syndic reconnu).`;
+  } else if (syndicSaisi && !parNom) {
+    message = actuelle
+      ? `Aucune organisation ne s'appelle « ${syndicSaisi} » : le dossier reste chez ${actuelle.nom}.`
+      : `Aucune organisation ne s'appelle « ${syndicSaisi} » : le dossier reste sans organisation.`;
+  }
+  if (!message) return null;
+  return (
+    <div className="kv" style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+      <span className="k" />
+      <span className="v" style={{ textAlign: "right" }}>
+        {message}
+      </span>
     </div>
   );
 }
