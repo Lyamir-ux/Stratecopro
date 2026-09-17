@@ -153,4 +153,47 @@ join profiles p on p.user_id = u.id
 where c.organisation_id = (select id from organisations where slug = 'immium')
 on conflict (copro_id, user_id) do nothing;
 
+-- ========== Ajout du 17/09/2026 (Amir) : LE BAYARD ==========
+-- Absent de l'extraction du 15/08 ; créé en prod le 17/09/2026 avec la même
+-- mécanique (bâtiment 01 + plan de tâches gabarit en phase travaux). Le trigger
+-- 0063 rattache Olivier PLAT (compte IMMIUM) au dossier via son e-mail.
+insert into coproprietes (name, slug, nb_logements, adresse, code_postal, city, phase,
+                          gestionnaire_nom, gestionnaire_email, chef_projet, syndic_name, organisation_id)
+select 'LE BAYARD', 'le-bayard', 46, '11-13-15-17 rue de Dambach - 98 rue de la Ziegelau', '67100', 'Strasbourg',
+       'travaux', 'Olivier PLAT', 'olivier.plat@immium.com', 'Radia', o.nom, o.id
+from organisations o where o.slug = 'immium'
+on conflict (slug) do nothing;
+
+insert into batiments (copro_id, code, position, declare_creation)
+select c.id, '01', 0, true from coproprietes c
+where c.slug = 'le-bayard' and not exists (select 1 from batiments b where b.copro_id = c.id);
+
+with tpl (position, phase, title, statut_courant, tag, jalon, due_label) as (values
+  (0,  'diagnostic', 'Recensement des copropriétaires & lots',                     'doing', null,                  'P1a', null),
+  (1,  'diagnostic', 'Saisie des tantièmes par bâtiment',                          'todo',  null,                  null,  null),
+  (2,  'diagnostic', 'Consultations diverses',                                     'todo',  null,                  null,  null),
+  (3,  'diagnostic', 'Vérif. audit énergétique',                                   'todo',  'Audit réglementaire', null,  null),
+  (4,  'diagnostic', 'Enquête sociale - profils MaPrimeRénov'' · Fiche État',      'todo',  'MPR',                 'P1b', null),
+  (5,  'etudes',     'Scénarios de travaux & chiffrage',                           'doing', null,                  null,  null),
+  (6,  'etudes',     'Ingénierie financière (7 étapes)',                           'doing', 'Finance',             null,  null),
+  (7,  'etudes',     'Récupération des données essentielles - CEE / MPR Copro',    'todo',  'CEE',                 null,  null),
+  (8,  'etudes',     'Récupération des données des entreprises',                   'todo',  null,                  null,  null),
+  (9,  'etudes',     'Plans de financement généraux et individuels',               'todo',  null,                  null,  null),
+  (10, 'etudes',     'Liasse documentaire pour AG',                                'todo',  null,                  'P1c', null),
+  (11, 'travaux',    'Dépôt des dossiers des aides',                               'doing', 'CEE',                 'P2a', null),
+  (12, 'travaux',    'Mobilisation des prêts',                                     'doing', 'Éco-PTZ',             'P2b', null),
+  (13, 'travaux',    'Suivi de chantier',                                          'doing', null,                  null,  'En cours'),
+  (14, 'travaux',    'Demandes d''acompte',                                        'todo',  null,                  null,  null),
+  (15, 'travaux',    'Réception des travaux & levée des réserves',                 'todo',  null,                  null,  null),
+  (16, 'travaux',    'Versement des aides & solde',                                'todo',  null,                  'P2c', null)
+),
+rk (phase, rang) as (values ('diagnostic', 0), ('etudes', 1), ('travaux', 2))
+insert into taches (copro_id, phase, title, status, tag, jalon, due_label, position)
+select c.id, t.phase::phase_copro, t.title,
+       (case when rt.rang < rc.rang then 'done' when rt.rang > rc.rang then 'todo' else t.statut_courant end)::statut_tache,
+       t.tag, t.jalon, t.due_label, t.position
+from coproprietes c cross join tpl t
+join rk rt on rt.phase = t.phase join rk rc on rc.phase = c.phase::text
+where c.slug = 'le-bayard' and not exists (select 1 from taches x where x.copro_id = c.id);
+
 commit;
