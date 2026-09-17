@@ -1,8 +1,8 @@
 -- Portefeuille CITYA Strasbourg - extraction du 16/09/2026
--- (fichiers « Copros_Citya_Strasbourg_Immo4.csv » et « _1.csv », 27 copropriétés / 1 525 logements).
+-- (fichiers « Copros_Citya_Strasbourg_Immo4.csv » et « _1.csv », 28 copropriétés / 1 536 logements).
 --
 -- Deux enseignes DISTINCTES : Citya Immo 4 (10 dossiers) et Citya Ruhl Segesca
--- (17 dossiers). LES ANEMONES (Reichstett) est chez Citya Immo 4 avec Eric LEROUX,
+-- (18 dossiers, dont ANEMONES Illkirch ajouté par Amir le 17/09). LES ANEMONES (Reichstett) est chez Citya Immo 4 avec Eric LEROUX,
 -- qui n'exerce que dans cette enseigne (le fichier source la classait à tort chez
 -- Ruhl Segesca - corrigé par Amir le 17/09/2026).
 --
@@ -30,7 +30,7 @@ insert into organisations (nom, slug) values
   ('Citya Ruhl Segesca', 'citya-ruhl-segesca')
 on conflict (slug) do nothing;
 
--- ========== Les 27 copropriétés ==========
+-- ========== Les 28 copropriétés ==========
 with src (org_slug, name, slug, nb_logements, adresse, code_postal, city, phase, gestionnaire_nom, gestionnaire_email, chef_projet) as (values
   -- Citya Immo 4
   ('citya-immo-4', '144 route des romains / 13 rue des brasseurs (OPAH RU)', '144-route-des-romains-13-rue-des-brasseurs-opah-ru', 6,  '144 route des Romains / 13 rue des Brasseurs', '67200', 'Strasbourg',             'etudes',     'Sybille BAERENZUNG', 'sbaerenzung@citya.com', 'Kawtar'),
@@ -60,6 +60,8 @@ with src (org_slug, name, slug, nb_logements, adresse, code_postal, city, phase,
   ('citya-ruhl-segesca', 'MEINAU',                                               'meinau',                                           262, 'Cour de Bretagne, rue Prosper Mérimée',                                                            '67100', 'Strasbourg',             'travaux',    'Jean-Claude REHM',      'jcrehm@citya.com', 'Amir'),
   ('citya-ruhl-segesca', 'PLATANES',                                             'platanes',                                         113, '8 à 14 rue du Canal',                                                                              '67400', 'Illkirch-Graffenstaden', 'etudes',     'Serge STOECKEL',        'sstoeckel@citya.com', 'Radia'),
   ('citya-ruhl-segesca', 'SLEIDAN',                                              'sleidan',                                          35,  '1 rue Sleidan',                                                                                    '67000', 'Strasbourg',             'etudes',     'Serge STOECKEL',        'sstoeckel@citya.com', 'Radia'),
+  -- Ajout Amir 17/09/2026 (absent de l'extraction) : homonyme des ANEMONES de Reichstett
+  ('citya-ruhl-segesca', 'ANEMONES',                                             'anemones',                                         11,  '1 impasse des Anémones',                                                                           '67400', 'Illkirch-Graffenstaden', 'travaux',    'Jean-François ROUSSET', 'jfrousset@citya.com', 'Radia'),
   ('citya-ruhl-segesca', 'VERT GALANT 2',                                        'vert-galant-2',                                    41,  '44-46 rue d''Altkirch',                                                                            '67100', 'Strasbourg',             'travaux',    'Serge STOECKEL',        'sstoeckel@citya.com', 'Louaa')
 )
 insert into coproprietes (
