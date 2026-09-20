@@ -390,6 +390,21 @@ export function useDeposerPptRapport() {
   });
 }
 
+/** Requalification du type d'un document déjà déposé (dirigeant, file de revue).
+ *  Le type est deviné au dépôt d'après le nom du fichier : un classeur nommé
+ *  « PPT_<Copro>.xlsx » arrive en « Tableau PPT » et sort donc de la file
+ *  d'analyse. Le corriger ici y ramène le document (journalisé, 0080). */
+export function useRequalifierPptRapport() {
+  const refresh = useRefreshPpt();
+  return useMutation({
+    mutationFn: async ({ rapportId, type }: { rapportId: string; type: TypeRapport }) => {
+      const { error } = await supabase.from("ppt_rapports").update({ type }).eq("id", rapportId);
+      if (error) throw error;
+    },
+    onSuccess: refresh,
+  });
+}
+
 /** URL signée (5 min) d'un document du bucket ppt-files. */
 export async function urlSigneePpt(path: string, download?: string): Promise<string> {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 300, download ? { download: nomFichierSansAccents(download) } : undefined);
