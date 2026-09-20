@@ -6,6 +6,7 @@ import { useUi, type Accent } from "@/stores/ui";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCopros, useTasksCount } from "@/api/copros";
 import { useQuestionsEnAttenteCount } from "@/api/consultations";
+import { usePptRapportsRevue } from "@/api/ppt";
 import { declencherRappelAgrements } from "@/api/prestataires";
 import { declencherRapportSyndic } from "@/api/rapportSyndic";
 import { declencherSignatureCron } from "@/api/signature";
@@ -44,6 +45,9 @@ export function Layout() {
   const { data: tasksCount } = useTasksCount();
   // alerte du menu « Consulter un intervenant » : questions de prestataires sans réponse
   const { data: questionsCount } = useQuestionsEnAttenteCount();
+  // alerte du menu « Suivi PPT » : rapports déposés ou analysés en attente de revue
+  const { data: rapportsPpt } = usePptRapportsRevue();
+  const pptCount = (rapportsPpt ?? []).filter((r) => ["depose", "en_analyse", "a_relire"].includes(r.statut) && (r.type === "pppt" || r.type === "ppt_adopte")).length;
 
   const user = {
     initials: profile?.initials ?? "–",
@@ -58,6 +62,7 @@ export function Layout() {
         recents={recents}
         tasksCount={tasksCount ?? null}
         questionsCount={questionsCount || null}
+        pptCount={pptCount || null}
         user={user}
         onLogout={() => void signOut()}
       />

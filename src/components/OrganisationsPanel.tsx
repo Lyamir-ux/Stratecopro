@@ -26,6 +26,8 @@ import {
   type OrgRole,
 } from "@/api/organisations";
 import type { Tables } from "@/lib/database.types";
+import { useActiverModulePpt, useMajPptParametres, usePptParametres } from "@/api/ppt";
+import { PARAMETRES_ORG_DEFAUT, type ParametresOrg } from "@/lib/ppt/formules";
 
 const ROLE_LABEL: Record<OrgRole, string> = {
   directeur: "Direction - tout le portefeuille",
@@ -404,6 +406,64 @@ function Dossiers({ org }: { org: Organisation }) {
   );
 }
 
+/**
+ * Module « Suivi PPT » de l'enseigne : activation (la branche apparaît dans
+ * l'espace syndic) et paramètres financiers - taux d'honoraires de suivi de
+ * travaux (assiette HT ou TTC) et hypothèses du tableau PPT Strat Eco.
+ */
+function ModulePpt({ org }: { org: Organisation }) {
+  const activer = useActiverModulePpt();
+  const { data: params } = usePptParametres(org.id);
+  const maj = useMajPptParametres();
+  const [p, setP] = useState<ParametresOrg | null>(null);
+  const v = p ?? params ?? PARAMETRES_ORG_DEFAUT;
+  const dirty = p != null && JSON.stringify(p) !== JSON.stringify(params ?? PARAMETRES_ORG_DEFAUT);
+  const num = (k: keyof ParametresOrg, label: string, suffixe: string, step = 0.5) => (
+    <label key={k} style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, fontWeight: 500 }}>
+      {label}
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <input className="edit-inp sm" type="number" step={step} min={0} style={{ width: 80, textAlign: "right" }} value={v[k] as number} onChange={(e) => setP({ ...v, [k]: Number(e.target.value) || 0 })} />
+        <span style={{ color: "var(--fg-muted)", fontSize: 12 }}>{suffixe}</span>
+      </span>
+    </label>
+  );
+  return (
+    <>
+      <div className="se-eyebrow" style={EYEBROW}>
+        Module Suivi PPT
+      </div>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 }}>
+        <input type="checkbox" checked={org.module_ppt} disabled={activer.isPending} onChange={(e) => void activer.mutateAsync({ organisation_id: org.id, actif: e.target.checked })} />
+        Activer le suivi des plans pluriannuels de travaux pour cette enseigne
+      </label>
+      {org.module_ppt && (
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
+          {num("taux_honoraires_pct", "Honoraires de suivi", "% du montant", 0.1)}
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, fontWeight: 500 }}>
+            Assiette
+            <select className="edit-inp sm" style={{ maxWidth: 90 }} value={v.base_honoraires} onChange={(e) => setP({ ...v, base_honoraires: e.target.value as "ht" | "ttc" })}>
+              <option value="ttc">TTC</option>
+              <option value="ht">HT</option>
+            </select>
+          </label>
+          {num("inflation_pct", "Inflation", "% / an")}
+          {num("moe_pct", "MOE", "% (préservation)")}
+          {num("syndic_pct", "Syndic", "%")}
+          {num("tva_facades_pct", "TVA bâti", "%")}
+          {num("tva_energetique_pct", "TVA énergie", "%")}
+          <button className="se-btn se-btn-primary btn-sm" disabled={!dirty || maj.isPending} onClick={() => void maj.mutateAsync({ organisation_id: org.id, ...v }).then(() => setP(null))}>
+            <Icon name="check" size={14} />
+            {maj.isPending ? "Enregistrement…" : "Enregistrer"}
+          </button>
+        </div>
+      )}
+      <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 8, marginBottom: 0 }}>
+        Le taux d'honoraires alimente le potentiel d'honoraires de la vue direction. Les hypothèses (inflation, MOE, syndic, TVA) servent aux montants actualisés des échéanciers ; l'année de base est l'année courante.
+      </p>
+    </>
+  );
+}
+
 export function OrganisationsPanel() {
   const { data: organisations } = useOrganisations();
   const creer = useCreerOrganisation();
@@ -516,6 +576,7 @@ export function OrganisationsPanel() {
                 </div>
               )}
               <span className="spacer"></span>
+              {o.module_ppt && <Badge kind="primary">PPT</Badge>}
               {o.membres === 0 && <Badge kind="warn">Sans accès</Badge>}
               <button
                 className="icon-btn"
@@ -549,6 +610,7 @@ export function OrganisationsPanel() {
               <div style={{ padding: "0 4px 8px" }}>
                 <Membres org={o} />
                 <Dossiers org={o} />
+                <ModulePpt org={o} />
               </div>
             )}
           </div>

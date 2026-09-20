@@ -1207,6 +1207,13 @@ export type Database = {
             referencedRelation: "enquetes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "enquete_reponses_profil_verifie_par_fkey"
+            columns: ["profil_verifie_par"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       enquetes: {
@@ -1738,18 +1745,21 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          module_ppt: boolean
           nom: string
           slug: string
         }
         Insert: {
           created_at?: string
           id?: string
+          module_ppt?: boolean
           nom: string
           slug: string
         }
         Update: {
           created_at?: string
           id?: string
+          module_ppt?: boolean
           nom?: string
           slug?: string
         }
@@ -2012,6 +2022,20 @@ export type Database = {
             referencedRelation: "coproprietes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "plans_definitifs_source_fichier_id_fkey"
+            columns: ["source_fichier_id"]
+            isOneToOne: false
+            referencedRelation: "fichiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plans_definitifs_valide_fichier_id_fkey"
+            columns: ["valide_fichier_id"]
+            isOneToOne: false
+            referencedRelation: "fichiers"
+            referencedColumns: ["id"]
+          },
         ]
       }
       plans_individuels: {
@@ -2073,6 +2097,893 @@ export type Database = {
             columns: ["scenario_id"]
             isOneToOne: false
             referencedRelation: "scenarios_financiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppt_affectations: {
+        Row: {
+          au: string | null
+          du: string
+          email: string | null
+          id: string
+          nom: string | null
+          ppt_copro_id: string
+          user_id: string | null
+        }
+        Insert: {
+          au?: string | null
+          du?: string
+          email?: string | null
+          id?: string
+          nom?: string | null
+          ppt_copro_id: string
+          user_id?: string | null
+        }
+        Update: {
+          au?: string | null
+          du?: string
+          email?: string | null
+          id?: string
+          nom?: string | null
+          ppt_copro_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppt_affectations_ppt_copro_id_fkey"
+            columns: ["ppt_copro_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_affectations_ppt_copro_id_fkey"
+            columns: ["ppt_copro_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_affectations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      ppt_ag: {
+        Row: {
+          created_at: string
+          date_ag: string
+          id: string
+          notes: string | null
+          ppt_copro_id: string
+          pv_rapport_id: string | null
+          saisi_par: string | null
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          date_ag: string
+          id?: string
+          notes?: string | null
+          ppt_copro_id: string
+          pv_rapport_id?: string | null
+          saisi_par?: string | null
+          type?: string
+        }
+        Update: {
+          created_at?: string
+          date_ag?: string
+          id?: string
+          notes?: string | null
+          ppt_copro_id?: string
+          pv_rapport_id?: string | null
+          saisi_par?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppt_ag_ppt_copro_id_fkey"
+            columns: ["ppt_copro_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_ag_ppt_copro_id_fkey"
+            columns: ["ppt_copro_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_ag_pv_rapport_id_fkey"
+            columns: ["pv_rapport_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_rapports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_ag_saisi_par_fkey"
+            columns: ["saisi_par"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      ppt_analyses: {
+        Row: {
+          importe_le: string
+          importe_par: string | null
+          json_corrige: Json
+          json_verif: Json
+          rapport_id: string
+          updated_at: string
+        }
+        Insert: {
+          importe_le?: string
+          importe_par?: string | null
+          json_corrige: Json
+          json_verif: Json
+          rapport_id: string
+          updated_at?: string
+        }
+        Update: {
+          importe_le?: string
+          importe_par?: string | null
+          json_corrige?: Json
+          json_verif?: Json
+          rapport_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppt_analyses_importe_par_fkey"
+            columns: ["importe_par"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "ppt_analyses_rapport_id_fkey"
+            columns: ["rapport_id"]
+            isOneToOne: true
+            referencedRelation: "ppt_rapports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppt_coproprietes: {
+        Row: {
+          adresse: string | null
+          annee_construction: number | null
+          budget_previsionnel_annuel: number | null
+          cep_kwhep_m2_an: number | null
+          chauffage: string | null
+          code_postal: string | null
+          commune: string | null
+          copro_id: string | null
+          created_at: string
+          created_by: string | null
+          date_dpe: string | null
+          deleted_at: string | null
+          energie_chauffage: string | null
+          etiquette_energie: string | null
+          etiquette_ges: string | null
+          fonds_travaux_cotisation_annuelle: number | null
+          fonds_travaux_maj: string | null
+          fonds_travaux_solde: number | null
+          gestionnaire_email: string | null
+          gestionnaire_nom: string | null
+          id: string
+          immatriculation_rnc: string | null
+          nb_batiments: number | null
+          nb_logements: number | null
+          nb_lots: number | null
+          nom: string
+          organisation_id: string
+          surface_m2: number | null
+          surface_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          adresse?: string | null
+          annee_construction?: number | null
+          budget_previsionnel_annuel?: number | null
+          cep_kwhep_m2_an?: number | null
+          chauffage?: string | null
+          code_postal?: string | null
+          commune?: string | null
+          copro_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          date_dpe?: string | null
+          deleted_at?: string | null
+          energie_chauffage?: string | null
+          etiquette_energie?: string | null
+          etiquette_ges?: string | null
+          fonds_travaux_cotisation_annuelle?: number | null
+          fonds_travaux_maj?: string | null
+          fonds_travaux_solde?: number | null
+          gestionnaire_email?: string | null
+          gestionnaire_nom?: string | null
+          id?: string
+          immatriculation_rnc?: string | null
+          nb_batiments?: number | null
+          nb_logements?: number | null
+          nb_lots?: number | null
+          nom: string
+          organisation_id: string
+          surface_m2?: number | null
+          surface_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          adresse?: string | null
+          annee_construction?: number | null
+          budget_previsionnel_annuel?: number | null
+          cep_kwhep_m2_an?: number | null
+          chauffage?: string | null
+          code_postal?: string | null
+          commune?: string | null
+          copro_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          date_dpe?: string | null
+          deleted_at?: string | null
+          energie_chauffage?: string | null
+          etiquette_energie?: string | null
+          etiquette_ges?: string | null
+          fonds_travaux_cotisation_annuelle?: number | null
+          fonds_travaux_maj?: string | null
+          fonds_travaux_solde?: number | null
+          gestionnaire_email?: string | null
+          gestionnaire_nom?: string | null
+          id?: string
+          immatriculation_rnc?: string | null
+          nb_batiments?: number | null
+          nb_logements?: number | null
+          nb_lots?: number | null
+          nom?: string
+          organisation_id?: string
+          surface_m2?: number | null
+          surface_type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppt_coproprietes_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_coproprietes_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_coproprietes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "ppt_coproprietes_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppt_corrections: {
+        Row: {
+          chemin_json: string
+          id: string
+          le: string
+          motif: string | null
+          par: string | null
+          poste_code: string | null
+          rapport_id: string
+          valeur_apres: Json | null
+          valeur_avant: Json | null
+        }
+        Insert: {
+          chemin_json: string
+          id?: string
+          le?: string
+          motif?: string | null
+          par?: string | null
+          poste_code?: string | null
+          rapport_id: string
+          valeur_apres?: Json | null
+          valeur_avant?: Json | null
+        }
+        Update: {
+          chemin_json?: string
+          id?: string
+          le?: string
+          motif?: string | null
+          par?: string | null
+          poste_code?: string | null
+          rapport_id?: string
+          valeur_apres?: Json | null
+          valeur_avant?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppt_corrections_par_fkey"
+            columns: ["par"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "ppt_corrections_rapport_id_fkey"
+            columns: ["rapport_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_rapports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppt_journal: {
+        Row: {
+          detail: Json
+          id: string
+          le: string
+          par: string | null
+          ppt_copro_id: string
+          rapport_id: string | null
+          type: string
+        }
+        Insert: {
+          detail?: Json
+          id?: string
+          le?: string
+          par?: string | null
+          ppt_copro_id: string
+          rapport_id?: string | null
+          type: string
+        }
+        Update: {
+          detail?: Json
+          id?: string
+          le?: string
+          par?: string | null
+          ppt_copro_id?: string
+          rapport_id?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppt_journal_par_fkey"
+            columns: ["par"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "ppt_journal_ppt_copro_id_fkey"
+            columns: ["ppt_copro_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_journal_ppt_copro_id_fkey"
+            columns: ["ppt_copro_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_journal_rapport_id_fkey"
+            columns: ["rapport_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_rapports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppt_parametres_org: {
+        Row: {
+          base_honoraires: string
+          inflation_pct: number
+          moe_pct: number
+          organisation_id: string
+          syndic_pct: number
+          taux_honoraires_pct: number
+          tva_energetique_pct: number
+          tva_facades_pct: number
+          updated_at: string
+        }
+        Insert: {
+          base_honoraires?: string
+          inflation_pct?: number
+          moe_pct?: number
+          organisation_id: string
+          syndic_pct?: number
+          taux_honoraires_pct?: number
+          tva_energetique_pct?: number
+          tva_facades_pct?: number
+          updated_at?: string
+        }
+        Update: {
+          base_honoraires?: string
+          inflation_pct?: number
+          moe_pct?: number
+          organisation_id?: string
+          syndic_pct?: number
+          taux_honoraires_pct?: number
+          tva_energetique_pct?: number
+          tva_facades_pct?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppt_parametres_org_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: true
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppt_postes: {
+        Row: {
+          actif: boolean
+          annee_origine: string | null
+          annee_prevue: number | null
+          annee_prochaine_presentation: number | null
+          avec_moe: boolean
+          batiment: string | null
+          code_source: string | null
+          commentaire: string | null
+          cout_ht_base: number | null
+          cout_origine: string | null
+          created_at: string
+          critere: string | null
+          gain_energetique_pct: number | null
+          id: string
+          libelle: string
+          libelle_source: string | null
+          montant_vote: number | null
+          montant_syndic: number | null
+          commentaire_syndic: string | null
+          origine: string
+          ouvrage: string | null
+          position: number
+          ppt_copro_id: string
+          priorite: string
+          rapport_id: string | null
+          statut: string
+          tva_pct: number | null
+          updated_at: string
+        }
+        Insert: {
+          actif?: boolean
+          annee_origine?: string | null
+          annee_prevue?: number | null
+          annee_prochaine_presentation?: number | null
+          avec_moe?: boolean
+          batiment?: string | null
+          code_source?: string | null
+          commentaire?: string | null
+          cout_ht_base?: number | null
+          cout_origine?: string | null
+          created_at?: string
+          critere?: string | null
+          gain_energetique_pct?: number | null
+          id?: string
+          libelle: string
+          libelle_source?: string | null
+          montant_vote?: number | null
+          montant_syndic?: number | null
+          commentaire_syndic?: string | null
+          origine?: string
+          ouvrage?: string | null
+          position?: number
+          ppt_copro_id: string
+          priorite: string
+          rapport_id?: string | null
+          statut?: string
+          tva_pct?: number | null
+          updated_at?: string
+        }
+        Update: {
+          actif?: boolean
+          annee_origine?: string | null
+          annee_prevue?: number | null
+          annee_prochaine_presentation?: number | null
+          avec_moe?: boolean
+          batiment?: string | null
+          code_source?: string | null
+          commentaire?: string | null
+          cout_ht_base?: number | null
+          cout_origine?: string | null
+          created_at?: string
+          critere?: string | null
+          gain_energetique_pct?: number | null
+          id?: string
+          libelle?: string
+          libelle_source?: string | null
+          montant_vote?: number | null
+          montant_syndic?: number | null
+          commentaire_syndic?: string | null
+          origine?: string
+          ouvrage?: string | null
+          position?: number
+          ppt_copro_id?: string
+          priorite?: string
+          rapport_id?: string | null
+          statut?: string
+          tva_pct?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppt_postes_ppt_copro_id_fkey"
+            columns: ["ppt_copro_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_postes_ppt_copro_id_fkey"
+            columns: ["ppt_copro_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_postes_rapport_id_fkey"
+            columns: ["rapport_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_rapports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppt_rapports: {
+        Row: {
+          created_at: string
+          date_document: string | null
+          depose_le: string
+          depose_par: string | null
+          id: string
+          mime: string | null
+          motif_rejet: string | null
+          name: string
+          nature_detectee: string | null
+          ppt_copro_id: string
+          prestataire: string | null
+          prestataire_type: string | null
+          remplace_rapport_id: string | null
+          schema_version: string | null
+          score_coherence_pct: number | null
+          score_conformite_pct: number | null
+          size: number | null
+          statut: string
+          taux_honoraires_pct: number | null
+          storage_path: string
+          type: string
+          updated_at: string
+          valide_le: string | null
+          valide_par: string | null
+          verdict: string | null
+        }
+        Insert: {
+          created_at?: string
+          date_document?: string | null
+          depose_le?: string
+          depose_par?: string | null
+          id?: string
+          mime?: string | null
+          motif_rejet?: string | null
+          name: string
+          nature_detectee?: string | null
+          ppt_copro_id: string
+          prestataire?: string | null
+          prestataire_type?: string | null
+          remplace_rapport_id?: string | null
+          schema_version?: string | null
+          score_coherence_pct?: number | null
+          score_conformite_pct?: number | null
+          size?: number | null
+          statut?: string
+          taux_honoraires_pct?: number | null
+          storage_path: string
+          type?: string
+          updated_at?: string
+          valide_le?: string | null
+          valide_par?: string | null
+          verdict?: string | null
+        }
+        Update: {
+          created_at?: string
+          date_document?: string | null
+          depose_le?: string
+          depose_par?: string | null
+          id?: string
+          mime?: string | null
+          motif_rejet?: string | null
+          name?: string
+          nature_detectee?: string | null
+          ppt_copro_id?: string
+          prestataire?: string | null
+          prestataire_type?: string | null
+          remplace_rapport_id?: string | null
+          schema_version?: string | null
+          score_coherence_pct?: number | null
+          score_conformite_pct?: number | null
+          size?: number | null
+          statut?: string
+          taux_honoraires_pct?: number | null
+          storage_path?: string
+          type?: string
+          updated_at?: string
+          valide_le?: string | null
+          valide_par?: string | null
+          verdict?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppt_rapports_depose_par_fkey"
+            columns: ["depose_par"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "ppt_rapports_ppt_copro_id_fkey"
+            columns: ["ppt_copro_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_rapports_ppt_copro_id_fkey"
+            columns: ["ppt_copro_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_rapports_remplace_rapport_id_fkey"
+            columns: ["remplace_rapport_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_rapports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_rapports_valide_par_fkey"
+            columns: ["valide_par"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      ppt_remarques: {
+        Row: {
+          action: string | null
+          attendu: string | null
+          code: string
+          constat: string | null
+          created_at: string
+          ecart: string | null
+          famille: string
+          id: string
+          libelle: string
+          observe: string | null
+          page: number | null
+          poste_id: string | null
+          ppt_copro_id: string
+          rapport_id: string
+          severite: string
+          statut: string
+          traitee: boolean
+          visible_syndic: boolean
+        }
+        Insert: {
+          action?: string | null
+          attendu?: string | null
+          code: string
+          constat?: string | null
+          created_at?: string
+          ecart?: string | null
+          famille: string
+          id?: string
+          libelle: string
+          observe?: string | null
+          page?: number | null
+          poste_id?: string | null
+          ppt_copro_id: string
+          rapport_id: string
+          severite: string
+          statut: string
+          traitee?: boolean
+          visible_syndic?: boolean
+        }
+        Update: {
+          action?: string | null
+          attendu?: string | null
+          code?: string
+          constat?: string | null
+          created_at?: string
+          ecart?: string | null
+          famille?: string
+          id?: string
+          libelle?: string
+          observe?: string | null
+          page?: number | null
+          poste_id?: string | null
+          ppt_copro_id?: string
+          rapport_id?: string
+          severite?: string
+          statut?: string
+          traitee?: boolean
+          visible_syndic?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppt_remarques_poste_id_fkey"
+            columns: ["poste_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_postes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_remarques_ppt_copro_id_fkey"
+            columns: ["ppt_copro_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_remarques_ppt_copro_id_fkey"
+            columns: ["ppt_copro_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_remarques_rapport_id_fkey"
+            columns: ["rapport_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_rapports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppt_resolutions: {
+        Row: {
+          abstentions: number | null
+          ag_id: string
+          article: string | null
+          created_at: string
+          id: string
+          intitule: string
+          issue: string
+          montant_vote: number | null
+          poste_id: string | null
+          voix_contre: number | null
+          voix_pour: number | null
+        }
+        Insert: {
+          abstentions?: number | null
+          ag_id: string
+          article?: string | null
+          created_at?: string
+          id?: string
+          intitule: string
+          issue: string
+          montant_vote?: number | null
+          poste_id?: string | null
+          voix_contre?: number | null
+          voix_pour?: number | null
+        }
+        Update: {
+          abstentions?: number | null
+          ag_id?: string
+          article?: string | null
+          created_at?: string
+          id?: string
+          intitule?: string
+          issue?: string
+          montant_vote?: number | null
+          poste_id?: string | null
+          voix_contre?: number | null
+          voix_pour?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppt_resolutions_ag_id_fkey"
+            columns: ["ag_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_ag"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppt_resolutions_poste_id_fkey"
+            columns: ["poste_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_postes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppt_traitements: {
+        Row: {
+          cout_usd: number | null
+          demarre_le: string
+          duree_ms: number | null
+          erreur: string | null
+          id: string
+          mode: string
+          modele: string | null
+          prompt_version: string | null
+          rapport_id: string
+          schema_version: string | null
+          statut: string
+          termine_le: string | null
+          tokens_cache_ecriture: number | null
+          tokens_cache_lecture: number | null
+          tokens_entree: number | null
+          tokens_sortie: number | null
+        }
+        Insert: {
+          cout_usd?: number | null
+          demarre_le?: string
+          duree_ms?: number | null
+          erreur?: string | null
+          id?: string
+          mode: string
+          modele?: string | null
+          prompt_version?: string | null
+          rapport_id: string
+          schema_version?: string | null
+          statut?: string
+          termine_le?: string | null
+          tokens_cache_ecriture?: number | null
+          tokens_cache_lecture?: number | null
+          tokens_entree?: number | null
+          tokens_sortie?: number | null
+        }
+        Update: {
+          cout_usd?: number | null
+          demarre_le?: string
+          duree_ms?: number | null
+          erreur?: string | null
+          id?: string
+          mode?: string
+          modele?: string | null
+          prompt_version?: string | null
+          rapport_id?: string
+          schema_version?: string | null
+          statut?: string
+          termine_le?: string | null
+          tokens_cache_ecriture?: number | null
+          tokens_cache_lecture?: number | null
+          tokens_entree?: number | null
+          tokens_sortie?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppt_traitements_rapport_id_fkey"
+            columns: ["rapport_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_rapports"
             referencedColumns: ["id"]
           },
         ]
@@ -2734,18 +3645,70 @@ export type Database = {
         }
         Relationships: []
       }
+      ppt_copro_stats: {
+        Row: {
+          derniere_ag: string | null
+          id: string | null
+          montant_ht_base: number | null
+          nb_ag: number | null
+          postes: number | null
+          postes_non_chiffres: number | null
+          prochaine_annee: number | null
+          rapports_en_attente: number | null
+          remarques_ouvertes: number | null
+          statut_rapport: string | null
+          valide_le: string | null
+        }
+        Insert: {
+          derniere_ag?: never
+          id?: string | null
+          montant_ht_base?: never
+          nb_ag?: never
+          postes?: never
+          postes_non_chiffres?: never
+          prochaine_annee?: never
+          rapports_en_attente?: never
+          remarques_ouvertes?: never
+          statut_rapport?: never
+          valide_le?: never
+        }
+        Update: {
+          derniere_ag?: never
+          id?: string | null
+          montant_ht_base?: never
+          nb_ag?: never
+          postes?: never
+          postes_non_chiffres?: never
+          prochaine_annee?: never
+          rapports_en_attente?: never
+          remarques_ouvertes?: never
+          statut_rapport?: never
+          valide_le?: never
+        }
+        Relationships: []
+      }
     }
     Functions: {
       a_postule: { Args: { p_consultation_id: string }; Returns: boolean }
-      copro_visible_presta: { Args: { p_copro_id: string }; Returns: boolean }
+      appels_de_fonds_syndic: {
+        Args: { p_copro_id: string }
+        Returns: {
+          appel: number
+          coproprietaire_id: string
+          prime_cee: number
+          source: string
+        }[]
+      }
       checklist_cocher_pieces: {
-        Args: { p_copro_id: string; p_labels: string[]; p_fichier_id?: string | null }
+        // retouche manuelle à préserver : p_fichier_id accepte null (défaut SQL)
+        Args: { p_copro_id: string; p_fichier_id?: string | null; p_labels: string[] }
         Returns: number
       }
       checklist_delier_fichier: {
         Args: { p_fichier_id: string }
         Returns: number
       }
+      copro_visible_presta: { Args: { p_copro_id: string }; Returns: boolean }
       documents_dossier: {
         Args: { p_copro_id: string }
         Returns: {
@@ -2756,15 +3719,6 @@ export type Database = {
           origine: string
           path: string
           taille: number
-        }[]
-      }
-      appels_de_fonds_syndic: {
-        Args: { p_copro_id: string }
-        Returns: {
-          coproprietaire_id: string
-          appel: number
-          prime_cee: number
-          source: string
         }[]
       }
       enquete_reponses_syndic: {
@@ -2783,6 +3737,7 @@ export type Database = {
       is_directeur_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_dirigeant: { Args: never; Returns: boolean }
       is_moe_retenu_of: { Args: { p_copro_id: string }; Returns: boolean }
+      is_org_membre_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_presta_retenu_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_scenario_partage: { Args: { p_scenario_id: string }; Returns: boolean }
       is_syndic_of: { Args: { p_copro_id: string }; Returns: boolean }
@@ -2798,6 +3753,78 @@ export type Database = {
         Args: { p_consultation_id: string }
         Returns: boolean
       }
+      phase_calculee: {
+        Args: { p_copro_id: string }
+        Returns: Database["public"]["Enums"]["phase_copro"]
+      }
+      ppt_ag_ouvre: { Args: { p_ag: string }; Returns: boolean }
+      ppt_code_priorite: { Args: { p: string }; Returns: string }
+      ppt_code_severite: { Args: { p: string }; Returns: string }
+      ppt_code_statut_controle: { Args: { p: string }; Returns: string }
+      ppt_corbeille_copro: {
+        Args: { p_id: string; p_restaurer?: boolean }
+        Returns: undefined
+      }
+      ppt_depose: { Args: { p_id: string }; Returns: boolean }
+      ppt_enregistrer_revue: {
+        Args: {
+          p_corrections?: Json
+          p_json_corrige: Json
+          p_rapport_id: string
+        }
+        Returns: undefined
+      }
+      ppt_importer_analyse: {
+        Args: { p_json: Json; p_mode?: string; p_rapport_id: string }
+        Returns: undefined
+      }
+      ppt_is_directeur_org: { Args: { p_org: string }; Returns: boolean }
+      ppt_is_gestionnaire_of: { Args: { p_id: string }; Returns: boolean }
+      ppt_is_membre_org: { Args: { p_org: string }; Returns: boolean }
+      ppt_journaliser: {
+        Args: {
+          p_copro: string
+          p_detail?: Json
+          p_rapport: string
+          p_type: string
+        }
+        Returns: undefined
+      }
+      ppt_membres_enseigne: {
+        Args: { p_org: string }
+        Returns: {
+          email: string
+          nom: string
+          org_role: Database["public"]["Enums"]["org_role"]
+          user_id: string
+        }[]
+      }
+      ppt_org_de: { Args: { p_id: string }; Returns: string }
+      ppt_ouvre: { Args: { p_id: string }; Returns: boolean }
+      ppt_ajouter_poste: {
+        Args: { p_annee?: number | null; p_commentaire?: string | null; p_copro_id: string; p_libelle: string; p_montant?: number | null; p_priorite: string }
+        Returns: string
+      }
+      ppt_decaler_postes: {
+        Args: { p_decalages: Json }
+        Returns: number
+      }
+      ppt_retirer_poste: {
+        Args: { p_poste_id: string }
+        Returns: undefined
+      }
+      ppt_saisir_montant_poste: {
+        Args: { p_commentaire?: string | null; p_montant: number | null; p_poste_id: string }
+        Returns: undefined
+      }
+      ppt_rejeter_rapport: {
+        Args: { p_motif: string; p_rapport_id: string }
+        Returns: undefined
+      }
+      ppt_valider_rapport: {
+        Args: { p_levees?: Json; p_rapport_id: string }
+        Returns: undefined
+      }
       rattacher_lot: {
         // retouche manuelle à préserver : p_cible_id a un défaut SQL (null)
         // que le générateur ne voit pas
@@ -2806,6 +3833,10 @@ export type Database = {
       }
       seed_syndic_taches: {
         Args: { p_copro_ids: string[] }
+        Returns: undefined
+      }
+      sync_rattachement_gestionnaire: {
+        Args: { p_copro_id?: string }
         Returns: undefined
       }
     }
@@ -2859,12 +3890,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2888,11 +3919,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2913,11 +3944,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2938,11 +3969,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2955,11 +3986,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

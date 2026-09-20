@@ -1475,3 +1475,75 @@ table.dossiers.sf-table tfoot td:first-child { text-align: left; }
 .dpe-vise .dv-chips .dpe { width: 46px; height: 46px; display: inline-flex; align-items: center; justify-content: center; }
 .dpe-vise .dv-title { font-family: var(--font-display); font-weight: 800; font-size: 18px; margin-bottom: 4px; }
 .dpe-vise .dv-sub { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--fg2); max-width: 640px; }
+
+/* ---------- Branche « Suivi des PPT » de l'espace syndic ----------
+   Accent bleu énergie (#2E6FA8) pour distinguer d'un coup d'œil le suivi des
+   PPT de la rénovation globale (verte). Posé par SyndicShell sur .portal et sur
+   la tuile de choix ; toute la gamme primaire est redéfinie pour que les
+   composants qui lisent --color-primary-* directement suivent aussi. */
+[data-branche="ppt"] {
+  --color-primary-50:  #EAF2FA;
+  --color-primary-100: #D6E4F3;
+  --color-primary-200: #B0CBE8;
+  --color-primary-300: #7AA6D4;
+  --color-primary-400: #4F88BE;
+  --color-primary-500: #2E6FA8;
+  --color-primary-600: #265E8F;
+  --color-primary-700: #1E4F7C;
+  --color-primary-800: #163A5B;
+  --color-primary-900: #112E48;
+  --accent:       var(--color-primary-500);
+  --accent-hover: var(--color-primary-700);
+  --accent-soft:  var(--color-primary-100);
+  --bg-muted:     var(--color-primary-100);
+  --border-focus: var(--color-primary-500);
+  --shadow-focus: 0 0 0 3px rgba(46, 111, 168, 0.30);
+}
+[data-branche="ppt"] .portal-header .ph-copro .nm { color: var(--color-primary-700); }
+
+/* ===== Suivi de l'échéancier PPT (syndic) : une colonne par année ===== */
+table.dossiers.ech-table thead th, table.dossiers.ech-table tbody td { padding: 8px 8px; }
+.ech-cell { min-width: 72px; }
+.ech-cell.libre { cursor: pointer; }
+.ech-cell.libre:hover { background: var(--accent-soft); }
+.ech-cell.ici { background: var(--bg-soft); }
+.ech-cible { color: var(--border-strong); font-size: 14px; }
+.ech-cell.libre:hover .ech-cible { color: var(--color-primary-700); }
+.ech-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--color-primary-700); font-weight: 700; font-size: 12px; white-space: nowrap;
+}
+.ech-chip.modifie { background: var(--color-warning-50); color: var(--color-warning-700); box-shadow: 0 0 0 1px var(--color-warning-500) inset; }
+.ech-chip.fige { background: var(--color-neutral-100); color: var(--fg2); }
+/* statut du poste : voté en vert (cadenas conservé), rejeté en AG en rouge */
+.ech-chip.vote { background: var(--color-success-50); color: var(--color-success-700); border-color: var(--color-success-500); }
+.ech-chip.rejete { background: var(--color-error-50); color: var(--color-error-700); border-color: var(--color-error-500); }
+.ech-chip.rejete.modifie { background: var(--color-warning-50); color: var(--color-warning-700); border-color: var(--color-warning-500); }
+/* ligne de total du récap des postes */
+table.dossiers tfoot tr.recap-total td { border-top: 2px solid var(--border-strong); background: var(--bg-soft); font-weight: 700; padding: 10px 12px; }
+table.dossiers tfoot tr.recap-total td.num { text-align: right; }
+.ech-chip-vide { background: var(--color-warning-50); color: var(--color-warning-700); }
+.ech-suivant {
+  display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px 3px 5px; border-radius: 999px;
+  color: var(--color-success-700); background: var(--color-success-50); border: 1px dashed var(--color-success-500);
+  font-size: 11.5px; font-weight: 700; white-space: nowrap;
+}
+.ech-suivant-lbl { display: none; }
+.ech-cell.libre:hover .ech-suivant { background: var(--color-success-500); color: #fff; border-style: solid; }
+.ech-cell.libre:hover .ech-suivant-lbl { display: inline; }
+.ech-chip { border: 1px solid transparent; font-family: var(--font-body); cursor: pointer; position: relative; }
+.ech-chip:hover { filter: brightness(0.96); }
+.ech-chip.saisi { background: var(--bg); color: var(--color-primary-700); border: 1.5px solid var(--color-primary-500); }
+.ech-chip.saisi.modifie { background: var(--color-warning-50); color: var(--color-warning-700); border-color: var(--color-warning-500); }
+/* bulle de commentaire au survol du montant : position fixe hors du tableau
+   (portail), au-dessus des en-têtes collants et jamais coupée par le défilement */
+.ech-bulle {
+  position: fixed; transform: translate(-50%, calc(-100% - 8px));
+  background: var(--color-neutral-800); color: #fff; font-weight: 400; font-size: 12px; line-height: 1.4; text-align: left;
+  padding: 8px 10px; border-radius: var(--radius-md); white-space: normal; width: max-content; max-width: 280px;
+  box-shadow: var(--shadow-md); pointer-events: none; z-index: 300;
+}
+.ech-bulle::after {
+  content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
+  border: 6px solid transparent; border-top-color: var(--color-neutral-800);
+}

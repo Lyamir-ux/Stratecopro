@@ -19,6 +19,10 @@ import Portail from "./pages/Portail";
 import Prestataire from "./pages/Prestataire";
 import Syndic from "./pages/Syndic";
 import CoproSyndic from "./pages/Syndic/CoproSyndic";
+import SyndicPpt from "./pages/SyndicPpt";
+import CoproPpt from "./pages/SyndicPpt/CoproPpt";
+import FileRevue from "./pages/Ppt/FileRevue";
+import Revue from "./pages/Ppt/Revue";
 import SignaturePublique from "./pages/Signature";
 import CguSignature from "./pages/CguSignature";
 
@@ -48,6 +52,9 @@ export const router = createBrowserRouter([
               { path: "/collaborateurs", element: <Collaborateurs /> },
               { path: "/base-connaissances", element: <BaseConnaissances /> },
               { path: "/parametres", element: <Parametres /> },
+              // module Suivi PPT : file de revue et revue d'un rapport (dirigeant)
+              { path: "/ppt", element: <FileRevue /> },
+              { path: "/ppt/rapports/:id", element: <Revue /> },
             ],
           },
         ],
@@ -64,6 +71,9 @@ export const router = createBrowserRouter([
         element: <RequireRole role="syndic" />,
         children: [
           { path: "/syndic/copros/:id/:tab?", element: <CoproSyndic /> },
+          // branche Suivi des PPT
+          { path: "/syndic/ppt/copros/:id/:tab?", element: <CoproPpt /> },
+          { path: "/syndic/ppt/:section?", element: <SyndicPpt /> },
           { path: "/syndic/:section?", element: <Syndic /> },
         ],
       },

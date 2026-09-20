@@ -63,6 +63,14 @@ suite("Intrusion externe (clé anon) - la base ne fuit pas", () => {
     "copro_stats",
     "montage_docs",
     "choix_financement",
+    // module Suivi PPT (0072) : plans, analyses JSON, corrections du dirigeant
+    "ppt_coproprietes",
+    "ppt_rapports",
+    "ppt_analyses",
+    "ppt_postes",
+    "ppt_remarques",
+    "ppt_corrections",
+    "ppt_copro_stats",
   ];
   it.each(tablesSensibles)("anon ne lit aucune ligne de %s", async (t) => {
     const { status, body } = await rest(`${t}?select=*&limit=5`);
