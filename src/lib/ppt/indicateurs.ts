@@ -288,3 +288,145 @@ export function totauxPortefeuille(copros: CoproLite[], postes: PosteLite[], rap
     honorairesAcquis: arr(acquis),
   };
 }
+
+// ---------- Portefeuille PPT (tableau de bord façon rénovation globale) ----------
+
+/**
+ * État de suivi d'une copropriété dans la branche PPT, du moins renseigné au
+ * plus avancé. Une seule case par copropriété (colonne du kanban, couleur de la
+ * mosaïque) ; « reno » l'emporte : le dossier est en rénovation globale avec
+ * Strat Eco, le PPT passe au second plan.
+ */
+export type EtatPpt = "inconnu" | "analyse" | "a_presenter" | "presente" | "vote" | "reno";
+export const ETATS_PPT: EtatPpt[] = ["inconnu", "analyse", "a_presenter", "presente", "vote", "reno"];
+export const ETAT_PPT_LABEL: Record<EtatPpt, string> = {
+  inconnu: "À qualifier",
+  analyse: "En analyse",
+  a_presenter: "PPPT à présenter",
+  presente: "Présenté en AG",
+  vote: "Travaux votés",
+  reno: "En rénovation",
+};
+
+/** Copropriété PPT avec les champs du portefeuille importé (0077) et la phase du dossier de rénovation rapproché. */
+export interface CoproEtatInput extends CoproLite {
+  commune?: string | null;
+  plus_de_15_ans?: boolean | null;
+  pppt_presente?: boolean | null;
+  reno_phase?: string | null;
+}
+
+/** État d'une copropriété : postes votés > présentés > PPPT déclaré présenté > PPT validé à présenter > document en analyse > + 15 ans sans PPPT > à qualifier. */
+export function etatCopro(c: CoproEtatInput, postes: PosteLite[], rapports: RapportLite[]): EtatPpt {
+  if (c.reno_phase) return "reno";
+  const ps = postes.filter((p) => p.ppt_copro_id === c.id && p.actif && p.statut !== "abandonne");
+  if (ps.some((p) => p.statut === "vote" || p.statut === "realise")) return "vote";
+  if (ps.some((p) => p.statut === "presente" || p.statut === "rejete" || p.statut === "reporte")) return "presente";
+  if (c.pppt_presente === true) return "presente";
+  const rs = rapports.filter((r) => r.ppt_copro_id === c.id);
+  if (rs.some((r) => r.type === "pppt" && r.statut === "valide")) return "a_presenter";
+  if (rs.some((r) => ["depose", "en_analyse", "a_relire"].includes(r.statut))) return "analyse";
+  if (c.plus_de_15_ans === true && c.pppt_presente === false) return "a_presenter";
+  return "inconnu";
+}
+
+export interface FicheCopro {
+  copro: CoproEtatInput;
+  etat: EtatPpt;
+  nbPostes: number;
+  /** TTC actualisé des postes à venir (montant voté s'il existe), hors réalisés et abandonnés. */
+  montantTtc: number;
+  honorairesPotentiels: number;
+  honorairesAcquis: number;
+  /** Prochaine année où un poste doit passer en AG (postes vivants non votés). */
+  prochaineAnnee: number | null;
+  nbAlertes: number;
+  alerteHaute: boolean;
+}
+
+/** Une fiche par copropriété : état, montants, prochain jalon, alertes - matière des trois vues du portefeuille. */
+export function fichesCopros(copros: CoproEtatInput[], postes: PosteLite[], rapports: RapportLite[], listeAlertes: Alerte[], org: ParametresOrg, anneeDebut: number): FicheCopro[] {
+  const params = parametresDepuisOrg(org, anneeDebut);
+  const parCopro = new Map<string, PosteLite[]>();
+  for (const p of postes) if (p.actif && p.statut !== "abandonne") parCopro.set(p.ppt_copro_id, [...(parCopro.get(p.ppt_copro_id) ?? []), p]);
+  const alertesPar = new Map<string, { n: number; haute: boolean }>();
+  for (const a of listeAlertes) {
+    const cur = alertesPar.get(a.ppt_copro_id) ?? { n: 0, haute: false };
+    alertesPar.set(a.ppt_copro_id, { n: cur.n + 1, haute: cur.haute || a.niveau === "haute" });
+  }
+  return copros.map((c) => {
+    const ps = parCopro.get(c.id) ?? [];
+    let ttc = 0, potentiel = 0, acquis = 0;
+    let prochaine: number | null = null;
+    for (const p of ps) {
+      if (p.statut !== "realise") ttc += (p.statut === "vote" && p.montant_vote != null ? p.montant_vote : montantTtcPoste(p, params)) ?? 0;
+      if (p.statut === "vote" || p.statut === "realise") {
+        acquis += p.montant_vote != null ? p.montant_vote * (org.taux_honoraires_pct / 100) : (honorairesPoste(p, params, org) ?? 0);
+      } else if (STATUTS_OUVERTS.includes(p.statut)) {
+        potentiel += honorairesPoste(p, params, org) ?? 0;
+        const a = anneeEffective(p);
+        if (a != null && (prochaine == null || a < prochaine)) prochaine = a;
+      }
+    }
+    const al = alertesPar.get(c.id);
+    return {
+      copro: c,
+      etat: etatCopro(c, ps, rapports),
+      nbPostes: ps.length,
+      montantTtc: arr(ttc),
+      honorairesPotentiels: arr(potentiel),
+      honorairesAcquis: arr(acquis),
+      prochaineAnnee: prochaine,
+      nbAlertes: al?.n ?? 0,
+      alerteHaute: al?.haute ?? false,
+    };
+  });
+}
+
+/** « Claude LOBSTEIN » → « CL ». Un seul mot → ses deux premières lettres. */
+export function initiales(nom: string): string {
+  const mots = nom.trim().split(/[\s-]+/).filter(Boolean);
+  if (mots.length === 0) return "?";
+  if (mots.length === 1) return mots[0].slice(0, 2).toUpperCase();
+  return (mots[0][0] + mots[mots.length - 1][0]).toUpperCase();
+}
+
+export interface GroupeGestionnaire {
+  key: string;
+  nom: string;
+  initiales: string;
+  logements: number;
+  montantTtc: number;
+  honoraires: number;
+  parEtat: Record<EtatPpt, number>;
+  /** fiches triées par nom */
+  fiches: FicheCopro[];
+}
+
+/** Regroupement par gestionnaire (mosaïque) : non attribués en dernier, sinon du plus gros parc de logements au plus petit. */
+export function groupesGestionnaires(fiches: FicheCopro[]): GroupeGestionnaire[] {
+  const groupes = new Map<string, GroupeGestionnaire>();
+  for (const f of fiches) {
+    const key = cleGestionnaire(f.copro);
+    const nom = f.copro.gestionnaire_nom?.trim() || "Non attribué";
+    const g = groupes.get(key) ?? {
+      key,
+      nom,
+      initiales: key === SANS_GESTIONNAIRE ? "-" : initiales(nom),
+      logements: 0,
+      montantTtc: 0,
+      honoraires: 0,
+      parEtat: { inconnu: 0, analyse: 0, a_presenter: 0, presente: 0, vote: 0, reno: 0 },
+      fiches: [],
+    };
+    g.logements += f.copro.nb_logements ?? 0;
+    g.montantTtc = arr(g.montantTtc + f.montantTtc);
+    g.honoraires = arr(g.honoraires + f.honorairesPotentiels + f.honorairesAcquis);
+    g.parEtat[f.etat]++;
+    g.fiches.push(f);
+    groupes.set(key, g);
+  }
+  return [...groupes.values()]
+    .map((g) => ({ ...g, fiches: [...g.fiches].sort((a, b) => a.copro.nom.localeCompare(b.copro.nom, "fr")) }))
+    .sort((a, b) => (a.key === SANS_GESTIONNAIRE ? 1 : b.key === SANS_GESTIONNAIRE ? -1 : b.logements - a.logements || a.nom.localeCompare(b.nom, "fr")));
+}

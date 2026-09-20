@@ -6,7 +6,11 @@ import {
   cleGestionnaire,
   controlerResolutions,
   echeancier,
+  etatCopro,
+  fichesCopros,
+  groupesGestionnaires,
   honorairesParAnnee,
+  initiales,
   statsParGestionnaire,
   totauxPortefeuille,
   type AgLite,
@@ -146,5 +150,56 @@ describe("indicateurs des tableaux de bord PPT", () => {
     expect(t.postes).toBe(5);
     expect(t.honorairesAcquis).toBeCloseTo(1200, 2);
     expect(t.honorairesPotentiels).toBeGreaterThan(0);
+  });
+});
+
+describe("portefeuille PPT : état de suivi, fiches, groupes par gestionnaire", () => {
+  it("état de suivi : postes votés > présentés > déclaré présenté > PPT validé à présenter > en analyse > + 15 ans sans PPPT > à qualifier", () => {
+    expect(etatCopro(copros[0], postes, rapports)).toBe("vote"); // c1 : un poste voté
+    expect(etatCopro(copros[1], postes, rapports)).toBe("presente"); // c2 : un poste reporté
+    expect(etatCopro(copros[2], postes, rapports)).toBe("analyse"); // c3 : rapport déposé
+    expect(etatCopro({ ...copros[0], reno_phase: "etudes" }, postes, rapports)).toBe("reno"); // la rénovation globale l'emporte
+    // PPT validé dont tous les postes sont encore programmés : à présenter
+    expect(etatCopro({ ...copros[1], id: "c8" }, [poste({ id: "p9", ppt_copro_id: "c8", libelle: "Toiture" })], [{ ...rapports[1], id: "r8", ppt_copro_id: "c8" }])).toBe("a_presenter");
+    // portefeuille importé sans document (0077)
+    expect(etatCopro({ ...copros[2], id: "c9", pppt_presente: true }, [], [])).toBe("presente");
+    expect(etatCopro({ ...copros[2], id: "c9", plus_de_15_ans: true, pppt_presente: false }, [], [])).toBe("a_presenter");
+    expect(etatCopro({ ...copros[2], id: "c9", plus_de_15_ans: false, pppt_presente: false }, [], [])).toBe("inconnu");
+    expect(etatCopro({ ...copros[2], id: "c9" }, [], [])).toBe("inconnu");
+  });
+
+  it("fiches : montant TTC à venir, honoraires, prochain jalon, alertes", () => {
+    const al = alertes(copros, postes, ags, rapports, AUJOURDHUI);
+    const fiches = fichesCopros(copros, postes, rapports, al, PARAMETRES_ORG_DEFAUT, 2026);
+    const c1 = fiches.find((f) => f.copro.id === "c1")!;
+    expect(c1.etat).toBe("vote");
+    expect(c1.nbPostes).toBe(3);
+    expect(c1.montantTtc).toBeCloseTo(186000 * 1.035 * 1.085 + 48000 * 1.035 * 1.19 + 40000, 1);
+    expect(c1.honorairesAcquis).toBeCloseTo(1200, 2);
+    expect(c1.honorairesPotentiels).toBeGreaterThan(0);
+    expect(c1.prochaineAnnee).toBe(2027);
+    const c2 = fiches.find((f) => f.copro.id === "c2")!;
+    expect(c2.nbPostes).toBe(2); // le poste inactif ne compte pas
+    expect(c2.prochaineAnnee).toBe(2026); // poste reporté sans nouvelle année : année prévue
+    expect(c2.nbAlertes).toBeGreaterThanOrEqual(3); // P30 validé depuis plus de 12 mois jamais présenté, P32 reporté sans année, P36 PPPT de 2014
+    expect(c2.alerteHaute).toBe(true); // P30 est de niveau haut
+    const c1b = fiches.find((f) => f.copro.id === "c1")!;
+    expect(c1b.alerteHaute).toBe(false);
+    const c3 = fiches.find((f) => f.copro.id === "c3")!;
+    expect(c3.montantTtc).toBe(0);
+    expect(c3.prochaineAnnee).toBeNull();
+  });
+
+  it("groupes par gestionnaire : plus gros parc d'abord, non attribués en dernier, jauge par état", () => {
+    const fiches = fichesCopros(copros, postes, rapports, [], PARAMETRES_ORG_DEFAUT, 2026);
+    const g = groupesGestionnaires(fiches);
+    expect(g.map((x) => x.nom)).toEqual(["Isabelle GEBEL", "Eric LEROUX", "Non attribué"]);
+    expect(g.map((x) => x.initiales)).toEqual(["IG", "EL", "-"]);
+    expect(g[0].logements).toBe(46);
+    expect(g[1].parEtat.vote).toBe(1);
+    expect(g[2].parEtat.analyse).toBe(1);
+    expect(g[1].honoraires).toBeCloseTo(fiches.find((f) => f.copro.id === "c1")!.honorairesPotentiels + 1200, 2);
+    expect(initiales("STOSSWIHR")).toBe("ST");
+    expect(initiales("Jean-François ROUSSET")).toBe("JR");
   });
 });

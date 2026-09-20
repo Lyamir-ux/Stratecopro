@@ -1547,3 +1547,70 @@ table.dossiers tfoot tr.recap-total td.num { text-align: right; }
   content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
   border: 6px solid transparent; border-top-color: var(--color-neutral-800);
 }
+
+/* ===== Portefeuille PPT (tableau de bord de la branche, façon rénovation globale) =====
+   La vue « Bulles » de la rénovation globale ne tient pas avec des dizaines de
+   copropriétés par gestionnaire : mosaïque à la place - une carte par
+   gestionnaire (jauge des états, honoraires) et une tuile compacte par
+   copropriété, colorée par état de suivi. La couleur d'état est portée par
+   --etat (data-etat sur l'élément) pour la légende, la jauge, les tuiles et
+   le kanban. */
+[data-etat="inconnu"]     { --etat: var(--color-neutral-400); }
+[data-etat="analyse"]     { --etat: var(--color-neutral-600); }
+[data-etat="a_presenter"] { --etat: var(--color-warning-500); }
+[data-etat="presente"]    { --etat: var(--color-primary-400); }
+[data-etat="vote"]        { --etat: var(--color-primary-700); }
+[data-etat="reno"]        { --etat: #7AB52C; } /* vert Strat Eco : dossier en rénovation globale, quelle que soit la branche */
+
+.ppt-legende { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: -8px 0 16px; }
+.ppt-legende button {
+  display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); background: var(--bg);
+  border-radius: 999px; padding: 4px 10px 4px 8px; font-size: 12.5px; font-weight: 600; color: var(--fg2);
+  cursor: pointer; font-family: var(--font-body);
+}
+.ppt-legende button:hover { border-color: var(--border-strong); color: var(--fg1); }
+.ppt-legende button.on { border-color: var(--etat); box-shadow: 0 0 0 1px var(--etat) inset; color: var(--fg1); }
+.ppt-legende button.vide { opacity: 0.5; }
+.ppt-legende .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--etat); flex: none; }
+.ppt-legende .n { color: var(--fg-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+
+.ppt-gest {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+  padding: 16px 18px 18px; margin-bottom: 16px;
+}
+.ppt-gest-head { display: flex; align-items: center; gap: 12px; }
+.ppt-gest-avatar {
+  width: 40px; height: 40px; border-radius: 50%; background: var(--color-neutral-200); color: var(--fg1);
+  display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 800; font-size: 15px; flex: none;
+}
+.ppt-gest-head .nm { font-family: var(--font-display); font-weight: 700; font-size: 17px; line-height: 1.15; }
+.ppt-gest-head .sub { font-size: 12.5px; color: var(--fg-muted); margin-top: 2px; }
+.ppt-gest-head .spacer { flex: 1; }
+.ppt-gest-hono { text-align: right; flex: none; }
+.ppt-gest-hono b { display: block; font-family: var(--font-display); font-weight: 800; font-size: 20px; color: var(--color-primary-700); line-height: 1.1; }
+.ppt-gest-hono span { font-size: 11.5px; color: var(--fg-muted); }
+.ppt-jauge { display: flex; gap: 2px; height: 8px; border-radius: 999px; overflow: hidden; background: var(--color-neutral-100); margin: 12px 0 14px; }
+.ppt-jauge i { display: block; height: 100%; background: var(--etat); min-width: 3px; }
+
+.ppt-mosaique { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 8px; }
+.ppt-carte {
+  position: relative; display: flex; flex-direction: column; gap: 3px; text-align: left; min-width: 0;
+  padding: 9px 10px 9px 13px; border: 1px solid var(--border); border-left: 4px solid var(--etat); border-radius: var(--radius-md);
+  background: var(--bg-soft); color: var(--fg1); cursor: pointer; font-family: var(--font-body);
+  transition: box-shadow 140ms, transform 140ms, background 140ms;
+}
+.ppt-carte:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); background: var(--bg); }
+.ppt-carte.verrou { cursor: default; opacity: 0.55; }
+.ppt-carte.verrou:hover { box-shadow: none; transform: none; }
+.ppt-carte .pc-nom { font-weight: 700; font-size: 13px; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.ppt-carte .pc-sub { font-size: 11.5px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ppt-carte .pc-foot { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 11.5px; color: var(--fg2); min-width: 0; }
+.ppt-carte .pc-foot .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--etat); flex: none; }
+.ppt-carte .pc-etat { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ppt-carte .pc-annee { margin-left: auto; font-weight: 700; color: var(--fg1); font-variant-numeric: tabular-nums; flex: none; }
+.ppt-carte .pc-alerte { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--color-warning-500); box-shadow: 0 0 0 2px var(--bg-soft); }
+.ppt-carte .pc-alerte.haute { background: var(--color-error-500); }
+.ppt-carte:hover .pc-alerte { box-shadow: 0 0 0 2px var(--bg); }
+
+.kanban.ppt .kcol { min-width: 205px; }
+.kanban.ppt .kcol-head .ktitle { font-size: 16px; }

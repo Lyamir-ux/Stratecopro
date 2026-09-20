@@ -1,5 +1,6 @@
 // Branche « Suivi des PPT » de l'espace syndic - /syndic/ppt/:section?
-// Tableau de bord (Dirigeant si direction de l'enseigne, Gestionnaire sinon),
+// Tableau de bord (portefeuille façon rénovation globale : mosaïque par
+// gestionnaire, kanban par état, tableau ; direction ou gestionnaire),
 // échéancier et liste des copropriétés. Les données sont chargées une fois ici
 // (portefeuille + postes + AG + rapports + paramètres du cabinet) et passées aux
 // sections. En aperçu AMO, le rail d'enseignes filtre comme dans la branche
@@ -24,7 +25,7 @@ import {
 } from "@/api/ppt";
 import { PARAMETRES_ORG_DEFAUT, type ParametresOrg } from "@/lib/ppt/formules";
 import { SyndicShell, Loader, OrgRail, lireVue, ecrireVue, type SectionId } from "@/pages/Syndic";
-import { DashboardDirigeant, DashboardGestionnaire } from "./Dashboard";
+import { PortefeuillePptVue } from "./Portefeuille";
 import { EcheancierPpt } from "./Echeancier";
 import { CoprosPpt } from "./Copros";
 
@@ -101,7 +102,7 @@ export default function SyndicPpt() {
       branche="ppt"
       rail={apercuAmo ? <OrgRail copros={tousCopros ?? []} value={orgId} onChange={setOrgId} /> : undefined}
     >
-      {section === "tableau" && (pf.direction ? <DashboardDirigeant pf={pf} /> : <DashboardGestionnaire pf={pf} />)}
+      {section === "tableau" && <PortefeuillePptVue pf={pf} />}
       {section === "echeancier" && <EcheancierPpt pf={pf} />}
       {section === "copros" && <CoprosPpt pf={pf} />}
     </SyndicShell>
