@@ -206,7 +206,7 @@ class Flux {
 
 export async function genererEcheancierPdf(input: EcheancierPdfInput): Promise<Uint8Array> {
   const { copro, params, annee } = input;
-  const postes = [...input.postes].filter((p) => true).sort((a, b) => (anneeEffective(a) ?? 9999) - (anneeEffective(b) ?? 9999) || a.position - b.position);
+  const postes = [...input.postes].sort((a, b) => (anneeEffective(a) ?? 9999) - (anneeEffective(b) ?? 9999) || a.position - b.position);
 
   const doc = await PDFDocument.create();
   doc.setTitle(`Échéancier PPT - ${copro.nom}`);
@@ -253,7 +253,6 @@ export async function genererEcheancierPdf(input: EcheancierPdfInput): Promise<U
   const gain = gainCumule(actifs, annee + 10);
   const cepFinal = cepApres(copro.cep_kwhep_m2_an ?? null, gain);
   const votes = actifs.filter((p) => p.statut === "vote").length;
-  const figes = actifs.filter((p) => !posteDeplacable(p)).length;
 
   f.titreSection("Synthèse");
   f.tuiles([

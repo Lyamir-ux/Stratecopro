@@ -21,6 +21,7 @@ import {
   type Alerte,
 } from "@/lib/ppt/indicateurs";
 import { articleSuggere } from "@/lib/ppt/referentiels";
+import { statutParc } from "@/lib/ppt/importPortefeuille";
 import { agLite, anneeCourante, coproLite, fmtDateCourte, fmtEur, posteLite, rapportLite, Tuile, type PrioriteCode } from "./commun";
 import type { PortefeuillePpt } from "./index";
 
@@ -129,6 +130,9 @@ export function DashboardDirigeant({ pf }: { pf: PortefeuillePpt }) {
   const gestionnaires = pf.membres.filter((m) => m.org_role !== "directeur");
   const nonEquipes = gestionnaires.filter((m) => !nomsEquipes.has(m.nom.trim().toLowerCase()));
   const actifs = gestionnaires.length - nonEquipes.length;
+  // portefeuille importé (0077) : dossiers rapprochés de la base AMO et copros de plus de 15 ans sans PPPT
+  const enReno = pf.copros.filter((c) => statutParc(c) === "en_reno").length;
+  const aPresenter = pf.copros.filter((c) => statutParc(c) === "pppt_a_presenter").length;
 
   return (
     <div className="page fade" style={{ padding: 0 }}>
@@ -136,7 +140,11 @@ export function DashboardDirigeant({ pf }: { pf: PortefeuillePpt }) {
       <p className="sec-sub">Vue direction : stock de plans pluriannuels, potentiel d'honoraires de suivi de travaux, activité par gestionnaire.</p>
 
       <div className="tiles tiles-4">
-        <Tuile label="PPT suivis" valeur={String(totaux.copros)} pied={`${totaux.validees} validé${totaux.validees > 1 ? "s" : ""} · ${totaux.enAttente} en attente d'analyse · ${totaux.logements} logements`} />
+        <Tuile
+          label="Copropriétés suivies"
+          valeur={String(totaux.copros)}
+          pied={`${totaux.validees} PPT validé${totaux.validees > 1 ? "s" : ""} · ${totaux.enAttente} en attente d'analyse · ${enReno} en rénovation avec Strat Eco · ${aPresenter} PPPT à présenter`}
+        />
         <Tuile
           label="Gestionnaires actifs"
           valeur={gestionnaires.length ? `${actifs} / ${gestionnaires.length}` : String(clesEquipees.size)}
@@ -245,7 +253,7 @@ export function DashboardGestionnaire({ pf }: { pf: PortefeuillePpt }) {
     <div className="page fade" style={{ padding: 0 }}>
       <h1 className="sec-title">Mes PPT</h1>
       <p className="sec-sub">
-        {copros.length} copropriété{copros.length > 1 ? "s" : ""} avec un plan pluriannuel suivi{pf.nomEnseigne ? ` · ${pf.nomEnseigne}` : ""}. Ce que vous devez préparer, votre échéancier, les remarques sur vos rapports.
+        {copros.length} copropriété{copros.length > 1 ? "s" : ""} suivie{copros.length > 1 ? "s" : ""}{pf.nomEnseigne ? ` · ${pf.nomEnseigne}` : ""}. Ce que vous devez préparer, votre échéancier, les remarques sur vos rapports.
       </p>
 
       <div className="panel">

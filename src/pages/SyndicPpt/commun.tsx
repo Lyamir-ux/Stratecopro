@@ -6,6 +6,34 @@ import type { PptAg, PptCoproAvecStats, PptPoste, PptRapport } from "@/api/ppt";
 import type { AgLite, CoproLite, PosteLite, RapportLite } from "@/lib/ppt/indicateurs";
 import { PRIORITE_LABEL, type PrioriteCode } from "@/lib/ppt/schema";
 import { ISSUE_LABEL, SEVERITE_LABEL, STATUT_POSTE_LABEL, STATUT_RAPPORT_LABEL, VERDICT_LABEL } from "@/lib/ppt/referentiels";
+import { statutParc, type StatutParc } from "@/lib/ppt/importPortefeuille";
+import { PHASES } from "@/lib/referentiels";
+
+/** Copropriété rapprochée d'un dossier de rénovation globale Strat Eco (0077) : phase du dossier. */
+export function RenoBadge({ phase }: { phase: string }) {
+  const label = PHASES.find((p) => p.id === phase)?.label ?? phase;
+  return (
+    <Badge kind="primary" dot>
+      En rénovation · {label}
+    </Badge>
+  );
+}
+
+export const STATUT_PARC_LABEL: Record<StatutParc, string> = {
+  en_reno: "En rénovation",
+  pppt_a_presenter: "PPPT à présenter",
+  pppt_presente: "PPPT présenté",
+  inconnu: "-",
+};
+
+/** Statut du portefeuille : dossier de rénovation rapproché, sinon PPPT déclaré par le syndic à l'import. */
+export function StatutParcBadge({ c }: { c: PptCoproAvecStats }) {
+  const s = statutParc(c);
+  if (s === "en_reno" && c.stats?.reno_phase) return <RenoBadge phase={c.stats.reno_phase} />;
+  if (s === "pppt_a_presenter") return <Badge kind="warn" dot>PPPT à présenter</Badge>;
+  if (s === "pppt_presente") return <Badge kind="success">PPPT présenté</Badge>;
+  return <span style={{ color: "var(--fg-muted)" }}>{c.plus_de_15_ans === true ? "+ 15 ans" : c.plus_de_15_ans === false ? "moins de 15 ans" : "-"}</span>;
+}
 
 export const fmtEur = (n: number | null | undefined, decimales = 0) =>
   n == null ? "-" : n.toLocaleString("fr-FR", { maximumFractionDigits: decimales }) + " €";

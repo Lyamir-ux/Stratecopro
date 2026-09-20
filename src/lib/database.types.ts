@@ -2281,11 +2281,14 @@ export type Database = {
           gestionnaire_nom: string | null
           id: string
           immatriculation_rnc: string | null
+          importe_le: string | null
           nb_batiments: number | null
           nb_logements: number | null
           nb_lots: number | null
           nom: string
           organisation_id: string
+          plus_de_15_ans: boolean | null
+          pppt_presente: boolean | null
           surface_m2: number | null
           surface_type: string | null
           updated_at: string
@@ -2313,11 +2316,14 @@ export type Database = {
           gestionnaire_nom?: string | null
           id?: string
           immatriculation_rnc?: string | null
+          importe_le?: string | null
           nb_batiments?: number | null
           nb_logements?: number | null
           nb_lots?: number | null
           nom: string
           organisation_id: string
+          plus_de_15_ans?: boolean | null
+          pppt_presente?: boolean | null
           surface_m2?: number | null
           surface_type?: string | null
           updated_at?: string
@@ -2345,11 +2351,14 @@ export type Database = {
           gestionnaire_nom?: string | null
           id?: string
           immatriculation_rnc?: string | null
+          importe_le?: string | null
           nb_batiments?: number | null
           nb_logements?: number | null
           nb_lots?: number | null
           nom?: string
           organisation_id?: string
+          plus_de_15_ans?: boolean | null
+          pppt_presente?: boolean | null
           surface_m2?: number | null
           surface_type?: string | null
           updated_at?: string
@@ -3656,6 +3665,7 @@ export type Database = {
           prochaine_annee: number | null
           rapports_en_attente: number | null
           remarques_ouvertes: number | null
+          reno_phase: string | null
           statut_rapport: string | null
           valide_le: string | null
         }
@@ -3669,6 +3679,7 @@ export type Database = {
           prochaine_annee?: never
           rapports_en_attente?: never
           remarques_ouvertes?: never
+          reno_phase?: never
           statut_rapport?: never
           valide_le?: never
         }
@@ -3682,6 +3693,7 @@ export type Database = {
           prochaine_annee?: never
           rapports_en_attente?: never
           remarques_ouvertes?: never
+          reno_phase?: never
           statut_rapport?: never
           valide_le?: never
         }
@@ -3766,6 +3778,10 @@ export type Database = {
         Returns: undefined
       }
       ppt_depose: { Args: { p_id: string }; Returns: boolean }
+      ppt_importer_portefeuille: {
+        Args: { p_lignes: Json; p_org: string }
+        Returns: Json
+      }
       ppt_enregistrer_revue: {
         Args: {
           p_corrections?: Json

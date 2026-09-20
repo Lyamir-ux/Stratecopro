@@ -9,6 +9,7 @@ import { nomFichierSansAccents } from "@/lib/nommage";
 import type { Json, Tables } from "@/lib/database.types";
 import type { PpptVerifJson, PrioriteCode } from "@/lib/ppt/schema";
 import type { CorrectionJson } from "@/lib/ppt/import";
+import type { LigneImport } from "@/lib/ppt/importPortefeuille";
 import { PARAMETRES_ORG_DEFAUT, type ParametresOrg } from "@/lib/ppt/formules";
 
 export type PptCopro = Tables<"ppt_coproprietes">;
@@ -209,6 +210,7 @@ export type PptCoproPatch = Partial<
     | "nom" | "adresse" | "code_postal" | "commune" | "immatriculation_rnc" | "annee_construction" | "nb_batiments" | "nb_lots" | "nb_logements"
     | "surface_m2" | "surface_type" | "chauffage" | "energie_chauffage" | "etiquette_energie" | "etiquette_ges" | "cep_kwhep_m2_an" | "date_dpe"
     | "fonds_travaux_solde" | "fonds_travaux_cotisation_annuelle" | "fonds_travaux_maj" | "budget_previsionnel_annuel"
+    | "plus_de_15_ans" | "pppt_presente"
     | "gestionnaire_nom" | "gestionnaire_email" | "organisation_id" | "copro_id"
   >
 >;
@@ -219,6 +221,47 @@ export function useMajPptCopro() {
     mutationFn: async ({ id, ...patch }: PptCoproPatch & { id: string }) => {
       const { error } = await supabase.from("ppt_coproprietes").update(patch).eq("id", id);
       if (error) throw error;
+    },
+    onSuccess: refresh,
+  });
+}
+
+// ========== Import du portefeuille (0077) ==========
+
+export interface ResultatImportPortefeuille {
+  creees: number;
+  mises_a_jour: number;
+  ignorees: number;
+  /** Passerelles vers un dossier de rénovation globale posées par cet import. */
+  rapprochees: number;
+  /** Copropriétés du fichier en rénovation avec Strat Eco (rapprochées avant ou pendant l'import). */
+  en_reno: number;
+  ids: string[];
+}
+
+/**
+ * Le gestionnaire dépose son portefeuille (nom, adresse, commune, logements,
+ * plus de 15 ans ?, PPPT présenté ?) : la RPC crée ou complète les copropriétés
+ * PPT de l'enseigne puis les rapproche de la base AMO (statut « En rénovation »).
+ */
+export function useImporterPortefeuille() {
+  const refresh = useRefreshPpt();
+  return useMutation({
+    mutationFn: async ({ organisation_id, lignes }: { organisation_id: string; lignes: LigneImport[] }): Promise<ResultatImportPortefeuille> => {
+      const { data, error } = await supabase.rpc("ppt_importer_portefeuille", {
+        p_org: organisation_id,
+        p_lignes: lignes.map(({ ligne: _ligne, ...reste }) => reste) as unknown as Json,
+      });
+      if (error) throw error;
+      const r = (data ?? {}) as Partial<ResultatImportPortefeuille>;
+      return {
+        creees: r.creees ?? 0,
+        mises_a_jour: r.mises_a_jour ?? 0,
+        ignorees: r.ignorees ?? 0,
+        rapprochees: r.rapprochees ?? 0,
+        en_reno: r.en_reno ?? 0,
+        ids: r.ids ?? [],
+      };
     },
     onSuccess: refresh,
   });

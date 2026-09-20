@@ -6,13 +6,16 @@
 // supprimée). Une copropriété inconnue est créée avec son seul nom ; sa fiche
 // (adresse, lots…) est complétée par Strat Eco à partir du rapport analysé.
 // Un gestionnaire voit toute l'enseigne mais n'ouvre que ses dossiers (0072).
+// Import du portefeuille (0077) : bouton « Importer mon portefeuille » ou tableau
+// Excel / CSV glissé sur la zone de dépôt et reconnu par ses en-têtes ; chaque
+// ligne est rapprochée de la base AMO → statut « En rénovation » dans la liste.
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import { Badge, DpeChip } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
-import { TYPES_AVEC_HONORAIRES, useCreerPptCopro, useDeposerPptRapport, type PptCopro, type TypeRapport } from "@/api/ppt";
+import { TYPES_AVEC_HONORAIRES, useCreerPptCopro, useDeposerPptRapport, type PptCopro, type ResultatImportPortefeuille, type TypeRapport } from "@/api/ppt";
 import { EVENEMENT_DEPOT, prendreTampon } from "@/lib/ppt/depotTampon";
 import type { DpeClass } from "@/lib/referentiels";
 import { telechargerCsv } from "@/lib/csv";
@@ -20,8 +23,21 @@ import { fmtEuroCourt } from "@/lib/format";
 import { cleGestionnaire } from "@/lib/ppt/indicateurs";
 import { STATUT_RAPPORT_LABEL, TYPE_RAPPORT_LABEL } from "@/lib/ppt/referentiels";
 import { TYPES_ANALYSES, TYPES_DEPOT, trouverCopro, typeDevine } from "@/lib/ppt/depot";
-import { StatutRapportBadge, TITRE_VERROU, fmtDateCourte } from "./commun";
+import { estPortefeuille, lireClasseur, statutParc, type StatutParc } from "@/lib/ppt/importPortefeuille";
+import { STATUT_PARC_LABEL, StatutParcBadge, StatutRapportBadge, TITRE_VERROU, fmtDateCourte } from "./commun";
+import { ImportPortefeuilleDialog } from "./ImportPortefeuille";
 import type { PortefeuillePpt } from "./index";
+
+/** Un tableau (Excel / CSV) dont les en-têtes ressemblent au portefeuille est routé vers l'import, pas vers le dépôt de document. */
+async function estFichierPortefeuille(f: File): Promise<boolean> {
+  if (!/\.(xlsx|xls|csv)$/i.test(f.name)) return false;
+  try {
+    const lu = lireClasseur(await f.arrayBuffer());
+    return !!lu && estPortefeuille(lu.entetes);
+  } catch {
+    return false;
+  }
+}
 
 /** Zone de télédéversement : glisser-déposer ou clic, plusieurs fichiers acceptés. */
 function ZoneDepot({ onFichiers, disabled }: { onFichiers: (f: File[]) => void; disabled?: boolean }) {
@@ -65,7 +81,7 @@ function ZoneDepot({ onFichiers, disabled }: { onFichiers: (f: File[]) => void; 
         ref={ref}
         type="file"
         multiple
-        accept="application/pdf,.pdf,.xlsx,.xls,.docx,.doc"
+        accept="application/pdf,.pdf,.xlsx,.xls,.csv,.docx,.doc"
         style={{ display: "none" }}
         onChange={(e) => {
           const fs = Array.from(e.target.files ?? []);
@@ -79,7 +95,7 @@ function ZoneDepot({ onFichiers, disabled }: { onFichiers: (f: File[]) => void; 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 14.5 }}>Déposer un fichier</div>
         <div className="se-small" style={{ color: "var(--fg-muted)" }}>
-          Glissez ici un PPPT, un PPT, un DPE collectif, un PV d'AG ou tout autre document (PDF, Excel, Word), ou cliquez pour le choisir. Vous indiquerez ensuite la copropriété et le type.
+          Glissez ici un PPPT, un PPT, un DPE collectif, un PV d'AG ou tout autre document (PDF, Excel, Word), ou cliquez pour le choisir. Vous indiquerez ensuite la copropriété et le type. Un tableau de votre portefeuille (Excel / CSV) est reconnu et importé.
         </div>
       </div>
     </div>
@@ -221,18 +237,38 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
   // file de fichiers déposés : la fenêtre traite le premier, puis le suivant
   const [fichiers, setFichiers] = useState<File[]>([]);
   const [confirmation, setConfirmation] = useState<{ copro: Pick<PptCopro, "id" | "nom">; type: TypeRapport; creee: boolean; acces: boolean } | null>(null);
+  // import du portefeuille (0077) : fenêtre ouverte par le bouton ou par un tableau reconnu, bilan affiché ensuite
+  const [importOuvert, setImportOuvert] = useState(false);
+  const [fichierImport, setFichierImport] = useState<File | null>(null);
+  const [bilanImport, setBilanImport] = useState<ResultatImportPortefeuille | null>(null);
+  const [parc, setParc] = useState<"tous" | StatutParc>("tous");
+
+  /** Fichiers reçus (zone ou bouton de l'en-tête) : un portefeuille part vers l'import, le reste vers le dépôt de document. */
+  const recevoir = async (fs: File[]) => {
+    setConfirmation(null);
+    setBilanImport(null);
+    const documents: File[] = [];
+    for (const f of fs) {
+      if (await estFichierPortefeuille(f)) {
+        setFichierImport(f);
+        setImportOuvert(true);
+      } else {
+        documents.push(f);
+      }
+    }
+    if (documents.length) setFichiers((q) => [...q, ...documents]);
+  };
+
   // fichiers choisis depuis le bouton de l'en-tête (toutes pages de la branche) : à l'arrivée et si déjà sur la page
   useEffect(() => {
     const prendre = () => {
       const t = prendreTampon();
-      if (t.length) {
-        setConfirmation(null);
-        setFichiers((q) => [...q, ...t]);
-      }
+      if (t.length) void recevoir(t);
     };
     prendre();
     window.addEventListener(EVENEMENT_DEPOT, prendre);
     return () => window.removeEventListener(EVENEMENT_DEPOT, prendre);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const gestionnaires = useMemo(() => {
@@ -244,14 +280,52 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
   const q = recherche.trim().toLowerCase();
   const lignes = pf.copros
     .filter((c) => gest === "tous" || cleGestionnaire(c) === gest)
+    .filter((c) => parc === "tous" || statutParc(c) === parc)
     .filter((c) => !q || c.nom.toLowerCase().includes(q) || (c.commune ?? "").toLowerCase().includes(q) || (c.gestionnaire_nom ?? "").toLowerCase().includes(q));
+  const enReno = pf.copros.filter((c) => statutParc(c) === "en_reno").length;
+  const aPresenter = pf.copros.filter((c) => statutParc(c) === "pppt_a_presenter").length;
 
   return (
     <div className="page fade" style={{ padding: 0 }}>
       <h1 className="sec-title">Copropriétés</h1>
-      <p className="sec-sub" style={{ marginBottom: 16 }}>{pf.copros.length} copropriété{pf.copros.length > 1 ? "s" : ""} avec un document déposé{pf.nomEnseigne ? ` · ${pf.nomEnseigne}` : ""}.</p>
+      <p className="sec-sub" style={{ marginBottom: 16 }}>
+        {pf.copros.length} copropriété{pf.copros.length > 1 ? "s" : ""} suivie{pf.copros.length > 1 ? "s" : ""}
+        {enReno ? ` · ${enReno} en rénovation avec Strat Eco` : ""}
+        {aPresenter ? ` · ${aPresenter} PPPT à présenter` : ""}
+        {pf.nomEnseigne ? ` · ${pf.nomEnseigne}` : ""}.
+      </p>
 
-      <ZoneDepot onFichiers={(fs) => { setConfirmation(null); setFichiers((q) => [...q, ...fs]); }} disabled={fichiers.length > 0} />
+      <ZoneDepot onFichiers={(fs) => void recevoir(fs)} disabled={fichiers.length > 0 || importOuvert} />
+
+      {importOuvert && (
+        <ImportPortefeuilleDialog
+          pf={pf}
+          fichierInitial={fichierImport}
+          onClose={(resultat) => {
+            setImportOuvert(false);
+            setFichierImport(null);
+            if (resultat) setBilanImport(resultat);
+          }}
+        />
+      )}
+
+      {bilanImport && !importOuvert && (
+        <div className="panel" style={{ padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12, borderColor: "var(--accent)" }}>
+          <Icon name="checkCircle" size={22} style={{ color: "var(--color-primary-700)", flex: "none" }} />
+          <div style={{ flex: 1, fontSize: 13.5 }}>
+            <strong>Portefeuille importé</strong> : {bilanImport.creees} copropriété{bilanImport.creees > 1 ? "s" : ""} créée{bilanImport.creees > 1 ? "s" : ""}, {bilanImport.mises_a_jour} fiche{bilanImport.mises_a_jour > 1 ? "s" : ""} complétée{bilanImport.mises_a_jour > 1 ? "s" : ""}
+            {bilanImport.en_reno ? `, ${bilanImport.en_reno} en rénovation avec Strat Eco` : ""}.
+          </div>
+          {bilanImport.en_reno > 0 && (
+            <button className="se-btn se-btn-secondary btn-sm" onClick={() => setParc("en_reno")}>
+              Voir <Icon name="arrowRight" size={14} />
+            </button>
+          )}
+          <button className="icon-btn" title="Fermer" onClick={() => setBilanImport(null)}>
+            <Icon name="x" size={15} />
+          </button>
+        </div>
+      )}
 
       {confirmation && fichiers.length === 0 && (
         <div className="panel" style={{ padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12, borderColor: "var(--accent)" }}>
@@ -294,6 +368,12 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
           <h3>{lignes.length} dossier{lignes.length > 1 ? "s" : ""}</h3>
           <span style={{ flex: 1 }}></span>
           <input className="edit-inp" style={{ maxWidth: 220 }} placeholder="Rechercher…" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+          <select className="edit-inp" style={{ maxWidth: 190 }} value={parc} onChange={(e) => setParc(e.target.value as "tous" | StatutParc)} title="Filtrer par statut du portefeuille">
+            <option value="tous">Tous les statuts</option>
+            <option value="en_reno">{STATUT_PARC_LABEL.en_reno} avec Strat Eco</option>
+            <option value="pppt_a_presenter">{STATUT_PARC_LABEL.pppt_a_presenter} (+ 15 ans)</option>
+            <option value="pppt_presente">{STATUT_PARC_LABEL.pppt_presente}</option>
+          </select>
           {gestionnaires.length > 1 && (
             <select className="edit-inp" style={{ maxWidth: 200 }} value={gest} onChange={(e) => setGest(e.target.value)}>
               <option value="tous">Tous les gestionnaires</option>
@@ -307,9 +387,13 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
             onClick={() =>
               telechargerCsv(
                 "copros-ppt.csv",
-                ["Copropriété", "Commune", "Gestionnaire", "Logements", "Lots", "DPE", "Statut du rapport", "Validé le", "Postes", "Montant HT (base)", "Prochaine année", "Dernière AG", "Remarques ouvertes"],
+                ["Copropriété", "Commune", "Gestionnaire", "Suivi", "Plus de 15 ans", "PPPT présenté", "Logements", "Lots", "DPE", "Statut du rapport", "Validé le", "Postes", "Montant HT (base)", "Prochaine année", "Dernière AG", "Remarques ouvertes"],
                 lignes.map((c) => [
-                  c.nom, c.commune ?? "", c.gestionnaire_nom ?? "", c.nb_logements ?? "", c.nb_lots ?? "", c.etiquette_energie ?? "",
+                  c.nom, c.commune ?? "", c.gestionnaire_nom ?? "",
+                  statutParc(c) === "en_reno" ? "En rénovation" : STATUT_PARC_LABEL[statutParc(c)].replace("-", ""),
+                  c.plus_de_15_ans == null ? "" : c.plus_de_15_ans ? "oui" : "non",
+                  c.pppt_presente == null ? "" : c.pppt_presente ? "oui" : "non",
+                  c.nb_logements ?? "", c.nb_lots ?? "", c.etiquette_energie ?? "",
                   STATUT_RAPPORT_LABEL[c.stats?.statut_rapport ?? ""] ?? "", c.stats?.valide_le ? fmtDateCourte(c.stats.valide_le) : "",
                   c.stats?.postes ?? 0, c.stats?.montant_ht_base ?? 0, c.stats?.prochaine_annee ?? "", c.stats?.derniere_ag ? fmtDateCourte(c.stats.derniere_ag) : "", c.stats?.remarques_ouvertes ?? 0,
                 ])
@@ -319,6 +403,15 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
             <Icon name="download" size={13} />
             CSV
           </button>
+          <button
+            className="se-btn se-btn-secondary btn-sm"
+            onClick={() => { setBilanImport(null); setFichierImport(null); setImportOuvert(true); }}
+            disabled={importOuvert || fichiers.length > 0}
+            title="Déposer le tableau de vos copropriétés (nom, adresse, commune, logements, plus de 15 ans ?, PPPT présenté ?)"
+          >
+            <Icon name="upload" size={13} />
+            {pf.direction ? "Importer un portefeuille" : "Importer mon portefeuille"}
+          </button>
         </div>
         <div className="p-body" style={{ paddingTop: 0 }}>
           <div className="tablewrap">
@@ -327,6 +420,7 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
                 <tr>
                   <th>Copropriété</th>
                   {pf.direction && <th>Gestionnaire</th>}
+                  <th>Suivi</th>
                   <th>DPE</th>
                   <th className="num">Logements</th>
                   <th>Rapport</th>
@@ -345,6 +439,7 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
                       {(c.commune || c.adresse) && <span style={{ display: "block", fontSize: 11.5, color: "var(--fg-muted)", fontWeight: 400 }}>{[c.adresse, c.commune].filter(Boolean).join(", ")}</span>}
                     </td>
                     {pf.direction && <td>{c.gestionnaire_nom || <span style={{ color: "var(--fg-muted)" }}>Non attribué</span>}</td>}
+                    <td><StatutParcBadge c={c} /></td>
                     <td>{c.etiquette_energie ? <DpeChip cls={c.etiquette_energie as DpeClass} /> : "-"}</td>
                     <td className="num">{c.nb_logements ?? "-"}</td>
                     <td>{c.stats?.statut_rapport ? <StatutRapportBadge statut={c.stats.statut_rapport} /> : <Badge kind="neutral">Aucun</Badge>}</td>
@@ -357,8 +452,8 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
                 ))}
                 {lignes.length === 0 && (
                   <tr>
-                    <td colSpan={10} style={{ color: "var(--fg-muted)" }}>
-                      {pf.copros.length === 0 ? "Aucune copropriété pour l'instant : déposez un premier fichier ci-dessus." : "Aucun dossier ne correspond à la recherche."}
+                    <td colSpan={11} style={{ color: "var(--fg-muted)" }}>
+                      {pf.copros.length === 0 ? "Aucune copropriété pour l'instant : importez votre portefeuille (bouton ci-dessus) ou déposez un premier fichier." : "Aucun dossier ne correspond à la recherche."}
                     </td>
                   </tr>
                 )}
@@ -367,6 +462,7 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
           </div>
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
             Le rapport passe par quatre états : déposé, à relire (analysé), validé (les postes et remarques deviennent visibles) ou rejeté. Le montant est la somme des coûts HT en année de base du plan validé.
+            « En rénovation » signale une copropriété dont Strat Eco suit le dossier de rénovation globale (rapprochement fait à l'import du portefeuille) ; « PPPT à présenter » une copropriété de plus de 15 ans sans PPPT présenté.
           </p>
         </div>
       </div>

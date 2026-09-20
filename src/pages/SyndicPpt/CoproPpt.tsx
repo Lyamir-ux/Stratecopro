@@ -44,7 +44,7 @@ import { anneeAffichee, decalagesEffectifs, plageAnnees, posteDeplacable } from 
 import { FONDS_TRAVAUX, TYPE_RAPPORT_LABEL } from "@/lib/ppt/referentiels";
 import { SyndicShell, Loader, AucuneCopro } from "@/pages/Syndic";
 import { AgForm } from "./AgForm";
-import { PrioriteBadge, SeveriteBadge, StatutPosteBadge, StatutRapportBadge, VerdictBadge, anneeCourante, fmtDateCourte, fmtEur, fmtPct, issueLabel, posteLite, type PrioriteCode } from "./commun";
+import { PrioriteBadge, RenoBadge, SeveriteBadge, StatutPosteBadge, StatutRapportBadge, VerdictBadge, anneeCourante, fmtDateCourte, fmtEur, fmtPct, issueLabel, posteLite, type PrioriteCode } from "./commun";
 
 const TABS = [
   { id: "echeancier", label: "Échéancier" },
@@ -97,7 +97,13 @@ function BoutonPdfEcheancier({ c, postes, grand }: { c: PptCoproAvecStats; poste
       const params = parametresDepuisOrg(org ?? PARAMETRES_ORG_DEFAUT, annee, c.cep_kwhep_m2_an);
       const { genererEcheancierPdf } = await import("@/lib/pdf/echeancierPpt");
       const { telechargerPdfBytes } = await import("@/lib/pdf/planIndividuel");
-      const bytes = await genererEcheancierPdf({ copro: c, nomEnseigne: orgPpt?.nom ?? null, postes: actifs, params, annee });
+      const bytes = await genererEcheancierPdf({
+        copro: c,
+        nomEnseigne: orgPpt?.nom ?? null,
+        postes: actifs.map((p) => ({ ...p, priorite: p.priorite as PrioriteCode })),
+        params,
+        annee,
+      });
       telechargerPdfBytes(bytes, `Echeancier PPT - ${c.nom.replace(/[\/:*?"<>|]+/g, "-")}.pdf`);
     } catch {
       setErreur(true);
@@ -850,12 +856,15 @@ function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
 // ---------- Fiche ----------
 function FicheTab({ c }: { c: PptCoproAvecStats }) {
   const maj = useMajPptCopro();
-  const champs = ["nom", "adresse", "code_postal", "commune", "immatriculation_rnc", "annee_construction", "nb_batiments", "nb_lots", "nb_logements", "surface_m2", "surface_type", "chauffage", "energie_chauffage", "etiquette_energie", "etiquette_ges", "cep_kwhep_m2_an", "date_dpe", "gestionnaire_nom", "gestionnaire_email"] as const;
+  const champs = ["nom", "adresse", "code_postal", "commune", "immatriculation_rnc", "annee_construction", "nb_batiments", "nb_lots", "nb_logements", "surface_m2", "surface_type", "chauffage", "energie_chauffage", "etiquette_energie", "etiquette_ges", "cep_kwhep_m2_an", "date_dpe", "plus_de_15_ans", "pppt_presente", "gestionnaire_nom", "gestionnaire_email"] as const;
   type Champ = (typeof champs)[number];
-  const init = () => Object.fromEntries(champs.map((k) => [k, c[k] == null ? "" : String(c[k])])) as Record<Champ, string>;
+  // les deux réponses oui / non du portefeuille (0077) sont éditées comme « oui » / « non »
+  const texte = (k: Champ) => (c[k] == null ? "" : typeof c[k] === "boolean" ? (c[k] ? "oui" : "non") : String(c[k]));
+  const init = () => Object.fromEntries(champs.map((k) => [k, texte(k)])) as Record<Champ, string>;
   const [v, setV] = useState<Record<Champ, string>>(init);
   const numeriques: Champ[] = ["annee_construction", "nb_batiments", "nb_lots", "nb_logements", "surface_m2", "cep_kwhep_m2_an"];
-  const dirty = champs.some((k) => v[k] !== (c[k] == null ? "" : String(c[k])));
+  const booleens: Champ[] = ["plus_de_15_ans", "pppt_presente"];
+  const dirty = champs.some((k) => v[k] !== texte(k));
   const champ = (k: Champ, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <label key={k} style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 500 }}>
       {label}
@@ -892,6 +901,8 @@ function FicheTab({ c }: { c: PptCoproAvecStats }) {
         {select("etiquette_ges", "Étiquette GES", ["A", "B", "C", "D", "E", "F", "G"])}
         {champ("cep_kwhep_m2_an", "Cep (kWhep/m².an)", { type: "number" })}
         {champ("date_dpe", "Date du DPE collectif", { type: "date" })}
+        {select("plus_de_15_ans", "Copropriété de plus de 15 ans ?", ["oui", "non"])}
+        {select("pppt_presente", "PPPT déjà présenté en AG ?", ["oui", "non"])}
         <span></span>
         {champ("gestionnaire_nom", "Gestionnaire en charge")}
         {champ("gestionnaire_email", "E-mail du gestionnaire", { type: "email" })}
@@ -903,8 +914,8 @@ function FicheTab({ c }: { c: PptCoproAvecStats }) {
             className="se-btn se-btn-primary btn-sm"
             disabled={!dirty || maj.isPending}
             onClick={() => {
-              const patch: Record<string, string | number | null> = {};
-              for (const k of champs) patch[k] = v[k] === "" ? null : numeriques.includes(k) ? Number(v[k]) : v[k];
+              const patch: Record<string, string | number | boolean | null> = {};
+              for (const k of champs) patch[k] = v[k] === "" ? null : numeriques.includes(k) ? Number(v[k]) : booleens.includes(k) ? v[k] === "oui" : v[k];
               void maj.mutateAsync({ ...(patch as PptCoproPatch), id: c.id });
             }}
           >
@@ -932,6 +943,7 @@ const JOURNAL_LABEL: Record<string, string> = {
   montant_saisi: "Montant saisi par le syndic",
   poste_ajoute: "Ligne ajoutée par le syndic",
   poste_retire: "Ligne retirée par le syndic",
+  import: "Portefeuille importé par le syndic",
 };
 
 function HistoriqueTab({ c }: { c: PptCoproAvecStats }) {
@@ -1016,6 +1028,8 @@ export default function CoproPpt() {
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
                 {s?.statut_rapport ? <StatutRapportBadge statut={s.statut_rapport} /> : <Badge kind="neutral">Aucun PPPT</Badge>}
+                {s?.reno_phase && <RenoBadge phase={s.reno_phase} />}
+                {!s?.reno_phase && c.plus_de_15_ans === true && c.pppt_presente === false && <Badge kind="warn" dot>PPPT à présenter</Badge>}
                 {c.gestionnaire_nom && <Badge kind="neutral"><Icon name="user" size={12} />{c.gestionnaire_nom}</Badge>}
                 {c.nb_logements != null && <Badge kind="neutral">{c.nb_logements} logements</Badge>}
                 {c.annee_construction && <Badge kind="neutral">{c.annee_construction}</Badge>}
