@@ -340,6 +340,9 @@ export interface FicheCopro {
   honorairesAcquis: number;
   /** Prochaine année où un poste doit passer en AG (postes vivants non votés). */
   prochaineAnnee: number | null;
+  /** TTC actualisé des seuls postes à voter cette année-là (feedback Amir 20/09 : sur une carte « Travaux votés », le montant
+   *  affiché à côté de 2027 est ce qui sera voté ou pas en 2027, pas l'intégralité du plan). 0 sans prochain jalon. */
+  montantProchaineAnnee: number;
   nbAlertes: number;
   alerteHaute: boolean;
 }
@@ -369,6 +372,9 @@ export function fichesCopros(copros: CoproEtatInput[], postes: PosteLite[], rapp
       }
     }
     const al = alertesPar.get(c.id);
+    const aVoter = prochaine == null
+      ? 0
+      : ps.filter((p) => STATUTS_OUVERTS.includes(p.statut) && anneeEffective(p) === prochaine).reduce((s, p) => s + (montantTtcPoste(p, params) ?? 0), 0);
     return {
       copro: c,
       etat: etatCopro(c, ps, rapports),
@@ -377,6 +383,7 @@ export function fichesCopros(copros: CoproEtatInput[], postes: PosteLite[], rapp
       honorairesPotentiels: arr(potentiel),
       honorairesAcquis: arr(acquis),
       prochaineAnnee: prochaine,
+      montantProchaineAnnee: arr(aVoter),
       nbAlertes: al?.n ?? 0,
       alerteHaute: al?.haute ?? false,
     };

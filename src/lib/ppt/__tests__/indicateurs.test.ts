@@ -178,7 +178,13 @@ describe("portefeuille PPT : état de suivi, fiches, groupes par gestionnaire", 
     expect(c1.honorairesAcquis).toBeCloseTo(1200, 2);
     expect(c1.honorairesPotentiels).toBeGreaterThan(0);
     expect(c1.prochaineAnnee).toBe(2027);
+    // montant du prochain jalon : seuls les postes à voter en 2027 (p1 programmé, p2 rejeté représenté en 2027), pas le poste déjà voté
+    expect(c1.montantProchaineAnnee).toBeCloseTo(186000 * 1.035 * 1.085 + 48000 * 1.035 * 1.19, 1);
+    expect(c1.montantProchaineAnnee).toBeLessThan(c1.montantTtc);
     const c2 = fiches.find((f) => f.copro.id === "c2")!;
+    // c2 : jalon 2026 = le seul poste reporté (p6) ; la chaufferie 2029 n'y figure pas
+    expect(c2.montantProchaineAnnee).toBeGreaterThan(0);
+    expect(c2.montantProchaineAnnee).toBeLessThan(c2.montantTtc);
     expect(c2.nbPostes).toBe(2); // le poste inactif ne compte pas
     expect(c2.prochaineAnnee).toBe(2026); // poste reporté sans nouvelle année : année prévue
     expect(c2.nbAlertes).toBeGreaterThanOrEqual(3); // P30 validé depuis plus de 12 mois jamais présenté, P32 reporté sans année, P36 PPPT de 2014
@@ -188,6 +194,7 @@ describe("portefeuille PPT : état de suivi, fiches, groupes par gestionnaire", 
     const c3 = fiches.find((f) => f.copro.id === "c3")!;
     expect(c3.montantTtc).toBe(0);
     expect(c3.prochaineAnnee).toBeNull();
+    expect(c3.montantProchaineAnnee).toBe(0);
   });
 
   it("groupes par gestionnaire : plus gros parc d'abord, non attribués en dernier, jauge par état", () => {

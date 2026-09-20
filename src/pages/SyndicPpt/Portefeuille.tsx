@@ -211,7 +211,7 @@ function TuileCopro({ f, onOuvrir }: { f: FicheCopro; onOuvrir?: () => void }) {
       type="button"
       className={"ppt-carte" + (onOuvrir ? "" : " verrou")}
       data-etat={f.etat}
-      title={`${c.nom} · ${libelleEtat(f)}${f.nbAlertes ? ` · ${f.nbAlertes} alerte${f.nbAlertes > 1 ? "s" : ""}` : ""}${onOuvrir ? "" : " · accès réservé à la direction et au gestionnaire en charge"}`}
+      title={`${c.nom} · ${libelleEtat(f)}${f.prochaineAnnee != null ? ` · à voter en ${f.prochaineAnnee} : ${fmtEuroCourt(f.montantProchaineAnnee)}` : ""}${f.montantTtc ? ` · travaux à venir : ${fmtEuroCourt(f.montantTtc)}` : ""}${f.nbAlertes ? ` · ${f.nbAlertes} alerte${f.nbAlertes > 1 ? "s" : ""}` : ""}${onOuvrir ? "" : " · accès réservé à la direction et au gestionnaire en charge"}`}
       onClick={onOuvrir}
     >
       <span className="pc-nom">{c.nom}</span>
@@ -321,8 +321,23 @@ function VueKanban({ fiches, acces, multiGest }: { fiches: FicheCopro[]; acces: 
                       {c.etiquette_energie ? <DpeChip cls={c.etiquette_energie as DpeClass} size={22} /> : null}
                       {etat === "reno" && c.reno_phase ? <Badge kind="primary">{PHASES.find((p) => p.id === c.reno_phase)?.label ?? c.reno_phase}</Badge> : null}
                       <span style={{ flex: 1 }}></span>
-                      {f.prochaineAnnee != null && <span style={{ color: "var(--fg2)", fontWeight: 600 }}>{f.prochaineAnnee}</span>}
-                      {f.montantTtc > 0 && <span style={{ fontWeight: 700, color: "var(--color-primary-700)" }}>{fmtEuroCourt(f.montantTtc)}</span>}
+                      {/* Prochain jalon : année + montant des seuls postes à voter cette année-là ; le
+                          total du plan reste dans l'info-bulle et la vue Tableau (feedback Amir 20/09). */}
+                      {f.prochaineAnnee != null ? (
+                        <span
+                          style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}
+                          title={`À voter en ${f.prochaineAnnee} : ${fmtEuroCourt(f.montantProchaineAnnee)} · total des travaux à venir : ${fmtEuroCourt(f.montantTtc)}`}
+                        >
+                          <span style={{ color: "var(--fg2)", fontWeight: 600 }}>{f.prochaineAnnee}</span>
+                          {f.montantProchaineAnnee > 0 && <span style={{ fontWeight: 700, color: "var(--color-primary-700)" }}>{fmtEuroCourt(f.montantProchaineAnnee)}</span>}
+                        </span>
+                      ) : (
+                        f.montantTtc > 0 && (
+                          <span style={{ fontWeight: 700, color: "var(--color-primary-700)" }} title="Total des travaux à venir">
+                            {fmtEuroCourt(f.montantTtc)}
+                          </span>
+                        )
+                      )}
                     </div>
                   </article>
                 );
@@ -504,7 +519,14 @@ function VueTableau({ pf, fiches, acces, multiGest }: { pf: PortefeuillePpt; fic
                       <td className="num" title={`potentiel ${fmtEur(f.honorairesPotentiels)} · acquis ${fmtEur(f.honorairesAcquis)}`}>
                         {f.honorairesPotentiels + f.honorairesAcquis ? fmtEuroCourt(f.honorairesPotentiels + f.honorairesAcquis) : "-"}
                       </td>
-                      <td className="num">{f.prochaineAnnee ?? "-"}</td>
+                      <td className="num">
+                        {f.prochaineAnnee ?? "-"}
+                        {f.prochaineAnnee != null && f.montantProchaineAnnee > 0 && (
+                          <span style={{ display: "block", fontSize: 11.5, color: "var(--fg-muted)", fontWeight: 400, whiteSpace: "nowrap" }} title="Montant des postes à voter à ce jalon">
+                            à voter : {fmtEuroCourt(f.montantProchaineAnnee)}
+                          </span>
+                        )}
+                      </td>
                       <td className="num">{f.nbAlertes ? <span style={{ color: f.alerteHaute ? "var(--color-error-700)" : "var(--color-warning-700)", fontWeight: 700 }}>{f.nbAlertes}</span> : "-"}</td>
                     </tr>
                   );
@@ -578,7 +600,7 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
   const exporter = () =>
     telechargerCsv(
       `portefeuille-ppt-${annee}.csv`,
-      ["Copropriété", "Commune", "Gestionnaire", "État", "DPE", "Logements", "Postes", "Travaux TTC à venir", "Honoraires potentiels", "Honoraires acquis", "Prochain jalon", "Alertes"],
+      ["Copropriété", "Commune", "Gestionnaire", "État", "DPE", "Logements", "Postes", "Travaux TTC à venir", "Honoraires potentiels", "Honoraires acquis", "Prochain jalon", "À voter au prochain jalon", "Alertes"],
       [...filtrees]
         .sort((a, b) => a.copro.nom.localeCompare(b.copro.nom, "fr"))
         .map((f) => [
@@ -593,6 +615,7 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
           f.honorairesPotentiels,
           f.honorairesAcquis,
           f.prochaineAnnee ?? "",
+          f.prochaineAnnee != null ? f.montantProchaineAnnee : "",
           f.nbAlertes,
         ])
     );
