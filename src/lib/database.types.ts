@@ -1901,38 +1901,68 @@ export type Database = {
         Row: {
           copro_id: string
           coproprietaire_id: string
+          deposee_par: string | null
+          deposee_par_nom: string | null
           id: string
           mime: string | null
+          motif_refus: string | null
           name: string
+          qualification: string | null
+          refus_email_le: string | null
+          refus_email_statut: string | null
           sha256: string | null
           size: number | null
+          statut: Database["public"]["Enums"]["statut_piece"]
           storage_path: string
           type: Database["public"]["Enums"]["type_piece"]
           uploaded_at: string
+          verifiee_le: string | null
+          verifiee_par: string | null
+          verifiee_par_nom: string | null
         }
         Insert: {
           copro_id: string
           coproprietaire_id: string
+          deposee_par?: string | null
+          deposee_par_nom?: string | null
           id?: string
           mime?: string | null
+          motif_refus?: string | null
           name: string
+          qualification?: string | null
+          refus_email_le?: string | null
+          refus_email_statut?: string | null
           sha256?: string | null
           size?: number | null
+          statut?: Database["public"]["Enums"]["statut_piece"]
           storage_path: string
           type: Database["public"]["Enums"]["type_piece"]
           uploaded_at?: string
+          verifiee_le?: string | null
+          verifiee_par?: string | null
+          verifiee_par_nom?: string | null
         }
         Update: {
           copro_id?: string
           coproprietaire_id?: string
+          deposee_par?: string | null
+          deposee_par_nom?: string | null
           id?: string
           mime?: string | null
+          motif_refus?: string | null
           name?: string
+          qualification?: string | null
+          refus_email_le?: string | null
+          refus_email_statut?: string | null
           sha256?: string | null
           size?: number | null
+          statut?: Database["public"]["Enums"]["statut_piece"]
           storage_path?: string
           type?: Database["public"]["Enums"]["type_piece"]
           uploaded_at?: string
+          verifiee_le?: string | null
+          verifiee_par?: string | null
+          verifiee_par_nom?: string | null
         }
         Relationships: [
           {
@@ -3870,6 +3900,7 @@ export type Database = {
       phase_copro: "diagnostic" | "etudes" | "travaux"
       signataire_role: "principal" | "cosignataire"
       signataire_statut: "en_attente" | "identite_deposee" | "signe" | "expire"
+      statut_piece: "a_verifier" | "valide" | "refuse"
       statut_candidature: "recue" | "retenue" | "non_retenue"
       statut_consultation: "en_ligne" | "cloturee"
       statut_enquete: "brouillon" | "prete" | "envoyee"
@@ -4032,6 +4063,7 @@ export const Constants = {
       phase_copro: ["diagnostic", "etudes", "travaux"],
       signataire_role: ["principal", "cosignataire"],
       signataire_statut: ["en_attente", "identite_deposee", "signe", "expire"],
+      statut_piece: ["a_verifier", "valide", "refuse"],
       statut_candidature: ["recue", "retenue", "non_retenue"],
       statut_consultation: ["en_ligne", "cloturee"],
       statut_enquete: ["brouillon", "prete", "envoyee"],

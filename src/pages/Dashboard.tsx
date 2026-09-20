@@ -737,6 +737,7 @@ export default function Dashboard() {
   const { dashLayout, setDashLayout, showProgress, chefProjetFilter, setChefProjetFilter } = useUi();
   const [phaseFilter, setPhaseFilter] = useState<PhaseId | "">("");
   const [cityFilter, setCityFilter] = useState<string>("");
+  const [gestionnaireFilter, setGestionnaireFilter] = useState<string>("");
   const [showNew, setShowNew] = useState(false);
   const [showCorbeille, setShowCorbeille] = useState(false);
   const { data: corbeille } = useCoprosCorbeille();
@@ -752,11 +753,21 @@ export default function Dashboard() {
       ),
     [copros]
   );
+  // Gestionnaires de copropriété présents dans la base, par ordre alphabétique
+  // (feedback Amir 20/09) - le filtre se combine à celui du chef de projet.
+  const gestionnaires = useMemo(
+    () =>
+      Array.from(
+        new Set((copros ?? []).map((c) => c.gestionnaire_nom?.trim()).filter((v): v is string => !!v))
+      ).sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" })),
+    [copros]
+  );
   const filtered = (copros ?? []).filter(
     (c) =>
       (!phaseFilter || c.phase === phaseFilter) &&
       (!cityFilter || c.city === cityFilter) &&
-      (!chefProjetFilter || c.chef_projet === chefProjetFilter)
+      (!chefProjetFilter || c.chef_projet === chefProjetFilter) &&
+      (!gestionnaireFilter || c.gestionnaire_nom?.trim() === gestionnaireFilter)
   );
 
   const views = [
@@ -849,6 +860,20 @@ export default function Dashboard() {
             <option value={chefProjetFilter}>{chefProjetFilter}</option>
           )}
           {chefsProjets.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+        <select
+          className="chip-filter"
+          value={gestionnaireFilter}
+          onChange={(e) => setGestionnaireFilter(e.target.value)}
+          style={{ cursor: "pointer" }}
+          title="Gestionnaire de copropriété (côté syndic) en charge du dossier"
+        >
+          <option value="">Gestionnaire : tous</option>
+          {gestionnaires.map((v) => (
             <option key={v} value={v}>
               {v}
             </option>

@@ -472,13 +472,28 @@ function DocRow({
             Non concerné
           </label>
         )}
-        {!na && uploadable && (
+        {/* Pièce du syndic : bouton de dépôt. Pièce d'un autre fournisseur
+            (Strat Eco, MOE) : le syndic n'a aucun bouton - l'encadré reste
+            neutre et passe au vert quand la pièce est fournie (feedback Amir
+            20/09). L'AMO garde un dépôt discret, signalé comme invisible du
+            syndic, pour alimenter le dossier depuis cette vue. */}
+        {!na && def.fournisseur === "syndic" && uploadable && (
           <button className="se-btn se-btn-secondary btn-sm" disabled={busy} onClick={onPick}>
             <Icon name="upload" size={14} />
             {busy ? "Envoi…" : depose ? "Ajouter" : "Téléverser"}
           </button>
         )}
-        {!na && !uploadable && !depose && <Badge kind="warn">En attente</Badge>}
+        {!na && def.fournisseur !== "syndic" && isAmo && (
+          <button
+            className="se-btn se-btn-ghost btn-sm"
+            disabled={busy}
+            onClick={onPick}
+            title="Dépôt réservé à Strat Eco : le syndic ne voit pas ce bouton, son encadré passe au vert dès que la pièce est déposée"
+          >
+            <Icon name="upload" size={14} />
+            {busy ? "Envoi…" : depose ? "Ajouter (Strat Eco)" : "Déposer (Strat Eco)"}
+          </button>
+        )}
       </div>
 
       {files.length > 0 && (

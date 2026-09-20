@@ -10,6 +10,7 @@ import { fmtDate } from "@/lib/format";
 import { downloadFichier } from "@/api/fichiers";
 import {
   PIECES,
+  libelleQualification,
   useFichiersPartages,
   useMesPieces,
   useUploadPiece,
@@ -39,7 +40,10 @@ export function Documents({ membership }: { membership: Membership }) {
   const [depot, setDepot] = useState<{ type: TypePiece; file: File } | null>(null);
 
   const req = PIECES.filter((p) => p.required);
-  const done = req.filter((p) => (pieces ?? []).some((x) => x.type === p.type)).length;
+  // une pièce refusée est à redéposer : elle ne compte plus comme fournie
+  const done = req.filter((p) => (pieces ?? []).some((x) => x.type === p.type && x.statut !== "refuse")).length;
+  const aVerifier = (pieces ?? []).filter((x) => x.statut === "a_verifier").length;
+  const refusees = (pieces ?? []).filter((x) => x.statut === "refuse").length;
 
   const pick = (type: TypePiece) => {
     setPendingType(type);
@@ -130,19 +134,31 @@ export function Documents({ membership }: { membership: Membership }) {
             {PIECES.map((d) => {
               const piece = (pieces ?? []).find((x) => x.type === d.type);
               const busy = upload.isPending && pendingType === d.type;
+              // Encadré : vert une fois validée par Strat Eco, orange en attente
+              // de vérification, rouge si refusée (feedback Amir 10/09).
+              const etat = !piece ? "" : piece.statut === "valide" ? " filled" : piece.statut === "refuse" ? " refus" : " attente";
+              const icone = !piece ? "download" : piece.statut === "valide" ? "check" : piece.statut === "refuse" ? "alert" : "clock";
+              const parTiers = piece?.deposee_par_nom && piece.deposee_par_nom !== membership.nom ? ` par ${piece.deposee_par_nom}` : "";
+              const hint = busy
+                ? "Téléversement…"
+                : !piece
+                  ? d.hint
+                  : piece.statut === "valide"
+                    ? `${piece.name} · validée par Strat Eco le ${fmtDate(piece.verifiee_le)}`
+                    : piece.statut === "refuse"
+                      ? `Refusée le ${fmtDate(piece.verifiee_le)} : ${piece.motif_refus || libelleQualification(piece.qualification).toLowerCase()} - déposez une nouvelle version`
+                      : `${piece.name} · déposée le ${fmtDate(piece.uploaded_at)}${parTiers} · en attente de vérification par Strat Eco`;
               return (
-                <div key={d.type} className={"dropzone" + (piece ? " filled" : "")} onClick={() => !upload.isPending && pick(d.type)}>
-                  <span className="dz-ico"><Icon name={piece ? "check" : "download"} size={18} /></span>
+                <div key={d.type} className={"dropzone" + etat} onClick={() => !upload.isPending && pick(d.type)} style={{ cursor: "pointer" }}>
+                  <span className="dz-ico"><Icon name={icone} size={18} /></span>
                   <div>
                     <div className="dz-name">
                       {d.name} {d.required && <span style={{ color: "var(--color-error-500)" }}>*</span>}
                     </div>
-                    <div className="dz-hint">
-                      {busy ? "Téléversement…" : piece ? piece.name + " · téléversée le " + fmtDate(piece.uploaded_at) : d.hint}
-                    </div>
+                    <div className="dz-hint">{hint}</div>
                   </div>
                   <span className="spacer"></span>
-                  <span className="dz-action">{piece ? "Remplacer" : "Téléverser"}</span>
+                  <span className="dz-action">{!piece ? "Téléverser" : piece.statut === "refuse" ? "Déposer une nouvelle version" : "Remplacer"}</span>
                 </div>
               );
             })}
@@ -151,6 +167,13 @@ export function Documents({ membership }: { membership: Membership }) {
                 Le téléversement a échoué. Vérifiez le fichier (PDF ou image) et réessayez.
               </p>
             )}
+            <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
+              Chaque pièce déposée est vérifiée par l'équipe Strat Eco (lisibilité, pages complètes, bonne année) :
+              l'encadré passe au vert une fois la pièce validée ; en cas de problème, vous recevez un e-mail qui
+              précise quoi corriger et l'encadré passe au rouge.
+              {aVerifier > 0 && ` ${aVerifier} pièce${aVerifier > 1 ? "s" : ""} en attente de vérification.`}
+              {refusees > 0 && ` ${refusees} pièce${refusees > 1 ? "s" : ""} à redéposer.`}
+            </p>
             <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
               Vos pièces sont stockées de manière sécurisée et ne sont visibles que par vous et l'équipe Strat Eco.
               CGU acceptées le {fmtDate(cguAcceptees.accepte_le)} (version {cguAcceptees.cgu_version}).

@@ -7,6 +7,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { useCopros, useTasksCount } from "@/api/copros";
 import { useQuestionsEnAttenteCount } from "@/api/consultations";
 import { usePptRapportsRevue } from "@/api/ppt";
+import { usePiecesAVerifierCount } from "@/api/portail";
 import { declencherRappelAgrements } from "@/api/prestataires";
 import { declencherRapportSyndic } from "@/api/rapportSyndic";
 import { declencherSignatureCron } from "@/api/signature";
@@ -43,6 +44,10 @@ export function Layout() {
   }, []);
   const { data: copros } = useCopros();
   const { data: tasksCount } = useTasksCount();
+  // pièces justificatives déposées au portail en attente de vérification :
+  // elles s'ajoutent à la pastille « Vos tâches », où la file est affichée en tête
+  const { data: piecesCount } = usePiecesAVerifierCount();
+  const tachesEtPieces = (tasksCount ?? 0) + (piecesCount ?? 0);
   // alerte du menu « Consulter un intervenant » : questions de prestataires sans réponse
   const { data: questionsCount } = useQuestionsEnAttenteCount();
   // alerte du menu « Suivi PPT » : rapports déposés ou analysés en attente de revue
@@ -60,7 +65,7 @@ export function Layout() {
     <div className={"app" + (collapsed ? " collapsed" : "")}>
       <Sidebar
         recents={recents}
-        tasksCount={tasksCount ?? null}
+        tasksCount={tasksCount == null && piecesCount == null ? null : tachesEtPieces}
         questionsCount={questionsCount || null}
         pptCount={pptCount || null}
         user={user}

@@ -6,10 +6,11 @@
 // éco-PTZ et pièces, et les trois exports concordants (liste des primes,
 // rapport d'enquête sociale, fiche état) générés depuis la même base.
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { Modal } from "@/components/Modal";
+import { StatutPieceBadge, VerificationPiece } from "@/components/VerificationPiece";
 import { fmtDate, fmtEuro, fmtEuroFull } from "@/lib/format";
 import { PROFILS_MPR, libellesBatiments } from "@/lib/referentiels";
 import type { Profil } from "@/lib/finance";
@@ -93,7 +94,10 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
   const [bat, setBat] = useState<string>("");
   const [statut, setStatut] = useState<FiltreStatut>("tous");
   const [q, setQ] = useState("");
-  const [ouvert, setOuvert] = useState<string | null>(null);
+  // Lien profond ?cp=<coproprietaireId> : ouvre directement la fiche (depuis la
+  // file « Pièces à vérifier » de la page Vos tâches, feedback 10/09).
+  const [searchParams] = useSearchParams();
+  const [ouvert, setOuvert] = useState<string | null>(searchParams.get("cp"));
 
   const filtres = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -596,25 +600,31 @@ function FicheCoproprietaire({
         <Bloc titre="Pièces justificatives" icon="folder">
           {PIECES.map((pc) => {
             const piece = d.pieces[pc.type];
+            const e: EtatItem = !piece ? (pc.required ? "manquant" : "na") : piece.statut === "valide" ? "ok" : piece.statut === "refuse" ? "manquant" : "en_cours";
             return (
-              <div key={pc.type} className="kv" style={{ padding: "6px 0", fontSize: 13 }}>
-                <span className="k">
-                  {pc.name}
-                  {pc.required && <span style={{ color: "var(--color-error-500)" }}> *</span>}
-                </span>
-                <span className="v" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  {piece ? (
-                    <>
-                      <Etat e="ok" />
-                      <span style={{ fontWeight: 400, color: "var(--fg3)", fontSize: 12 }}>{fmtDate(piece.uploaded_at)}</span>
-                      <button className="icon-btn" title={`Ouvrir ${piece.name}`} onClick={() => void ouvrirPiece(piece.storage_path)}>
-                        <Icon name="eye" size={14} />
-                      </button>
-                    </>
-                  ) : (
-                    <Etat e={pc.required ? "manquant" : "na"} title={pc.name} />
-                  )}
-                </span>
+              <div key={pc.type} style={{ padding: "6px 0", fontSize: 13, borderBottom: "1px dashed var(--border)" }}>
+                <div className="kv" style={{ padding: 0 }}>
+                  <span className="k">
+                    {pc.name}
+                    {pc.required && <span style={{ color: "var(--color-error-500)" }}> *</span>}
+                  </span>
+                  <span className="v" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <Etat e={e} title={pc.name} />
+                    {piece && (
+                      <>
+                        <StatutPieceBadge piece={piece} />
+                        <button className="icon-btn" title={`Ouvrir ${piece.name}`} onClick={() => void ouvrirPiece(piece.storage_path)}>
+                          <Icon name="eye" size={14} />
+                        </button>
+                      </>
+                    )}
+                  </span>
+                </div>
+                {piece && (
+                  <div style={{ marginTop: 6 }}>
+                    <VerificationPiece key={piece.id + piece.statut + (piece.qualification ?? "")} piece={piece} compact />
+                  </div>
+                )}
               </div>
             );
           })}

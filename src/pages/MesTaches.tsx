@@ -8,6 +8,8 @@ import { Avatar, Badge, PhaseBadge } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 import type { Tables } from "@/lib/database.types";
 import { useCopros } from "@/api/copros";
+import { PIECES, urlSigneePiece, usePiecesAVerifier } from "@/api/portail";
+import { VerificationPiece } from "@/components/VerificationPiece";
 import { StatusDot } from "./CoproDetail/ProjetTab";
 
 type TacheRow = Tables<"taches"> & { assignee: { initials: string; full_name: string } | null };
@@ -37,6 +39,12 @@ export default function MesTaches() {
   const navigate = useNavigate();
   const { data: copros } = useCopros();
   const { data: tasks } = useAllOpenTasks();
+  // pièces justificatives déposées au portail par les copropriétaires, en
+  // attente de vérification par l'équipe (feedback Amir 10/09)
+  const { data: piecesAVerifier } = usePiecesAVerifier();
+  const ouvrirPiece = (path: string) => {
+    void urlSigneePiece(path).then((url) => window.open(url, "_blank", "noopener")).catch(() => undefined);
+  };
 
   const groups = (copros ?? [])
     .map((c) => ({
@@ -69,6 +77,50 @@ export default function MesTaches() {
           </span>
         </div>
       </div>
+
+      {(piecesAVerifier ?? []).length > 0 && (
+        <div className="panel" style={{ marginBottom: 18 }}>
+          <div className="p-head">
+            <Icon name="folder" size={18} />
+            <h3>Pièces justificatives à vérifier</h3>
+            <span style={{ flex: 1 }}></span>
+            <Badge kind="warn" dot>
+              {piecesAVerifier!.length} pièce{piecesAVerifier!.length > 1 ? "s" : ""}
+            </Badge>
+          </div>
+          <div className="p-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
+            <p className="se-small" style={{ margin: "0 0 4px", color: "var(--fg-muted)" }}>
+              Déposées par les copropriétaires sur leur portail. Ouvrez la pièce (œil), vérifiez lisibilité, pages et
+              année, puis qualifiez-la : « Conforme » la valide ; tout autre choix la refuse et envoie aussitôt un
+              e-mail au copropriétaire avec le motif.
+            </p>
+            {piecesAVerifier!.map((p) => (
+              <div key={p.id} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 600 }}>{PIECES.find((x) => x.type === p.type)?.name ?? p.type}</span>
+                  <span style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>{p.name}</span>
+                  <span style={{ flex: 1 }}></span>
+                  <button
+                    className="se-btn se-btn-ghost btn-sm"
+                    title={`Ouvrir la fiche de ${p.coproprietaires?.nom ?? "ce copropriétaire"}`}
+                    onClick={() => navigate(`/copros/${p.copro_id}/coproprietaires?cp=${p.coproprietaire_id}`)}
+                  >
+                    <Icon name="building" size={13} />
+                    {p.coproprietes?.name ?? "Dossier"} · {p.coproprietaires?.nom ?? "copropriétaire"}
+                  </button>
+                  <button className="se-btn se-btn-secondary btn-sm" title="Ouvrir la pièce (aperçu, journalisé)" onClick={() => ouvrirPiece(p.storage_path)}>
+                    <Icon name="eye" size={13} />
+                    Ouvrir
+                  </button>
+                </div>
+                <div style={{ marginTop: 6 }}>
+                  <VerificationPiece key={p.id + p.statut} piece={p} compact />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {groups.length === 0 && (
         <div className="placeholder-screen" style={{ minHeight: 280 }}>

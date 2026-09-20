@@ -481,6 +481,7 @@ export function Portefeuille({
   const navigate = useNavigate();
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [recherche, setRecherche] = useState("");
+  const [pdfBusy, setPdfBusy] = useState(false);
   // la vue choisie survit à l'ouverture d'un dossier (retour cohérent)
   const [vue, setVueBrut] = useState<"bulles" | "kanban" | "tableau">(() => {
     try {
@@ -569,6 +570,41 @@ export function Portefeuille({
         ])
     );
 
+  // Export PDF de la vue du portefeuille (feedback Amir 20/09) : mêmes données
+  // que le CSV, périmètre et recherche en cours appliqués, chargé à la demande.
+  const exporterPdf = async () => {
+    setPdfBusy(true);
+    try {
+      const { genererPortefeuilleSyndicPdf } = await import("@/lib/pdf/portefeuilleSyndic");
+      const { telechargerPdfBytes } = await import("@/lib/pdf/planIndividuel");
+      const bytes = await genererPortefeuilleSyndicPdf({
+        syndicNom: syndicNom ?? null,
+        filtre: q ? `recherche « ${recherche.trim()} »` : null,
+        lignes: coprosFiltres.map((c) => ({
+          nom: c.name,
+          ville: c.city,
+          gestionnaire: c.gestionnaire_nom,
+          phase: phaseDe(c),
+          dpeAvant: c.energy_before,
+          dpeApres: c.energy_after,
+          gainPct: c.gain_pct,
+          logements: nbLogements(c),
+          lots: c.stats?.lots ?? null,
+          coproprietaires: c.stats?.coproprietaires ?? null,
+          montantTtc: c.stats?.montant_ttc ?? null,
+          honoraires: honoraires.get(c.id) ?? null,
+          avancement: avancementSyndic(c),
+          fragile: c.fragile,
+          retard: retards.get(c.id) ?? 0,
+        })),
+      });
+      const suffixe = syndicNom ? ` - ${syndicNom.replace(/[\\/:*?"<>|]+/g, "-")}` : "";
+      telechargerPdfBytes(bytes, `Portefeuille${suffixe} - ${new Date().toISOString().slice(0, 10)}.pdf`);
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   return (
     <div className="page syndic-dash fade" style={{ padding: 0 }}>
       <div className="page-head">
@@ -597,7 +633,16 @@ export function Portefeuille({
         </div>
         <button className="se-btn se-btn-secondary btn-sm" onClick={exporter} title="Exporter le portefeuille (CSV pour Excel)">
           <Icon name="download" size={14} />
-          Exporter
+          CSV
+        </button>
+        <button
+          className="se-btn se-btn-secondary btn-sm"
+          onClick={() => void exporterPdf()}
+          disabled={pdfBusy}
+          title="Exporter la vue du portefeuille en PDF (synthèse, comparatif par gestionnaire, tableau des copropriétés)"
+        >
+          <Icon name="fileText" size={14} />
+          {pdfBusy ? "Génération…" : "PDF"}
         </button>
         <div className="search" style={{ margin: 0 }}>
           <Icon name="search" size={16} />

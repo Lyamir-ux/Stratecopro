@@ -543,6 +543,119 @@ export function useUploadPiece(coproId: string, coproprietaireId: string) {
   });
 }
 
+// ---------- Vérification des pièces par l'équipe Strat Eco (feedback Amir 10/09) ----------
+// Toute pièce déposée est « à vérifier » (trigger 0079 : dépositaire et date
+// tracés). L'administratif la qualifie depuis l'app ; un refus déclenche un
+// e-mail au copropriétaire (edge notifier-piece-refusee).
+
+export type StatutPiece = Enums<"statut_piece">;
+
+export interface QualificationPiece {
+  id: string;
+  label: string;
+  statut: StatutPiece;
+  /** Motif repris dans l'e-mail de refus (vide : saisie libre attendue). */
+  motif: string;
+}
+
+export const QUALIFICATIONS_PIECE: QualificationPiece[] = [
+  { id: "conforme", label: "Conforme", statut: "valide", motif: "" },
+  { id: "illisible", label: "Illisible", statut: "refuse", motif: "le document est illisible (photo floue, page coupée ou trop sombre)" },
+  { id: "incomplet", label: "Incomplet", statut: "refuse", motif: "le document est incomplet (il manque une ou plusieurs pages)" },
+  { id: "mauvaise_annee", label: "Mauvaise année", statut: "refuse", motif: "le document ne porte pas sur la bonne année" },
+  { id: "mauvais_document", label: "Mauvais document", statut: "refuse", motif: "le fichier déposé ne correspond pas à la pièce demandée" },
+  { id: "perime", label: "Périmé", statut: "refuse", motif: "le document est trop ancien" },
+  { id: "autre", label: "Autre motif", statut: "refuse", motif: "" },
+];
+
+export const LIBELLE_STATUT_PIECE: Record<StatutPiece, string> = {
+  a_verifier: "À vérifier",
+  valide: "Validée",
+  refuse: "Refusée",
+};
+
+export function libelleQualification(id: string | null | undefined): string {
+  return QUALIFICATIONS_PIECE.find((q) => q.id === id)?.label ?? (id ?? "");
+}
+
+/** Pièce à vérifier enrichie du copropriétaire et de la copropriété (liste AMO). */
+export type PieceAVerifier = PieceJustificative & {
+  coproprietaires: { nom: string; email: string | null } | null;
+  coproprietes: { name: string } | null;
+};
+
+/** Toutes les pièces en attente de vérification (équipe Strat Eco), les plus anciennes d'abord. */
+export function usePiecesAVerifier() {
+  return useQuery({
+    queryKey: ["pieces-a-verifier"],
+    queryFn: async (): Promise<PieceAVerifier[]> => {
+      const { data, error } = await supabase
+        .from("pieces_justificatives")
+        .select("*, coproprietaires(nom, email), coproprietes!pieces_justificatives_copro_id_fkey(name)")
+        .eq("statut", "a_verifier")
+        .order("uploaded_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as PieceAVerifier[];
+    },
+  });
+}
+
+/** Nombre de pièces à vérifier - pastille du menu AMO. */
+export function usePiecesAVerifierCount() {
+  return useQuery({
+    queryKey: ["pieces-a-verifier", "count"],
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await supabase
+        .from("pieces_justificatives")
+        .select("id", { count: "exact", head: true })
+        .eq("statut", "a_verifier");
+      if (error) throw error;
+      return count ?? 0;
+    },
+    refetchInterval: 120_000,
+  });
+}
+
+/**
+ * Qualifie une pièce (menu déroulant de l'administratif). « Conforme » la
+ * valide ; tout autre choix la refuse avec un motif (celui de la qualification,
+ * ou le texte libre saisi) et déclenche l'e-mail au copropriétaire.
+ * Remettre `qualification` à null la repasse « à vérifier ».
+ */
+export function useQualifierPiece() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      piece,
+      qualification,
+      motifLibre,
+    }: {
+      piece: Pick<PieceJustificative, "id" | "copro_id" | "coproprietaire_id">;
+      qualification: string | null;
+      motifLibre?: string | null;
+    }) => {
+      const q = QUALIFICATIONS_PIECE.find((x) => x.id === qualification) ?? null;
+      const statut: StatutPiece = q ? q.statut : "a_verifier";
+      const motif = statut === "refuse" ? (motifLibre?.trim() || q?.motif || null) : null;
+      const { error } = await supabase
+        .from("pieces_justificatives")
+        .update({ statut, qualification: q?.id ?? null, motif_refus: motif })
+        .eq("id", piece.id);
+      if (error) throw error;
+      if (statut === "refuse") {
+        // e-mail au copropriétaire - best effort, le refus est enregistré quoi qu'il arrive
+        await supabase.functions.invoke("notifier-piece-refusee", { body: { piece_id: piece.id } }).catch(() => undefined);
+      }
+      return statut;
+    },
+    onSuccess: (_s, v) => {
+      void qc.invalidateQueries({ queryKey: ["pieces-a-verifier"] });
+      void qc.invalidateQueries({ queryKey: ["pieces-copro", v.piece.copro_id] });
+      void qc.invalidateQueries({ queryKey: ["portail", "pieces", v.piece.coproprietaire_id] });
+    },
+  });
+}
+
 // ========== Adhésion au prêt collectif (CEGEE) ==========
 
 export type FinancementConfig = Tables<"copro_financement_config">;

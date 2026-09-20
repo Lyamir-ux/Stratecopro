@@ -282,14 +282,20 @@ export function assemblerDossiers(input: {
       etatSepa = adhesion?.sepa_path ? "ok" : "manquant";
       if (etatSepa !== "ok") manquants.push("mandat SEPA");
     }
-    const aRib = !!pieces.rib || bulletinsElec.some((b) => !!b.rib_path && !b.purge_effectuee_le);
-    const etatRib: EtatItem = aRib ? "ok" : "manquant";
-    if (!aRib) manquants.push("RIB");
-    const aCni = !!pieces.piece_identite || bulletinsElec.some((b) => b.signataires.some((sg) => !!sg.piece_identite_path));
-    const etatCni: EtatItem = aCni ? "ok" : "manquant";
-    if (!aCni) manquants.push("pièce d'identité");
-    const etatAvis: EtatItem = pieces.avis_imposition ? "ok" : "manquant";
-    if (!pieces.avis_imposition) manquants.push("avis d'imposition");
+    // Pièce déposée au portail : validée = fournie ; à vérifier = en cours ;
+    // refusée = manquante (le copropriétaire doit redéposer) - feedback 10/09.
+    const etatPiece = (p: PieceJustificative | undefined): EtatItem =>
+      !p ? "manquant" : p.statut === "valide" ? "ok" : p.statut === "refuse" ? "manquant" : "en_cours";
+    const suffixe = (p: PieceJustificative | undefined) =>
+      !p ? "" : p.statut === "refuse" ? " (refusée, à redéposer)" : p.statut === "a_verifier" ? " (déposée, à vérifier)" : "";
+    const ribBulletin = bulletinsElec.some((b) => !!b.rib_path && !b.purge_effectuee_le);
+    const etatRib: EtatItem = ribBulletin ? "ok" : etatPiece(pieces.rib);
+    if (etatRib !== "ok") manquants.push("RIB" + suffixe(pieces.rib));
+    const cniBulletin = bulletinsElec.some((b) => b.signataires.some((sg) => !!sg.piece_identite_path));
+    const etatCni: EtatItem = cniBulletin ? "ok" : etatPiece(pieces.piece_identite);
+    if (etatCni !== "ok") manquants.push("pièce d'identité" + suffixe(pieces.piece_identite));
+    const etatAvis: EtatItem = etatPiece(pieces.avis_imposition);
+    if (etatAvis !== "ok") manquants.push("avis d'imposition" + suffixe(pieces.avis_imposition));
 
     const rienCommence = !r && !financement && !adhesion && bulletinsElec.length === 0 && Object.keys(pieces).length === 0;
     const statut: StatutDossier = manquants.length === 0 ? "complet" : rienCommence ? "non_commence" : "incomplet";
