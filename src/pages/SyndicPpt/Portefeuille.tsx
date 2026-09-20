@@ -6,8 +6,9 @@
 // carte par gestionnaire (jauge des états, honoraires) contenant une tuile
 // compacte par copropriété, colorée par état de suivi. Kanban : une colonne
 // par état. Tableau : comparatif par gestionnaire (direction) et copropriétés
-// triables. Sous les vues : honoraires projetés (direction), ce qu'il faut
-// préparer pour les AG (gestionnaire), alertes.
+// triables. Sous les vues : honoraires projetés (direction, sauf en mosaïque où
+// chaque carte de gestionnaire les porte déjà), ce qu'il faut préparer pour les
+// AG (gestionnaire), alertes.
 // Direction et aperçu AMO voient toute l'enseigne ; un gestionnaire ne voit
 // que ses dossiers - aucun chiffre d'un collègue, aucun classement.
 import { useMemo, useState } from "react";
@@ -696,7 +697,10 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
         <VueMosaique fiches={filtrees} acces={acces} direction={pf.direction} />
       )}
 
-      {pf.direction ? <BarresHonoraires pf={pf} /> : <PanneauAPreparer pf={pf} copros={copros} />}
+      {/* Honoraires projetés : pas en mosaïque, où chaque carte de gestionnaire porte déjà
+          son total d'honoraires de suivi (feedback Amir 20/09 : le tableau était repris
+          à l'identique dans les trois vues). */}
+      {pf.direction ? vue !== "mosaique" && <BarresHonoraires pf={pf} /> : <PanneauAPreparer pf={pf} copros={copros} />}
 
       {!pf.direction && remarquesOuvertes > 0 && (
         <div className="panel" style={{ marginTop: 20, display: "flex", alignItems: "center", gap: 12, padding: "12px 18px" }}>
