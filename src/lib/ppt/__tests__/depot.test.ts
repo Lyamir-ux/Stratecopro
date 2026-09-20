@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TYPES_ANALYSES, TYPES_DEPOT, cheminDepot, coproEnNomFichier, nomPourCopro, trouverCopro, typeDevine } from "../depot";
+import { TYPES_ANALYSES, TYPES_DEPOT, cheminDepot, coproEnNomFichier, nomPourCopro, remplacerCoproDansNom, trouverCopro, typeDevine } from "../depot";
 
 describe("typeDevine", () => {
   it("reconnaît le DPE collectif, le PV d'AG, le tableau et le PPT adopté", () => {
@@ -51,5 +51,29 @@ describe("correction d'un dépôt", () => {
   it("construit le chemin de stockage attendu par les policies", () => {
     const chemin = cheminDepot("11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "PPPT Les Tilleuls.pdf", 1700000000000);
     expect(chemin).toBe("11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222/1700000000000-PPPT_Les_Tilleuls.pdf");
+  });
+});
+
+describe("renommage d'une copropriété", () => {
+  const ancien = "Porte du Soleil";
+  const nouveau = "Résidence Les Tilleuls";
+
+  it("remplace le nom de la copropriété dans le nom du fichier, séparateur conservé", () => {
+    expect(remplacerCoproDansNom("PPT_LaPorteDuSoleil_2026.xlsx", ancien, nouveau)).toBe("PPT_LaResidenceLesTilleuls_2026.xlsx");
+    expect(remplacerCoproDansNom("PPPT Porte du Soleil.pdf", ancien, nouveau)).toBe("PPPT Residence Les Tilleuls.pdf");
+    expect(remplacerCoproDansNom("dpe-porte-du-soleil.pdf", ancien, nouveau)).toBe("dpe-residence-les-tilleuls.pdf");
+    expect(remplacerCoproDansNom("PPT_Porte_du_Soleil.xlsx", ancien, nouveau)).toBe("PPT_Residence_Les_Tilleuls.xlsx");
+  });
+
+  it("ignore les accents de l'ancien nom et garde l'extension", () => {
+    expect(remplacerCoproDansNom("PPPT_ResidenceLesTilleuls_2026.pdf", nouveau, ancien)).toBe("PPPT_PorteDuSoleil_2026.pdf");
+    expect(remplacerCoproDansNom("Résidence Les Tilleuls - PV", nouveau, ancien)).toBe("Porte Du Soleil - PV");
+  });
+
+  it("rend null quand le fichier ne mentionne pas la copropriété", () => {
+    expect(remplacerCoproDansNom("rapport du BE.pdf", ancien, nouveau)).toBeNull();
+    expect(remplacerCoproDansNom("PPT_LaPorteDuSoleil.xlsx", "", nouveau)).toBeNull();
+    // pas de correspondance partielle au milieu d'un mot plus long
+    expect(remplacerCoproDansNom("leparcelle.pdf", "Le Parc", "Les Tilleuls")).toBeNull();
   });
 });

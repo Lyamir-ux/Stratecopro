@@ -3861,6 +3861,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      ppt_deposants: {
+        Args: { p_copro: string }
+        Returns: { rapport_id: string; user_id: string | null; nom: string | null; email: string | null }[]
+      }
+      ppt_supprimer_rapport: {
+        Args: { p_rapport_id: string }
+        Returns: string
+      }
       ppt_decaler_postes: {
         Args: { p_decalages: Json }
         Returns: number

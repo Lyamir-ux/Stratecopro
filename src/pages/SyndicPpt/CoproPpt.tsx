@@ -15,6 +15,7 @@ import { fmtEuroCourt } from "@/lib/format";
 import { telechargerCsv } from "@/lib/csv";
 import {
   telechargerPptRapport,
+  urlSigneePpt,
   useAjouterPoste,
   useDecalerPptPostes,
   useDeposerPptRapport,
@@ -29,22 +30,26 @@ import {
   usePptJournal,
   usePptParametres,
   usePptPostes,
+  usePptDeposants,
   usePptRapports,
   usePptRemarques,
   usePptResolutions,
   useSupprimerAg,
+  useSupprimerPptRapport,
   type PptCoproAvecStats,
   type PptCoproPatch,
   type PptPoste,
   type TypeRapport,
 } from "@/api/ppt";
+import { remplacerCoproDansNom } from "@/lib/ppt/depot";
 import { PARAMETRES_ORG_DEFAUT, anneeEffective, cepApres, etiquetteDepuisCep, gainCumule, montantTtcPoste, parametresDepuisOrg } from "@/lib/ppt/formules";
 import { controlerResolutions } from "@/lib/ppt/indicateurs";
 import { anneeAffichee, decalagesEffectifs, plageAnnees, posteDeplacable } from "@/lib/ppt/echeancier";
 import { FONDS_TRAVAUX, TYPE_RAPPORT_LABEL } from "@/lib/ppt/referentiels";
 import { SyndicShell, Loader, AucuneCopro } from "@/pages/Syndic";
 import { AgForm } from "./AgForm";
-import { CorrigerDocument, type DocumentACorriger } from "./CorrigerDocument";
+import { ApercuDocument } from "@/components/ApercuDocument";
+import { CorrigerDocument, RenommerFichiers, type DocumentACorriger } from "./CorrigerDocument";
 import { PrioriteBadge, RenoBadge, SeveriteBadge, StatutPosteBadge, StatutRapportBadge, VerdictBadge, anneeCourante, fmtDateCourte, fmtEur, fmtPct, issueLabel, posteLite, type PrioriteCode } from "./commun";
 
 const TABS = [
@@ -790,6 +795,10 @@ function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
   const deposer = useDeposerPptRapport();
   // correction d'un dépôt mal rattaché (mauvaise copropriété, type ou nom) - 0081
   const [aCorriger, setACorriger] = useState<DocumentACorriger | null>(null);
+  // aperçu sans téléchargement et retrait d'un dépôt - 0082
+  const [apercu, setApercu] = useState<{ name: string; storage_path: string } | null>(null);
+  const { data: deposants } = usePptDeposants(c.id);
+  const supprimer = useSupprimerPptRapport();
   const [type, setType] = useState<TypeRapport>("dpe_collectif");
   const { data: orgParams } = usePptParametres(c.organisation_id);
   const [taux, setTaux] = useState("");
@@ -837,6 +846,7 @@ function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
                 <div className="d-name">{r.name}</div>
                 <div className="d-sub">
                   {TYPE_RAPPORT_LABEL[r.type] ?? r.type} · déposé le {fmtDateCourte(r.depose_le)}
+                  {deposants?.get(r.id)?.nom ? ` par ${deposants.get(r.id)!.nom}` : ""}
                   {r.prestataire ? ` · ${r.prestataire}` : ""}{r.date_document ? ` · document du ${fmtDateCourte(r.date_document)}` : ""}
                   {r.motif_rejet ? ` · rejeté : ${r.motif_rejet}` : ""}
                 </div>
@@ -844,10 +854,25 @@ function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
               <span className="spacer"></span>
               {(r.type === "pppt" || r.type === "ppt_adopte") && <StatutRapportBadge statut={r.statut} />}
               {r.statut === "valide" && <VerdictBadge verdict={r.verdict} />}
+              <button className="icon-btn" title="Visualiser sans télécharger" onClick={() => setApercu(r)}><Icon name="eye" size={18} /></button>
               {r.statut !== "valide" && (
                 <button className="icon-btn" title="Corriger : copropriété, type ou nom du fichier" onClick={() => setACorriger(r)}><Icon name="edit" size={17} /></button>
               )}
               <button className="icon-btn" title="Télécharger" onClick={() => void telechargerPptRapport(r)}><Icon name="download" size={18} /></button>
+              {r.statut !== "valide" && (
+                <button
+                  className="icon-btn"
+                  title="Supprimer ce document"
+                  disabled={supprimer.isPending}
+                  onClick={() => {
+                    if (!window.confirm(`Supprimer « ${r.name} » ? Le document et son fichier sont retirés définitivement.`)) return;
+                    setErreur(null);
+                    supprimer.mutateAsync(r.id).catch((err) => setErreur(err instanceof Error ? err.message : "Suppression refusée"));
+                  }}
+                >
+                  <Icon name="trash" size={17} />
+                </button>
+              )}
             </div>
           ))
         )}
@@ -856,6 +881,15 @@ function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
           Un document rangé sous la mauvaise copropriété se corrige avec le crayon : le fichier suit.
         </p>
         {aCorriger && <CorrigerDocument rapport={aCorriger} onClose={() => setACorriger(null)} />}
+        {apercu && (
+          <ApercuDocument
+            name={apercu.name}
+            path={apercu.storage_path}
+            urlSignee={urlSigneePpt}
+            onClose={() => setApercu(null)}
+            onTelecharger={() => void telechargerPptRapport(apercu)}
+          />
+        )}
       </div>
     </div>
   );
@@ -864,6 +898,9 @@ function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
 // ---------- Fiche ----------
 function FicheTab({ c }: { c: PptCoproAvecStats }) {
   const maj = useMajPptCopro();
+  // renommer la copropriété laisse son ancien nom dans les fichiers déposés (0082)
+  const { data: rapports } = usePptRapports([c.id]);
+  const [renommages, setRenommages] = useState<{ rapport: DocumentACorriger; nouveau: string }[]>([]);
   const champs = ["nom", "adresse", "code_postal", "commune", "immatriculation_rnc", "annee_construction", "nb_batiments", "nb_lots", "nb_logements", "surface_m2", "surface_type", "chauffage", "energie_chauffage", "etiquette_energie", "etiquette_ges", "cep_kwhep_m2_an", "date_dpe", "plus_de_15_ans", "pppt_presente", "gestionnaire_nom", "gestionnaire_email"] as const;
   type Champ = (typeof champs)[number];
   // les deux réponses oui / non du portefeuille (0077) sont éditées comme « oui » / « non »
@@ -924,7 +961,16 @@ function FicheTab({ c }: { c: PptCoproAvecStats }) {
             onClick={() => {
               const patch: Record<string, string | number | boolean | null> = {};
               for (const k of champs) patch[k] = v[k] === "" ? null : numeriques.includes(k) ? Number(v[k]) : booleens.includes(k) ? v[k] === "oui" : v[k];
-              void maj.mutateAsync({ ...(patch as PptCoproPatch), id: c.id });
+              const nouveauNom = v.nom.trim();
+              const renomme = nouveauNom.length > 1 && nouveauNom !== c.nom ? nouveauNom : null;
+              void maj.mutateAsync({ ...(patch as PptCoproPatch), id: c.id }).then(() => {
+                if (!renomme) return;
+                const suite = (rapports ?? [])
+                  .filter((r) => r.statut !== "valide")
+                  .map((r) => ({ rapport: r as DocumentACorriger, nouveau: remplacerCoproDansNom(r.name, c.nom, renomme) }))
+                  .filter((x): x is { rapport: DocumentACorriger; nouveau: string } => !!x.nouveau && x.nouveau !== x.rapport.name);
+                if (suite.length) setRenommages(suite);
+              });
             }}
           >
             <Icon name="check" size={14} />
@@ -932,6 +978,7 @@ function FicheTab({ c }: { c: PptCoproAvecStats }) {
           </button>
         </div>
       </div>
+      {renommages.length > 0 && <RenommerFichiers copro={c} renommages={renommages} onClose={() => setRenommages([])} />}
     </div>
   );
 }
@@ -952,6 +999,9 @@ const JOURNAL_LABEL: Record<string, string> = {
   poste_ajoute: "Ligne ajoutée par le syndic",
   poste_retire: "Ligne retirée par le syndic",
   import: "Portefeuille importé par le syndic",
+  correction: "Document corrigé",
+  requalification: "Type de document corrigé",
+  suppression: "Document supprimé",
 };
 
 function HistoriqueTab({ c }: { c: PptCoproAvecStats }) {
@@ -968,6 +1018,14 @@ function HistoriqueTab({ c }: { c: PptCoproAvecStats }) {
     if (type === "montant_saisi") return `${d.libelle ?? "poste"} : ${d.montant != null ? fmtEur(Number(d.montant)) : "retour au calcul"}${d.commentaire ? ` - ${d.commentaire}` : ""}`;
     if (type === "poste_ajoute") return `${d.libelle ?? "poste"}${d.annee ? ` · ${d.annee}` : ""}${d.montant != null ? ` · ${fmtEur(Number(d.montant))}` : ""}`;
     if (type === "poste_retire") return String(d.libelle ?? "");
+    if (type === "suppression") return `${TYPE_RAPPORT_LABEL[String(d.type)] ?? d.type} - ${d.name}`;
+    if (type === "requalification") return `${TYPE_RAPPORT_LABEL[String(d.avant)] ?? d.avant} → ${TYPE_RAPPORT_LABEL[String(d.apres)] ?? d.apres}`;
+    if (type === "correction")
+      return [
+        d.copro_avant !== d.copro_apres ? `${d.copro_avant} → ${d.copro_apres}` : null,
+        d.name_avant !== d.name_apres ? `${d.name_avant} → ${d.name_apres}` : null,
+        d.type_avant !== d.type_apres ? `${TYPE_RAPPORT_LABEL[String(d.type_avant)] ?? d.type_avant} → ${TYPE_RAPPORT_LABEL[String(d.type_apres)] ?? d.type_apres}` : null,
+      ].filter(Boolean).join(" · ");
     if (type === "decalage") return (Array.isArray(d.postes) ? (d.postes as { libelle?: string; de?: number | null; vers?: number }[]) : []).map((x) => `${x.libelle ?? "poste"} : ${x.de ?? "à fixer"} → ${x.vers}`).join(" · ");
     return "";
   };

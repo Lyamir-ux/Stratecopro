@@ -1,5 +1,6 @@
-// Aperçu d'un document du bucket copro-files, sans téléchargement.
-// Partagé par l'onglet Fichiers de l'espace AMO et celui de l'espace syndic.
+// Aperçu d'un document sans téléchargement. Partagé par l'onglet Fichiers de
+// l'espace AMO, celui de l'espace syndic et les documents du Suivi PPT (qui
+// vivent dans un autre bucket : d'où `urlSignee`, l'accès au fichier).
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
@@ -10,11 +11,14 @@ export function ApercuDocument({
   path,
   onClose,
   onTelecharger,
+  urlSignee = urlSigneeFichier,
 }: {
   name: string;
   path: string;
   onClose: () => void;
   onTelecharger: () => void;
+  /** Résolution du lien signé ; par défaut le bucket copro-files. */
+  urlSignee?: (path: string) => Promise<string>;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [erreur, setErreur] = useState(false);
@@ -25,13 +29,13 @@ export function ApercuDocument({
   useEffect(() => {
     if (!affichable) return;
     let vivant = true;
-    urlSigneeFichier(path)
+    urlSignee(path)
       .then((u) => vivant && setUrl(u))
       .catch(() => vivant && setErreur(true));
     return () => {
       vivant = false;
     };
-  }, [path, affichable]);
+  }, [path, affichable, urlSignee]);
 
   return (
     <Modal title={name} onClose={onClose} width={980}>

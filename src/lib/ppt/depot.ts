@@ -64,3 +64,34 @@ export function nomPourCopro(nomActuel: string, copro: string, type: TypeRapport
 export function cheminDepot(organisationId: string, coproId: string, nomFichier: string, horodatage = Date.now()): string {
   return `${organisationId}/${coproId}/${horodatage}-${nomFichier.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
 }
+
+/** Lettres accentuées ramenées à leur base, longueur du texte conservée (indices comparables). */
+const aplatir = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+const echapperRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Renommage d'un fichier quand sa copropriété change de nom : le nom du fichier
+ * porte presque toujours celui de la copropriété (« PPT_LaPorteDuSoleil_2026.xlsx »),
+ * écrit avec n'importe quel séparateur. On remplace ce seul morceau, dans le
+ * style rencontré (collé, tiret bas, tiret, espace), et on rend null si le nom
+ * ne mentionne pas l'ancienne copropriété : rien à renommer.
+ */
+export function remplacerCoproDansNom(nomFichier: string, ancienne: string, nouvelle: string): string | null {
+  const mots = normaliser(ancienne).split(/[^a-z0-9]+/).filter(Boolean);
+  const nouveaux = normaliser(nouvelle).split(/[^a-z0-9]+/).filter(Boolean);
+  if (!mots.length || !nouveaux.length) return null;
+  const point = nomFichier.lastIndexOf(".");
+  const base = point > 0 ? nomFichier.slice(0, point) : nomFichier;
+  const ext = point > 0 ? nomFichier.slice(point) : "";
+  const motif = new RegExp(mots.map(echapperRegex).join("[ _.-]*") + "(?![a-z])", "i");
+  const trouve = motif.exec(aplatir(base));
+  if (!trouve) return null;
+  const morceau = base.slice(trouve.index, trouve.index + trouve[0].length);
+  const separateur = morceau.includes("_") ? "_" : morceau.includes("-") ? "-" : morceau.includes(" ") ? " " : "";
+  const minuscules = morceau === morceau.toLowerCase();
+  const remplacement = nouveaux
+    .map((m) => (minuscules ? m : m[0].toUpperCase() + m.slice(1)))
+    .join(separateur);
+  return base.slice(0, trouve.index) + remplacement + base.slice(trouve.index + trouve[0].length) + ext;
+}

@@ -449,6 +449,38 @@ export function useCorrigerPptRapport() {
   });
 }
 
+/** Qui a déposé chaque document du dossier (0082) : la RLS de profiles ne laisse
+ *  lire que son propre profil, le nom passe donc par une RPC security definer. */
+export function usePptDeposants(coproId: string | undefined) {
+  return useQuery({
+    queryKey: ["ppt", "deposants", coproId],
+    enabled: !!coproId,
+    queryFn: async (): Promise<Map<string, { nom: string | null; email: string | null }>> => {
+      const { data, error } = await supabase.rpc("ppt_deposants", { p_copro: coproId! });
+      if (error) throw error;
+      return new Map((data ?? []).map((d) => [d.rapport_id, { nom: d.nom, email: d.email }]));
+    },
+  });
+}
+
+/** Suppression d'un document déposé (0082) : la ligne part avec son fichier.
+ *  Réservée au déposant et à l'équipe Strat Eco, interdite sur un rapport validé. */
+export function useSupprimerPptRapport() {
+  const refresh = useRefreshPpt();
+  return useMutation({
+    mutationFn: async (rapportId: string) => {
+      const { data: chemin, error } = await supabase.rpc("ppt_supprimer_rapport", { p_rapport_id: rapportId });
+      if (error) throw error;
+      // le fichier suit ; un échec ici ne laisse qu'un fichier orphelin, jamais une ligne cassée
+      if (chemin) {
+        const { error: eSt } = await supabase.storage.from(BUCKET).remove([chemin]);
+        if (eSt) console.warn("ppt-files : fichier non retiré", eSt);
+      }
+    },
+    onSuccess: refresh,
+  });
+}
+
 /** URL signée (5 min) d'un document du bucket ppt-files. */
 export async function urlSigneePpt(path: string, download?: string): Promise<string> {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 300, download ? { download: nomFichierSansAccents(download) } : undefined);

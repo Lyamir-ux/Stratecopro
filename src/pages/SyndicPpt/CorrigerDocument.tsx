@@ -18,6 +18,7 @@ import {
   type TypeRapport,
 } from "@/api/ppt";
 import { TYPES_DEPOT, nomPourCopro, trouverCopro } from "@/lib/ppt/depot";
+import { fmtDateCourte } from "./commun";
 import { TYPE_RAPPORT_LABEL } from "@/lib/ppt/referentiels";
 
 export type DocumentACorriger = Pick<PptRapport, "id" | "ppt_copro_id" | "storage_path" | "name" | "type" | "statut" | "date_document" | "depose_le">;
@@ -158,6 +159,70 @@ export function CorrigerDocument({ rapport, onClose }: { rapport: DocumentACorri
           </button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+/**
+ * Renommer une copropriété laisse son ancien nom dans les fichiers déjà déposés
+ * (« PPT_LaPorteDuSoleil_2026.xlsx »). Après l'enregistrement de la fiche, on
+ * propose la reprise, avant / après sous les yeux - jamais en silence.
+ */
+export function RenommerFichiers({
+  copro,
+  renommages,
+  onClose,
+}: {
+  copro: Pick<PptCopro, "id" | "organisation_id">;
+  renommages: { rapport: DocumentACorriger; nouveau: string }[];
+  onClose: () => void;
+}) {
+  const corriger = useCorrigerPptRapport();
+  const [faits, setFaits] = useState(0);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  const lancer = async () => {
+    setErreur(null);
+    try {
+      for (const r of renommages.slice(faits)) {
+        await corriger.mutateAsync({ rapport: r.rapport, copro, name: r.nouveau, type: r.rapport.type });
+        setFaits((n) => n + 1);
+      }
+      onClose();
+    } catch (err) {
+      setErreur(err instanceof Error ? err.message : "Le renommage a échoué.");
+    }
+  };
+
+  return (
+    <Modal title="Renommer les fichiers ?" onClose={onClose} width={560} closeOnBackdrop={!corriger.isPending}>
+      <p className="se-body" style={{ marginTop: 0 }}>
+        {renommages.length} fichier{renommages.length > 1 ? "s" : ""} porte{renommages.length > 1 ? "nt" : ""} l'ancien nom de la copropriété. Les reprendre ?
+      </p>
+      <div style={{ maxHeight: "40vh", overflowY: "auto" }}>
+        {renommages.map(({ rapport, nouveau }) => (
+          <div key={rapport.id} className="doc-row" style={{ padding: "8px 0" }}>
+            <span className="d-ico"><Icon name="fileText" size={16} /></span>
+            <div style={{ minWidth: 0, fontSize: 13 }}>
+              <div style={{ color: "var(--fg-muted)", textDecoration: "line-through" }}>{rapport.name}</div>
+              <div style={{ fontWeight: 600 }}>{nouveau}</div>
+            </div>
+            <span className="spacer"></span>
+            <span className="se-small" style={{ color: "var(--fg-muted)" }}>{fmtDateCourte(rapport.depose_le)}</span>
+          </div>
+        ))}
+      </div>
+      {erreur && <p style={{ margin: "12px 0 0", padding: "8px 12px", borderRadius: "var(--radius-md)", background: "var(--color-error-50)", color: "var(--color-error-700)", fontSize: 13 }}>{erreur}</p>}
+      <p className="se-small" style={{ color: "var(--fg-muted)" }}>
+        Un rapport déjà validé garde son nom : son plan est rattaché à la copropriété.
+      </p>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <button type="button" className="se-btn se-btn-ghost btn-sm" onClick={onClose} disabled={corriger.isPending}>Laisser tels quels</button>
+        <button type="button" className="se-btn se-btn-primary btn-sm" onClick={() => void lancer()} disabled={corriger.isPending}>
+          <Icon name="check" size={14} />
+          {corriger.isPending ? `Renommage… (${faits}/${renommages.length})` : "Renommer"}
+        </button>
+      </div>
     </Modal>
   );
 }
