@@ -27,3 +27,40 @@ export function trouverCopro<T extends { nom: string }>(copros: T[], nom: string
   if (!n) return undefined;
   return copros.find((c) => normaliser(c.nom).trim() === n);
 }
+
+/** Préfixe de nom de fichier par type de document. */
+const PREFIXE_TYPE: Record<TypeRapport, string> = {
+  pppt: "PPPT",
+  ppt_adopte: "PPT_adopte",
+  tableau_ppt: "PPT",
+  dpe_collectif: "DPE",
+  pv_ag: "PV_AG",
+  autre: "Document",
+};
+
+/** Nom de copropriété en CamelCase sans accents ni séparateurs (Porte du Soleil → PorteDuSoleil). */
+export function coproEnNomFichier(nom: string): string {
+  return normaliser(nom)
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .map((m) => m[0].toUpperCase() + m.slice(1))
+    .join("");
+}
+
+/**
+ * Nom de fichier proposé quand un document change de copropriété : le fichier
+ * déposé porte presque toujours le nom de la copropriété (« PPT_LaPorteDuSoleil_2026.xlsx »),
+ * qui devient faux après correction. L'extension d'origine est conservée.
+ */
+export function nomPourCopro(nomActuel: string, copro: string, type: TypeRapport, annee: number | string | null): string {
+  const point = nomActuel.lastIndexOf(".");
+  const ext = point > 0 ? nomActuel.slice(point) : "";
+  const nom = coproEnNomFichier(copro);
+  const a = annee == null ? "" : String(annee).slice(0, 4);
+  return [PREFIXE_TYPE[type] ?? "Document", nom || "Copropriete", a].filter(Boolean).join("_") + ext;
+}
+
+/** Chemin de stockage d'un document : <organisation>/<copropriété>/<horodatage>-<nom>. */
+export function cheminDepot(organisationId: string, coproId: string, nomFichier: string, horodatage = Date.now()): string {
+  return `${organisationId}/${coproId}/${horodatage}-${nomFichier.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+}

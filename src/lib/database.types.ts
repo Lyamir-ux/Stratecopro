@@ -3851,6 +3851,16 @@ export type Database = {
         Args: { p_annee?: number | null; p_commentaire?: string | null; p_copro_id: string; p_libelle: string; p_montant?: number | null; p_priorite: string }
         Returns: string
       }
+      ppt_corriger_rapport: {
+        Args: {
+          p_copro_id: string
+          p_name?: string | null
+          p_rapport_id: string
+          p_storage_path?: string | null
+          p_type?: string | null
+        }
+        Returns: undefined
+      }
       ppt_decaler_postes: {
         Args: { p_decalages: Json }
         Returns: number

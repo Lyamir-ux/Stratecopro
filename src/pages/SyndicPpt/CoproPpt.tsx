@@ -44,6 +44,7 @@ import { anneeAffichee, decalagesEffectifs, plageAnnees, posteDeplacable } from 
 import { FONDS_TRAVAUX, TYPE_RAPPORT_LABEL } from "@/lib/ppt/referentiels";
 import { SyndicShell, Loader, AucuneCopro } from "@/pages/Syndic";
 import { AgForm } from "./AgForm";
+import { CorrigerDocument, type DocumentACorriger } from "./CorrigerDocument";
 import { PrioriteBadge, RenoBadge, SeveriteBadge, StatutPosteBadge, StatutRapportBadge, VerdictBadge, anneeCourante, fmtDateCourte, fmtEur, fmtPct, issueLabel, posteLite, type PrioriteCode } from "./commun";
 
 const TABS = [
@@ -787,6 +788,8 @@ function RemarquesTab({ c, postes }: { c: PptCoproAvecStats; postes: PptPoste[] 
 function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
   const { data: rapports } = usePptRapports([c.id]);
   const deposer = useDeposerPptRapport();
+  // correction d'un dépôt mal rattaché (mauvaise copropriété, type ou nom) - 0081
+  const [aCorriger, setACorriger] = useState<DocumentACorriger | null>(null);
   const [type, setType] = useState<TypeRapport>("dpe_collectif");
   const { data: orgParams } = usePptParametres(c.organisation_id);
   const [taux, setTaux] = useState("");
@@ -841,13 +844,18 @@ function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
               <span className="spacer"></span>
               {(r.type === "pppt" || r.type === "ppt_adopte") && <StatutRapportBadge statut={r.statut} />}
               {r.statut === "valide" && <VerdictBadge verdict={r.verdict} />}
+              {r.statut !== "valide" && (
+                <button className="icon-btn" title="Corriger : copropriété, type ou nom du fichier" onClick={() => setACorriger(r)}><Icon name="edit" size={17} /></button>
+              )}
               <button className="icon-btn" title="Télécharger" onClick={() => void telechargerPptRapport(r)}><Icon name="download" size={18} /></button>
             </div>
           ))
         )}
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
           Un nouveau PPPT (actualisation décennale, nouvelle version du rédacteur) se dépose ici : après validation il remplace le plan précédent, dont les postes et l'historique d'AG sont conservés.
+          Un document rangé sous la mauvaise copropriété se corrige avec le crayon : le fichier suit.
         </p>
+        {aCorriger && <CorrigerDocument rapport={aCorriger} onClose={() => setACorriger(null)} />}
       </div>
     </div>
   );

@@ -18,6 +18,7 @@ import { TYPES_DEPOT } from "@/lib/ppt/depot";
 import { aRevoir, filtrerRevue, requalifiable } from "@/lib/ppt/fileRevue";
 import { STATUT_RAPPORT_LABEL, TYPE_RAPPORT_LABEL } from "@/lib/ppt/referentiels";
 import { StatutRapportBadge, VerdictBadge, fmtDateCourte } from "@/pages/SyndicPpt/commun";
+import { CorrigerDocument, type DocumentACorriger } from "@/pages/SyndicPpt/CorrigerDocument";
 
 const STATUTS = ["depose", "a_relire", "valide", "rejete", "echec"] as const;
 
@@ -31,6 +32,8 @@ export default function FileRevue() {
   const [statut, setStatut] = useState<string>("a_traiter");
   const [enseigne, setEnseigne] = useState<string>("toutes");
   const [recherche, setRecherche] = useState("");
+  // correction d'un dépôt mal rattaché (copropriété, type, nom du fichier) - 0081
+  const [aCorriger, setACorriger] = useState<DocumentACorriger | null>(null);
 
   const tous = rapports ?? [];
   const analysables = tous.filter(aRevoir);
@@ -150,6 +153,9 @@ export default function FileRevue() {
                       <td><StatutRapportBadge statut={r.statut} /></td>
                       <td><VerdictBadge verdict={r.verdict} /></td>
                       <td style={{ whiteSpace: "nowrap" }}>
+                        {r.statut !== "valide" && (
+                          <button className="icon-btn" title="Corriger : copropriété, type ou nom du fichier" onClick={(e) => { e.stopPropagation(); setACorriger(r); }}><Icon name="edit" size={16} /></button>
+                        )}
                         <button className="icon-btn" title="Télécharger le document" onClick={(e) => { e.stopPropagation(); void telechargerPptRapport(r); }}><Icon name="download" size={16} /></button>
                         <button className="icon-btn" title={aRevoir(r) ? "Ouvrir la revue" : "Ouvrir la copropriété"}><Icon name="arrowRight" size={16} /></button>
                       </td>
@@ -186,6 +192,8 @@ export default function FileRevue() {
           )}
         </div>
       </div>
+
+      {aCorriger && <CorrigerDocument rapport={aCorriger} onClose={() => setACorriger(null)} />}
     </div>
   );
 }

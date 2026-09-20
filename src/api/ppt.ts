@@ -10,6 +10,7 @@ import type { Json, Tables } from "@/lib/database.types";
 import type { PpptVerifJson, PrioriteCode } from "@/lib/ppt/schema";
 import type { CorrectionJson } from "@/lib/ppt/import";
 import type { LigneImport } from "@/lib/ppt/importPortefeuille";
+import { cheminDepot } from "@/lib/ppt/depot";
 import { PARAMETRES_ORG_DEFAUT, type ParametresOrg } from "@/lib/ppt/formules";
 
 export type PptCopro = Tables<"ppt_coproprietes">;
@@ -372,8 +373,7 @@ export function useDeposerPptRapport() {
   return useMutation({
     mutationFn: async ({ copro, file, type, date_document, taux_honoraires_pct }: { copro: Pick<PptCopro, "id" | "organisation_id">; file: File; type: TypeRapport; date_document?: string | null; taux_honoraires_pct?: number | null }): Promise<PptRapport> => {
       const nom = nomFichierSansAccents(file.name);
-      const safe = nom.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `${copro.organisation_id}/${copro.id}/${Date.now()}-${safe}`;
+      const path = cheminDepot(copro.organisation_id, copro.id, nom);
       const { error: eUp } = await supabase.storage.from(BUCKET).upload(path, file);
       if (eUp) throw eUp;
       const { data: session } = await supabase.auth.getSession();
@@ -400,6 +400,50 @@ export function useRequalifierPptRapport() {
     mutationFn: async ({ rapportId, type }: { rapportId: string; type: TypeRapport }) => {
       const { error } = await supabase.from("ppt_rapports").update({ type }).eq("id", rapportId);
       if (error) throw error;
+    },
+    onSuccess: refresh,
+  });
+}
+
+/**
+ * Correction d'un document déposé (0081) : copropriété de rattachement, type et
+ * nom du fichier. Le chemin de stockage porte la copropriété et commande la
+ * lecture côté syndic : le fichier est déplacé dans le bucket avant la RPC, et
+ * remis en place si celle-ci refuse la correction.
+ */
+export function useCorrigerPptRapport() {
+  const refresh = useRefreshPpt();
+  return useMutation({
+    mutationFn: async ({
+      rapport,
+      copro,
+      name,
+      type,
+    }: {
+      rapport: Pick<PptRapport, "id" | "ppt_copro_id" | "storage_path" | "name" | "type">;
+      copro: Pick<PptCopro, "id" | "organisation_id">;
+      name: string;
+      type: TypeRapport;
+    }) => {
+      const nom = nomFichierSansAccents(name.trim() || rapport.name);
+      const bouge = copro.id !== rapport.ppt_copro_id || nom !== rapport.name;
+      const chemin = bouge ? cheminDepot(copro.organisation_id, copro.id, nom) : rapport.storage_path;
+      if (bouge) {
+        const { error } = await supabase.storage.from(BUCKET).move(rapport.storage_path, chemin);
+        if (error) throw error;
+      }
+      const { error } = await supabase.rpc("ppt_corriger_rapport", {
+        p_rapport_id: rapport.id,
+        p_copro_id: copro.id,
+        p_name: nom,
+        p_type: type,
+        p_storage_path: chemin,
+      });
+      if (error) {
+        // la base a refusé : le fichier retourne à sa place pour rester lisible
+        if (bouge) await supabase.storage.from(BUCKET).move(chemin, rapport.storage_path);
+        throw error;
+      }
     },
     onSuccess: refresh,
   });

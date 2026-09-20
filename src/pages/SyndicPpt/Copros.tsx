@@ -15,7 +15,7 @@ import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import { Badge, DpeChip } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
-import { TYPES_AVEC_HONORAIRES, useCreerPptCopro, useDeposerPptRapport, type PptCopro, type ResultatImportPortefeuille, type TypeRapport } from "@/api/ppt";
+import { TYPES_AVEC_HONORAIRES, useCreerPptCopro, useDeposerPptRapport, type PptCopro, type PptRapport, type ResultatImportPortefeuille, type TypeRapport } from "@/api/ppt";
 import { EVENEMENT_DEPOT, prendreTampon } from "@/lib/ppt/depotTampon";
 import type { DpeClass } from "@/lib/referentiels";
 import { telechargerCsv } from "@/lib/csv";
@@ -25,6 +25,7 @@ import { STATUT_RAPPORT_LABEL, TYPE_RAPPORT_LABEL } from "@/lib/ppt/referentiels
 import { TYPES_ANALYSES, TYPES_DEPOT, trouverCopro, typeDevine } from "@/lib/ppt/depot";
 import { estPortefeuille, lireClasseur, statutParc, type StatutParc } from "@/lib/ppt/importPortefeuille";
 import { STATUT_PARC_LABEL, StatutParcBadge, StatutRapportBadge, TITRE_VERROU, fmtDateCourte } from "./commun";
+import { CorrigerDocument, type DocumentACorriger } from "./CorrigerDocument";
 import { ImportPortefeuilleDialog } from "./ImportPortefeuille";
 import type { PortefeuillePpt } from "./index";
 
@@ -114,7 +115,7 @@ function FenetreDepot({
   /** Fichiers encore en attente derrière celui-ci. */
   reste: number;
   pf: PortefeuillePpt;
-  onFait: (copro: Pick<PptCopro, "id" | "nom">, type: TypeRapport, creee: boolean) => void;
+  onFait: (copro: Pick<PptCopro, "id" | "nom">, type: TypeRapport, creee: boolean, rapport: PptRapport) => void;
   onAnnuler: () => void;
 }) {
   const { profile, session } = useAuth();
@@ -153,8 +154,8 @@ function FenetreDepot({
         });
         creee = true;
       }
-      await deposer.mutateAsync({ copro, file: fichier, type, date_document: date || null, taux_honoraires_pct: avecHonoraires ? tauxNum : null });
-      onFait(copro, type, creee);
+      const rapport = await deposer.mutateAsync({ copro, file: fichier, type, date_document: date || null, taux_honoraires_pct: avecHonoraires ? tauxNum : null });
+      onFait(copro, type, creee, rapport);
     } catch (err) {
       setErreur(err instanceof Error ? err.message : "Le dépôt a échoué. Réessayez.");
     }
@@ -236,7 +237,9 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
   const [gest, setGest] = useState<string>(gestParam ?? "tous");
   // file de fichiers déposés : la fenêtre traite le premier, puis le suivant
   const [fichiers, setFichiers] = useState<File[]>([]);
-  const [confirmation, setConfirmation] = useState<{ copro: Pick<PptCopro, "id" | "nom">; type: TypeRapport; creee: boolean; acces: boolean } | null>(null);
+  const [confirmation, setConfirmation] = useState<{ copro: Pick<PptCopro, "id" | "nom">; type: TypeRapport; creee: boolean; acces: boolean; rapport: PptRapport } | null>(null);
+  // correction d'un dépôt qui vient d'être rangé sous la mauvaise copropriété (0081)
+  const [aCorriger, setACorriger] = useState<DocumentACorriger | null>(null);
   // import du portefeuille (0077) : fenêtre ouverte par le bouton ou par un tableau reconnu, bilan affiché ensuite
   const [importOuvert, setImportOuvert] = useState(false);
   const [fichierImport, setFichierImport] = useState<File | null>(null);
@@ -335,6 +338,9 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
             {confirmation.creee ? " (nouvelle copropriété)" : ""}.{" "}
             {TYPES_ANALYSES.includes(confirmation.type) ? "Strat Eco est prévenu et vous alertera par e-mail une fois l'analyse validée." : "Le document est rangé dans l'onglet Documents de la copropriété."}
           </div>
+          <button className="se-btn se-btn-ghost btn-sm" title="Mauvaise copropriété, mauvais type ou nom de fichier à revoir" onClick={() => setACorriger(confirmation.rapport)}>
+            <Icon name="edit" size={14} /> Corriger
+          </button>
           {confirmation.acces && (
             <button className="se-btn se-btn-secondary btn-sm" onClick={() => navigate(`/syndic/ppt/copros/${confirmation.copro.id}`)}>
               Ouvrir <Icon name="arrowRight" size={14} />
@@ -346,16 +352,26 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
         </div>
       )}
 
+      {aCorriger && (
+        <CorrigerDocument
+          rapport={aCorriger}
+          onClose={(corrige) => {
+            setACorriger(null);
+            if (corrige) setConfirmation(null);
+          }}
+        />
+      )}
+
       {fichiers[0] && (
         <FenetreDepot
           key={`${fichiers[0].name}-${fichiers[0].size}-${fichiers.length}`}
           fichier={fichiers[0]}
           reste={fichiers.length - 1}
           pf={pf}
-          onFait={(copro, type, creee) => {
+          onFait={(copro, type, creee, rapport) => {
             // accès : copro connue et ouvrable, ou créée par le déposant lui-même
             const connue = pf.copros.find((c) => c.id === copro.id);
-            setConfirmation({ copro, type, creee, acces: creee || !!connue?.acces });
+            setConfirmation({ copro, type, creee, acces: creee || !!connue?.acces, rapport });
             setFichiers((q) => q.slice(1));
           }}
           onAnnuler={() => setFichiers((q) => q.slice(1))}
