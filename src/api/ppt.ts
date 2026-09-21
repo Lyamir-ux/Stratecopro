@@ -564,6 +564,23 @@ export function useValiderRapport() {
   });
 }
 
+/**
+ * Retour en mode vérification d'un rapport validé (dirigeant) - RPC 0084.
+ * Défait la validation : postes et remarques retirés, version précédente
+ * réactivée, rapport remis « à relire ». Refusé si le syndic a déjà travaillé
+ * les postes (vote, montant, commentaire).
+ */
+export function useDevaliderRapport() {
+  const refresh = useRefreshPpt();
+  return useMutation({
+    mutationFn: async ({ rapportId, motif }: { rapportId: string; motif?: string | null }) => {
+      const { error } = await supabase.rpc("ppt_devalider_rapport", { p_rapport_id: rapportId, p_motif: motif ?? null });
+      if (error) throw error;
+    },
+    onSuccess: refresh,
+  });
+}
+
 export function useRejeterRapport() {
   const refresh = useRefreshPpt();
   return useMutation({

@@ -988,6 +988,7 @@ const JOURNAL_LABEL: Record<string, string> = {
   depot: "Document déposé",
   analyse_importee: "Analyse importée par Strat Eco",
   validation: "Rapport validé",
+  devalidation: "Rapport revenu en vérification",
   rejet: "Rapport rejeté",
   ag_saisie: "Assemblée générale saisie",
   resolution: "Résolution enregistrée",
@@ -1012,6 +1013,7 @@ function HistoriqueTab({ c }: { c: PptCoproAvecStats }) {
     if (type === "resolution") return `${issueLabel(String(d.issue))}${d.article ? ` (art. ${d.article})` : ""}${d.montant ? ` - ${fmtEur(Number(d.montant))}` : ""}`;
     if (type === "changement_gestionnaire") return d.email ? `${d.nom ?? ""} ${d.email ? `<${d.email}>` : ""}${d.compte ? "" : " - aucun compte à cet e-mail"}` : "gestionnaire retiré";
     if (type === "validation") return `${d.postes ?? 0} postes`;
+    if (type === "devalidation") return `${d.postes ?? 0} postes retirés${d.motif ? ` - ${d.motif}` : ""}`;
     if (type === "rejet") return String(d.motif ?? "");
     if (type === "analyse_importee") return `verdict ${String(d.verdict ?? "-")}`;
     if (type === "ag_saisie") return `AG ${d.type} du ${fmtDateCourte(String(d.date_ag))}`;

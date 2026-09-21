@@ -3889,6 +3889,10 @@ export type Database = {
         Args: { p_levees?: Json; p_rapport_id: string }
         Returns: undefined
       }
+      ppt_devalider_rapport: {
+        Args: { p_motif?: string | null; p_rapport_id: string }
+        Returns: undefined
+      }
       rattacher_lot: {
         // retouche manuelle à préserver : p_cible_id a un défaut SQL (null)
         // que le générateur ne voit pas

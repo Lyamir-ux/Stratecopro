@@ -21,6 +21,7 @@ import {
   usePptCorrections,
   usePptRapport,
   usePptTraitements,
+  useDevaliderRapport,
   useRejeterRapport,
   useValiderRapport,
 } from "@/api/ppt";
@@ -92,6 +93,7 @@ export default function Revue() {
   const enregistrer = useEnregistrerRevue();
   const valider = useValiderRapport();
   const rejeter = useRejeterRapport();
+  const devalider = useDevaliderRapport();
   useCrumbs([{ label: "Suivi PPT", to: "/ppt" }, { label: rapport?.copro?.nom ?? "Revue" }]);
 
   const [depuis] = useState(() => Date.now());
@@ -104,6 +106,7 @@ export default function Revue() {
   const [motifRejet, setMotifRejet] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [erreurDecision, setErreurDecision] = useState<string | null>(null);
+  const [erreurRetour, setErreurRetour] = useState<string | null>(null);
 
   // le JSON de travail suit l'analyse chargée (import ou enregistrement)
   useEffect(() => {
@@ -186,6 +189,26 @@ export default function Revue() {
     setMessage(`Revue enregistrée${diff.length ? ` - ${diff.length} correction${diff.length > 1 ? "s" : ""} journalisée${diff.length > 1 ? "s" : ""}` : ""}.`);
   };
 
+  // Retour en mode vérification d'un rapport validé : la validation est défaite
+  // (postes et remarques retirés du syndic), la revue reprend sur l'analyse déjà
+  // importée. Refusé par la base si le syndic a travaillé les postes.
+  const revenirEnVerification = async () => {
+    setErreurRetour(null);
+    const avertissement = [
+      "Revenir au mode vérification ?",
+      "",
+      "Le plan et les remarques publiés au cabinet sont retirés jusqu'à la prochaine validation, et le rapport repasse « À relire ».",
+      "L'analyse importée et vos corrections sont conservées : la revue reprend où elle en était.",
+    ].join("\n");
+    if (!window.confirm(avertissement)) return;
+    try {
+      await devalider.mutateAsync({ rapportId: id!, motif: null });
+      setMessage("Rapport revenu en vérification : la revue est de nouveau modifiable, le cabinet ne voit plus le plan.");
+    } catch (e) {
+      setErreurRetour(e instanceof Error ? e.message : "Retour en vérification refusé.");
+    }
+  };
+
   const validerRapport = async () => {
     setErreurDecision(null);
     if (!jsonComplet) return;
@@ -223,6 +246,12 @@ export default function Revue() {
             <Icon name="download" size={14} />
             PDF
           </button>
+          {dirigeant && rapport.statut === "valide" && (
+            <button className="se-btn se-btn-secondary btn-sm" disabled={devalider.isPending} title="Défaire la validation et rouvrir la revue : le cabinet ne voit plus le plan tant qu'il n'est pas revalidé" onClick={() => void revenirEnVerification()}>
+              <Icon name="refresh" size={14} />
+              {devalider.isPending ? "Retour…" : "Revenir au mode vérification"}
+            </button>
+          )}
           {revueActive && (
             <label className="se-btn se-btn-primary btn-sm" style={{ cursor: "pointer" }}>
               <Icon name="upload" size={14} />
@@ -246,6 +275,11 @@ export default function Revue() {
         </div>
       )}
       {avertissements.length > 0 && <p className="se-small" style={{ color: "var(--color-warning-700)", marginTop: 0 }}>{avertissements.join(" ")}</p>}
+      {erreurRetour && (
+        <div className="panel" style={{ padding: "12px 16px", marginBottom: 16, background: "var(--color-error-50)", color: "var(--color-error-700)" }}>
+          <b>Retour en vérification refusé</b> - {erreurRetour}
+        </div>
+      )}
       {message && <p className="se-small" style={{ padding: "8px 12px", borderRadius: "var(--radius-md)", background: "var(--bg-soft)", border: "1px solid var(--border)" }}>{message}</p>}
 
       {!analyse || !json || !jsonComplet ? (
