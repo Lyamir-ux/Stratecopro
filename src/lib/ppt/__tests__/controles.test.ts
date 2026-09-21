@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EXEMPLE } from "./exemple";
 import { bloquantsRestants, compterSeverites, controlesPlateforme } from "../controles";
 import { cloner } from "../import";
+import { cleControle } from "../schema";
 import type { PpptVerifJson } from "../schema";
 
 const AUJOURDHUI = new Date("2026-09-20");
@@ -117,12 +118,20 @@ describe("contrôles déterministes de la plateforme", () => {
     expect(r.some((c) => c.code === "C09" && c.poste_code === "T04")).toBe(true);
   });
 
-  it("C04 : ordre de grandeur - ascenseur à 300 k€ → bloquant (× 5)", () => {
+  it("C04 : ordre de grandeur - ascenseur à 300 k€ → majeur (× 5), jamais bloquant", () => {
     const j = cloner(EXEMPLE);
     j.travaux_source.push({ ...j.travaux_source[6], id: "T10", libelle_source: "Remplacement ascenseur", ouvrage: "Ascenseur", cout_source_eur: 300000 });
     j.travaux_normalises.push({ ...j.travaux_normalises[6], id: "T10", libelle: "Ascenseur / Remplacement", ouvrage: "Ascenseur", priorite: "Préservation", cout_ht_base_eur: 300000, avec_moe: true });
     const r = controlesPlateforme(j, {}, AUJOURDHUI).find((c) => c.code === "C04" && c.poste_code === "T10");
-    expect(r?.severite).toBe("BLOQUANT");
+    expect(r?.severite).toBe("MAJEUR"); // vraisemblance, pas manquement : ne bloque pas la validation
+    expect(r?.constat).toContain("× 5");
+  });
+
+  it("C04 : « hors ITE » ne rapproche pas le poste de la fourchette ITE", () => {
+    const j = cloner(EXEMPLE);
+    j.travaux_source.push({ ...j.travaux_source[0], id: "T11", libelle_source: "Reprises en façades hors ITE", ouvrage: "Façades", cout_source_eur: 12000 });
+    j.travaux_normalises.push({ ...j.travaux_normalises[0], id: "T11", libelle: "Façades / Reprises ponctuelles hors ITE", ouvrage: "Façades", cout_ht_base_eur: 12000 });
+    expect(controlesPlateforme(j, {}, AUJOURDHUI).some((c) => c.code === "C04" && c.poste_code === "T11")).toBe(false);
   });
 
   it("R06 / R08 : plan sans préservation ou sans énergie", () => {
@@ -147,6 +156,14 @@ describe("contrôles déterministes de la plateforme", () => {
     const json = { ...EXEMPLE, remarques_plateforme: remarques };
     expect(bloquantsRestants(json).map((c) => c.code).sort()).toEqual(["C01", "R10"]);
     expect(bloquantsRestants(json, ["C01", "R10"])).toHaveLength(0);
+  });
+
+  it("deux bloquants de même code se lèvent un par un", () => {
+    const jumeau = (poste: string) => ({ ...remarques.find((c) => c.code === "C01")!, poste_code: poste, libelle: "Ordre de grandeur - ITE", code: "C04" });
+    const json = { ...EXEMPLE, controles: [], remarques_plateforme: [jumeau("T01"), jumeau("T02")] };
+    expect(bloquantsRestants(json)).toHaveLength(2);
+    expect(bloquantsRestants(json, [cleControle(jumeau("T01"))]).map((c) => c.poste_code)).toEqual(["T02"]);
+    expect(bloquantsRestants(json, [cleControle(jumeau("T01")), cleControle(jumeau("T02"))])).toHaveLength(0);
   });
 
   it("compte les sévérités des seuls contrôles non conformes ou partiels", () => {

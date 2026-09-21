@@ -7,7 +7,7 @@
 // qu'il a payé (argument commercial du brief). Fonctions pures, testées.
 
 import type { Controle, PpptVerifJson, SeveriteControle, StatutControle, TravailNormalise, TravailSource } from "./schema";
-import { codePriorite } from "./schema";
+import { cleControle, codePriorite } from "./schema";
 import {
   CHARGE_ANNUELLE_MAX_PAR_LOGEMENT,
   ENCHAINEMENTS,
@@ -288,17 +288,31 @@ export function controlesPlateforme(json: PpptVerifJson, fiche: FicheCopro = {},
   }
 
   // ---------- F. Ordres de grandeur ----------
+  // Rapprochement par mots-clés d'une fourchette de plein exercice : c'est une
+  // alerte de vraisemblance, jamais un manquement réglementaire, donc jamais
+  // BLOQUANT (un poste en tranches ou une reprise ponctuelle sort légitimement
+  // de la fourchette).
   for (const t of normalises) {
     if (!t.cout_ht_base_eur) continue;
-    const f = FOURCHETTES_COUT.find((x) => contientUn(texte(t), x.mots));
+    const f = FOURCHETTES_COUT.find((x) => contientUn(texte(t), x.mots, { horsNegation: true }));
     if (!f) continue;
     const denominateur = f.unite === "appareil" ? 1 : nbLogements;
     const unite = f.unite === "appareil" ? "par appareil" : "par logement";
     if (!denominateur) continue;
     const ratio = t.cout_ht_base_eur / denominateur;
-    const facteur = ratio < f.min ? f.min / ratio : ratio > f.max ? ratio / f.max : 1;
-    if (facteur >= 2)
-      out.push(rem("C04", `Ordre de grandeur - ${f.libelle}`, facteur >= 4 ? "BLOQUANT" : "MAJEUR", `« ${t.libelle} » : ${fmt(ratio)} ${unite}, fourchette usuelle ${fmt(f.min)} à ${fmt(f.max)}.`, { poste_code: t.id, attendu: `${fmt(f.min)} à ${fmt(f.max)} ${unite}`, observe: fmt(ratio), action: "Montant à confirmer par devis ; vérifier l'unité et le périmètre du poste." }));
+    const sousFourchette = ratio < f.min;
+    const facteur = sousFourchette ? f.min / ratio : ratio > f.max ? ratio / f.max : 1;
+    if (facteur < 2) continue;
+    out.push(
+      rem("C04", `Ordre de grandeur - ${f.libelle}`, facteur >= 4 ? "MAJEUR" : "MINEUR", `« ${t.libelle} » : ${fmt(ratio)} ${unite}, fourchette usuelle ${fmt(f.min)} à ${fmt(f.max)} (écart × ${Math.round(facteur * 10) / 10}).`, {
+        poste_code: t.id,
+        attendu: `${fmt(f.min)} à ${fmt(f.max)} ${unite}`,
+        observe: fmt(ratio),
+        action: sousFourchette
+          ? "Vérifier le périmètre : tranche, reprise ponctuelle ou poste partiel plutôt qu'une opération complète ; sinon confirmer par devis."
+          : "Montant à confirmer par devis ; vérifier l'unité et le périmètre du poste.",
+      })
+    );
   }
 
   // ---------- G. TVA et base ----------
@@ -382,10 +396,15 @@ export function controlesPlateforme(json: PpptVerifJson, fiche: FicheCopro = {},
   return out;
 }
 
-/** Bloquants non conformes restant (grille du skill + plateforme), hors codes levés. */
+/**
+ * Bloquants non conformes restant (grille du skill + plateforme), hors remarques
+ * levées. Une levée est une clé `cleControle` : un même code (C04, P20) peut
+ * porter sur plusieurs postes et chacun se lève séparément. Les levées reçues
+ * sous forme de code nu (anciens enregistrements) restent honorées.
+ */
 export function bloquantsRestants(json: PpptVerifJson, leves: string[] = []): Controle[] {
   return [...(json.controles ?? []), ...(json.remarques_plateforme ?? [])].filter(
-    (c) => c.severite === "BLOQUANT" && c.statut === "NON_CONFORME" && !leves.includes(c.code)
+    (c) => c.severite === "BLOQUANT" && c.statut === "NON_CONFORME" && !leves.includes(cleControle(c)) && !leves.includes(c.code)
   );
 }
 

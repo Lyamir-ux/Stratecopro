@@ -545,10 +545,17 @@ export function useEnregistrerRevue() {
   });
 }
 
+/** Levée d'un bloquant : la remarque précise, pas seulement son code (C04 et P20 se répètent par poste). */
+export interface LeveeBloquant {
+  code: string;
+  poste_code: string | null;
+  libelle: string;
+}
+
 export function useValiderRapport() {
   const refresh = useRefreshPpt();
   return useMutation({
-    mutationFn: async ({ rapportId, levees }: { rapportId: string; levees: string[] }) => {
+    mutationFn: async ({ rapportId, levees }: { rapportId: string; levees: LeveeBloquant[] }) => {
       const { error } = await supabase.rpc("ppt_valider_rapport", { p_rapport_id: rapportId, p_levees: levees as unknown as Json });
       if (error) throw error;
       void notifierPpt("valide", rapportId);

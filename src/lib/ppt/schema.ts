@@ -230,3 +230,8 @@ export const PRIORITE_LABEL: Record<PrioriteCode, string> = {
   securite: "Sécurité",
   sante: "Santé",
 };
+
+/** Clé d'un contrôle : un code peut se répéter (un par poste), jamais le triplet. */
+export function cleControle(c: { code: string; poste_code?: string | null; libelle?: string | null }): string {
+  return `${c.code}|${c.poste_code ?? ""}|${c.libelle ?? ""}`;
+}

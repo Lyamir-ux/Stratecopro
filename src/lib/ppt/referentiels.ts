@@ -162,8 +162,24 @@ export function normaliser(s: string | null | undefined): string {
 
 const echapper = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Vrai si le texte contient l'un des mots-clés, en mots entiers (accents et casse ignorés). */
-export function contientUn(texte: string, mots: string[]): boolean {
+/** Mots qui excluent le mot-clé qui les suit : « reprises en façades hors ITE ». */
+const NEGATIONS = ["hors", "sans", "non compris", "exclu", "exclus", "exclue", "exclues", "hormis"];
+
+/**
+ * Vrai si le texte contient l'un des mots-clés, en mots entiers (accents et
+ * casse ignorés). Avec `horsNegation`, une occurrence précédée d'une négation
+ * (« hors ITE », « sans ravalement ») ne compte pas.
+ */
+export function contientUn(texte: string, mots: string[], options: { horsNegation?: boolean } = {}): boolean {
   const t = normaliser(texte);
-  return mots.some((m) => new RegExp(`(^|[^a-z0-9])${echapper(normaliser(m))}([^a-z0-9]|$)`).test(t));
+  return mots.some((m) => {
+    const mot = echapper(normaliser(m));
+    const re = new RegExp(`(^|[^a-z0-9])${mot}([^a-z0-9]|$)`, "g");
+    for (const trouve of t.matchAll(re)) {
+      if (!options.horsNegation) return true;
+      const avant = t.slice(0, trouve.index + trouve[1].length);
+      if (!NEGATIONS.some((n) => new RegExp(`(^|[^a-z0-9])${echapper(n)}[^a-z0-9]+$`).test(avant))) return true;
+    }
+    return false;
+  });
 }

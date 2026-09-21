@@ -103,6 +103,7 @@ export default function Revue() {
   const [motifLevee, setMotifLevee] = useState("");
   const [motifRejet, setMotifRejet] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [erreurDecision, setErreurDecision] = useState<string | null>(null);
 
   // le JSON de travail suit l'analyse chargée (import ou enregistrement)
   useEffect(() => {
@@ -123,6 +124,8 @@ export default function Revue() {
   const jsonComplet = useMemo(() => (json ? { ...json, remarques_plateforme: remarquesPlateforme } : null), [json, remarquesPlateforme]);
   const bloquants = jsonComplet ? bloquantsRestants(jsonComplet) : [];
   const bloquantsRestant = jsonComplet ? bloquantsRestants(jsonComplet, leves) : [];
+  // une levée porte sur une remarque précise : un même code (C04, P20) peut viser plusieurs postes
+  const levees = bloquants.filter((b) => leves.includes(cleRemarque(b))).map((b) => ({ code: b.code, poste_code: b.poste_code ?? null, libelle: b.libelle }));
   const severites = jsonComplet ? compterSeverites([...jsonComplet.controles, ...remarquesPlateforme]) : null;
   const dirty = !!json && !!base && JSON.stringify(jsonComplet) !== JSON.stringify({ ...base, remarques_plateforme: base.remarques_plateforme ?? remarquesPlateforme });
   const params = json ? parametresDepuisJson(json.parametres_ppt) : null;
@@ -184,16 +187,21 @@ export default function Revue() {
   };
 
   const validerRapport = async () => {
+    setErreurDecision(null);
     if (!jsonComplet) return;
-    if (bloquantsRestant.length) return;
+    // aucun abandon silencieux : le bouton reste actif et dit ce qui manque
+    if (bloquantsRestant.length) {
+      setErreurDecision(`Validation impossible : ${bloquantsRestant.length} contrôle${bloquantsRestant.length > 1 ? "s" : ""} bloquant${bloquantsRestant.length > 1 ? "s" : ""} non levé${bloquantsRestant.length > 1 ? "s" : ""} (${[...new Set(bloquantsRestant.map((b) => b.code))].join(", ")}). Corrigez le contrôle dans le panneau « Contrôles » ou cochez-le ci-contre pour le lever avec un motif.`);
+      return;
+    }
     if (leves.length && !motifLevee.trim()) {
-      setMessage("Indiquez le motif de levée des bloquants.");
+      setErreurDecision("Indiquez le motif de levée des bloquants : il est journalisé et le syndic voit la remarque comme traitée.");
       return;
     }
     const diff = base ? diffJson(base, jsonComplet) : [];
     if (leves.length) diff.push({ chemin_json: "levee_bloquants", poste_code: null, valeur_avant: leves, valeur_apres: null, motif: motifLevee.trim() });
     await enregistrer.mutateAsync({ rapportId: id!, json: jsonComplet, corrections: diff });
-    await valider.mutateAsync({ rapportId: id!, levees: leves });
+    await valider.mutateAsync({ rapportId: id!, levees });
     navigate("/ppt");
   };
 
@@ -389,12 +397,12 @@ export default function Revue() {
                     <>
                       <div className="se-eyebrow" style={{ color: "var(--color-error-700)", marginBottom: 6 }}>{bloquants.length} contrôle{bloquants.length > 1 ? "s" : ""} bloquant{bloquants.length > 1 ? "s" : ""} non conforme{bloquants.length > 1 ? "s" : ""}</div>
                       {bloquants.map((b) => (
-                        <label key={b.code + (b.poste_code ?? "")} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "3px 0" }}>
-                          <input type="checkbox" checked={leves.includes(b.code)} onChange={(e) => setLeves((l) => (e.target.checked ? [...new Set([...l, b.code])] : l.filter((x) => x !== b.code)))} />
-                          <Badge kind="neutral">{b.code}</Badge> {b.libelle} <span style={{ color: "var(--fg-muted)" }}>- lever (le syndic verra la remarque comme traitée)</span>
+                        <label key={cleRemarque(b)} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "3px 0" }}>
+                          <input type="checkbox" checked={leves.includes(cleRemarque(b))} onChange={(e) => { setErreurDecision(null); const cle = cleRemarque(b); setLeves((l) => (e.target.checked ? [...new Set([...l, cle])] : l.filter((x) => x !== cle))); }} />
+                          <Badge kind="neutral">{b.code}</Badge> {b.libelle}{b.poste_code ? <span style={{ color: "var(--fg-muted)" }}> ({b.poste_code})</span> : null} <span style={{ color: "var(--fg-muted)" }}>- lever (le syndic verra la remarque comme traitée)</span>
                         </label>
                       ))}
-                      {leves.length > 0 && <input className="edit-inp" style={{ maxWidth: "none", marginTop: 8 }} placeholder="Motif de la levée (obligatoire, journalisé)" value={motifLevee} onChange={(e) => setMotifLevee(e.target.value)} />}
+                      {leves.length > 0 && <input className="edit-inp" style={{ maxWidth: "none", marginTop: 8 }} placeholder="Motif de la levée (obligatoire, journalisé)" value={motifLevee} onChange={(e) => { setErreurDecision(null); setMotifLevee(e.target.value); }} />}
                     </>
                   ) : (
                     <div className="se-eyebrow" style={{ color: "var(--color-primary-700)" }}>Aucun bloquant : le rapport peut être validé</div>
@@ -406,7 +414,7 @@ export default function Revue() {
                       <Icon name="check" size={14} />
                       {enregistrer.isPending ? "Enregistrement…" : dirty ? "Enregistrer la revue" : "Revue enregistrée"}
                     </button>
-                    <button className="se-btn se-btn-primary btn-sm" disabled={bloquantsRestant.length > 0 || valider.isPending || enregistrer.isPending} title={bloquantsRestant.length ? "Levez ou corrigez les bloquants" : "Matérialise postes et remarques pour le cabinet"} onClick={() => void validerRapport()}>
+                    <button className="se-btn se-btn-primary btn-sm" disabled={valider.isPending || enregistrer.isPending} title={bloquantsRestant.length ? "Levez ou corrigez les bloquants" : "Matérialise postes et remarques pour le cabinet"} onClick={() => void validerRapport()}>
                       <Icon name="checkCircle" size={14} />
                       {valider.isPending ? "Validation…" : `Valider${bloquantsRestant.length ? ` - ${bloquantsRestant.length} à lever` : ""}`}
                     </button>
@@ -418,6 +426,9 @@ export default function Revue() {
                       Rejeter
                     </button>
                   </div>
+                  {erreurDecision && (
+                    <p className="se-small" style={{ color: "var(--color-error-700)", margin: 0, maxWidth: 420, textAlign: "right" }}>{erreurDecision}</p>
+                  )}
                   {(valider.isError || enregistrer.isError || rejeter.isError) && (
                     <p className="se-small" style={{ color: "var(--color-error-700)", margin: 0 }}>{String(((valider.error ?? enregistrer.error ?? rejeter.error) as Error)?.message)}</p>
                   )}

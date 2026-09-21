@@ -3,6 +3,7 @@
 // corrections (diff entre deux états du JSON de travail).
 
 import type { Controle, PpptVerifJson, TravailNormalise } from "./schema";
+import { cleControle } from "./schema";
 
 export interface ResultatValidation {
   ok: boolean;
@@ -132,7 +133,7 @@ export function diffJson(avant: PpptVerifJson, apres: PpptVerifJson, motif: stri
 
 /** Une remarque plateforme n'a pas d'identifiant unique : code + poste + libellé. */
 export function cleRemarque(c: Controle): string {
-  return `${c.code}|${c.poste_code ?? ""}|${c.libelle}`;
+  return cleControle(c);
 }
 
 /** Copie profonde d'un JSON de travail (édition immuable côté revue). */
