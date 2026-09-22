@@ -890,6 +890,7 @@ export type Database = {
           banque: string
           copro_id: string
           duree_annees: number
+          lien_adhesion: string | null
           updated_at: string
         }
         Insert: {
@@ -897,6 +898,7 @@ export type Database = {
           banque?: string
           copro_id: string
           duree_annees?: number
+          lien_adhesion?: string | null
           updated_at?: string
         }
         Update: {
@@ -904,6 +906,7 @@ export type Database = {
           banque?: string
           copro_id?: string
           duree_annees?: number
+          lien_adhesion?: string | null
           updated_at?: string
         }
         Relationships: [

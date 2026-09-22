@@ -9,6 +9,12 @@ export type AdhesionAvecNom = Tables<"adhesions_pret"> & { coproprietaire: { nom
 
 export const BANQUES = ["CEGEE", "DOMOFINANCE"] as const;
 
+/** Le lien de souscription de la banque est ouvert depuis le portail : https seul,
+ *  comme la contrainte de la table (migration 0086). */
+export function lienAdhesionValide(url: string): boolean {
+  return /^https:\/\/\S+$/i.test(url.trim());
+}
+
 export function useFinancementConfigAmo(coproId: string | undefined) {
   return useQuery({
     queryKey: ["fin-config", coproId],
@@ -28,13 +34,19 @@ export function useFinancementConfigAmo(coproId: string | undefined) {
 export function useSaveFinancementConfig(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { banque: string; dureeAnnees: number; adhesionOuverte: boolean }) => {
+    mutationFn: async (input: {
+      banque: string;
+      dureeAnnees: number;
+      adhesionOuverte: boolean;
+      lienAdhesion: string | null;
+    }) => {
       const { error } = await supabase.from("copro_financement_config").upsert(
         {
           copro_id: coproId,
           banque: input.banque,
           duree_annees: input.dureeAnnees,
           adhesion_ouverte: input.adhesionOuverte,
+          lien_adhesion: input.lienAdhesion,
         },
         { onConflict: "copro_id" }
       );

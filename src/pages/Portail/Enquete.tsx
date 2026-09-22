@@ -1,9 +1,15 @@
 // Enquête sociale & technique côté portail : le questionnaire configuré par
 // l'AMO (catalogue + on/off) est rendu dynamiquement - questions « vous »
-// (copropriétaire) puis une section par lot. Les conditions d'affichage
-// s'appliquent en direct pendant la saisie. Les réponses vivent dans
+// (copropriétaire) puis une section par lot d'habitation. Les conditions
+// d'affichage s'appliquent en direct pendant la saisie. Les réponses vivent dans
 // enquete_reponses.reponses (jsonb) ; foyer / occupation / RFR alimentent
 // aussi les colonnes historiques pour le calcul du profil MaPrimeRénov'.
+//
+// Lots secondaires (garage, cave, commerce…) : aucune question n'est posée
+// (feedback Amir 22/09/2026) - le parcours ne porte que sur les logements, et le
+// rattachement d'un lot annexe à un lot d'habitation se fait sur « Mes
+// quotes-parts ». L'avis d'imposition, seule pièce encore attendue, se dépose
+// ici même, sous les plafonds de l'Anah (l'onglet « Mes documents » a disparu).
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
@@ -24,6 +30,7 @@ import {
   type Membership,
   type PortalLot,
 } from "@/api/portail";
+import { DepotAvisImposition } from "./Documents";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Json } from "@/lib/database.types";
 
@@ -281,9 +288,16 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
   const getCopro = (qid: string) => rep?.copro[qid];
   const getLot = (lot: PortalLot) => (qid: string) => rep?.lots[lot.id]?.[qid] ?? rep?.copro[qid];
 
+  // Seuls les logements sont enquêtés : sur un garage, une cave ou un commerce,
+  // les questions d'occupation, de menuiseries ou de chauffage n'ont pas de sens
+  // et alourdissaient le parcours (feedback Amir 22/09/2026). Les réponses déjà
+  // enregistrées sur ces lots sont conservées telles quelles à l'enregistrement.
+  const lotsEnquetes = membership.lots.filter((l) => l.usage === "habitation");
+  const lotsSecondaires = membership.lots.length - lotsEnquetes.length;
+
   const visiblesCopro = rep ? coproQs.filter((q) => isVisible(q, getCopro)) : [];
   const visiblesParLot = rep
-    ? membership.lots.map((lot) => ({ lot, qs: lotQs.filter((q) => isVisible(q, getLot(lot))) }))
+    ? lotsEnquetes.map((lot) => ({ lot, qs: lotQs.filter((q) => isVisible(q, getLot(lot))) }))
     : [];
 
   const allVisible = [
@@ -446,11 +460,18 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
         {enquete && rep && allVisible.length > 0 ? (
           <>
             Ces <b>{allVisible.length} questions</b>
-            {membership.lots.length > 1 ? ` (dont ${visiblesParLot.reduce((n, x) => n + x.qs.length, 0)} sur vos ${membership.lots.length} lots)` : ""}{" "}
+            {lotsEnquetes.length > 1 ? ` (dont ${visiblesParLot.reduce((n, x) => n + x.qs.length, 0)} sur vos ${lotsEnquetes.length} logements)` : ""}{" "}
             permettent de vérifier votre éligibilité aux aides de l'Anah et de calculer votre aide individuelle
             MaPrimeRénov'. Comptez <b>{dureeEstimee(allVisible.length)} minutes</b>. Vos réponses
             sont confidentielles : seule l'équipe Strat Eco les consulte, pour préparer le projet (profil
             d'aides, état des logements, organisation des visites).
+            {lotsSecondaires > 0 && (
+              <>
+                {" "}
+                Aucune question n'est posée sur {lotsSecondaires > 1 ? "vos " + lotsSecondaires + " lots secondaires" : "votre lot secondaire"}{" "}
+                (garage, cave, commerce…).
+              </>
+            )}
           </>
         ) : (
           <>
@@ -461,10 +482,17 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
       </p>
 
       {!isLoading && !enquete && (
-        <div className="cc-next" style={{ marginBottom: 20 }}>
-          <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
-          <span>L'enquête n'a pas encore été ouverte par votre AMO pour cette copropriété.</span>
-        </div>
+        <>
+          <div className="cc-next" style={{ marginBottom: 20 }}>
+            <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
+            <span>L'enquête n'a pas encore été ouverte par votre AMO pour cette copropriété.</span>
+          </div>
+          {/* Le dépôt de l'avis reste ouvert même sans questionnaire : c'est la
+              seule pièce attendue, et elle n'a plus d'autre page où vivre. */}
+          <div style={{ maxWidth: 560 }}>
+            <DepotAvisImposition membership={membership} />
+          </div>
+        </>
       )}
 
       {enquete && rep && (
@@ -648,7 +676,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                     {bareme?.zone === "hors_idf" ? " (hors Île-de-France)" : bareme?.zone === "idf" ? " (Île-de-France)" : ""}.
                     {profilStatut === "verifie"
                       ? " Votre AMO l'a vérifiée sur votre avis d'imposition."
-                      : " Elle repose sur vos déclarations : votre AMO la vérifiera sur votre avis d'imposition (Mes documents)."}{" "}
+                      : " Elle repose sur vos déclarations : votre AMO la vérifiera sur l'avis d'imposition déposé ci-dessous."}{" "}
                     Votre plan de financement individuel utilise ce profil.
                   </p>
                 </div>
@@ -699,6 +727,10 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                 </div>
               )
             )}
+
+            {/* Sous les plafonds de l'Anah : le dépôt de l'avis d'imposition, seule
+                pièce encore attendue du copropriétaire (feedback Amir 22/09/2026). */}
+            <DepotAvisImposition membership={membership} />
 
             <div className="cc-next">
               <Icon name="checkCircle" size={15} className="ico" />

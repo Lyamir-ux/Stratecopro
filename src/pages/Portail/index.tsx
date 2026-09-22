@@ -13,7 +13,6 @@ import {
   useMonChoix,
   useMonPlan,
   useMesPieces,
-  PIECES,
   profilMetaDepuisReponse,
   type Membership,
   type Scenario,
@@ -24,18 +23,19 @@ import { Accueil } from "./Accueil";
 import { QuotesParts } from "./QuotesParts";
 import { Enquete } from "./Enquete";
 import { Financement } from "./Financement";
-import { Documents } from "./Documents";
 import { PlanCopro } from "./PlanCopro";
 import { Faq } from "./Faq";
 
-export type SectionId = "accueil" | "plan-indiv" | "enquete" | "pret" | "documents" | "plan-copro" | "faq";
+// « Mes documents » a été retiré (feedback Amir 22/09/2026) : le seul document
+// encore attendu du copropriétaire est son avis d'imposition, qui se dépose dans
+// l'enquête sociale ; les documents partagés par l'AMO sont sur l'accueil.
+export type SectionId = "accueil" | "plan-indiv" | "enquete" | "pret" | "plan-copro" | "faq";
 
 const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
   { id: "accueil", label: "Accueil", icon: "home" },
   { id: "plan-indiv", label: "Mes quotes-parts", icon: "euro" },
   { id: "enquete", label: "Enquête sociale", icon: "clipboard" },
   { id: "pret", label: "Mon financement", icon: "trendingUp" },
-  { id: "documents", label: "Mes documents", icon: "folder" },
   { id: "plan-copro", label: "Plan de financement global", icon: "barChart" },
   { id: "faq", label: "FAQ", icon: "help" },
 ];
@@ -312,12 +312,11 @@ export default function Portail() {
   const profil = (reponse?.profil_mpr as Profil | null) ?? null;
   const profilMeta = profilMetaDepuisReponse(reponse);
   const enqueteComplete = !!(reponse?.reponses as { complet?: boolean } | null)?.complet;
-  const reqPieces = PIECES.filter((p) => p.required);
-  const piecesDone = reqPieces.filter((p) => (pieces ?? []).some((x) => x.type === p.type)).length;
+  // Avis d'imposition : refusé = à redéposer, donc pas fourni (feedback 10/09).
+  const avisFourni = (pieces ?? []).some((x) => x.type === "avis_imposition" && x.statut !== "refuse");
   const flags: Record<string, boolean> = {
-    enquete: !enqueteComplete,
+    enquete: !enqueteComplete || !avisFourni,
     pret: !choix,
-    documents: piecesDone < reqPieces.length,
   };
 
   const go = (s: SectionId) => {
@@ -388,8 +387,7 @@ export default function Portail() {
           <Accueil
             {...common}
             userName={isAmo ? membership.nom : userName}
-            piecesDone={piecesDone}
-            piecesReq={reqPieces.length}
+            avisFourni={avisFourni}
             choix={choix ?? null}
             enqueteComplete={enqueteComplete}
           />
@@ -397,7 +395,6 @@ export default function Portail() {
         {section === "plan-indiv" && <QuotesParts {...common} />}
         {section === "enquete" && <Enquete membership={membership} bareme={bareme ?? null} />}
         {section === "pret" && <Financement {...common} choix={choix ?? null} />}
-        {section === "documents" && <Documents membership={membership} />}
         {section === "plan-copro" && <PlanCopro membership={membership} scenarios={scenarios ?? []} bareme={bareme ?? null} />}
         {section === "faq" && <Faq />}
       </main>

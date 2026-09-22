@@ -453,8 +453,7 @@ export function Adhesion({
                   <b>Le mandat SEPA doit être signé de façon manuscrite.</b>
                   <span>
                     Imprimez-le, signez-le sans rature, puis envoyez-le par courrier à Strat Eco ou
-                    remettez-le en main propre. Pensez aussi à téléverser vos pièces justificatives
-                    dans « Mes documents ».
+                    remettez-le en main propre.
                   </span>
                 </div>
               </div>

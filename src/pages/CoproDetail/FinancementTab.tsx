@@ -6,6 +6,7 @@ import { Badge, DpePair, Progress } from "@/components/ui";
 import {
   BANQUES,
   downloadAdhesionDoc,
+  lienAdhesionValide,
   useAdhesions,
   useFinancementConfigAmo,
   useSaveFinancementConfig,
@@ -64,19 +65,26 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   const [banque, setBanque] = useState<string>("CEGEE");
   const [duree, setDuree] = useState(15);
   const [ouverte, setOuverte] = useState(false);
+  // Parcours de souscription en ligne de la banque : c'est lui qui s'ouvre quand
+  // le copropriétaire clique « Adhérer au prêt collectif » sur son portail.
+  const [lien, setLien] = useState("");
 
   useEffect(() => {
     if (!finConfig) return;
     setBanque(finConfig.banque);
     setDuree(finConfig.duree_annees);
     setOuverte(finConfig.adhesion_ouverte);
+    setLien(finConfig.lien_adhesion ?? "");
   }, [finConfig]);
 
+  const lienNettoye = lien.trim();
+  const lienKo = lienNettoye !== "" && !lienAdhesionValide(lienNettoye);
   const configDirty =
     !finConfig ||
     finConfig.banque !== banque ||
     finConfig.duree_annees !== duree ||
-    finConfig.adhesion_ouverte !== ouverte;
+    finConfig.adhesion_ouverte !== ouverte ||
+    (finConfig.lien_adhesion ?? "") !== lienNettoye;
 
   if (isLoading || !bareme) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
@@ -250,11 +258,38 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
               <button
                 className="se-btn se-btn-secondary btn-sm"
                 style={{ marginBottom: 4 }}
-                disabled={!configDirty || saveConfig.isPending || duree < 3 || duree > 20}
-                onClick={() => saveConfig.mutate({ banque, dureeAnnees: duree, adhesionOuverte: ouverte })}
+                disabled={!configDirty || lienKo || saveConfig.isPending || duree < 3 || duree > 20}
+                onClick={() =>
+                  saveConfig.mutate({
+                    banque,
+                    dureeAnnees: duree,
+                    adhesionOuverte: ouverte,
+                    lienAdhesion: lienNettoye || null,
+                  })
+                }
               >
                 {saveConfig.isPending ? "Enregistrement…" : "Enregistrer"}
               </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 14 }}>
+              <label style={{ fontSize: 12.5, color: "var(--fg2)" }}>
+                Lien de souscription de la banque
+              </label>
+              <input
+                className="edit-inp"
+                type="url"
+                placeholder="https://… (parcours d'adhésion communiqué par la banque)"
+                value={lien}
+                onChange={(e) => setLien(e.target.value)}
+              />
+              <p className="se-small" style={{ color: lienKo ? "var(--color-error-700)" : "var(--fg-muted)", margin: 0 }}>
+                {lienKo
+                  ? "Le lien doit commencer par https:// - il est ouvert depuis le portail des copropriétaires."
+                  : lienNettoye
+                    ? "Le bouton « Adhérer au prêt collectif » du portail ouvre ce lien après avoir enregistré le choix du copropriétaire."
+                    : "Tant qu'il est vide, le portail enregistre le choix du copropriétaire et lui annonce que le lien de la banque n'est pas encore ouvert."}
+              </p>
             </div>
 
             <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 2 }}>

@@ -1,5 +1,6 @@
 // Accueil du portail : salutation, timeline de phases, tuiles financières,
-// étiquette énergie visée du bâtiment, à-faire.
+// étiquette énergie visée du bâtiment, à-faire, documents partagés par l'AMO
+// (remontés ici depuis l'onglet « Mes documents » retiré le 22/09/2026).
 import { Icon } from "@/components/Icon";
 import { Badge, DpeChip } from "@/components/ui";
 import { fmtDate, fmtEuro } from "@/lib/format";
@@ -15,6 +16,7 @@ import {
 import { readParams } from "@/api/scenarios";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Tables } from "@/lib/database.types";
+import { DocumentsProjet } from "./Documents";
 import type { SectionId } from "./index";
 
 export function Accueil({
@@ -25,8 +27,7 @@ export function Accueil({
   profil,
   profilMeta,
   userName,
-  piecesDone,
-  piecesReq,
+  avisFourni,
   choix,
   enqueteComplete,
   go,
@@ -38,8 +39,7 @@ export function Accueil({
   profil: Profil | null;
   profilMeta: ProfilMeta;
   userName: string;
-  piecesDone: number;
-  piecesReq: number;
+  avisFourni: boolean;
   choix: ChoixFinancement | null;
   enqueteComplete: boolean;
   go: (s: SectionId) => void;
@@ -79,11 +79,13 @@ export function Accueil({
           : "Indispensable pour déterminer votre aide individuelle (à déterminer tant qu'il n'est pas rempli)",
     },
     {
-      id: "documents",
-      done: piecesDone >= piecesReq,
+      id: "enquete",
+      done: avisFourni,
       ico: "folder",
-      title: "Téléverser vos pièces justificatives",
-      sub: piecesDone + "/" + piecesReq + " pièces obligatoires fournies",
+      title: "Déposer votre avis d'imposition",
+      sub: avisFourni
+        ? "Avis déposé - toutes les pages"
+        : "Toutes les pages, dans l'enquête sociale : c'est lui qui atteste vos ressources",
     },
     {
       id: "pret",
@@ -210,7 +212,7 @@ export function Accueil({
       <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 21, margin: "0 0 14px" }}>À faire</h2>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {todos.map((t) => (
-          <div key={t.id} className={"todo-card" + (t.done ? " done" : "")} onClick={() => go(t.id)}>
+          <div key={t.title} className={"todo-card" + (t.done ? " done" : "")} onClick={() => go(t.id)}>
             <span className="tc-ico"><Icon name={(t.done ? "checkCircle" : t.ico) as never} size={22} /></span>
             <div style={{ flex: 1 }}>
               <div className="tc-title">{t.title}</div>
@@ -220,6 +222,10 @@ export function Accueil({
             <Icon name="chevronRight" size={20} style={{ color: "var(--fg-muted)" }} />
           </div>
         ))}
+      </div>
+
+      <div style={{ marginTop: 26 }}>
+        <DocumentsProjet membership={membership} />
       </div>
     </div>
   );

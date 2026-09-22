@@ -1,7 +1,13 @@
 // Mon financement : fonds propres, prêt collectif (banque + durée fixées par
 // l'AMO - CEGEE/Domofinance, durée votée en AG) ou éco-PTZ individuel (durée
-// au choix du copropriétaire). L'adhésion au prêt collectif ouvre le dossier
-// pré-rempli (bulletins + mandat SEPA) avec signature électronique.
+// au choix du copropriétaire).
+//
+// Adhésion au prêt collectif (feedback Amir 22/09/2026) : quand l'AMO a saisi le
+// lien de souscription de la banque, « Adhérer au prêt collectif » enregistre le
+// choix puis envoie le copropriétaire sur le parcours en ligne de la banque, qui
+// mène le dossier de prêt (identité, RIB, pièces). Sans lien, on retombe sur le
+// dossier pré-rempli du portail (bulletins + mandat SEPA, signature
+// électronique), conservé pour les copropriétés qui n'en ont pas.
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { fmtEuro } from "@/lib/format";
@@ -28,6 +34,12 @@ const BANQUE_LABEL: Record<string, string> = {
   CEGEE: "Caisse d'Epargne Grand Est Europe (CEGEE)",
   DOMOFINANCE: "Domofinance",
 };
+
+/** Ouvre le parcours de la banque dans un nouvel onglet - appelé dans le clic
+ *  lui-même (pas après la mutation) pour ne pas être bloqué comme une pop-up. */
+function ouvrirBanque(url: string) {
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 
 export function Financement({
   membership,
@@ -77,12 +89,17 @@ export function Financement({
   const indiv = computeIndiv(scenario, bareme, plan, totalTantiemes(lots, cle), profil);
   const montant = indiv.resteAvantTravaux;
   const dureeCollectif = config?.duree_annees ?? 15;
+  const lienBanque = config?.lien_adhesion ?? null;
+  const banqueNom = config ? BANQUE_LABEL[config.banque] : "la banque partenaire";
   const mensualiteCollectif = montant / (dureeCollectif * 12);
   const mensualiteIndiv = montant / (Math.max(1, yearsIndiv) * 12);
   const toggleLot = (id: string) =>
     setSelLots((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   const transmit = (t: TypeFinancement) => {
+    // Adhésion au prêt collectif : on enregistre le choix (le suivi AMO en vit)
+    // et on envoie aussitôt vers la banque, qui instruit le dossier de prêt.
+    if (t === "collectif" && lienBanque) ouvrirBanque(lienBanque);
     save.mutate(
       {
         type: t,
@@ -149,7 +166,28 @@ export function Financement({
         </div>
 
         {choix.type === "collectif" &&
-          (config?.adhesion_ouverte ? (
+          (lienBanque ? (
+            <div className="card-xl" style={{ marginTop: 18 }}>
+              <div className="cx-head">
+                <Icon name="building" size={19} style={{ color: "var(--accent)" }} />
+                <h2 style={{ fontSize: 18 }}>Votre souscription auprès de {banqueNom}</h2>
+              </div>
+              <div className="cx-body">
+                <p className="se-body" style={{ marginTop: 0 }}>
+                  Votre dossier de prêt se remplit directement chez {banqueNom} : c'est elle qui vous demande
+                  votre identité, votre RIB et les pièces du prêt, et qui vous fait signer. Vous pouvez revenir
+                  sur ce lien autant de fois que nécessaire pour reprendre ou terminer votre souscription.
+                </p>
+                <button className="se-btn se-btn-primary" onClick={() => ouvrirBanque(lienBanque)}>
+                  <Icon name="externalLink" size={17} />
+                  Reprendre ma souscription en ligne
+                </button>
+                <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
+                  Une question sur le dossier ou les pièces demandées ? Votre AMO vous accompagne.
+                </p>
+              </div>
+            </div>
+          ) : config?.adhesion_ouverte ? (
             <Adhesion
               membership={membership}
               scenario={scenario}
@@ -162,8 +200,8 @@ export function Financement({
             <div className="cc-next" style={{ marginTop: 18 }}>
               <Icon name="alert" size={15} className="ico" />
               <span>
-                Le dossier d'adhésion (bulletin + mandat SEPA) ouvrira dès que votre AMO aura lancé la campagne
-                d'adhésion - vous serez averti.
+                Le lien de souscription de {banqueNom} n'est pas encore ouvert. Votre choix est bien enregistré :
+                votre AMO vous préviendra dès que vous pourrez souscrire.
               </span>
             </div>
           ))}
@@ -197,8 +235,8 @@ export function Financement({
           <div className="lo-ico"><Icon name="users" size={22} /></div>
           <h3>Prêt collectif</h3>
           <p>
-            Éco-PTZ souscrit par la copropriété auprès de {config ? BANQUE_LABEL[config.banque] : "la banque partenaire"}.
-            Vous adhérez pour votre seule quote-part - pas de banque à contacter.
+            Éco-PTZ souscrit par la copropriété auprès de {banqueNom}. Vous adhérez pour votre seule
+            quote-part, directement en ligne sur le site de la banque.
           </p>
           <div className="loan-terms"><span className="term">Recommandé</span><span className="term">Durée votée en AG</span></div>
         </div>
@@ -223,6 +261,7 @@ export function Financement({
               <div className="cx-head"><Icon name="users" size={19} /><h2 style={{ fontSize: 18 }}>Conditions du prêt collectif</h2></div>
               <div className="cx-body">
                 <div className="kv"><span className="k">Banque</span><span className="v">{config ? BANQUE_LABEL[config.banque] : "À confirmer par votre AMO"}</span></div>
+                <div className="kv"><span className="k">Souscription</span><span className="v">{lienBanque ? "En ligne, sur le site de la banque" : "Ouverture à venir"}</span></div>
                 <div className="kv"><span className="k">Durée (votée en AG)</span><span className="v">{dureeCollectif} ans</span></div>
                 <div className="kv"><span className="k">Montant financé</span><span className="v">{fmtEuro(montant)}</span></div>
                 <div className="kv"><span className="k">Taux d'intérêt</span><span className="v">0 % (éco-PTZ)</span></div>
@@ -236,19 +275,34 @@ export function Financement({
               </div>
             </div>
             <button className="se-btn se-btn-primary" onClick={() => transmit("collectif")} disabled={save.isPending}>
-              <Icon name="checkCircle" size={18} />
+              <Icon name={lienBanque ? "externalLink" : "checkCircle"} size={18} />
               {save.isPending ? "Transmission…" : "Adhérer au prêt collectif"}
             </button>
           </div>
 
           <div className="card-xl">
             <div className="cx-head"><Icon name="clipboard" size={19} /><h2 style={{ fontSize: 18 }}>Après votre adhésion</h2></div>
-            <div className="cx-body">
-              <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Vous complétez un formulaire (identité, coordonnées, IBAN)</div>
-              <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Vos bulletins d'adhésion sont pré-remplis et signés en ligne</div>
-              <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Le mandat SEPA pré-rempli est à signer à la main et à envoyer par courrier</div>
-              <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Vous téléversez vos pièces (RIB, identité, taxe foncière, avis d'imposition)</div>
-            </div>
+            {lienBanque ? (
+              <div className="cx-body">
+                <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Le site de {banqueNom} s'ouvre dans un nouvel onglet</div>
+                <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Vous y complétez votre demande de prêt et signez en ligne</div>
+                <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />C'est la banque qui vous demande vos pièces (identité, RIB…)</div>
+                <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Votre AMO est prévenu de votre choix et reste à vos côtés</div>
+                <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
+                  Votre choix est enregistré au moment du clic : vous pourrez revenir sur le lien de la banque
+                  depuis cette page si vous ne terminez pas tout de suite.
+                </p>
+              </div>
+            ) : (
+              <div className="cx-body">
+                <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Votre choix est transmis à votre AMO</div>
+                <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Le lien de souscription de {banqueNom} vous sera ouvert sur cette page</div>
+                <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />C'est la banque qui vous demande vos pièces (identité, RIB…)</div>
+                <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
+                  Le parcours de souscription n'est pas encore ouvert : vous serez averti dès qu'il le sera.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
