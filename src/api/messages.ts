@@ -4,6 +4,9 @@
 // (prestataire_id null) ou privé avec une entreprise ; l'envoi AMO déclenche
 // une alerte e-mail SANS le contenu (edge function `notifier-message`).
 // Côté prestataire : fil de ses projets + pastille de non-lus (message_lectures).
+// Canal copropriétaires (0088) : coproprietaire_id null = annonce à tous les
+// copropriétaires de la copro ; coproprietaire_id posé = fil privé entre CE
+// copropriétaire et l'équipe AMO (onglet « Nous contacter » du portail).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthProvider";
@@ -19,6 +22,7 @@ export const CANAUX: { id: CanalMessage; label: string }[] = [
 
 export type MessageProjet = Tables<"messages_projet"> & {
   prestataire: { raison_sociale: string } | null;
+  coproprietaire: { id: string; nom: string } | null;
 };
 
 /** Fil complet d'une copro (AMO - tous canaux, messages privés compris). */
@@ -29,15 +33,16 @@ export function useMessagesCopro(coproId: string | undefined) {
     queryFn: async (): Promise<MessageProjet[]> => {
       const { data, error } = await supabase
         .from("messages_projet")
-        .select("*, prestataires(raison_sociale)")
+        .select("*, prestataires(raison_sociale), coproprietaires(id, nom)")
         .eq("copro_id", coproId!)
         .order("created_at");
       if (error) throw error;
       return (data ?? []).map((m) => {
-        const { prestataires, ...rest } = m as typeof m & {
+        const { prestataires, coproprietaires, ...rest } = m as typeof m & {
           prestataires: { raison_sociale: string } | null;
+          coproprietaires: { id: string; nom: string } | null;
         };
-        return { ...rest, prestataire: prestataires };
+        return { ...rest, prestataire: prestataires, coproprietaire: coproprietaires };
       });
     },
   });
@@ -51,8 +56,12 @@ export interface EnvoiMessageResult {
 
 /** Envoi AMO depuis l'onglet Communications ; l'alerte e-mail (sans contenu)
  *  part vers l'entreprise visée ou toutes les entreprises retenues du projet
- *  (canal prestataires), ou vers les gestionnaires du dossier et les directeurs
- *  de l'enseigne (canal syndic, edge function `notifier-syndic`). */
+ *  (canal prestataires), vers les gestionnaires du dossier et les directeurs
+ *  de l'enseigne (canal syndic, edge function `notifier-syndic`), ou vers le
+ *  copropriétaire destinataire d'un fil privé (canal copropriétaires, edge
+ *  function `notifier-copro`). Une annonce à tous les copropriétaires
+ *  (coproprietaireId null) n'envoie pas d'e-mail : elle s'affiche dans le
+ *  portail de chacun. */
 export function useEnvoyerMessage(coproId: string) {
   const qc = useQueryClient();
   const { profile } = useAuth();
@@ -60,10 +69,12 @@ export function useEnvoyerMessage(coproId: string) {
     mutationFn: async ({
       canal,
       prestataireId,
+      coproprietaireId = null,
       body,
     }: {
       canal: CanalMessage;
       prestataireId: string | null;
+      coproprietaireId?: string | null;
       body: string;
     }): Promise<EnvoiMessageResult> => {
       const { data: session } = await supabase.auth.getSession();
@@ -71,27 +82,107 @@ export function useEnvoyerMessage(coproId: string) {
         copro_id: coproId,
         canal,
         prestataire_id: canal === "prestataires" ? prestataireId : null,
+        coproprietaire_id: canal === "coproprietaires" ? coproprietaireId : null,
         user_id: session.session?.user.id ?? null,
         auteur_nom: profile?.full_name ?? "",
         auteur_role: "amo",
         body: body.trim(),
       });
       if (error) throw error;
-      if (canal === "coproprietaires") return { notification: null, notifyError: null };
+      if (canal === "coproprietaires" && !coproprietaireId) return { notification: null, notifyError: null };
       const { data, error: fnErr } =
         canal === "prestataires"
           ? await supabase.functions.invoke("notifier-message", {
               body: { copro_id: coproId, prestataire_id: prestataireId },
             })
-          : await supabase.functions.invoke("notifier-syndic", {
-              body: { copro_id: coproId, type: "message_amo" },
-            });
+          : canal === "coproprietaires"
+            ? await supabase.functions.invoke("notifier-copro", {
+                body: { copro_id: coproId, type: "message_amo_copro", coproprietaire_id: coproprietaireId },
+              })
+            : await supabase.functions.invoke("notifier-syndic", {
+                body: { copro_id: coproId, type: "message_amo" },
+              });
       return {
         notification: fnErr ? null : (data as EnvoiMessageResult["notification"]),
         notifyError: fnErr ? String(fnErr.message ?? fnErr) : null,
       };
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["messages", coproId] }),
+  });
+}
+
+// ========== Côté portail copropriétaire ==========
+
+export type MessagePortail = Tables<"messages_projet">;
+
+/** Fil du portail d'un copropriétaire : les annonces de l'AMO à tous les
+ *  copropriétaires de la copro (coproprietaire_id null) et son fil privé.
+ *  La RLS (0088) ne laisse rien passer d'autre ; le filtre client reproduit
+ *  ce périmètre quand un AMO consulte le portail en aperçu. */
+export function useMessagesPortail(coproId: string | undefined, coproprietaireId: string | undefined) {
+  return useQuery({
+    queryKey: ["messages-portail", coproId, coproprietaireId],
+    enabled: !!coproId && !!coproprietaireId,
+    queryFn: async (): Promise<MessagePortail[]> => {
+      const { data, error } = await supabase
+        .from("messages_projet")
+        .select("*")
+        .eq("canal", "coproprietaires")
+        .eq("copro_id", coproId!)
+        .order("created_at");
+      if (error) throw error;
+      return (data ?? []).filter(
+        (m) => m.coproprietaire_id == null || m.coproprietaire_id === coproprietaireId
+      );
+    },
+  });
+}
+
+/** « Envoyez-nous un message » : le copropriétaire écrit à l'équipe AMO de son
+ *  dossier. Le message reste privé (ni les autres copropriétaires, ni le
+ *  syndic, ni les entreprises ne le voient) ; l'équipe est alertée par e-mail
+ *  sans le contenu (`notifier-copro`). En aperçu AMO, l'envoi est refusé par
+ *  la RLS - l'AMO répond depuis l'onglet Communications du dossier. */
+export function useEnvoyerMessagePortail() {
+  const qc = useQueryClient();
+  const { profile } = useAuth();
+  return useMutation({
+    mutationFn: async ({
+      coproId,
+      coproprietaireId,
+      auteurNom,
+      body,
+    }: {
+      coproId: string;
+      coproprietaireId: string;
+      auteurNom: string;
+      body: string;
+    }) => {
+      const { data: session } = await supabase.auth.getSession();
+      const { error } = await supabase.from("messages_projet").insert({
+        copro_id: coproId,
+        canal: "coproprietaires",
+        prestataire_id: null,
+        coproprietaire_id: coproprietaireId,
+        user_id: session.session?.user.id ?? null,
+        auteur_nom: profile?.full_name || auteurNom,
+        auteur_role: "copro",
+        body: body.trim(),
+      });
+      if (error) throw error;
+      // alerte e-mail - meilleur effort, le message est déjà posté
+      try {
+        await supabase.functions.invoke("notifier-copro", {
+          body: { copro_id: coproId, type: "message_copro", coproprietaire_id: coproprietaireId },
+        });
+      } catch {
+        /* l'alerte e-mail est facultative */
+      }
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["messages-portail"] });
+      void qc.invalidateQueries({ queryKey: ["messages"] });
+    },
   });
 }
 

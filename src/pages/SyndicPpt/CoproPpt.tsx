@@ -588,16 +588,16 @@ function LignesRetirees({ retirees, params, onClose }: { retirees: PptPoste[]; p
   const [erreur, setErreur] = useState<string | null>(null);
   const lignes = [...retirees].sort((a, b) => (b.retire_le ?? "").localeCompare(a.retire_le ?? ""));
   return (
-    <Modal title="Lignes retirées" onClose={onClose} width={820} closeOnBackdrop={!retablir.isPending}>
+    <Modal title="Lignes retirées" onClose={onClose} width={1060} closeOnBackdrop={!retablir.isPending}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
-          Lignes retirées de l'échéancier par le cabinet, avec le motif indiqué au retrait. Elles ne comptent plus dans le récap, le suivi ni le tableau de bord. « Rétablir » remet la ligne dans le plan telle qu'elle était.
+          Lignes retirées de l'échéancier par le cabinet, avec le motif indiqué au retrait. Elles ne comptent plus dans le récap, le suivi ni le tableau de bord. « Remettre dans le plan » remet la ligne dans l'échéancier telle qu'elle était.
         </p>
         {lignes.length === 0 ? (
           <p className="se-body" style={{ margin: 0 }}>Aucune ligne retirée.</p>
         ) : (
-          <div className="tablewrap">
-            <table className="dossiers" style={{ fontSize: 13 }}>
+          <div className="tablewrap" style={{ overflowX: "auto" }}>
+            <table className="dossiers" style={{ fontSize: 13, minWidth: 820 }}>
               <thead>
                 <tr>
                   <th>Poste</th>
@@ -606,7 +606,7 @@ function LignesRetirees({ retirees, params, onClose }: { retirees: PptPoste[]; p
                   <th className="num">TTC</th>
                   <th>Motif du retrait</th>
                   <th>Retirée le</th>
-                  <th></th>
+                  <th style={{ textAlign: "right" }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -620,11 +620,12 @@ function LignesRetirees({ retirees, params, onClose }: { retirees: PptPoste[]; p
                     <td><PrioriteBadge priorite={p.priorite} /></td>
                     <td className="num">{anneeEffective(p) ?? "-"}</td>
                     <td className="num">{fmtEur(montantTtcPoste(posteLite(p), params))}</td>
-                    <td style={{ whiteSpace: "normal", maxWidth: 280 }}>{p.motif_retrait}</td>
+                    <td style={{ whiteSpace: "normal", maxWidth: 260 }}>{p.motif_retrait}</td>
                     <td style={{ whiteSpace: "nowrap" }}>{fmtDateCourte(p.retire_le)}</td>
-                    <td>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       <button
-                        className="se-btn se-btn-ghost btn-sm"
+                        className="se-btn se-btn-secondary btn-sm"
+                        style={{ whiteSpace: "nowrap" }}
                         disabled={retablir.isPending}
                         title="Remettre cette ligne dans le plan"
                         onClick={() => {
@@ -633,7 +634,7 @@ function LignesRetirees({ retirees, params, onClose }: { retirees: PptPoste[]; p
                         }}
                       >
                         <Icon name="refresh" size={13} />
-                        Rétablir
+                        Remettre dans le plan
                       </button>
                     </td>
                   </tr>

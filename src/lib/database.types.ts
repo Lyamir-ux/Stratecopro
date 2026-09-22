@@ -1512,6 +1512,7 @@ export type Database = {
           body: string
           canal: Database["public"]["Enums"]["canal_message"]
           copro_id: string
+          coproprietaire_id: string | null
           created_at: string
           id: string
           prestataire_id: string | null
@@ -1523,6 +1524,7 @@ export type Database = {
           body: string
           canal: Database["public"]["Enums"]["canal_message"]
           copro_id: string
+          coproprietaire_id?: string | null
           created_at?: string
           id?: string
           prestataire_id?: string | null
@@ -1534,6 +1536,7 @@ export type Database = {
           body?: string
           canal?: Database["public"]["Enums"]["canal_message"]
           copro_id?: string
+          coproprietaire_id?: string | null
           created_at?: string
           id?: string
           prestataire_id?: string | null
@@ -1552,6 +1555,13 @@ export type Database = {
             columns: ["copro_id"]
             isOneToOne: false
             referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_projet_coproprietaire_id_fkey"
+            columns: ["coproprietaire_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietaires"
             referencedColumns: ["id"]
           },
           {
@@ -3797,6 +3807,7 @@ export type Database = {
       is_scenario_partage: { Args: { p_scenario_id: string }; Returns: boolean }
       is_syndic_of: { Args: { p_copro_id: string }; Returns: boolean }
       my_coproprietaire_ids: { Args: never; Returns: string[] }
+      my_coproprietaire_ids_of: { Args: { p_copro_id: string }; Returns: string[] }
       my_lot_ids: { Args: never; Returns: string[] }
       my_presta_types: {
         Args: never

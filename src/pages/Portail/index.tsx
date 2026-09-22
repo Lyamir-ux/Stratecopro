@@ -5,6 +5,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Avatar, PhaseBadge, THUMB_BG } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
+import { compteNonLus, useLectures, useMessagesPortail } from "@/api/messages";
 import {
   useMesCopros,
   useScenariosPartages,
@@ -25,11 +26,12 @@ import { Enquete } from "./Enquete";
 import { Financement } from "./Financement";
 import { PlanCopro } from "./PlanCopro";
 import { Faq } from "./Faq";
+import { Messages } from "./Messages";
 
 // « Mes documents » a été retiré (feedback Amir 22/09/2026) : le seul document
 // encore attendu du copropriétaire est son avis d'imposition, qui se dépose dans
 // l'enquête sociale ; les documents partagés par l'AMO sont sur l'accueil.
-export type SectionId = "accueil" | "plan-indiv" | "enquete" | "pret" | "plan-copro" | "faq";
+export type SectionId = "accueil" | "plan-indiv" | "enquete" | "pret" | "plan-copro" | "faq" | "messages";
 
 const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
   { id: "accueil", label: "Accueil", icon: "home" },
@@ -38,6 +40,8 @@ const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
   { id: "pret", label: "Mon financement", icon: "trendingUp" },
   { id: "plan-copro", label: "Plan de financement global", icon: "barChart" },
   { id: "faq", label: "FAQ", icon: "help" },
+  // « Envoyez-nous un message » (feedback Amir 22/09/2026) : fil privé avec l'équipe AMO
+  { id: "messages", label: "Nous contacter", icon: "message" },
 ];
 
 function Loader() {
@@ -219,7 +223,7 @@ function CoproSelect({
 
 // ---------- Portail (conteneur) ----------
 export default function Portail() {
-  const { profile, signOut } = useAuth();
+  const { profile, session, signOut } = useAuth();
   const navigate = useNavigate();
   const { section: sectionParam } = useParams();
   const section: SectionId = (SECTIONS.some((s) => s.id === sectionParam) ? sectionParam : "accueil") as SectionId;
@@ -256,6 +260,8 @@ export default function Portail() {
   const { data: choix } = useMonChoix(scenario?.id, membership?.coproprietaireId);
   const { data: plan } = useMonPlan(scenario?.id, membership?.coproprietaireId);
   const { data: pieces } = useMesPieces(membership?.coproprietaireId);
+  const { data: messages } = useMessagesPortail(membership?.copro.id, membership?.coproprietaireId);
+  const { data: lectures } = useLectures();
 
   if (isLoading || !profile) return <Loader />;
 
@@ -314,9 +320,13 @@ export default function Portail() {
   const enqueteComplete = !!(reponse?.reponses as { complet?: boolean } | null)?.complet;
   // Avis d'imposition : refusé = à redéposer, donc pas fourni (feedback 10/09).
   const avisFourni = (pieces ?? []).some((x) => x.type === "avis_imposition" && x.statut !== "refuse");
-  const flags: Record<string, boolean> = {
+  // pastilles du menu : « ! » pour une action attendue, le nombre de messages
+  // non lus pour l'onglet « Nous contacter »
+  const nonLus = compteNonLus(messages, lectures, session?.user.id);
+  const flags: Record<string, boolean | number> = {
     enquete: !enqueteComplete || !avisFourni,
     pret: !choix,
+    messages: nonLus,
   };
 
   const go = (s: SectionId) => {
@@ -377,7 +387,9 @@ export default function Portail() {
           <button key={it.id} className={"pnav" + (section === it.id ? " on" : "")} onClick={() => go(it.id)}>
             <Icon name={it.icon as never} size={17} />
             {it.label}
-            {flags[it.id] ? <span className="pn-badge">!</span> : null}
+            {flags[it.id] ? (
+              <span className="pn-badge">{typeof flags[it.id] === "number" ? flags[it.id] : "!"}</span>
+            ) : null}
           </button>
         ))}
       </nav>
@@ -397,6 +409,7 @@ export default function Portail() {
         {section === "pret" && <Financement {...common} choix={choix ?? null} />}
         {section === "plan-copro" && <PlanCopro membership={membership} scenarios={scenarios ?? []} bareme={bareme ?? null} />}
         {section === "faq" && <Faq />}
+        {section === "messages" && <Messages membership={membership} />}
       </main>
     </div>
   );

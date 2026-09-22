@@ -2,6 +2,9 @@
 // 1. Messagerie du projet par bloc (prestataires / syndic / copropriétaires),
 //    avec envoi « à tous les prestataires » ou privé à une entreprise ; l'envoi
 //    aux prestataires déclenche une alerte e-mail sans le contenu du message.
+//    Canal copropriétaires : annonce à tous (visible dans le portail de chacun)
+//    ou réponse dans le fil privé d'un copropriétaire qui a écrit depuis son
+//    onglet « Nous contacter » (feedback Amir 22/09/2026).
 // 2. Questions/réponses des candidats sur les consultations de la copro.
 // 3. Notes internes de l'équipe AMO (historique existant).
 import { useEffect, useMemo, useState } from "react";
@@ -49,6 +52,7 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
   const marquerLu = useMarquerLu();
   const [canal, setCanal] = useState<CanalMessage>("prestataires");
   const [dest, setDest] = useState<string>("tous"); // "tous" ou prestataire_id
+  const [destCopro, setDestCopro] = useState<string>("tous"); // "tous" ou coproprietaire_id
   const [body, setBody] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -74,15 +78,42 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
     return [...map.entries()].map(([id, nom]) => ({ id, nom }));
   }, [consultations, c.id]);
 
-  const fil = (messages ?? []).filter((m) => m.canal === canal);
+  // copropriétaires ayant un fil privé (ils ont écrit, ou l'AMO leur a écrit)
+  const filsCopro = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of messages ?? []) {
+      if (m.canal === "coproprietaires" && m.coproprietaire_id) {
+        map.set(m.coproprietaire_id, m.coproprietaire?.nom || m.auteur_nom || "Copropriétaire");
+      }
+    }
+    return [...map.entries()].map(([id, nom]) => ({ id, nom })).sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  }, [messages]);
+
+  const fil = (messages ?? [])
+    .filter((m) => m.canal === canal)
+    .filter((m) => canal !== "coproprietaires" || destCopro === "tous" || m.coproprietaire_id === destCopro);
 
   const submit = async () => {
     const text = body.trim();
     if (!text) return;
     const prestataireId = canal === "prestataires" && dest !== "tous" ? dest : null;
-    const res = await envoyer.mutateAsync({ canal, prestataireId, body: text });
+    const coproprietaireId = canal === "coproprietaires" && destCopro !== "tous" ? destCopro : null;
+    const res = await envoyer.mutateAsync({ canal, prestataireId, coproprietaireId, body: text });
     setBody("");
-    if (canal !== "coproprietaires") {
+    if (canal === "coproprietaires") {
+      if (coproprietaireId) {
+        const nom = filsCopro.find((f) => f.id === coproprietaireId)?.nom ?? "le copropriétaire";
+        setNotice(
+          res.notifyError
+            ? "Réponse envoyée, mais l'alerte e-mail a échoué : " + res.notifyError
+            : res.notification?.mode === "simulation"
+              ? `Réponse envoyée à ${nom} - alerte e-mail simulée (configurez RESEND_API_KEY pour l'envoi réel).`
+              : `Réponse envoyée à ${nom} - elle l'attend dans son portail, onglet « Nous contacter ».`
+        );
+      } else {
+        setNotice("Annonce publiée - elle s'affiche dans le portail de tous les copropriétaires (onglet « Nous contacter »).");
+      }
+    } else {
       const cible = canal === "prestataires" ? "entreprise" : "compte syndic";
       if (res.notifyError) setNotice("Message envoyé, mais l'alerte e-mail a échoué : " + res.notifyError);
       else if (res.notification) {
@@ -125,7 +156,7 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 0 }}>
             {canal === "syndic"
               ? "Fil avec le syndic de la copropriété - il le lit et vous répond depuis son espace (page Messages). L'envoi déclenche une alerte e-mail sans le contenu du message vers les gestionnaires du dossier et les directeurs de l'enseigne."
-              : "Fil avec les copropriétaires - l'affichage dans le portail copropriétaire arrive prochainement, le fil est déjà conservé."}
+              : "Fil avec les copropriétaires. « Annonce à tous » s'affiche dans le portail de chaque copropriétaire ; un copropriétaire qui vous écrit depuis son onglet « Nous contacter » ouvre un fil privé, que lui seul voit - votre réponse le prévient par e-mail sans le contenu du message."}
           </p>
         )}
 
@@ -171,6 +202,12 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
                   ) : (
                     <Badge kind="neutral">À tous</Badge>
                   ))}
+                {m.canal === "coproprietaires" &&
+                  (m.coproprietaire_id ? (
+                    <Badge kind="blue">Privé - {m.coproprietaire?.nom ?? "copropriétaire"}</Badge>
+                  ) : (
+                    <Badge kind="neutral">À tous</Badge>
+                  ))}
               </div>
             </div>
           </div>
@@ -189,6 +226,22 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
               {retenues.map((p) => (
                 <option key={p.id} value={p.id}>
                   Privé - {p.nom}
+                </option>
+              ))}
+            </select>
+          )}
+          {canal === "coproprietaires" && (
+            <select
+              className="edit-sel"
+              value={destCopro}
+              onChange={(e) => setDestCopro(e.target.value)}
+              style={{ maxWidth: 260 }}
+              title="Destinataire du message"
+            >
+              <option value="tous">À tous les copropriétaires</option>
+              {filsCopro.map((f) => (
+                <option key={f.id} value={f.id}>
+                  Privé - {f.nom}
                 </option>
               ))}
             </select>
