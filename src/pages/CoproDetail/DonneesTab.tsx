@@ -11,16 +11,18 @@ import {
   USAGES_LOTS,
   type DpeClass,
 } from "@/lib/referentiels";
-import { useDonnees, useSetNbBatiments, useSetUsageLot } from "@/api/donnees";
+import { useDonnees, useMutationsLots, useSetNbBatiments, useSetUsageLot } from "@/api/donnees";
 import { notifierPassation, useUpdateCopro, type CoproWithStats, type PassationMailStatut } from "@/api/copros";
 import { useTeamProfiles } from "@/api/profiles";
 import { organisationIdPourSyndic, useOrganisations } from "@/api/organisations";
 import { normaliserNomOrganisation, trouverOrganisationParNom, type OrganisationNommee } from "@/lib/organisations";
 import type { Enums } from "@/lib/database.types";
 import { ImportLotsDialog } from "./ImportLotsDialog";
+import { JournalMutations } from "@/pages/Syndic/ChangementProprietaire";
 
 export function DonneesTab({ c }: { c: CoproWithStats }) {
   const { data, isLoading } = useDonnees(c.id);
+  const { data: mutations } = useMutationsLots(c.id);
   const { data: team } = useTeamProfiles();
   const { data: organisations } = useOrganisations();
   const update = useUpdateCopro(c.id);
@@ -355,6 +357,10 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
             )}
           </div>
         </div>
+
+        {/* Ventes et successions enregistrées par le syndic (feedback Amir 22/09/2026) :
+            l'aide individuelle du nouveau propriétaire est à réinstruire. */}
+        <JournalMutations mutations={mutations ?? []} />
       </div>
 
       <div className="panel" style={{ position: "sticky", top: 0, alignSelf: "flex-start" }}>

@@ -974,6 +974,7 @@ export type Database = {
           email: string | null
           id: string
           nom: string
+          sortant_le: string | null
           telephone: string | null
           type: string | null
           user_id: string | null
@@ -985,6 +986,7 @@ export type Database = {
           email?: string | null
           id?: string
           nom: string
+          sortant_le?: string | null
           telephone?: string | null
           type?: string | null
           user_id?: string | null
@@ -996,6 +998,7 @@ export type Database = {
           email?: string | null
           id?: string
           nom?: string
+          sortant_le?: string | null
           telephone?: string | null
           type?: string | null
           user_id?: string | null
@@ -1110,6 +1113,88 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organisations"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      demandes_amo: {
+        Row: {
+          adresse: string
+          chauffage: string | null
+          commentaire_amo: string | null
+          copro_id: string | null
+          copro_nom: string
+          created_at: string
+          demandeur_email: string | null
+          demandeur_nom: string
+          demandeur_user_id: string | null
+          id: string
+          nb_lots: number | null
+          organisation_id: string | null
+          statut: string
+          syndic_name: string | null
+          traite_le: string | null
+          traite_par: string | null
+          vmc: boolean | null
+        }
+        Insert: {
+          adresse?: string
+          chauffage?: string | null
+          commentaire_amo?: string | null
+          copro_id?: string | null
+          copro_nom: string
+          created_at?: string
+          demandeur_email?: string | null
+          demandeur_nom?: string
+          demandeur_user_id?: string | null
+          id?: string
+          nb_lots?: number | null
+          organisation_id?: string | null
+          statut?: string
+          syndic_name?: string | null
+          traite_le?: string | null
+          traite_par?: string | null
+          vmc?: boolean | null
+        }
+        Update: {
+          adresse?: string
+          chauffage?: string | null
+          commentaire_amo?: string | null
+          copro_id?: string | null
+          copro_nom?: string
+          created_at?: string
+          demandeur_email?: string | null
+          demandeur_nom?: string
+          demandeur_user_id?: string | null
+          id?: string
+          nb_lots?: number | null
+          organisation_id?: string | null
+          statut?: string
+          syndic_name?: string | null
+          traite_le?: string | null
+          traite_par?: string | null
+          vmc?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demandes_amo_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demandes_amo_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demandes_amo_demandeur_user_id_fkey"
+            columns: ["demandeur_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -1468,6 +1553,74 @@ export type Database = {
             columns: ["rattache_a"]
             isOneToOne: false
             referencedRelation: "lots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lots_mutations: {
+        Row: {
+          ancien_coproprietaire_id: string | null
+          annexe: boolean
+          commentaire: string | null
+          copro_id: string
+          fait_le: string
+          fait_par: string | null
+          id: string
+          lot_id: string
+          motif: string
+          nouveau_coproprietaire_id: string
+        }
+        Insert: {
+          ancien_coproprietaire_id?: string | null
+          annexe?: boolean
+          commentaire?: string | null
+          copro_id: string
+          fait_le?: string
+          fait_par?: string | null
+          id?: string
+          lot_id: string
+          motif: string
+          nouveau_coproprietaire_id: string
+        }
+        Update: {
+          ancien_coproprietaire_id?: string | null
+          annexe?: boolean
+          commentaire?: string | null
+          copro_id?: string
+          fait_le?: string
+          fait_par?: string | null
+          id?: string
+          lot_id?: string
+          motif?: string
+          nouveau_coproprietaire_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lots_mutations_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lots_mutations_lot_id_fkey"
+            columns: ["lot_id"]
+            isOneToOne: false
+            referencedRelation: "lots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lots_mutations_ancien_coproprietaire_id_fkey"
+            columns: ["ancien_coproprietaire_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietaires"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lots_mutations_nouveau_coproprietaire_id_fkey"
+            columns: ["nouveau_coproprietaire_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietaires"
             referencedColumns: ["id"]
           },
         ]
@@ -3807,6 +3960,20 @@ export type Database = {
       is_scenario_partage: { Args: { p_scenario_id: string }; Returns: boolean }
       is_syndic_of: { Args: { p_copro_id: string }; Returns: boolean }
       my_coproprietaire_ids: { Args: never; Returns: string[] }
+      syndic_changer_proprietaire: {
+        // retouche manuelle (0090) : tous les paramètres sauf p_lot_id ont un défaut SQL
+        Args: {
+          p_lot_id: string
+          p_coproprietaire_id?: string | null
+          p_nom?: string | null
+          p_email?: string | null
+          p_telephone?: string | null
+          p_type?: string | null
+          p_motif?: string | null
+          p_commentaire?: string | null
+        }
+        Returns: string
+      }
       my_coproprietaire_ids_of: { Args: { p_copro_id: string }; Returns: string[] }
       my_lot_ids: { Args: never; Returns: string[] }
       my_presta_types: {

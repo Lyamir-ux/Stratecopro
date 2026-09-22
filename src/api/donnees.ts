@@ -137,6 +137,112 @@ function invalidateDonnees(qc: ReturnType<typeof useQueryClient>, coproId: strin
   void qc.invalidateQueries({ queryKey: ["copros"] });
 }
 
+// ========== Vente / succession : changement de propriétaire d'un lot ==========
+// Feedback Amir 22/09/2026 : le syndic clique sur le lot vendu et saisit le
+// nouveau copropriétaire (RPC syndic_changer_proprietaire, migration 0090).
+// Le vendeur garde son historique ; s'il ne possède plus rien, sa ligne devient
+// sortante et son accès au portail est coupé.
+
+export type MotifMutation = "vente" | "succession" | "autre";
+
+export const MOTIFS_MUTATION: { id: MotifMutation; label: string }[] = [
+  { id: "vente", label: "Vente du lot" },
+  { id: "succession", label: "Succession (décès)" },
+  { id: "autre", label: "Autre (donation, partage…)" },
+];
+
+export interface ChangementProprietaire {
+  lotId: string;
+  /** Copropriétaire existant de la copro… */
+  coproprietaireId?: string | null;
+  /** …ou acquéreur à créer. */
+  nom?: string | null;
+  email?: string | null;
+  telephone?: string | null;
+  type?: "occupant" | "bailleur" | null;
+  motif: MotifMutation;
+  commentaire?: string | null;
+  /** Repères pour l'alerte e-mail de l'équipe AMO (aucune donnée sensible). */
+  numeroLot?: string | null;
+  ancienNom?: string | null;
+  nouveauNom?: string | null;
+}
+
+export function useChangerProprietaire(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ChangementProprietaire): Promise<string> => {
+      const { data, error } = await supabase.rpc("syndic_changer_proprietaire", {
+        p_lot_id: input.lotId,
+        p_coproprietaire_id: input.coproprietaireId ?? null,
+        p_nom: input.nom ?? null,
+        p_email: input.email ?? null,
+        p_telephone: input.telephone ?? null,
+        p_type: input.type ?? null,
+        p_motif: input.motif,
+        p_commentaire: input.commentaire ?? null,
+      });
+      if (error) throw error;
+      // alerte e-mail de l'équipe AMO du dossier, sans les coordonnées du nouveau
+      // propriétaire - meilleur effort, la mutation est déjà enregistrée
+      try {
+        await supabase.functions.invoke("notifier-syndic", {
+          body: {
+            copro_id: coproId,
+            type: "mutation_lot",
+            detail: {
+              lot: input.numeroLot ?? null,
+              ancien: input.ancienNom ?? null,
+              nouveau: input.nom?.trim() || input.nouveauNom || null,
+              motif: MOTIFS_MUTATION.find((m) => m.id === input.motif)?.label ?? input.motif,
+            },
+          },
+        });
+      } catch {
+        /* l'alerte e-mail est facultative */
+      }
+      return data as string;
+    },
+    onSuccess: () => {
+      invalidateDonnees(qc, coproId);
+      void qc.invalidateQueries({ queryKey: ["mutations-lots", coproId] });
+      void qc.invalidateQueries({ queryKey: ["syndic"] });
+    },
+  });
+}
+
+export type MutationLot = Tables<"lots_mutations"> & {
+  lot: { num: string } | null;
+  ancien: { nom: string } | null;
+  nouveau: { nom: string } | null;
+};
+
+/** Journal des changements de propriétaire de la copro (AMO et syndic). */
+export function useMutationsLots(coproId: string | undefined) {
+  return useQuery({
+    queryKey: ["mutations-lots", coproId],
+    enabled: !!coproId,
+    queryFn: async (): Promise<MutationLot[]> => {
+      const { data, error } = await supabase
+        .from("lots_mutations")
+        .select(
+          "*, lots(num), ancien:coproprietaires!ancien_coproprietaire_id(nom), nouveau:coproprietaires!nouveau_coproprietaire_id(nom)"
+        )
+        .eq("copro_id", coproId!)
+        .order("fait_le", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((m) => {
+        const { lots, ancien, nouveau, ...rest } = m as typeof m & {
+          lots: { num: string } | null;
+          ancien: { nom: string } | null;
+          nouveau: { nom: string } | null;
+        };
+        return { ...rest, lot: lots, ancien, nouveau };
+      });
+    },
+  });
+}
+
 /**
  * Import des lots depuis un fichier Excel/CSV validé :
  * crée bâtiments, copropriétaires et clés manquants, puis lots + tantièmes.

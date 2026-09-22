@@ -23,11 +23,13 @@ interface SidebarProps {
   questionsCount?: number | null;
   /** PPPT déposés ou analysés en attente de revue - alerte sur « Suivi PPT ». */
   pptCount?: number | null;
+  /** Demandes d'AMO des syndics encore à traiter (feedback Amir 22/09/2026). */
+  demandesCount?: number | null;
   user: { initials: string; name: string; org: string };
   onLogout: () => void;
 }
 
-export function Sidebar({ recents, tasksCount, questionsCount, pptCount, user, onLogout }: SidebarProps) {
+export function Sidebar({ recents, tasksCount, questionsCount, pptCount, demandesCount, user, onLogout }: SidebarProps) {
   const { collapsed, toggleCollapsed, sidebarTheme } = useUi();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -38,6 +40,7 @@ export function Sidebar({ recents, tasksCount, questionsCount, pptCount, user, o
     { to: "/taches", icon: "clipboard", label: "Vos tâches", count: tasksCount },
     { to: "/consultations", icon: "megaphone", label: "Consulter un intervenant", count: questionsCount },
     { to: "/ppt", icon: "fileCheck", label: "Suivi PPT", count: pptCount },
+    { to: "/demandes", icon: "megaphone", label: "Demandes des syndics", count: demandesCount },
   ];
   const nav2: NavEntry[] = [
     { to: "/prestataires", icon: "briefcase", label: "Base prestataires" },

@@ -1,13 +1,19 @@
-// Onglet Données de la copro (syndic) - bâtiments, copropriétaires et lots,
-// en lecture seule (l'import et l'édition restent côté AMO).
+// Onglet Données de la copro (syndic) - bâtiments, copropriétaires et lots.
+// L'import et l'édition des tantièmes restent côté AMO ; depuis le 22/09/2026
+// (feedback Amir) le gestionnaire met à jour le propriétaire d'un lot en
+// cliquant sa ligne : vente, succession ou autre mutation.
+import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { libellesBatiments, USAGE_LOT_LABEL } from "@/lib/referentiels";
-import { useDonnees } from "@/api/donnees";
+import { useDonnees, useMutationsLots, type LotFull } from "@/api/donnees";
 import type { SyndicCopro } from "@/api/syndic";
+import { ChangementProprietaire, JournalMutations } from "./ChangementProprietaire";
 
 export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
   const { data: donnees, isLoading } = useDonnees(c.id);
+  const { data: mutations } = useMutationsLots(c.id);
+  const [lotEdite, setLotEdite] = useState<LotFull | null>(null);
   const lb = libellesBatiments(c.denomination_batiments);
   if (isLoading || !donnees) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
@@ -49,11 +55,16 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
                       <th>Usage</th>
                       <th>Copropriétaire</th>
                       <th style={{ textAlign: "right" }}>Tantièmes{suffixeCle}</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {lots.map((l) => (
-                      <tr key={l.id} style={{ cursor: "default" }}>
+                      <tr
+                        key={l.id}
+                        onClick={() => setLotEdite(l)}
+                        title={`Changer le propriétaire du lot n°${l.num} (vente, succession…)`}
+                      >
                         <td style={{ fontWeight: 600 }}>{l.num}</td>
                         <td>{l.batiment?.code ?? "-"}</td>
                         <td>{USAGE_LOT_LABEL[l.usage] ?? l.usage}</td>
@@ -63,14 +74,24 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
                             ? l.tantiemes[cleDefaut].toLocaleString("fr-FR")
                             : "-"}
                         </td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap", color: "var(--fg-muted)" }}>
+                          <Icon name="edit" size={14} />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
+            {lots.length > 0 && (
+              <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10, marginBottom: 0 }}>
+                Vente ou succession : cliquez la ligne du lot pour enregistrer son nouveau propriétaire.
+                Les tantièmes et les lots rattachés suivent.
+              </p>
+            )}
           </div>
         </div>
+        <JournalMutations mutations={mutations ?? []} />
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -90,7 +111,10 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
               >
                 <Icon name="user" size={16} style={{ color: "var(--fg-muted)" }} />
                 <div>
-                  <div className="t-title" style={{ fontSize: 13 }}>{cp.nom}</div>
+                  <div className="t-title" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                    {cp.nom}
+                    {cp.sortant_le && <Badge kind="neutral">Sortant</Badge>}
+                  </div>
                   <div className="t-copro">
                     {[
                       cp.type === "bailleur" ? "Bailleur" : cp.type === "occupant" ? "Occupant" : null,
@@ -132,6 +156,14 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
           </div>
         </div>
       </div>
+      {lotEdite && (
+        <ChangementProprietaire
+          coproId={c.id}
+          lot={lotEdite}
+          donnees={donnees}
+          onClose={() => setLotEdite(null)}
+        />
+      )}
     </div>
   );
 }

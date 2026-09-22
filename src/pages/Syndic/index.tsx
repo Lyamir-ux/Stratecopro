@@ -20,9 +20,19 @@ import { deposerDansTampon } from "@/lib/ppt/depotTampon";
 import { Portefeuille, cleGestionnaire } from "./Portefeuille";
 import { TachesSyndic } from "./Taches";
 import { MessagesSyndic } from "./Messages";
+import { DemandeAmo } from "./DemandeAmo";
 
 export type Branche = "reno" | "ppt";
-export type SectionId = "portefeuille" | "taches" | "messages" | "tableau" | "echeancier" | "copros";
+// « demande-amo » n'est pas un onglet : la page s'ouvre par le bouton du
+// bandeau ou celui de la colonne « Futur projet » (feedbacks Amir 22/09/2026).
+export type SectionId =
+  | "portefeuille"
+  | "taches"
+  | "messages"
+  | "tableau"
+  | "echeancier"
+  | "copros"
+  | "demande-amo";
 
 const SECTIONS: Record<Branche, { id: SectionId; label: string; icon: IconName }[]> = {
   reno: [
@@ -208,6 +218,15 @@ export function SyndicShell({
             {autre === "ppt" ? "Suivi des PPT" : "Rénovations globales"}
           </button>
         )}
+        {/* « Faire une demande d'AMO » à côté de la bascule (feedback Amir 22/09 12:58) */}
+        <button
+          className="se-btn se-btn-ghost btn-sm"
+          title="Signaler à Strat Eco une copropriété à accompagner"
+          onClick={() => navigate("/syndic/demande-amo")}
+        >
+          <Icon name="megaphone" size={15} />
+          Demande d'AMO
+        </button>
         {profile.role === "amo" && (
           <button className="se-btn se-btn-ghost btn-sm" onClick={() => navigate("/")} title="Revenir à l'espace AMO">
             <Icon name="gauge" size={15} />Espace AMO
@@ -319,7 +338,13 @@ function ChoixBranche({ nbReno, nbPpt }: { nbReno: number; nbPpt: number }) {
 export default function Syndic() {
   const { section: sectionParam } = useParams();
   const section: SectionId =
-    sectionParam === "taches" ? "taches" : sectionParam === "messages" ? "messages" : "portefeuille";
+    sectionParam === "taches"
+      ? "taches"
+      : sectionParam === "messages"
+        ? "messages"
+        : sectionParam === "demande-amo"
+          ? "demande-amo"
+          : "portefeuille";
   const { profile, session } = useAuth();
   const { data: copros, isLoading } = useCoprosSyndic();
   const { data: monOrg } = useMonOrganisation();
@@ -350,6 +375,15 @@ export default function Syndic() {
   const apercuAmo = profile?.role === "amo";
   const moduleActif = !apercuAmo && !!orgPpt?.module_ppt;
   const branche = lireBranche();
+  // La demande d'AMO porte justement sur une copropriété que Strat Eco ne suit
+  // pas encore : elle s'ouvre même sans dossier au portefeuille.
+  if (section === "demande-amo") {
+    return (
+      <SyndicShell active={null}>
+        <DemandeAmo />
+      </SyndicShell>
+    );
+  }
   // Enseigne équipée du module : la branche mémorisée s'applique, sinon on demande.
   if (moduleActif && !sectionParam) {
     if (branche === "ppt") return <Navigate to="/syndic/ppt" replace />;

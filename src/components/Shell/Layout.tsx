@@ -8,6 +8,7 @@ import { useCopros, useTasksCount } from "@/api/copros";
 import { useQuestionsEnAttenteCount } from "@/api/consultations";
 import { usePptRapportsRevue } from "@/api/ppt";
 import { usePiecesAVerifierCount } from "@/api/portail";
+import { compteNouvelles, useDemandesAmo } from "@/api/demandesAmo";
 import { declencherRappelAgrements } from "@/api/prestataires";
 import { declencherRapportSyndic } from "@/api/rapportSyndic";
 import { declencherSignatureCron } from "@/api/signature";
@@ -53,6 +54,9 @@ export function Layout() {
   // alerte du menu « Suivi PPT » : rapports déposés ou analysés en attente de revue
   const { data: rapportsPpt } = usePptRapportsRevue();
   const pptCount = (rapportsPpt ?? []).filter((r) => ["depose", "en_analyse", "a_relire"].includes(r.statut) && (r.type === "pppt" || r.type === "ppt_adopte")).length;
+  // alerte du menu « Demandes des syndics » : demandes d'AMO encore à traiter
+  const { data: demandes } = useDemandesAmo();
+  const demandesCount = compteNouvelles(demandes);
 
   const user = {
     initials: profile?.initials ?? "–",
@@ -68,6 +72,7 @@ export function Layout() {
         tasksCount={tasksCount == null && piecesCount == null ? null : tachesEtPieces}
         questionsCount={questionsCount || null}
         pptCount={pptCount || null}
+        demandesCount={demandesCount || null}
         user={user}
         onLogout={() => void signOut()}
       />

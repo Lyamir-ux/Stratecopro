@@ -5,7 +5,10 @@
 //                      de l'enseigne ;
 //   - message_syndic : le syndic a écrit → alerte à l'équipe AMO du dossier ;
 //   - pf_valide      : le plan de financement définitif vient d'être validé →
-//                      les gestionnaires et directeurs en sont informés.
+//                      les gestionnaires et directeurs en sont informés ;
+//   - mutation_lot   : le syndic a enregistré une vente ou une succession sur
+//                      un lot → alerte à l'équipe AMO du dossier (l'aide
+//                      individuelle du nouveau propriétaire est à réinstruire).
 // Envoi réel via Resend si RESEND_API_KEY est configuré, sinon 'simule'
 // (même parti pris que notifier-consultation et notifier-depot-document).
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -22,7 +25,7 @@ function json(status: number, body: unknown): Response {
   });
 }
 
-type TypeNotif = "message_amo" | "message_syndic" | "pf_valide";
+type TypeNotif = "message_amo" | "message_syndic" | "pf_valide" | "mutation_lot";
 
 const BOUTON = (href: string, libelle: string) =>
   `<p style="margin:22px 0">
@@ -53,14 +56,16 @@ Deno.serve(async (req: Request) => {
     .maybeSingle();
   if (!profile || !profile.active) return json(403, { error: "Profil inactif" });
 
-  const { copro_id, type } = await req.json().catch(() => ({}));
+  const { copro_id, type, detail } = await req.json().catch(() => ({}));
   if (!copro_id || !type) return json(400, { error: "copro_id et type attendus" });
   const typeNotif = type as TypeNotif;
-  if (!["message_amo", "message_syndic", "pf_valide"].includes(typeNotif)) {
+  if (!["message_amo", "message_syndic", "pf_valide", "mutation_lot"].includes(typeNotif)) {
     return json(400, { error: "type inconnu" });
   }
-  // message_amo / pf_valide : émis par l'AMO ; message_syndic : émis par le syndic
-  if (typeNotif === "message_syndic" ? profile.role !== "syndic" : profile.role !== "amo") {
+  // message_amo / pf_valide : émis par l'AMO ; message_syndic et mutation_lot :
+  // émis par le syndic (ou par l'AMO qui agit depuis l'espace syndic en aperçu)
+  const versAmo = typeNotif === "message_syndic" || typeNotif === "mutation_lot";
+  if (versAmo ? !["syndic", "amo"].includes(profile.role) : profile.role !== "amo") {
     return json(403, { error: "Rôle de l'appelant incompatible avec ce type d'alerte" });
   }
 
@@ -77,7 +82,7 @@ Deno.serve(async (req: Request) => {
   // + directeurs de l'enseigne. Côté AMO : l'équipe du dossier.
   const cibles = new Map<string, { user_id: string; nom: string }>();
 
-  if (typeNotif === "message_syndic") {
+  if (versAmo) {
     const { data: membres } = await admin
       .from("copro_members")
       .select("user_id, member_role, profiles(full_name, role, active)")
@@ -127,6 +132,23 @@ Deno.serve(async (req: Request) => {
             <p>L'équipe Strat Eco${profile.full_name ? ` (${profile.full_name})` : ""} vous a écrit un message
             au sujet du dossier <strong>${copro.name}</strong>. Il vous attend dans votre espace syndic.</p>
             ${BOUTON(`${appUrl}/syndic/messages?copro=${copro.id}`, "Lire le message")}
+            ${signature}
+          </div>`,
+      };
+    }
+    if (typeNotif === "mutation_lot") {
+      const d = (detail ?? {}) as { lot?: string; ancien?: string; nouveau?: string; motif?: string };
+      return {
+        sujet: `Changement de propriétaire - ${copro.name}`,
+        html: `
+          <div style="font-family:Arial,Helvetica,sans-serif;font-size:14.5px;line-height:1.55;color:#1a1a1a;max-width:620px">
+            ${bonjour}
+            <p>Le syndic${profile.full_name ? ` (${profile.full_name})` : ""} a enregistré un changement de
+            propriétaire sur la copropriété <strong>${copro.name}</strong>${d.lot ? `, lot n°${d.lot}` : ""}.</p>
+            ${d.ancien || d.nouveau ? `<p>${d.ancien ?? "Sans propriétaire"} → <strong>${d.nouveau ?? "-"}</strong>${d.motif ? ` (${d.motif})` : ""}.</p>` : ""}
+            <p>L'aide individuelle du nouveau propriétaire est à réinstruire : enquête sociale, plan
+            individuel et choix de financement ne sont pas repris du vendeur.</p>
+            ${BOUTON(`${appUrl}/copros/${copro.id}/donnees`, "Voir les données du dossier")}
             ${signature}
           </div>`,
       };

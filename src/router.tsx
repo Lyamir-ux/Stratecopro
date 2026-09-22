@@ -11,6 +11,7 @@ import Ingenierie from "./pages/Ingenierie";
 import PlanDefinitifPage from "./pages/PlanDefinitif";
 import MesTaches from "./pages/MesTaches";
 import Consultations from "./pages/Consultations";
+import DemandesAmo from "./pages/DemandesAmo";
 import Prestataires from "./pages/Prestataires";
 import Collaborateurs from "./pages/Collaborateurs";
 import BaseConnaissances from "./pages/BaseConnaissances";
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
               { path: "/copros/:id/:tab?", element: <CoproDetail /> },
               { path: "/taches", element: <MesTaches /> },
               { path: "/consultations", element: <Consultations /> },
+              { path: "/demandes", element: <DemandesAmo /> },
               { path: "/prestataires", element: <Prestataires /> },
               { path: "/collaborateurs", element: <Collaborateurs /> },
               { path: "/base-connaissances", element: <BaseConnaissances /> },

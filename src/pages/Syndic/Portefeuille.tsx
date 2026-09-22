@@ -141,6 +141,8 @@ function construireSystemes(copros: SyndicCopro[], phaseDe: (c: SyndicCopro) => 
 
 // « Futur projet » anticipe la prospection : aucune phase du référentiel ne s'y
 // range encore (feedback du 28/08), la colonne existe pour préparer la suite.
+// Depuis le 22/09/2026 elle porte le bouton « Faire une demande » : le
+// gestionnaire signale à Strat Eco une copropriété à accompagner.
 const COLONNES_KANBAN: { id: PhaseId | "futur"; label: string; dot: string }[] = [
   { id: "futur", label: "Futur projet", dot: "var(--color-neutral-300)" },
   { id: "diagnostic", label: "Diagnostic", dot: COULEUR_PHASE.diagnostic },
@@ -172,6 +174,17 @@ function VueKanban({
               <span className="kcount">{list.length}</span>
             </div>
             <div className="kcol-body">
+              {col.id === "futur" && (
+                <button
+                  className="se-btn se-btn-secondary btn-sm"
+                  style={{ width: "100%", justifyContent: "center", marginBottom: 10 }}
+                  title="Signaler à Strat Eco une copropriété à accompagner"
+                  onClick={() => navigate("/syndic/demande-amo")}
+                >
+                  <Icon name="megaphone" size={14} />
+                  Faire une demande
+                </button>
+              )}
               {list.map((c) => {
                 const retard = retards.get(c.id) ?? 0;
                 return (
@@ -225,7 +238,7 @@ function VueKanban({
               {list.length === 0 && (
                 <div style={{ padding: 18, textAlign: "center", color: "var(--fg-muted)", fontSize: 13 }}>
                   {col.id === "futur"
-                    ? "Les projets en prospection apparaîtront ici."
+                    ? "Une copropriété à faire accompagner ? Envoyez une demande d'AMO."
                     : "Aucun dossier"}
                 </div>
               )}
