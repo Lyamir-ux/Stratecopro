@@ -70,11 +70,15 @@ Deno.serve(async (req: Request) => {
   const from = Deno.env.get("RESEND_FROM") ?? "Strat Eco <onboarding@resend.dev>";
   const appUrl = Deno.env.get("APP_URL") ?? "https://stratecopro.vercel.app";
 
+  const nbPieces = Array.isArray(demande.fichiers) ? demande.fichiers.length : 0;
   const details = [
     demande.adresse ? `Adresse : <strong>${demande.adresse}</strong>` : null,
     demande.nb_lots ? `Nombre de lots : <strong>${demande.nb_lots}</strong>` : null,
     demande.chauffage ? `Chauffage : <strong>${demande.chauffage}</strong>` : null,
     demande.vmc == null ? null : `VMC : <strong>${demande.vmc ? "oui" : "non"}</strong>`,
+    nbPieces > 0
+      ? `Document${nbPieces > 1 ? "s" : ""} joint${nbPieces > 1 ? "s" : ""} : <strong>${nbPieces}</strong>`
+      : null,
   ].filter(Boolean).join("<br/>");
 
   const contenu = (nom: string) => ({

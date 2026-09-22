@@ -10,7 +10,13 @@ import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
 import { useCreateCopro } from "@/api/copros";
-import { useDemandesAmo, useStatutDemandeAmo, type DemandeAmo } from "@/api/demandesAmo";
+import {
+  piecesDemande,
+  telechargerPieceDemande,
+  useDemandesAmo,
+  useStatutDemandeAmo,
+  type DemandeAmo,
+} from "@/api/demandesAmo";
 
 const STATUTS: { id: DemandeAmo["statut"]; label: string }[] = [
   { id: "nouvelle", label: "À traiter" },
@@ -108,6 +114,21 @@ function Carte({ d }: { d: DemandeAmo }) {
             <Badge key={i as string} kind="neutral">{i}</Badge>
           ))}
         </div>
+        {piecesDemande(d).length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {piecesDemande(d).map((p) => (
+              <button
+                key={p.path}
+                className="se-btn se-btn-ghost btn-sm"
+                title={`Télécharger ${p.name}`}
+                onClick={() => void telechargerPieceDemande(p)}
+              >
+                <Icon name="fileText" size={13} />
+                {p.name}
+              </button>
+            ))}
+          </div>
+        )}
         <p className="se-small" style={{ margin: 0, color: "var(--fg-muted)" }}>
           Demandée par <b>{d.demandeur_nom || "un gestionnaire"}</b>
           {d.syndic_name ? ` · ${d.syndic_name}` : ""}

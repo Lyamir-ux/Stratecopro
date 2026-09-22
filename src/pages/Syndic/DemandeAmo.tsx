@@ -5,13 +5,27 @@
 // adresse, nombre de lots, mode de chauffage, présence d'une VMC. Deux entrées
 // mènent ici : le bouton du bandeau (à côté de la bascule « Suivi des PPT ») et
 // le bouton de la colonne « Futur projet » du portefeuille.
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
 import { useMonOrganisation } from "@/api/syndic";
-import { CHAUFFAGES, useDemandesAmo, useDeposerDemandeAmo } from "@/api/demandesAmo";
+import {
+  CHAUFFAGES,
+  EXTENSIONS_PIECES,
+  TAILLE_MAX_PIECE,
+  piecesDemande,
+  telechargerPieceDemande,
+  useDemandesAmo,
+  useDeposerDemandeAmo,
+} from "@/api/demandesAmo";
+
+function fmtTaille(bytes: number | null): string {
+  if (bytes == null) return "";
+  if (bytes < 1024 * 1024) return Math.max(1, Math.round(bytes / 1024)) + " Ko";
+  return (bytes / (1024 * 1024)).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " Mo";
+}
 
 const champ = (label: string, input: React.ReactNode, aide?: string) => (
   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -32,8 +46,24 @@ export function DemandeAmo({ syndicNom }: { syndicNom?: string }) {
   const [nbLots, setNbLots] = useState("");
   const [chauffage, setChauffage] = useState("");
   const [vmc, setVmc] = useState<"" | "oui" | "non">("");
+  const [fichiers, setFichiers] = useState<File[]>([]);
   const [erreur, setErreur] = useState<string | null>(null);
   const [envoyee, setEnvoyee] = useState<string | null>(null);
+  const [avertissement, setAvertissement] = useState<string | null>(null);
+  const inputFichiers = useRef<HTMLInputElement>(null);
+
+  const ajouterFichiers = (liste: FileList | null) => {
+    const choisis = Array.from(liste ?? []);
+    if (choisis.length === 0) return;
+    const trop = choisis.filter((f) => f.size > TAILLE_MAX_PIECE).map((f) => f.name);
+    setAvertissement(trop.length ? `Trop volumineux (20 Mo maximum) : ${trop.join(", ")}` : null);
+    setFichiers((prev) => {
+      const gardes = choisis.filter(
+        (f) => f.size <= TAILLE_MAX_PIECE && !prev.some((p) => p.name === f.name && p.size === f.size)
+      );
+      return [...prev, ...gardes];
+    });
+  };
 
   const lots = nbLots.trim() === "" ? null : Number(nbLots.replace(/\s/g, ""));
   const valide =
@@ -47,23 +77,31 @@ export function DemandeAmo({ syndicNom }: { syndicNom?: string }) {
     if (!valide) return;
     setErreur(null);
     try {
-      await deposer.mutateAsync({
+      const creee = await deposer.mutateAsync({
         demande: {
           copro_nom: nom,
           adresse,
           nb_lots: lots,
           chauffage: chauffage || null,
           vmc: vmc === "" ? null : vmc === "oui",
+          fichiers,
         },
         organisationId: monOrg?.id ?? null,
         syndicName: monOrg?.nom ?? syndicNom ?? null,
       });
+      const ratees = (creee as { _piecesRatees?: string[] })._piecesRatees;
+      setAvertissement(
+        ratees?.length
+          ? `Demande envoyée, mais document(s) non déposé(s) : ${ratees.join(", ")}. Transmettez-les à l'équipe par un autre moyen.`
+          : null
+      );
       setEnvoyee(nom.trim());
       setNom("");
       setAdresse("");
       setNbLots("");
       setChauffage("");
       setVmc("");
+      setFichiers([]);
     } catch (err) {
       setErreur(err instanceof Error ? err.message : "L'envoi de la demande a échoué.");
     }
@@ -159,6 +197,86 @@ export function DemandeAmo({ syndicNom }: { syndicNom?: string }) {
               </div>
             )}
 
+            {/* Pièces jointes (feedback Amir 22/09 14:26) : ce que le gestionnaire
+                a déjà sous la main, pour qualifier la demande sans relance. */}
+            {champ(
+              "Documents (facultatif)",
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div>
+                  <button
+                    type="button"
+                    className="se-btn se-btn-secondary btn-sm"
+                    onClick={() => inputFichiers.current?.click()}
+                  >
+                    <Icon name="upload" size={14} />
+                    Ajouter un document
+                  </button>
+                  <input
+                    ref={inputFichiers}
+                    type="file"
+                    multiple
+                    accept={EXTENSIONS_PIECES}
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      ajouterFichiers(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+                {fichiers.length > 0 && (
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+                    {fichiers.map((f) => (
+                      <li
+                        key={f.name + f.size}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          border: "1px solid var(--border)",
+                          borderRadius: "var(--radius-md)",
+                          padding: "7px 10px",
+                          fontSize: 13,
+                        }}
+                      >
+                        <Icon name="fileText" size={15} style={{ color: "var(--fg-muted)", flex: "none" }} />
+                        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {f.name}
+                        </span>
+                        <span className="se-small" style={{ color: "var(--fg-muted)" }}>{fmtTaille(f.size)}</span>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          style={{ width: 24, height: 24 }}
+                          title="Retirer ce document"
+                          onClick={() => setFichiers((prev) => prev.filter((p) => p !== f))}
+                        >
+                          <Icon name="x" size={13} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <span className="se-small" style={{ color: "var(--fg-muted)" }}>
+                  DPE collectif, audit énergétique, PPT, carnet d'entretien, PV d'AG… PDF, Word, Excel ou
+                  photo, 20 Mo par document.
+                </span>
+              </div>
+            )}
+
+            {avertissement && (
+              <p
+                style={{
+                  margin: 0,
+                  padding: "10px 12px",
+                  borderRadius: "var(--radius-md)",
+                  background: "var(--bg-soft)",
+                  border: "1px solid var(--border)",
+                  fontSize: 13,
+                }}
+              >
+                {avertissement}
+              </p>
+            )}
             {erreur && (
               <p
                 style={{
@@ -252,6 +370,22 @@ export function DemandeAmo({ syndicNom }: { syndicNom?: string }) {
                     <div className="se-small" style={{ color: "var(--fg-muted)" }}>
                       Envoyée le {fmtDate(d.created_at)}
                     </div>
+                    {piecesDemande(d).length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 }}>
+                        {piecesDemande(d).map((p) => (
+                          <button
+                            key={p.path}
+                            type="button"
+                            className="se-btn se-btn-ghost btn-sm"
+                            title={`Télécharger ${p.name}`}
+                            onClick={() => void telechargerPieceDemande(p)}
+                          >
+                            <Icon name="fileText" size={13} />
+                            {p.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {d.commentaire_amo && (
                       <div className="se-small" style={{ marginTop: 4 }}>
                         <b>Réponse de Strat Eco :</b> {d.commentaire_amo}

@@ -1127,6 +1127,7 @@ export type Database = {
           demandeur_email: string | null
           demandeur_nom: string
           demandeur_user_id: string | null
+          fichiers: Json
           id: string
           nb_lots: number | null
           organisation_id: string | null
@@ -1146,6 +1147,7 @@ export type Database = {
           demandeur_email?: string | null
           demandeur_nom?: string
           demandeur_user_id?: string | null
+          fichiers?: Json
           id?: string
           nb_lots?: number | null
           organisation_id?: string | null
@@ -1165,6 +1167,7 @@ export type Database = {
           demandeur_email?: string | null
           demandeur_nom?: string
           demandeur_user_id?: string | null
+          fichiers?: Json
           id?: string
           nb_lots?: number | null
           organisation_id?: string | null
