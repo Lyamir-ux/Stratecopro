@@ -154,14 +154,23 @@ function parseLotSheet(grid: Grid, sheetName: string, avert: string[]): { lot: L
     if (!designation || montant == null || /€\s*ht/i.test(designation)) continue;
     const retenuRaw = norm(grid[i]?.[cB + 1]);
     if (retenuRaw !== "oui" && retenuRaw !== "non" && retenuRaw !== "") continue; // en-têtes
+    const retenu = retenuRaw === "oui";
     const tva = parseTva(f.commentaire(i));
-    if (tva == null) avert.push(`Lot ${numero} « ${designation} » : TVA absente, 10 % appliqué par défaut.`);
+    // Sans TVA au classeur : une ligne retenue dans l'assiette MaPrimeRénov' est
+    // un geste de rénovation énergétique, donc 5,5 % ; les autres restent à 10 %
+    // (feedback Wafaa du 22/09/2026).
+    const tvaDefaut = retenu ? 5.5 : 10;
+    if (tva == null)
+      avert.push(
+        `Lot ${numero} « ${designation} » : TVA absente, ${String(tvaDefaut).replace(".", ",")} % appliqué par défaut` +
+          (retenu ? " (montant retenu à l'assiette MaPrimeRénov')." : ".")
+      );
     lignes.push({
       designation,
       groupe: f.groupe(i) || undefined,
-      retenu: retenuRaw === "oui",
+      retenu,
       montantHt: montant,
-      tvaPct: tva ?? 10,
+      tvaPct: tva ?? tvaDefaut,
       commentaire: undefined,
     });
   }

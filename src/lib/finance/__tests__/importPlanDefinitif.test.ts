@@ -114,6 +114,32 @@ describe("import d'un classeur s'écartant de la nomenclature de référence", (
     expect(avertissements.some((a) => a.includes("montant repris tel quel"))).toBe(true);
   });
 
+  // Feedback Wafaa du 22/09/2026 : une ligne retenue dans l'assiette MaPrimeRénov'
+  // est un geste de rénovation énergétique, donc 5,5 % par défaut quand le
+  // classeur ne précise pas la TVA ; les autres lignes restent à 10 %.
+  it("propose 5,5 % quand la TVA manque sur une ligne retenue, 10 % sinon", () => {
+    const wb = read(write(exportPlanDefinitif(makeViolettes()), { type: "buffer", bookType: "xlsx" }), { type: "buffer" });
+    const feuille = wb.SheetNames.find((n) => /^lot 03/i.test(n))!;
+    const ws = wb.Sheets[feuille];
+    let ligneOui = 0;
+    let ligneNon = 0;
+    for (let i = 3; i < 40 && !(ligneOui && ligneNon); i++) {
+      const retenu = ws[`C${i}`]?.v;
+      if (retenu === "oui" && !ligneOui) ligneOui = i;
+      if (retenu === "non" && !ligneNon) ligneNon = i;
+    }
+    const desOui = String(ws[`B${ligneOui}`].v);
+    const desNon = String(ws[`B${ligneNon}`].v);
+    delete ws[`E${ligneOui}`]; // « TVA de 5,5% » effacée
+    delete ws[`E${ligneNon}`];
+    const res = importPlanDefinitif(wb);
+    const lot3 = res.data.lots.find((l) => l.numero === 3)!;
+    expect(lot3.lignes.find((l) => l.designation === desOui)!.tvaPct).toBe(5.5);
+    expect(lot3.lignes.find((l) => l.designation === desNon)!.tvaPct).toBe(10);
+    expect(res.avertissements.some((a) => a.includes(desOui) && a.includes("5,5 % appliqué par défaut"))).toBe(true);
+    expect(res.avertissements.some((a) => a.includes(desNon) && a.includes("10 % appliqué par défaut"))).toBe(true);
+  });
+
   it("conserve le plafond de l'assiette MPR quand le classeur ne l'applique pas, avec avertissement", () => {
     const sansPlafond = makeViolettes();
     sansPlafond.params.plafondTravauxParLogement = 1_000_000; // le classeur calcule sur tout le retenu (614 208 €)
