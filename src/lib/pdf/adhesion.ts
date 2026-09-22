@@ -1,6 +1,13 @@
 // Génération des documents d'adhésion au prêt collectif éco-PTZ :
 // bulletin d'adhésion CEGEE (un par lot principal, signé électroniquement)
 // et mandat de prélèvement SEPA (téléchargé, signature manuscrite exigée).
+//
+// Plus branché depuis le 22/09/2026 : le dossier d'adhésion interne du portail a
+// été retiré, les copropriétaires souscrivent sur le parcours en ligne de la
+// banque. `genBulletin` / `genMandatSepa` sont conservés avec les gabarits
+// (public/modeles/) et leur calibrage au rectangle (./coords) - à supprimer
+// seulement si Strat Eco n'a plus jamais à produire ces PDF elle-même. Les
+// validateurs IBAN/BIC ci-dessous, eux, servent toujours (ribCheck).
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import { BULLETIN_COORDS, SEPA_COORDS, type TextSpot } from "./coords";
 

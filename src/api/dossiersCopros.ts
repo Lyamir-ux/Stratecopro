@@ -20,7 +20,7 @@ import { useDonnees, type DonneesCopro, type LotFull } from "./donnees";
 import { useEnquete, useReponses, type Reponse } from "./enquete";
 import { readParams, useBareme, useChoixFinancementScenario, usePlansIndividuels, useScenarios } from "./scenarios";
 import { usePlansDefinitifs, type PlanDefinitif } from "./planDefinitif";
-import { useAdhesions, type AdhesionAvecNom } from "./financement";
+import { useAdhesions, useFinancementConfigAmo, type AdhesionAvecNom } from "./financement";
 import { useBulletinsCopro, type BulletinAvecSignataires } from "./signature";
 import type { CoproWithStats } from "./copros";
 
@@ -153,6 +153,10 @@ export function assemblerDossiers(input: {
   bulletins: BulletinAvecSignataires[];
   pieces: PieceJustificative[];
   bareme: Bareme | null;
+  /** La copropriété souscrit chez la banque (lien de souscription saisi) : le
+   *  bulletin et le mandat SEPA ne passent plus par nous, donc ils ne peuvent
+   *  plus manquer dans notre dossier (22/09/2026). */
+  souscriptionEnLigne?: boolean;
 }): { dossiers: DossierCoproprietaire[]; cleRef: string | null } {
   const { donnees, scenario, bareme } = input;
   const repById = new Map(input.reponses.map((r) => [r.coproprietaire_id, r]));
@@ -277,10 +281,16 @@ export function assemblerDossiers(input: {
     if (collectif) {
       const signe = adhesion?.statut === "signee" || bulletinsElec.some((b) => b.statut === "complet");
       const enCours = !!adhesion || bulletinsElec.some((b) => b.statut === "en_signature");
-      etatBulletin = signe ? "ok" : enCours ? "en_cours" : "manquant";
-      if (etatBulletin !== "ok") manquants.push("bulletin d'adhésion" + (etatBulletin === "en_cours" ? " (en cours)" : ""));
-      etatSepa = adhesion?.sepa_path ? "ok" : "manquant";
-      if (etatSepa !== "ok") manquants.push("mandat SEPA");
+      if (input.souscriptionEnLigne && !signe && !enCours) {
+        // Souscription menée par la banque : rien à attendre de notre côté.
+        etatBulletin = "na";
+        etatSepa = "na";
+      } else {
+        etatBulletin = signe ? "ok" : enCours ? "en_cours" : "manquant";
+        if (etatBulletin !== "ok") manquants.push("bulletin d'adhésion" + (etatBulletin === "en_cours" ? " (en cours)" : ""));
+        etatSepa = adhesion?.sepa_path ? "ok" : "manquant";
+        if (etatSepa !== "ok") manquants.push("mandat SEPA");
+      }
     }
     // Pièce déposée au portail : validée = fournie ; à vérifier = en cours ;
     // refusée = manquante (le copropriétaire doit redéposer) - feedback 10/09.
@@ -345,6 +355,7 @@ export function useDossiersCoproprietaires(c: CoproWithStats): DossiersCopro {
   const { data: adhesions } = useAdhesions(c.id);
   const { data: bulletins } = useBulletinsCopro(c.id);
   const { data: pieces } = usePiecesCopro(c.id);
+  const { data: finConfig } = useFinancementConfigAmo(c.id);
 
   // Même sélection que l'onglet Financement : scénario partagé (ou importé) le plus récent.
   const scenario = useMemo(
@@ -379,8 +390,9 @@ export function useDossiersCoproprietaires(c: CoproWithStats): DossiersCopro {
       bulletins: bulletins ?? [],
       pieces: pieces ?? [],
       bareme: bareme ?? null,
+      souscriptionEnLigne: !!finConfig?.lien_adhesion,
     });
-  }, [donnees, reponses, scenario, plansIndiv, choix, planValide, adhesions, bulletins, pieces, bareme]);
+  }, [donnees, reponses, scenario, plansIndiv, choix, planValide, adhesions, bulletins, pieces, bareme, finConfig]);
 
   return {
     dossiers: assemble.dossiers,

@@ -64,26 +64,26 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   const saveConfig = useSaveFinancementConfig(c.id);
   const [banque, setBanque] = useState<string>("CEGEE");
   const [duree, setDuree] = useState(15);
-  const [ouverte, setOuverte] = useState(false);
   // Parcours de souscription en ligne de la banque : c'est lui qui s'ouvre quand
-  // le copropriétaire clique « Adhérer au prêt collectif » sur son portail.
+  // le copropriétaire clique « Adhérer au prêt collectif » sur son portail, et
+  // c'est lui seul qui ouvre la campagne depuis le retrait du dossier
+  // d'adhésion interne (feedback Amir 22/09/2026).
   const [lien, setLien] = useState("");
 
   useEffect(() => {
     if (!finConfig) return;
     setBanque(finConfig.banque);
     setDuree(finConfig.duree_annees);
-    setOuverte(finConfig.adhesion_ouverte);
     setLien(finConfig.lien_adhesion ?? "");
   }, [finConfig]);
 
   const lienNettoye = lien.trim();
   const lienKo = lienNettoye !== "" && !lienAdhesionValide(lienNettoye);
+  const ouverte = lienNettoye !== "";
   const configDirty =
     !finConfig ||
     finConfig.banque !== banque ||
     finConfig.duree_annees !== duree ||
-    finConfig.adhesion_ouverte !== ouverte ||
     (finConfig.lien_adhesion ?? "") !== lienNettoye;
 
   if (isLoading || !bareme) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
@@ -225,7 +225,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
             <Icon name="users" size={18} />
             <h3>Prêt collectif - adhésions</h3>
             <span style={{ flex: 1 }}></span>
-            <Badge kind={ouverte ? "success" : "neutral"}>{ouverte ? "Campagne ouverte" : "Fermée"}</Badge>
+            <Badge kind={ouverte ? "success" : "neutral"}>{ouverte ? "Souscription ouverte" : "Lien à venir"}</Badge>
           </div>
           <div className="p-body">
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -251,10 +251,6 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                   onChange={(e) => setDuree(Number(e.target.value))}
                 />
               </div>
-              <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, cursor: "pointer", paddingBottom: 8 }}>
-                <input type="checkbox" checked={ouverte} onChange={(e) => setOuverte(e.target.checked)} />
-                Adhésions ouvertes sur le portail
-              </label>
               <button
                 className="se-btn se-btn-secondary btn-sm"
                 style={{ marginBottom: 4 }}
@@ -263,7 +259,6 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                   saveConfig.mutate({
                     banque,
                     dureeAnnees: duree,
-                    adhesionOuverte: ouverte,
                     lienAdhesion: lienNettoye || null,
                   })
                 }
@@ -274,7 +269,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 14 }}>
               <label style={{ fontSize: 12.5, color: "var(--fg2)" }}>
-                Lien de souscription de la banque
+                Lien de souscription de la banque - ouvre la campagne
               </label>
               <input
                 className="edit-inp"
@@ -287,16 +282,16 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                 {lienKo
                   ? "Le lien doit commencer par https:// - il est ouvert depuis le portail des copropriétaires."
                   : lienNettoye
-                    ? "Le bouton « Adhérer au prêt collectif » du portail ouvre ce lien après avoir enregistré le choix du copropriétaire."
-                    : "Tant qu'il est vide, le portail enregistre le choix du copropriétaire et lui annonce que le lien de la banque n'est pas encore ouvert."}
+                    ? "Le bouton « Adhérer au prêt collectif » du portail ouvre ce lien après avoir enregistré le choix du copropriétaire. C'est la banque qui mène ensuite tout le dossier de prêt."
+                    : "Tant qu'il est vide, le portail enregistre le choix du copropriétaire et lui annonce que la souscription n'est pas encore ouverte."}
               </p>
             </div>
 
             <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 2 }}>
               {(adhesions ?? []).length === 0 ? (
                 <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
-                  Aucun dossier d'adhésion pour l'instant - les copropriétaires y accèdent depuis leur portail
-                  après avoir choisi le prêt collectif.
+                  Aucun dossier d'adhésion dans le portail. Les copropriétaires souscrivent désormais en ligne
+                  chez la banque : suivez leurs choix de financement dans l'onglet Copropriétaires.
                 </p>
               ) : (
                 (adhesions ?? []).map((a, i, arr) => {

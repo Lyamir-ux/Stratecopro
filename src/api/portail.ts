@@ -1,7 +1,6 @@
 // Espace copropriétaire : données du user connecté (RLS = son périmètre uniquement).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { nomFichierSansAccents } from "@/lib/nommage";
 import type { Tables, Enums, Json } from "@/lib/database.types";
 import { determineProfil, type Bareme, type FinanceParams, type Profil } from "@/lib/finance";
 import { readParams } from "./scenarios";
@@ -44,17 +43,6 @@ export function totalTantiemes(lots: PortalLot[], cle: string): number {
 /** Lots annexes (garage, cave…) rattachés à ce lot d'habitation. */
 export function lotsRattaches(lots: PortalLot[], lot: PortalLot): PortalLot[] {
   return lots.filter((l) => l.rattacheA === lot.id);
-}
-
-/** Tantièmes du lot + de ses lots annexes rattachés (affichés sur le bulletin). */
-export function tantiemesAvecRattaches(lots: PortalLot[], lot: PortalLot, cle: string): number {
-  return lotTantiemes(lot, cle) + totalTantiemes(lotsRattaches(lots, lot), cle);
-}
-
-/** Lots annexes non rattachés à un lot d'habitation - bloquent la génération
- *  des documents d'adhésion dès que le copropriétaire a un lot d'habitation. */
-export function lotsAnnexesNonRattaches(lots: PortalLot[]): PortalLot[] {
-  return lots.filter((l) => l.usage !== "habitation" && !l.rattacheA);
 }
 
 /** Rattache (cibleId) ou détache (null) un lot annexe - RPC validée en base. */
@@ -656,11 +644,13 @@ export function useQualifierPiece() {
   });
 }
 
-// ========== Adhésion au prêt collectif (CEGEE) ==========
+// ========== Prêt collectif : configuration de la souscription ==========
+// Le dossier d'adhésion interne (bulletins + mandat SEPA signés dans le
+// portail) a été retiré le 22/09/2026 : les copropriétaires souscrivent chez
+// la banque (copro_financement_config.lien_adhesion). La table adhesions_pret
+// reste lue côté AMO pour les dossiers signés avant le basculement.
 
 export type FinancementConfig = Tables<"copro_financement_config">;
-export type Adhesion = Tables<"adhesions_pret">;
-
 export function useFinancementConfig(coproId: string | undefined) {
   return useQuery({
     queryKey: ["portail", "fin-config", coproId],
@@ -677,93 +667,11 @@ export function useFinancementConfig(coproId: string | undefined) {
   });
 }
 
-export function useMonAdhesion(coproId: string | undefined, coproprietaireId: string | undefined) {
-  return useQuery({
-    queryKey: ["portail", "adhesion", coproId, coproprietaireId],
-    enabled: !!coproId && !!coproprietaireId,
-    queryFn: async (): Promise<Adhesion | null> => {
-      const { data, error } = await supabase
-        .from("adhesions_pret")
-        .select("*")
-        .eq("copro_id", coproId!)
-        .eq("coproprietaire_id", coproprietaireId!)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-  });
-}
-
-export function useSaveAdhesion(coproId: string, coproprietaireId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: {
-      scenarioId: string | null;
-      form: Json;
-      iban: string;
-      bic: string;
-      lieuSignature: string;
-      statut?: "brouillon" | "signee";
-      signedAt?: string | null;
-      bulletins?: Json;
-      sepaPath?: string | null;
-      ribConcordance?: string | null;
-    }) => {
-      const { error } = await supabase.from("adhesions_pret").upsert(
-        {
-          copro_id: coproId,
-          coproprietaire_id: coproprietaireId,
-          scenario_id: input.scenarioId,
-          form: input.form,
-          iban: input.iban,
-          bic: input.bic,
-          lieu_signature: input.lieuSignature,
-          ...(input.statut ? { statut: input.statut } : {}),
-          ...(input.signedAt !== undefined ? { signed_at: input.signedAt } : {}),
-          ...(input.bulletins !== undefined ? { bulletins: input.bulletins } : {}),
-          ...(input.sepaPath !== undefined ? { sepa_path: input.sepaPath } : {}),
-          ...(input.ribConcordance !== undefined ? { rib_concordance: input.ribConcordance } : {}),
-        },
-        { onConflict: "copro_id,coproprietaire_id" }
-      );
-      if (error) throw error;
-    },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["portail"] }),
-  });
-}
-
-/** Téléverse un PDF généré (bulletin / mandat) dans le bucket privé du user. */
-export async function uploadPdfGenere(name: string, bytes: Uint8Array): Promise<string> {
-  const { data: session } = await supabase.auth.getSession();
-  const uid = session.session?.user.id;
-  if (!uid) throw new Error("Session expirée");
-  const path = `${uid}/adhesion/${Date.now()}-${name}`;
-  const { error } = await supabase.storage
-    .from("pieces-copro")
-    .upload(path, new Blob([bytes as BlobPart], { type: "application/pdf" }));
-  if (error) throw error;
-  return path;
-}
-
 /** URL signée courte durée pour AFFICHER un document du bucket pieces-copro. */
 export async function urlSigneePiece(path: string): Promise<string> {
   const { data, error } = await supabase.storage.from("pieces-copro").createSignedUrl(path, 300);
   if (error) throw error;
   return data.signedUrl;
-}
-
-export async function downloadFromPieces(path: string, filename: string) {
-  // `download` côté Storage : Content-Disposition attachment - l'attribut
-  // download d'un lien est ignoré par les navigateurs sur une URL cross-origin
-  const { data, error } = await supabase.storage
-    .from("pieces-copro")
-    .createSignedUrl(path, 300, { download: nomFichierSansAccents(filename) });
-  if (error) throw error;
-  const a = document.createElement("a");
-  a.href = data.signedUrl;
-  a.download = filename;
-  a.target = "_blank";
-  a.click();
 }
 
 /** Télécharge le RIB téléversé (pour la vérification de concordance). */

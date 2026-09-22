@@ -2,16 +2,16 @@
 // l'AMO - CEGEE/Domofinance, durée votée en AG) ou éco-PTZ individuel (durée
 // au choix du copropriétaire).
 //
-// Adhésion au prêt collectif (feedback Amir 22/09/2026) : quand l'AMO a saisi le
-// lien de souscription de la banque, « Adhérer au prêt collectif » enregistre le
-// choix puis envoie le copropriétaire sur le parcours en ligne de la banque, qui
-// mène le dossier de prêt (identité, RIB, pièces). Sans lien, on retombe sur le
-// dossier pré-rempli du portail (bulletins + mandat SEPA, signature
-// électronique), conservé pour les copropriétés qui n'en ont pas.
+// Adhésion au prêt collectif (feedback Amir 22/09/2026) : « Adhérer au prêt
+// collectif » enregistre le choix puis envoie le copropriétaire sur le parcours
+// de souscription en ligne de la banque, qui mène tout le dossier de prêt
+// (identité, RIB, pièces, signature). C'est la règle : le dossier d'adhésion
+// interne (bulletins pré-remplis + mandat SEPA signés dans le portail) a été
+// retiré. Tant que l'AMO n'a pas saisi le lien, le choix est enregistré et la
+// page annonce que la souscription n'est pas encore ouverte.
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { fmtEuro } from "@/lib/format";
-import { useAuth } from "@/auth/AuthProvider";
 import {
   computeIndiv,
   lotTantiemes,
@@ -24,11 +24,9 @@ import {
   type TypeFinancement,
 } from "@/api/portail";
 import { readParams } from "@/api/scenarios";
-import { Adhesion } from "./Adhesion";
 import { MentionsPrudence } from "./Mentions";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Tables } from "@/lib/database.types";
-import type { SectionId } from "./index";
 
 const BANQUE_LABEL: Record<string, string> = {
   CEGEE: "Caisse d'Epargne Grand Est Europe (CEGEE)",
@@ -48,7 +46,6 @@ export function Financement({
   plan,
   profil,
   choix,
-  go,
 }: {
   membership: Membership;
   scenarios: Scenario[];
@@ -57,9 +54,7 @@ export function Financement({
   plan: Tables<"plans_individuels"> | null;
   profil: Profil | null;
   choix: ChoixFinancement | null;
-  go: (s: SectionId) => void;
 }) {
-  const { session } = useAuth();
   const lots = membership.lots;
   const { data: config } = useFinancementConfig(membership.copro.id);
   const [editing, setEditing] = useState(false);
@@ -187,15 +182,6 @@ export function Financement({
                 </p>
               </div>
             </div>
-          ) : config?.adhesion_ouverte ? (
-            <Adhesion
-              membership={membership}
-              scenario={scenario}
-              bareme={bareme}
-              config={config}
-              email={session?.user.email ?? ""}
-              go={go}
-            />
           ) : (
             <div className="cc-next" style={{ marginTop: 18 }}>
               <Icon name="alert" size={15} className="ico" />

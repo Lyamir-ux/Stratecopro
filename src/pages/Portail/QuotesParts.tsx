@@ -267,7 +267,7 @@ export function QuotesParts({
                     <>
                       <p className="se-body" style={{ marginTop: 0 }}>
                         Ce lot est <b>rattaché au lot d'habitation n°{cible.num}</b> : sur vos documents
-                        (bulletin d'adhésion…), seul le lot n°{cible.num} apparaît, avec les tantièmes
+                        et dans votre dossier de prêt, seul le lot n°{cible.num} apparaît, avec les tantièmes
                         additionnés.
                       </p>
                       <button

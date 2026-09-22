@@ -34,18 +34,16 @@ export function useFinancementConfigAmo(coproId: string | undefined) {
 export function useSaveFinancementConfig(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: {
-      banque: string;
-      dureeAnnees: number;
-      adhesionOuverte: boolean;
-      lienAdhesion: string | null;
-    }) => {
+    // `adhesion_ouverte` n'est plus écrit : depuis le retrait du dossier
+    // d'adhésion interne (22/09/2026), c'est la présence du lien de la banque
+    // qui ouvre la souscription. La colonne reste en base pour les campagnes
+    // menées avant le basculement.
+    mutationFn: async (input: { banque: string; dureeAnnees: number; lienAdhesion: string | null }) => {
       const { error } = await supabase.from("copro_financement_config").upsert(
         {
           copro_id: coproId,
           banque: input.banque,
           duree_annees: input.dureeAnnees,
-          adhesion_ouverte: input.adhesionOuverte,
           lien_adhesion: input.lienAdhesion,
         },
         { onConflict: "copro_id" }
