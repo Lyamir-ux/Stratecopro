@@ -143,7 +143,7 @@ Deno.serve(async (req: Request) => {
         html: `
           <div style="font-family:Arial,Helvetica,sans-serif;font-size:14.5px;line-height:1.55;color:#1a1a1a;max-width:620px">
             ${bonjour}
-            <p>Le syndic${profile.full_name ? ` (${profile.full_name})` : ""} a enregistré un changement de
+            <p>${profile.role === "syndic" ? "Le syndic" : "L'équipe Strat Eco"}${profile.full_name ? ` (${profile.full_name})` : ""} a enregistré un changement de
             propriétaire sur la copropriété <strong>${copro.name}</strong>${d.lot ? `, lot n°${d.lot}` : ""}.</p>
             ${d.ancien || d.nouveau ? `<p>${d.ancien ?? "Sans propriétaire"} → <strong>${d.nouveau ?? "-"}</strong>${d.motif ? ` (${d.motif})` : ""}.</p>` : ""}
             <p>L'aide individuelle du nouveau propriétaire est à réinstruire : enquête sociale, plan

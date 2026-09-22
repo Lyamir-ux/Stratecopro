@@ -11,14 +11,14 @@ import {
   USAGES_LOTS,
   type DpeClass,
 } from "@/lib/referentiels";
-import { useDonnees, useMutationsLots, useSetNbBatiments, useSetUsageLot } from "@/api/donnees";
+import { useDonnees, useMutationsLots, useSetNbBatiments, useSetUsageLot, type LotFull } from "@/api/donnees";
 import { notifierPassation, useUpdateCopro, type CoproWithStats, type PassationMailStatut } from "@/api/copros";
 import { useTeamProfiles } from "@/api/profiles";
 import { organisationIdPourSyndic, useOrganisations } from "@/api/organisations";
 import { normaliserNomOrganisation, trouverOrganisationParNom, type OrganisationNommee } from "@/lib/organisations";
 import type { Enums } from "@/lib/database.types";
 import { ImportLotsDialog } from "./ImportLotsDialog";
-import { JournalMutations } from "@/pages/Syndic/ChangementProprietaire";
+import { ChangementProprietaire, JournalMutations } from "@/pages/Syndic/ChangementProprietaire";
 
 export function DonneesTab({ c }: { c: CoproWithStats }) {
   const { data, isLoading } = useDonnees(c.id);
@@ -27,6 +27,8 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
   const { data: organisations } = useOrganisations();
   const update = useUpdateCopro(c.id);
   const [showImport, setShowImport] = useState(false);
+  // vente ou succession : même clic que côté syndic (feedback Amir 22/09/2026)
+  const [lotEdite, setLotEdite] = useState<LotFull | null>(null);
   const [editingSynth, setEditingSynth] = useState(false);
   const setNbBatiments = useSetNbBatiments(c.id);
   const setUsage = useSetUsageLot(c.id);
@@ -314,11 +316,16 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                       <th>Usage</th>
                       {/* Code de clé précisé seulement s'il y en a plusieurs (et jamais le « MUN » technique) */}
                       {cleDefaut && <th>Tantièmes{cles.length > 1 && cleDefaut !== "MUN" ? ` ${cleDefaut}` : ""}</th>}
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {lots.map((l) => (
-                      <tr key={l.id} style={{ cursor: "default" }}>
+                      <tr
+                        key={l.id}
+                        onClick={() => setLotEdite(l)}
+                        title={`Changer le propriétaire du lot n°${l.num} (vente, succession…)`}
+                      >
                         <td className="mono">n°{l.num}</td>
                         <td>{l.batiment?.code ? `${lb.court} ${l.batiment.code}` : "-"}</td>
                         <td>{l.coproprietaire?.nom ?? "-"}</td>
@@ -326,7 +333,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                           {l.coproprietaire?.email ?? "-"}
                         </td>
                         <td className="mono">{l.coproprietaire?.telephone ?? "-"}</td>
-                        <td>
+                        <td onClick={(e) => e.stopPropagation()}>
                           {/* L'usage se corrige à la main (ex. « autres » → « commerces ») */}
                           <select
                             className="edit-inp"
@@ -349,16 +356,23 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                             {l.tantiemes[cleDefaut] != null ? l.tantiemes[cleDefaut].toLocaleString("fr-FR") : "-"}
                           </td>
                         )}
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap", color: "var(--fg-muted)" }}>
+                          <Icon name="edit" size={14} />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                <p className="se-small" style={{ marginTop: 12, color: "var(--fg-muted)" }}>
+                  Vente ou succession : cliquez la ligne du lot pour enregistrer son nouveau propriétaire.
+                  Les tantièmes et les lots rattachés suivent.
+                </p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Ventes et successions enregistrées par le syndic (feedback Amir 22/09/2026) :
+        {/* Ventes et successions enregistrées par le syndic ou l'équipe (feedback Amir 22/09/2026) :
             l'aide individuelle du nouveau propriétaire est à réinstruire. */}
         <JournalMutations mutations={mutations ?? []} />
       </div>
@@ -594,6 +608,14 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
 
       {showImport && (
         <ImportLotsDialog coproId={c.id} hasExistingLots={totalLots > 0} onClose={() => setShowImport(false)} />
+      )}
+      {lotEdite && (
+        <ChangementProprietaire
+          coproId={c.id}
+          lot={lotEdite}
+          donnees={data}
+          onClose={() => setLotEdite(null)}
+        />
       )}
     </div>
   );
