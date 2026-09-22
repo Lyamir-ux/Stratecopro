@@ -2602,6 +2602,10 @@ export type Database = {
           montant_vote: number | null
           montant_syndic: number | null
           commentaire_syndic: string | null
+          // retouche manuelle (0087) : retrait d'une ligne par le syndic, motivé
+          motif_retrait: string | null
+          retire_le: string | null
+          retire_par: string | null
           origine: string
           ouvrage: string | null
           position: number
@@ -2632,6 +2636,9 @@ export type Database = {
           montant_vote?: number | null
           montant_syndic?: number | null
           commentaire_syndic?: string | null
+          motif_retrait?: string | null
+          retire_le?: string | null
+          retire_par?: string | null
           origine?: string
           ouvrage?: string | null
           position?: number
@@ -2662,6 +2669,9 @@ export type Database = {
           montant_vote?: number | null
           montant_syndic?: number | null
           commentaire_syndic?: string | null
+          motif_retrait?: string | null
+          retire_le?: string | null
+          retire_par?: string | null
           origine?: string
           ouvrage?: string | null
           position?: number
@@ -3877,6 +3887,11 @@ export type Database = {
         Returns: number
       }
       ppt_retirer_poste: {
+        // retouche manuelle (0087) : motif obligatoire
+        Args: { p_motif: string; p_poste_id: string }
+        Returns: undefined
+      }
+      ppt_retablir_poste: {
         Args: { p_poste_id: string }
         Returns: undefined
       }

@@ -681,12 +681,25 @@ export function useAjouterPoste() {
   });
 }
 
-/** Retrait (archivage) d'une ligne ajoutée par le syndic - RPC 0074. */
+/** Retrait d'une ligne par le syndic (toute ligne ni votée ni réalisée), motif obligatoire :
+ *  archivage daté et signé, jamais de suppression - RPC 0087 (feedback Amir 22/09). */
 export function useRetirerPoste() {
   const refresh = useRefreshPpt();
   return useMutation({
+    mutationFn: async ({ poste_id, motif }: { poste_id: string; motif: string }) => {
+      const { error } = await supabase.rpc("ppt_retirer_poste", { p_poste_id: poste_id, p_motif: motif });
+      if (error) throw error;
+    },
+    onSuccess: refresh,
+  });
+}
+
+/** Rétablissement d'une ligne retirée par le syndic - RPC 0087. */
+export function useRetablirPoste() {
+  const refresh = useRefreshPpt();
+  return useMutation({
     mutationFn: async (poste_id: string) => {
-      const { error } = await supabase.rpc("ppt_retirer_poste", { p_poste_id: poste_id });
+      const { error } = await supabase.rpc("ppt_retablir_poste", { p_poste_id: poste_id });
       if (error) throw error;
     },
     onSuccess: refresh,

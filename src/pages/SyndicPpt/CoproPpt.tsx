@@ -19,6 +19,7 @@ import {
   useAjouterPoste,
   useDecalerPptPostes,
   useDeposerPptRapport,
+  useRetablirPoste,
   useRetirerPoste,
   useSaisirMontantPoste,
   TYPES_AVEC_HONORAIRES,
@@ -136,8 +137,10 @@ function EcheancierTab({ c, postes }: { c: PptCoproAvecStats; postes: PptPoste[]
   const params = parametresDepuisOrg(org ?? PARAMETRES_ORG_DEFAUT, annee, c.cep_kwhep_m2_an);
   const [archives, setArchives] = useState(false);
   const actifs = postes.filter((p) => p.actif);
-  const anciens = postes.filter((p) => !p.actif);
-  const lignes = [...(archives ? postes : actifs)].sort((a, b) => (anneeEffective(a) ?? 9999) - (anneeEffective(b) ?? 9999) || a.position - b.position);
+  // retirées par le syndic (motif, date, feedback 22/09) ≠ archivées par une nouvelle version du rapport
+  const retirees = postes.filter((p) => !p.actif && p.retire_le);
+  const anciens = postes.filter((p) => !p.actif && !p.retire_le);
+  const lignes = [...(archives ? [...actifs, ...anciens] : actifs)].sort((a, b) => (anneeEffective(a) ?? 9999) - (anneeEffective(b) ?? 9999) || a.position - b.position);
   // TTC estimé du rapport : coût normalisé, TVA, MOE et honoraires, à l'année prévue
   // au plan, sans décalage ni saisie du syndic (le « coût HT de base » seul ne parle pas)
   const ttcEstime = (p: PptPoste) => montantTtcPoste({ ...posteLite(p), montant_syndic: null }, params, p.annee_prevue ?? annee);
@@ -148,10 +151,11 @@ function EcheancierTab({ c, postes }: { c: PptCoproAvecStats; postes: PptPoste[]
 
   if (actifs.length === 0)
     return (
-      <div className="panel" style={{ padding: 22 }}>
-        <p className="se-body" style={{ margin: 0 }}>
-          {c.stats?.statut_rapport === "valide" ? "Le plan validé ne contient aucun poste." : c.stats?.rapports_en_attente ? "Le PPPT est en cours d'analyse chez Strat Eco : l'échéancier apparaîtra à la validation." : "Aucun PPPT validé pour cette copropriété - déposez le rapport depuis l'onglet Documents."}
+      <div className="panel" style={{ padding: 22, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+        <p className="se-body" style={{ margin: 0, flex: 1, minWidth: 260 }}>
+          {retirees.length > 0 ? `Toutes les lignes du plan ont été retirées (${retirees.length}). Rétablissez-en depuis « Lignes retirées » ou ajoutez une ligne.` : c.stats?.statut_rapport === "valide" ? "Le plan validé ne contient aucun poste." : c.stats?.rapports_en_attente ? "Le PPPT est en cours d'analyse chez Strat Eco : l'échéancier apparaîtra à la validation." : "Aucun PPPT validé pour cette copropriété - déposez le rapport depuis l'onglet Documents."}
         </p>
+        {retirees.length > 0 && <BoutonLignesRetirees retirees={retirees} params={params} />}
       </div>
     );
 
@@ -268,7 +272,7 @@ function EcheancierTab({ c, postes }: { c: PptCoproAvecStats; postes: PptPoste[]
         </div>
       </div>
 
-      <SuiviEcheancier key={actifs.map((p) => `${p.id}:${p.annee_prochaine_presentation ?? ""}`).join("|")} copro={c} postes={actifs} params={params} annee={annee} />
+      <SuiviEcheancier key={actifs.map((p) => `${p.id}:${p.annee_prochaine_presentation ?? ""}`).join("|")} copro={c} postes={actifs} retirees={retirees} params={params} annee={annee} />
     </>
   );
 }
@@ -279,7 +283,7 @@ function EcheancierTab({ c, postes }: { c: PptCoproAvecStats; postes: PptPoste[]
 // dans sa colonne avec son TTC actualisé ; un clic sur une autre colonne le
 // décale (brouillon), Enregistrer applique. Le récap au-dessus reprend les
 // décalages via annee_prochaine_presentation.
-function SuiviEcheancier({ copro, postes, params, annee }: { copro: PptCoproAvecStats; postes: PptPoste[]; params: ReturnType<typeof parametresDepuisOrg>; annee: number }) {
+function SuiviEcheancier({ copro, postes, retirees, params, annee }: { copro: PptCoproAvecStats; postes: PptPoste[]; retirees: PptPoste[]; params: ReturnType<typeof parametresDepuisOrg>; annee: number }) {
   const decaler = useDecalerPptPostes();
   const [brouillon, setBrouillon] = useState<Record<string, number>>({});
   const [erreur, setErreur] = useState<string | null>(null);
@@ -334,6 +338,7 @@ function SuiviEcheancier({ copro, postes, params, annee }: { copro: PptCoproAvec
           <Icon name="plus" size={14} />
           Ajouter une ligne
         </button>
+        <BoutonLignesRetirees retirees={retirees} params={params} />
         {changements.length > 0 && (
           <button className="se-btn se-btn-ghost btn-sm" onClick={() => setBrouillon({})} disabled={decaler.isPending}>
             Annuler
@@ -439,7 +444,7 @@ function SuiviEcheancier({ copro, postes, params, annee }: { copro: PptCoproAvec
           </table>
         </div>
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
-          La flèche verte décale le poste d'un an ; un clic sur toute autre année le décale à cette année. Puis Enregistrer : le récap ci-dessus et le tableau de bord suivent. Le montant est recalculé pour l'année choisie (inflation, TVA, honoraires). Un clic sur un montant permet de le saisir à la main et d'y joindre un commentaire, visible au survol. Les postes votés, réalisés ou abandonnés sont figés. Tout est tracé dans l'historique.
+          La flèche verte décale le poste d'un an ; un clic sur toute autre année le décale à cette année. Puis Enregistrer : le récap ci-dessus et le tableau de bord suivent. Le montant est recalculé pour l'année choisie (inflation, TVA, honoraires). Un clic sur un montant permet de le saisir à la main et d'y joindre un commentaire, visible au survol, ou de retirer la ligne du plan avec un motif obligatoire ; « Lignes retirées » les liste et permet de les rétablir. Les postes votés, réalisés ou abandonnés sont figés. Tout est tracé dans l'historique.
         </p>
       </div>
       {bulleEtat &&
@@ -472,6 +477,10 @@ function SaisieMontant({ poste, params, annee, onClose }: { poste: PptPoste; par
   const [montant, setMontant] = useState(poste.montant_syndic != null ? String(poste.montant_syndic) : "");
   const [commentaire, setCommentaire] = useState(poste.commentaire_syndic ?? "");
   const [erreur, setErreur] = useState<string | null>(null);
+  // retrait de la ligne (feedback 22/09) : toute ligne ni votée ni réalisée, motif obligatoire
+  const [retrait, setRetrait] = useState(false);
+  const [motif, setMotif] = useState("");
+  const retirable = poste.statut !== "vote" && poste.statut !== "realise";
   const calcule = montantTtcPoste({ ...posteLite(poste), montant_syndic: null }, params, annee);
   const busy = saisir.isPending || retirer.isPending;
   const valeur = montant.trim() === "" ? null : Number(montant.replace(/\s/g, "").replace(",", "."));
@@ -512,31 +521,132 @@ function SaisieMontant({ poste, params, annee, onClose }: { poste: PptPoste; par
           <span className="se-small" style={{ color: "var(--fg-muted)", fontWeight: 400 }}>Affiché au survol du montant et sous le poste dans le récap.</span>
         </label>
         {erreur && <p style={{ margin: 0, padding: "8px 12px", borderRadius: "var(--radius-md)", background: "var(--color-error-50)", color: "var(--color-error-700)", fontSize: 13 }}>{erreur}</p>}
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {poste.origine === "syndic" && poste.statut !== "vote" && poste.statut !== "realise" && (
-            <button
-              type="button"
-              className="se-btn se-btn-ghost btn-sm"
-              style={{ color: "var(--color-error-700)" }}
-              disabled={busy}
-              onClick={() => {
-                if (!window.confirm(`Retirer la ligne « ${poste.libelle} » du suivi ?`)) return;
-                setErreur(null);
-                retirer.mutateAsync(poste.id).then(onClose).catch((err) => setErreur(err instanceof Error ? err.message : "Le retrait a échoué."));
-              }}
-            >
-              <Icon name="trash" size={13} />
-              Retirer la ligne
+        {retrait ? (
+          <div style={{ padding: "12px 14px", borderRadius: "var(--radius-md)", background: "var(--color-error-50)", display: "flex", flexDirection: "column", gap: 10 }}>
+            <label style={champStyle}>
+              Motif du retrait *
+              <textarea className="cs-textarea" rows={2} value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="Travaux déjà réalisés, poste hors périmètre de la copropriété, doublon avec un autre poste…" autoFocus />
+              <span className="se-small" style={{ color: "var(--fg-muted)", fontWeight: 400 }}>
+                Obligatoire. La ligne sort du récap, du suivi et du tableau de bord ; elle reste consultable et rétablissable depuis « Lignes retirées ». Le motif est tracé dans l'historique.
+              </span>
+            </label>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button type="button" className="se-btn se-btn-ghost btn-sm" onClick={() => setRetrait(false)} disabled={busy}>Annuler</button>
+              <button
+                type="button"
+                className="se-btn se-btn-primary btn-sm"
+                style={{ background: "var(--color-error-700)", borderColor: "var(--color-error-700)" }}
+                disabled={busy || !motif.trim()}
+                onClick={() => {
+                  setErreur(null);
+                  retirer.mutateAsync({ poste_id: poste.id, motif: motif.trim() }).then(onClose).catch((err) => setErreur(err instanceof Error ? err.message : "Le retrait a échoué."));
+                }}
+              >
+                <Icon name="trash" size={13} />
+                {retirer.isPending ? "Retrait…" : "Retirer la ligne"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {retirable && (
+              <button type="button" className="se-btn se-btn-ghost btn-sm" style={{ color: "var(--color-error-700)" }} disabled={busy} title="Retirer cette ligne du plan, avec un motif" onClick={() => setRetrait(true)}>
+                <Icon name="trash" size={13} />
+                Retirer la ligne
+              </button>
+            )}
+            <span style={{ flex: 1 }}></span>
+            <button type="button" className="se-btn se-btn-ghost btn-sm" onClick={onClose} disabled={busy}>Annuler</button>
+            <button type="submit" className="se-btn se-btn-primary btn-sm" disabled={!valide}>
+              <Icon name="check" size={14} />
+              {busy ? "Enregistrement…" : "Enregistrer"}
             </button>
-          )}
-          <span style={{ flex: 1 }}></span>
-          <button type="button" className="se-btn se-btn-ghost btn-sm" onClick={onClose} disabled={busy}>Annuler</button>
-          <button type="submit" className="se-btn se-btn-primary btn-sm" disabled={!valide}>
-            <Icon name="check" size={14} />
-            {busy ? "Enregistrement…" : "Enregistrer"}
-          </button>
-        </div>
+          </div>
+        )}
       </form>
+    </Modal>
+  );
+}
+
+/** « Lignes retirées » (feedback Amir 22/09) : bouton à côté de « Ajouter une ligne »,
+ *  tableau des postes retirés par le cabinet avec motif et date, rétablissement en un clic. */
+function BoutonLignesRetirees({ retirees, params }: { retirees: PptPoste[]; params: ReturnType<typeof parametresDepuisOrg> }) {
+  const [ouvert, setOuvert] = useState(false);
+  return (
+    <>
+      <button className="se-btn se-btn-secondary btn-sm" onClick={() => setOuvert(true)} disabled={retirees.length === 0} title={retirees.length ? "Voir les lignes retirées du plan et les rétablir" : "Aucune ligne retirée"}>
+        <Icon name="trash" size={14} />
+        Lignes retirées{retirees.length ? ` (${retirees.length})` : ""}
+      </button>
+      {ouvert && <LignesRetirees retirees={retirees} params={params} onClose={() => setOuvert(false)} />}
+    </>
+  );
+}
+
+function LignesRetirees({ retirees, params, onClose }: { retirees: PptPoste[]; params: ReturnType<typeof parametresDepuisOrg>; onClose: () => void }) {
+  const retablir = useRetablirPoste();
+  const [erreur, setErreur] = useState<string | null>(null);
+  const lignes = [...retirees].sort((a, b) => (b.retire_le ?? "").localeCompare(a.retire_le ?? ""));
+  return (
+    <Modal title="Lignes retirées" onClose={onClose} width={820} closeOnBackdrop={!retablir.isPending}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
+          Lignes retirées de l'échéancier par le cabinet, avec le motif indiqué au retrait. Elles ne comptent plus dans le récap, le suivi ni le tableau de bord. « Rétablir » remet la ligne dans le plan telle qu'elle était.
+        </p>
+        {lignes.length === 0 ? (
+          <p className="se-body" style={{ margin: 0 }}>Aucune ligne retirée.</p>
+        ) : (
+          <div className="tablewrap">
+            <table className="dossiers" style={{ fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <th>Poste</th>
+                  <th>Nature</th>
+                  <th className="num">Année</th>
+                  <th className="num">TTC</th>
+                  <th>Motif du retrait</th>
+                  <th>Retirée le</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {lignes.map((p) => (
+                  <tr key={p.id} style={{ cursor: "default" }}>
+                    <td style={{ fontWeight: 600, whiteSpace: "normal", minWidth: 180 }}>
+                      {p.libelle}
+                      {p.origine === "syndic" && <Badge kind="neutral">ajouté par le syndic</Badge>}
+                      {p.batiment && <span style={{ display: "block", fontSize: 11.5, color: "var(--fg-muted)", fontWeight: 400 }}>{p.batiment}</span>}
+                    </td>
+                    <td><PrioriteBadge priorite={p.priorite} /></td>
+                    <td className="num">{anneeEffective(p) ?? "-"}</td>
+                    <td className="num">{fmtEur(montantTtcPoste(posteLite(p), params))}</td>
+                    <td style={{ whiteSpace: "normal", maxWidth: 280 }}>{p.motif_retrait}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{fmtDateCourte(p.retire_le)}</td>
+                    <td>
+                      <button
+                        className="se-btn se-btn-ghost btn-sm"
+                        disabled={retablir.isPending}
+                        title="Remettre cette ligne dans le plan"
+                        onClick={() => {
+                          setErreur(null);
+                          retablir.mutateAsync(p.id).catch((err) => setErreur(err instanceof Error ? err.message : "Le rétablissement a échoué."));
+                        }}
+                      >
+                        <Icon name="refresh" size={13} />
+                        Rétablir
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {erreur && <p style={{ margin: 0, padding: "8px 12px", borderRadius: "var(--radius-md)", background: "var(--color-error-50)", color: "var(--color-error-700)", fontSize: 13 }}>{erreur}</p>}
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button type="button" className="se-btn se-btn-ghost btn-sm" onClick={onClose} disabled={retablir.isPending}>Fermer</button>
+        </div>
+      </div>
     </Modal>
   );
 }
@@ -999,6 +1109,7 @@ const JOURNAL_LABEL: Record<string, string> = {
   montant_saisi: "Montant saisi par le syndic",
   poste_ajoute: "Ligne ajoutée par le syndic",
   poste_retire: "Ligne retirée par le syndic",
+  poste_retabli: "Ligne rétablie par le syndic",
   import: "Portefeuille importé par le syndic",
   correction: "Document corrigé",
   requalification: "Type de document corrigé",
@@ -1019,7 +1130,8 @@ function HistoriqueTab({ c }: { c: PptCoproAvecStats }) {
     if (type === "ag_saisie") return `AG ${d.type} du ${fmtDateCourte(String(d.date_ag))}`;
     if (type === "montant_saisi") return `${d.libelle ?? "poste"} : ${d.montant != null ? fmtEur(Number(d.montant)) : "retour au calcul"}${d.commentaire ? ` - ${d.commentaire}` : ""}`;
     if (type === "poste_ajoute") return `${d.libelle ?? "poste"}${d.annee ? ` · ${d.annee}` : ""}${d.montant != null ? ` · ${fmtEur(Number(d.montant))}` : ""}`;
-    if (type === "poste_retire") return String(d.libelle ?? "");
+    if (type === "poste_retire") return `${d.libelle ?? "poste"}${d.motif ? ` - ${d.motif}` : ""}`;
+    if (type === "poste_retabli") return `${d.libelle ?? "poste"}${d.motif_retrait ? ` (retirée pour : ${d.motif_retrait})` : ""}`;
     if (type === "suppression") return `${TYPE_RAPPORT_LABEL[String(d.type)] ?? d.type} - ${d.name}`;
     if (type === "requalification") return `${TYPE_RAPPORT_LABEL[String(d.avant)] ?? d.avant} → ${TYPE_RAPPORT_LABEL[String(d.apres)] ?? d.apres}`;
     if (type === "correction")
