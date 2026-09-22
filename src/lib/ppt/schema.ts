@@ -1,10 +1,17 @@
-// Schéma `pppt-verif/1.0` - sortie du skill pppt-verif (analyse d'un PPPT
+// Schéma `pppt-verif/1.1` - sortie du skill pppt-verif (analyse d'un PPPT
 // tiers). C'est la frontière du module Suivi PPT : en phase 1 le JSON est
 // téléversé par le dirigeant après analyse locale ; plus tard l'edge function
 // ppt-analyser produira le même JSON. Ne pas modifier ces types à la volée :
-// un besoin nouveau = version 1.1 du schéma, avec migrateur.
+// un besoin nouveau = nouvelle version du schéma, avec migrateur (import.ts).
+//
+// 1.0 → 1.1 (22/09/2026) : le skill décide et l'utilisateur valide en bloc.
+// Bloc `propositions[]` (une décision = une proposition, avec son statut de
+// validation), `travaux_source[].scenario`, compteurs de propositions dans la
+// synthèse. Un JSON 1.0 est accepté et migré (propositions vides).
 
-export const SCHEMA_VERSION = "pppt-verif/1.0";
+export const SCHEMA_VERSION = "pppt-verif/1.1";
+/** Versions que la plateforme sait lire (1.0 migrée à l'import). */
+export const SCHEMAS_CONNUS = ["pppt-verif/1.0", "pppt-verif/1.1"];
 
 export type NatureDocument = "PPPT" | "PPT" | "DTG" | "AUDIT" | "DPE" | "TABLEAU" | "INCONNU";
 export type Etiquette = "A" | "B" | "C" | "D" | "E" | "F" | "G";
@@ -15,6 +22,9 @@ export type Verdict = "EXPLOITABLE" | "EXPLOITABLE_AVEC_RESERVES" | "A_REPRENDRE
 export type PrioriteSkill = "Préservation" | "Énergétique" | "Amélioration";
 export type CoutOrigine = "source" | "converti_depuis_TTC" | "estime_strateco";
 export type AnneeOrigine = "source" | "deduite" | "a_confirmer";
+/** Statut de validation d'une proposition du skill, décidé par Strat Eco sur la revue. */
+export type StatutValidationProposition = "A_VALIDER" | "VALIDEE" | "REFUSEE" | "MODIFIEE";
+export const STATUTS_VALIDATION: StatutValidationProposition[] = ["A_VALIDER", "VALIDEE", "REFUSEE", "MODIFIEE"];
 
 export interface DocumentSource {
   fichiers: { nom: string; type: string; pages: number | null }[];
@@ -85,6 +95,8 @@ export interface TravailSource {
   libelle_source: string;
   batiment: string | null;
   ouvrage: string | null;
+  /** 1.1 : plan / scénario du document quand il en propose plusieurs. */
+  scenario?: string | null;
   priorite_source: string | null;
   annee_source: number | null;
   periode_source: string | null;
@@ -147,10 +159,35 @@ export interface Synthese {
   nb_bloquants: number;
   nb_majeurs: number;
   nb_mineurs: number;
+  /** 1.1 */
+  nb_partiels?: number;
+  nb_propositions?: number;
+  nb_propositions_appliquees?: number;
   score_conformite_pct: number;
   score_coherence_pct: number;
   points_forts: string[];
   questions_ouvertes: string[];
+}
+
+/**
+ * Proposition du skill (1.1) : une décision prise par défaut, appliquée ou non
+ * au tableau, que Strat Eco accepte, refuse ou modifie sur la revue avant de
+ * matérialiser les postes. `appliquee_dans_ppt` = le tableau (travaux_normalises)
+ * la reflète déjà ; false = alternative soumise mais non retenue par le skill.
+ */
+export interface Proposition {
+  code: string;
+  theme: string;
+  decision: string;
+  valeur_source: string | null;
+  valeur_proposee: string;
+  impact: string;
+  alternative: string | null;
+  appliquee_dans_ppt: boolean;
+  lignes_concernees: string[];
+  controle_lie: string | null;
+  statut_validation: StatutValidationProposition;
+  commentaire_validateur: string | null;
 }
 
 export interface TravailNormalise {
@@ -200,6 +237,8 @@ export interface PpptVerifJson {
   synthese: Synthese;
   travaux_normalises: TravailNormalise[];
   parametres_ppt: ParametresPpt;
+  /** 1.1 : décisions du skill à valider en bloc (vide pour un JSON 1.0 migré). */
+  propositions: Proposition[];
   /** Ajouté par la plateforme à l'import : contrôles déterministes rejoués
    *  (famille « plateforme »), réécrits à chaque enregistrement de la revue. */
   remarques_plateforme?: Controle[];

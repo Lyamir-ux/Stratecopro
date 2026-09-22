@@ -1,11 +1,19 @@
 // Revue d'un PPPT (dirigeant) - /ppt/rapports/:id
 // 1. Télécharger le PDF, l'analyser en local avec le skill pppt-verif, importer
-//    le JSON pppt-verif/1.0 produit (contrat strict : refus explicite).
-// 2. Les contrôles déterministes de la plateforme sont rejoués sur le JSON et
+//    le JSON pppt-verif/1.1 produit (contrat strict : refus explicite ; un 1.0
+//    est migré, sans propositions).
+// 2. Les propositions du skill (décisions prises par défaut) sont validées en
+//    bloc : accepter / refuser / modifier, commentaire quand on s'écarte du
+//    tableau ; les lignes à reprendre à la main sont marquées dans les postes.
+//    Tant qu'une proposition reste « à valider », le rapport ne peut pas l'être
+//    (UI + RPC ppt_valider_rapport, migration 0085).
+// 3. Les contrôles déterministes de la plateforme sont rejoués sur le JSON et
 //    la fiche à chaque modification ; l'éditeur corrige les postes et la fiche ;
-//    chaque modification est journalisée (ppt_corrections) à l'enregistrement.
-// 3. Valider (bloquants levés avec motif) ou rejeter. Le syndic ne voit rien
-//    avant la validation.
+//    chaque modification (dont chaque décision) est journalisée (ppt_corrections)
+//    à l'enregistrement.
+// 4. Valider (bloquants levés avec motif) ou rejeter. Le syndic ne voit rien
+//    avant la validation. Les décisions se copient au format « P04 oui, P11 non »
+//    pour que le skill régénère le classeur Excel.
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
@@ -25,10 +33,11 @@ import {
   useRejeterRapport,
   useValiderRapport,
 } from "@/api/ppt";
-import type { Controle, PpptVerifJson, TravailNormalise } from "@/lib/ppt/schema";
+import type { Controle, PpptVerifJson, Proposition, StatutValidationProposition, TravailNormalise } from "@/lib/ppt/schema";
 import { codePriorite } from "@/lib/ppt/schema";
 import { bloquantsRestants, compterSeverites, controlesPlateforme } from "@/lib/ppt/controles";
-import { cleRemarque, cloner, diffJson, validerJson } from "@/lib/ppt/import";
+import { cleRemarque, cloner, diffJson, migrerJson, validerJson } from "@/lib/ppt/import";
+import { STATUT_VALIDATION_LABEL, accepterEnBloc, aReprendre, bilanPropositions, commentaireRequis, decider, libelleChoix, lignesAReprendre, propositionsEnAttente, propositionsSansCommentaire, texteDecisions } from "@/lib/ppt/propositions";
 import { montantTtcPoste, parametresDepuisJson, postesDepuisJson, totauxParAnnee } from "@/lib/ppt/formules";
 import { STATUT_CONTROLE_LABEL, TYPE_RAPPORT_LABEL, VERDICT_LABEL } from "@/lib/ppt/referentiels";
 import { SeveriteBadge, StatutRapportBadge, VerdictBadge, fmtDateCourte, fmtEur, fmtPct } from "@/pages/SyndicPpt/commun";
@@ -79,6 +88,72 @@ function LigneControle({ c, editable, onChange }: { c: Controle; editable: boole
   );
 }
 
+const COULEUR_STATUT: Record<StatutValidationProposition, string> = {
+  A_VALIDER: "var(--color-warning-700)",
+  VALIDEE: "var(--color-primary-700)",
+  REFUSEE: "var(--color-error-700)",
+  MODIFIEE: "var(--color-blue-700, #2E6FA8)",
+};
+
+/** Une proposition du skill : la décision, son contexte, et les trois choix du dirigeant. */
+function LigneProposition({ p, editable, onDecider }: { p: Proposition; editable: boolean; onDecider?: (statut: StatutValidationProposition, commentaire?: string) => void }) {
+  const [ouvert, setOuvert] = useState(p.statut_validation === "A_VALIDER");
+  const reprendre = aReprendre(p);
+  const manqueCommentaire = commentaireRequis(p) && !(p.commentaire_validateur ?? "").trim();
+  const choix: StatutValidationProposition[] = ["VALIDEE", "REFUSEE", "MODIFIEE"];
+  const aide = (st: StatutValidationProposition) => {
+    if (st === "VALIDEE") return p.appliquee_dans_ppt ? "D'accord avec la décision : rien à changer" : "Retenir cette alternative : les lignes concernées sont à reprendre";
+    if (st === "REFUSEE") return p.appliquee_dans_ppt ? "Refuser : les lignes concernées sont à reprendre à la main (commentaire obligatoire)" : "Laisser le tableau tel quel";
+    return "Retenir en l'adaptant : dites quoi en commentaire, puis reprenez les lignes";
+  };
+  return (
+    <div style={{ padding: "8px 4px", borderBottom: "1px solid var(--border)", background: p.statut_validation === "A_VALIDER" ? "var(--color-warning-50, transparent)" : undefined }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <Badge kind="neutral">{p.code}</Badge>
+        <span style={{ fontSize: 13, fontWeight: 600, flex: 1, minWidth: 200, cursor: "pointer" }} onClick={() => setOuvert((v) => !v)}>
+          {p.theme || p.decision}
+          {p.lignes_concernees.length > 0 && <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}> · {p.lignes_concernees.join(", ")}</span>}
+          {p.controle_lie && <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}> · {p.controle_lie}</span>}
+        </span>
+        <span className="se-small" title={p.appliquee_dans_ppt ? "Le tableau du skill reflète déjà cette décision" : "Alternative soumise par le skill, non appliquée au tableau"} style={{ color: "var(--fg-muted)" }}>
+          {p.appliquee_dans_ppt ? "appliquée au tableau" : "alternative non appliquée"}
+        </span>
+        {editable && onDecider ? (
+          <span style={{ display: "inline-flex", gap: 4 }}>
+            {choix.map((st) => (
+              <button key={st} type="button" className={`se-btn btn-sm ${p.statut_validation === st ? "se-btn-primary" : "se-btn-secondary"}`} style={{ padding: "2px 8px", fontSize: 12 }} title={aide(st)} onClick={() => onDecider(st)}>
+                {libelleChoix(p, st)}
+              </button>
+            ))}
+          </span>
+        ) : (
+          <span style={{ fontSize: 12, fontWeight: 600, color: COULEUR_STATUT[p.statut_validation] }}>{STATUT_VALIDATION_LABEL[p.statut_validation]}</span>
+        )}
+        {reprendre && <span className="se-small" title="La décision prise s'écarte du tableau du skill : reprenez les lignes concernées dans les postes" style={{ color: "var(--color-warning-700)" }}>↺ lignes à reprendre</span>}
+      </div>
+      {(ouvert || manqueCommentaire || reprendre) && (
+        <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.5 }}>
+          <p style={{ margin: 0 }}>{p.decision}</p>
+          {(p.valeur_source || p.valeur_proposee) && <p className="se-small" style={{ margin: "3px 0 0", color: "var(--fg-muted)" }}>{p.valeur_source ? `source ${p.valeur_source} → ` : ""}proposé {p.valeur_proposee}</p>}
+          {p.impact && <p className="se-small" style={{ margin: "3px 0 0", color: "var(--fg-muted)" }}>impact : {p.impact}</p>}
+          {p.alternative && <p className="se-small" style={{ margin: "3px 0 0", color: "var(--fg-muted)" }}>alternative : {p.alternative}</p>}
+          {editable && onDecider && p.statut_validation !== "A_VALIDER" ? (
+            <input
+              className="edit-inp sm"
+              style={{ maxWidth: "none", width: "100%", marginTop: 6, borderColor: manqueCommentaire ? "var(--color-warning-500)" : undefined }}
+              placeholder={commentaireRequis(p) ? "Commentaire obligatoire : ce qui est fait à la place (journalisé, renvoyé au skill)" : "Commentaire (facultatif)"}
+              value={p.commentaire_validateur ?? ""}
+              onChange={(e) => onDecider(p.statut_validation, e.target.value)}
+            />
+          ) : p.commentaire_validateur ? (
+            <p className="se-small" style={{ margin: "3px 0 0" }}>« {p.commentaire_validateur} »</p>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Revue() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -111,7 +186,8 @@ export default function Revue() {
   // le JSON de travail suit l'analyse chargée (import ou enregistrement)
   useEffect(() => {
     if (analyse?.json_corrige) {
-      const j = analyse.json_corrige as unknown as PpptVerifJson;
+      // une analyse importée avant la 1.1 n'a pas de bloc propositions : migrée à la lecture
+      const j = migrerJson(analyse.json_corrige as unknown as PpptVerifJson);
       setJson(cloner(j));
       setBase(cloner(j));
     }
@@ -135,6 +211,12 @@ export default function Revue() {
   const totaux = json && params ? totauxParAnnee(postesDepuisJson(json), params) : null;
   const revuePossible = dirigeant && rapport && ["depose", "en_analyse", "a_relire", "echec", "rejete"].includes(rapport.statut);
   const revueActive = revuePossible && rapport?.statut !== "valide";
+  // propositions du skill : à trancher avant de matérialiser les postes
+  const bilan = json ? bilanPropositions(json) : null;
+  const enAttente = json ? propositionsEnAttente(json) : [];
+  const sansCommentaire = json ? propositionsSansCommentaire(json) : [];
+  const lignesReprise = useMemo(() => (json ? lignesAReprendre(json) : new Map<string, string[]>()), [json]);
+  const [propositionsRepliees, setPropositionsRepliees] = useState(false);
 
   const importerFichier = async (f: File) => {
     setMessage(null);
@@ -154,7 +236,8 @@ export default function Revue() {
     }
     try {
       await importer.mutateAsync({ rapportId: id!, json: r.json });
-      setMessage(`Analyse importée : ${r.json.travaux_normalises.length} postes, verdict ${VERDICT_LABEL[r.json.synthese.verdict] ?? r.json.synthese.verdict}.`);
+      const nbProp = r.json.propositions.length;
+      setMessage(`Analyse importée : ${r.json.travaux_normalises.length} postes, verdict ${VERDICT_LABEL[r.json.synthese.verdict] ?? r.json.synthese.verdict}${nbProp ? `, ${nbProp} proposition${nbProp > 1 ? "s" : ""} du skill à valider avant la création du tableau` : ""}.`);
     } catch (e) {
       setErreurs([e instanceof Error ? e.message : "Import refusé par la base."]);
     }
@@ -181,6 +264,34 @@ export default function Revue() {
       };
     });
   const retirerPoste = (idPoste: string) => setJson((j) => (j ? { ...j, travaux_normalises: j.travaux_normalises.filter((t) => t.id !== idPoste) } : j));
+  const deciderProposition = (code: string, statut: StatutValidationProposition, commentaire?: string) => {
+    setErreurDecision(null);
+    setJson((j) => (j ? decider(j, code, statut, commentaire) : j));
+  };
+  const accepterToutLeReste = () => {
+    setErreurDecision(null);
+    setJson((j) => (j ? accepterEnBloc(j) : j));
+  };
+  const copierDecisions = async () => {
+    if (!json) return;
+    const texte = texteDecisions(json);
+    try {
+      await navigator.clipboard.writeText(texte);
+      setMessage(`Décisions copiées (${json.propositions.length}) : collez-les au skill pppt-verif pour régénérer le classeur Excel.`);
+    } catch {
+      setMessage(`Décisions : ${texte}`);
+    }
+  };
+  const telechargerJson = () => {
+    if (!jsonComplet) return;
+    const nom = `PPPT_VERIF_${(rapport?.copro?.nom ?? "copro").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "")}_valide.json`;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(jsonComplet, null, 2)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nom;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const sauvegarder = async (motif: string | null = null) => {
     if (!jsonComplet || !base) return;
@@ -213,6 +324,16 @@ export default function Revue() {
     setErreurDecision(null);
     if (!jsonComplet) return;
     // aucun abandon silencieux : le bouton reste actif et dit ce qui manque
+    if (enAttente.length) {
+      setPropositionsRepliees(false);
+      setErreurDecision(`Validation impossible : ${enAttente.length} proposition${enAttente.length > 1 ? "s" : ""} du skill encore à valider (${enAttente.map((p) => p.code).join(", ")}). Tranchez-les dans le panneau « Propositions du skill » ou acceptez tout le reste en bloc.`);
+      return;
+    }
+    if (sansCommentaire.length) {
+      setPropositionsRepliees(false);
+      setErreurDecision(`Indiquez ce qui est fait à la place pour ${sansCommentaire.map((p) => p.code).join(", ")} : le commentaire est journalisé et renvoyé au skill.`);
+      return;
+    }
     if (bloquantsRestant.length) {
       setErreurDecision(`Validation impossible : ${bloquantsRestant.length} contrôle${bloquantsRestant.length > 1 ? "s" : ""} bloquant${bloquantsRestant.length > 1 ? "s" : ""} non levé${bloquantsRestant.length > 1 ? "s" : ""} (${[...new Set(bloquantsRestant.map((b) => b.code))].join(", ")}). Corrigez le contrôle dans le panneau « Contrôles » ou cochez-le ci-contre pour le lever avec un motif.`);
       return;
@@ -270,7 +391,7 @@ export default function Revue() {
       )}
       {erreurs.length > 0 && (
         <div className="panel" style={{ padding: "12px 16px", marginBottom: 16, background: "var(--color-error-50)", color: "var(--color-error-700)" }}>
-          <b>Import refusé</b> - le JSON ne respecte pas le contrat pppt-verif/1.0 :
+          <b>Import refusé</b> - le JSON ne respecte pas le contrat pppt-verif/1.1 :
           <ul style={{ margin: "6px 0 0 18px", padding: 0, fontSize: 13 }}>{erreurs.map((e, i) => <li key={i}>{e}</li>)}</ul>
         </div>
       )}
@@ -303,6 +424,47 @@ export default function Revue() {
             <span style={{ color: "var(--fg-muted)" }}>{json.travaux_normalises.length} postes · année de base {json.parametres_ppt.annee_base}</span>
             {(traitements ?? []).length > 0 && <span style={{ color: "var(--fg-muted)" }}>importé le {fmtDateCourte(traitements![0].demarre_le)} ({traitements![0].mode === "api" ? `API ${traitements![0].modele ?? ""}, ${traitements![0].cout_usd ?? "?"} $` : "analyse locale"})</span>}
           </div>
+
+          {/* Propositions du skill : à valider en bloc avant la création du tableau */}
+          {bilan && bilan.total > 0 && (
+            <div className="panel" style={{ marginBottom: 16, borderColor: bilan.en_attente ? "var(--color-warning-500)" : undefined }}>
+              <div className="p-head">
+                <Icon name="clipboard" size={18} />
+                <h3>Propositions du skill</h3>
+                <span style={{ fontSize: 12.5, color: bilan.en_attente ? "var(--color-warning-700)" : "var(--fg-muted)", fontWeight: bilan.en_attente ? 600 : 400 }}>
+                  {bilan.en_attente ? `${bilan.en_attente} à valider` : "toutes tranchées"} · {bilan.validees} acceptée{bilan.validees > 1 ? "s" : ""} · {bilan.refusees} refusée{bilan.refusees > 1 ? "s" : ""} · {bilan.modifiees} modifiée{bilan.modifiees > 1 ? "s" : ""}{bilan.a_reprendre ? ` · ${bilan.a_reprendre} à répercuter sur les postes` : ""}
+                </span>
+                <span style={{ flex: 1 }}></span>
+                {revueActive && bilan.en_attente > 0 && (
+                  <button className="se-btn se-btn-primary btn-sm" title="Accepter les décisions appliquées, ne pas retenir les alternatives : le tableau du skill reste tel quel" onClick={accepterToutLeReste}>
+                    <Icon name="checkCircle" size={14} />
+                    Accepter tout le reste ({bilan.en_attente})
+                  </button>
+                )}
+                <button className="se-btn se-btn-ghost btn-sm" title="Copier « P01 oui, P02 non (motif)… » à coller au skill pour régénérer le classeur Excel" onClick={() => void copierDecisions()}>
+                  <Icon name="copy" size={14} />
+                  Copier les décisions
+                </button>
+                <button className="se-btn se-btn-ghost btn-sm" title="Télécharger le JSON de travail avec les statuts de validation" onClick={telechargerJson}>
+                  <Icon name="download" size={14} />
+                  JSON
+                </button>
+                <button className="icon-btn" title={propositionsRepliees ? "Afficher" : "Replier"} onClick={() => setPropositionsRepliees((v) => !v)}>
+                  <Icon name={propositionsRepliees ? "chevronDown" : "chevronUp"} size={14} />
+                </button>
+              </div>
+              {!propositionsRepliees && (
+                <div className="p-body" style={{ paddingTop: 0 }}>
+                  <p className="se-small" style={{ color: "var(--fg-muted)", margin: "8px 0 4px" }}>
+                    Le skill a décidé, vous validez en bloc : une décision « appliquée au tableau » est déjà dans les postes ci-dessous ; une « alternative » ne l'est pas. Refuser une décision appliquée, retenir une alternative ou modifier vous oblige à reprendre les lignes marquées ↺ dans les postes. Chaque décision est journalisée à l'enregistrement.
+                  </p>
+                  {json.propositions.map((p) => (
+                    <LigneProposition key={p.code} p={p} editable={!!revueActive} onDecider={revueActive ? (st, com) => deciderProposition(p.code, st, com) : undefined} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div style={{ display: "grid", gridTemplateColumns: "minmax(300px, 1.1fr) minmax(0, 2fr)", gap: 16, alignItems: "start" }}>
             {/* Contrôles */}
@@ -374,9 +536,10 @@ export default function Revue() {
                         const src = json.travaux_source.find((s) => s.id === t.id);
                         const ttc = params ? montantTtcPoste({ cout_ht_base: t.cout_ht_base_eur, tva_pct: t.tva_pct, avec_moe: t.avec_moe, annee_prevue: t.annee_prevue, gain_energetique_pct: t.gain_energetique_pct, priorite: codePriorite(t.priorite) }, params) : null;
                         const lie = [...json.controles, ...remarquesPlateforme].some((c) => (c.poste_code === t.id || t.controles_lies.includes(c.code)) && (c.statut === "NON_CONFORME" || c.statut === "PARTIEL"));
+                        const reprise = lignesReprise.get(t.id);
                         return (
-                          <tr key={t.id} style={{ cursor: "default", background: lie ? "var(--color-warning-50, transparent)" : undefined }}>
-                            <td style={{ color: "var(--fg-muted)" }} title={src ? `${src.libelle_source}${src.page ? ` (p. ${src.page})` : ""}` : ""}>{t.id}{lie && <span title="contrôle non conforme lié"> ⚠</span>}</td>
+                          <tr key={t.id} style={{ cursor: "default", background: lie || reprise ? "var(--color-warning-50, transparent)" : undefined }}>
+                            <td style={{ color: "var(--fg-muted)", whiteSpace: "nowrap" }} title={src ? `${src.libelle_source}${src.page ? ` (p. ${src.page})` : ""}` : ""}>{t.id}{lie && <span title="contrôle non conforme lié"> ⚠</span>}{reprise && <span title={`à reprendre suite à votre décision sur ${reprise.join(", ")}`} style={{ color: "var(--color-warning-700)" }}> ↺ {reprise.join(", ")}</span>}</td>
                             <td style={{ minWidth: 200 }}>
                               {revueActive ? <input className="edit-inp sm" style={{ maxWidth: "none", width: "100%" }} value={t.libelle} onChange={(e) => majPoste(t.id, { libelle: e.target.value })} /> : <b>{t.libelle}</b>}
                               {src && src.libelle_source !== t.libelle && <span style={{ display: "block", fontSize: 11, color: "var(--fg-muted)" }}>{src.libelle_source}{src.page ? ` · p. ${src.page}` : ""}</span>}
@@ -439,7 +602,7 @@ export default function Revue() {
                       {leves.length > 0 && <input className="edit-inp" style={{ maxWidth: "none", marginTop: 8 }} placeholder="Motif de la levée (obligatoire, journalisé)" value={motifLevee} onChange={(e) => { setErreurDecision(null); setMotifLevee(e.target.value); }} />}
                     </>
                   ) : (
-                    <div className="se-eyebrow" style={{ color: "var(--color-primary-700)" }}>Aucun bloquant : le rapport peut être validé</div>
+                    <div className="se-eyebrow" style={{ color: enAttente.length ? "var(--color-warning-700)" : "var(--color-primary-700)" }}>{enAttente.length ? `Aucun bloquant, mais ${enAttente.length} proposition${enAttente.length > 1 ? "s" : ""} du skill à valider` : "Aucun bloquant : le rapport peut être validé"}</div>
                   )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
@@ -448,9 +611,9 @@ export default function Revue() {
                       <Icon name="check" size={14} />
                       {enregistrer.isPending ? "Enregistrement…" : dirty ? "Enregistrer la revue" : "Revue enregistrée"}
                     </button>
-                    <button className="se-btn se-btn-primary btn-sm" disabled={valider.isPending || enregistrer.isPending} title={bloquantsRestant.length ? "Levez ou corrigez les bloquants" : "Matérialise postes et remarques pour le cabinet"} onClick={() => void validerRapport()}>
+                    <button className="se-btn se-btn-primary btn-sm" disabled={valider.isPending || enregistrer.isPending} title={enAttente.length ? "Tranchez d'abord les propositions du skill" : bloquantsRestant.length ? "Levez ou corrigez les bloquants" : "Matérialise postes et remarques pour le cabinet"} onClick={() => void validerRapport()}>
                       <Icon name="checkCircle" size={14} />
-                      {valider.isPending ? "Validation…" : `Valider${bloquantsRestant.length ? ` - ${bloquantsRestant.length} à lever` : ""}`}
+                      {valider.isPending ? "Validation…" : `Valider${enAttente.length ? ` - ${enAttente.length} proposition${enAttente.length > 1 ? "s" : ""} à valider` : bloquantsRestant.length ? ` - ${bloquantsRestant.length} à lever` : ""}`}
                     </button>
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>

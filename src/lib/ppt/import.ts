@@ -1,9 +1,10 @@
-// Contrat d'import du JSON pppt-verif/1.0 : validation stricte (refus explicite
-// avec la liste des écarts, jamais de réparation silencieuse) et journal des
+// Contrat d'import du JSON pppt-verif/1.x : validation stricte (refus explicite
+// avec la liste des écarts, jamais de réparation silencieuse), migration d'une
+// version antérieure connue (1.0 → 1.1 : propositions vides) et journal des
 // corrections (diff entre deux états du JSON de travail).
 
-import type { Controle, PpptVerifJson, TravailNormalise } from "./schema";
-import { cleControle } from "./schema";
+import type { Controle, PpptVerifJson, Proposition, TravailNormalise } from "./schema";
+import { SCHEMAS_CONNUS, SCHEMA_VERSION, STATUTS_VALIDATION, cleControle } from "./schema";
 
 export interface ResultatValidation {
   ok: boolean;
@@ -26,7 +27,8 @@ export function validerJson(brut: unknown): ResultatValidation {
 
   const version = brut.schema_version;
   if (typeof version !== "string" || !version.startsWith("pppt-verif/1.")) erreurs.push(`schema_version « ${String(version ?? "absent")} » : pppt-verif/1.x attendu.`);
-  if (typeof version === "string" && version !== "pppt-verif/1.0") avertissements.push(`Version ${version} : la plateforme connaît la 1.0, les champs inconnus sont ignorés.`);
+  else if (version === "pppt-verif/1.0") avertissements.push("JSON pppt-verif/1.0 (skill antérieur) : aucune proposition à valider, les décisions du skill n'ont pas été tracées.");
+  else if (!SCHEMAS_CONNUS.includes(version)) avertissements.push(`Version ${version} : la plateforme connaît la ${SCHEMA_VERSION.replace("pppt-verif/", "")}, les champs inconnus sont ignorés.`);
 
   for (const cle of ["document_source", "copropriete", "synthese", "parametres_ppt"]) if (!estObjet(brut[cle])) erreurs.push(`Bloc « ${cle} » absent ou invalide.`);
   for (const cle of ["travaux_source", "travaux_normalises", "controles"]) if (!Array.isArray(brut[cle])) erreurs.push(`Tableau « ${cle} » absent.`);
@@ -71,7 +73,49 @@ export function validerJson(brut: unknown): ResultatValidation {
   }
   if (estObjet(brut.synthese) && typeof brut.synthese.verdict !== "string") erreurs.push("synthese.verdict absent.");
 
-  return { ok: erreurs.length === 0, json: erreurs.length === 0 ? (brut as unknown as PpptVerifJson) : null, erreurs, avertissements };
+  // propositions (1.1) : une décision = un code unique ; les statuts de validation
+  // sont ceux du skill (une valeur absente naît « à valider »)
+  if (brut.propositions !== undefined && !Array.isArray(brut.propositions)) erreurs.push("Tableau « propositions » invalide.");
+  else if (brut.propositions === undefined && typeof version === "string" && version !== "pppt-verif/1.0") avertissements.push("Aucun bloc « propositions » : les décisions du skill ne seront pas soumises à validation.");
+  const propositions = Array.isArray(brut.propositions) ? (brut.propositions as unknown[]) : [];
+  const codesProp = new Set<string>();
+  const idsConnus = new Set([...idsSource, ...idsNorm]);
+  propositions.forEach((p, i) => {
+    if (!estObjet(p) || typeof p.code !== "string" || !p.code) return erreurs.push(`propositions[${i}] sans code.`);
+    if (codesProp.has(p.code)) erreurs.push(`propositions : code « ${p.code} » en double.`);
+    codesProp.add(p.code);
+    if (typeof p.decision !== "string" || !p.decision) erreurs.push(`proposition ${p.code} : décision absente.`);
+    if (p.statut_validation != null && (typeof p.statut_validation !== "string" || !STATUTS_VALIDATION.includes(p.statut_validation as never))) erreurs.push(`proposition ${p.code} : statut de validation « ${String(p.statut_validation)} » inconnu.`);
+    if (p.lignes_concernees != null && !Array.isArray(p.lignes_concernees)) erreurs.push(`proposition ${p.code} : lignes_concernees doit être un tableau.`);
+    const inconnues = (Array.isArray(p.lignes_concernees) ? p.lignes_concernees : []).filter((l) => typeof l !== "string" || !idsConnus.has(l));
+    if (inconnues.length) avertissements.push(`Proposition ${p.code} : ligne${inconnues.length > 1 ? "s" : ""} ${inconnues.map(String).join(", ")} inconnue${inconnues.length > 1 ? "s" : ""} des travaux.`);
+  });
+
+  return { ok: erreurs.length === 0, json: erreurs.length === 0 ? migrerJson(brut as unknown as PpptVerifJson) : null, erreurs, avertissements };
+}
+
+/**
+ * Migre un JSON validé vers la forme que la plateforme manipule (1.1) sans en
+ * changer la version déclarée : un 1.0 reçoit un bloc de propositions vide, une
+ * proposition sans statut naît « à valider ». Idempotent : appliqué aussi au
+ * JSON de travail relu en base (analyses importées avant la 1.1).
+ */
+export function migrerJson(j: PpptVerifJson): PpptVerifJson {
+  const propositions: Proposition[] = (Array.isArray(j.propositions) ? j.propositions : []).map((p) => ({
+    code: p.code,
+    theme: p.theme ?? "",
+    decision: p.decision,
+    valeur_source: p.valeur_source ?? null,
+    valeur_proposee: p.valeur_proposee ?? "",
+    impact: p.impact ?? "",
+    alternative: p.alternative ?? null,
+    appliquee_dans_ppt: p.appliquee_dans_ppt !== false,
+    lignes_concernees: Array.isArray(p.lignes_concernees) ? p.lignes_concernees.map(String) : [],
+    controle_lie: p.controle_lie ?? null,
+    statut_validation: STATUTS_VALIDATION.includes(p.statut_validation) ? p.statut_validation : "A_VALIDER",
+    commentaire_validateur: p.commentaire_validateur ?? null,
+  }));
+  return { ...j, propositions };
 }
 
 export interface CorrectionJson {
@@ -90,8 +134,9 @@ const egal = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stri
 
 /**
  * Corrections manuelles entre deux états du JSON de travail : postes (par id),
- * fiche copropriété, paramètres, et statut / visibilité des contrôles. C'est la
- * matière première des futures règles (objectif de convergence du brief).
+ * fiche copropriété, paramètres, statut / visibilité des contrôles et décision
+ * prise sur chaque proposition du skill. C'est la matière première des futures
+ * règles (objectif de convergence du brief).
  */
 export function diffJson(avant: PpptVerifJson, apres: PpptVerifJson, motif: string | null = null): CorrectionJson[] {
   const out: CorrectionJson[] = [];
@@ -121,6 +166,13 @@ export function diffJson(avant: PpptVerifJson, apres: PpptVerifJson, motif: stri
     push(`controles[${c.code}].statut`, c.poste_code ?? null, a.statut, c.statut);
     push(`controles[${c.code}].severite`, c.poste_code ?? null, a.severite, c.severite);
     push(`controles[${c.code}].visible_syndic`, c.poste_code ?? null, a.visible_syndic ?? true, c.visible_syndic ?? true);
+  }
+  const propAvant = new Map((avant.propositions ?? []).map((p) => [p.code, p]));
+  for (const p of apres.propositions ?? []) {
+    const a = propAvant.get(p.code);
+    if (!a) continue;
+    push(`propositions[${p.code}].statut_validation`, null, a.statut_validation, p.statut_validation);
+    push(`propositions[${p.code}].commentaire_validateur`, null, a.commentaire_validateur, p.commentaire_validateur);
   }
   const remAvant = new Map((avant.remarques_plateforme ?? []).map((c) => [cleRemarque(c), c]));
   for (const c of apres.remarques_plateforme ?? []) {

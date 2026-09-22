@@ -23,12 +23,65 @@ describe("import du JSON pppt-verif", () => {
     expect(r.erreurs[0]).toContain("schema_version");
   });
 
-  it("accepte une 1.1 avec avertissement", () => {
+  it("accepte une 1.2 avec avertissement", () => {
     const j = cloner(EXEMPLE) as unknown as Record<string, unknown>;
-    j.schema_version = "pppt-verif/1.1";
+    j.schema_version = "pppt-verif/1.2";
     const r = validerJson(j);
     expect(r.ok).toBe(true);
-    expect(r.avertissements.some((a) => a.includes("1.1"))).toBe(true);
+    expect(r.avertissements.some((a) => a.includes("1.2"))).toBe(true);
+  });
+
+  it("migre un JSON 1.0 : propositions vides, avertissement sur l'absence de décisions tracées", () => {
+    const j = cloner(EXEMPLE) as unknown as Record<string, unknown>;
+    j.schema_version = "pppt-verif/1.0";
+    delete j.propositions;
+    const r = validerJson(j);
+    expect(r.ok).toBe(true);
+    expect(r.json?.propositions).toEqual([]);
+    expect(r.avertissements.some((a) => a.includes("1.0"))).toBe(true);
+  });
+
+  it("une 1.1 sans bloc propositions passe avec avertissement", () => {
+    const j = cloner(EXEMPLE) as unknown as Record<string, unknown>;
+    delete j.propositions;
+    const r = validerJson(j);
+    expect(r.ok).toBe(true);
+    expect(r.avertissements.some((a) => a.includes("propositions"))).toBe(true);
+  });
+
+  it("refuse une proposition sans code, en double, sans décision ou à statut inconnu", () => {
+    const j = cloner(EXEMPLE) as unknown as { propositions: Record<string, unknown>[] };
+    j.propositions[1].code = "P01";
+    j.propositions[2].decision = "";
+    j.propositions[2].statut_validation = "PEUT_ETRE";
+    j.propositions.push({ theme: "x" });
+    const r = validerJson(j);
+    expect(r.ok).toBe(false);
+    expect(r.erreurs.some((e) => e.includes("en double"))).toBe(true);
+    expect(r.erreurs.some((e) => e.includes("décision absente"))).toBe(true);
+    expect(r.erreurs.some((e) => e.includes("PEUT_ETRE"))).toBe(true);
+    expect(r.erreurs.some((e) => e.includes("sans code"))).toBe(true);
+  });
+
+  it("une proposition sans statut naît « à valider » ; une ligne inconnue n'est qu'un avertissement", () => {
+    const j = cloner(EXEMPLE) as unknown as { propositions: Record<string, unknown>[] };
+    delete j.propositions[0].statut_validation;
+    j.propositions[0].lignes_concernees = ["T01", "T42"];
+    const r = validerJson(j);
+    expect(r.ok).toBe(true);
+    expect(r.json?.propositions[0].statut_validation).toBe("A_VALIDER");
+    expect(r.avertissements.some((a) => a.includes("T42"))).toBe(true);
+  });
+
+  it("journalise la décision prise sur une proposition et son commentaire", () => {
+    const apres = cloner(EXEMPLE);
+    apres.propositions[0].statut_validation = "VALIDEE";
+    apres.propositions[2].statut_validation = "REFUSEE";
+    apres.propositions[2].commentaire_validateur = "le syndic préfère appeler le fonds";
+    const d = diffJson(EXEMPLE, apres);
+    expect(d).toHaveLength(3);
+    expect(d.find((c) => c.chemin_json === "propositions[P01].statut_validation")).toMatchObject({ valeur_avant: "A_VALIDER", valeur_apres: "VALIDEE", poste_code: null });
+    expect(d.find((c) => c.chemin_json === "propositions[P03].commentaire_validateur")).toMatchObject({ valeur_apres: "le syndic préfère appeler le fonds" });
   });
 
   it("refuse les identifiants en double et les postes normalisés orphelins", () => {
