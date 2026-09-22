@@ -295,13 +295,6 @@ button { font-family: inherit; }
 .thumb-ph .cap { font-family: var(--font-mono); font-size: 11px; color: var(--color-primary-700); opacity: 0.75; letter-spacing: 0.02em; }
 
 /* ==========================================================================
-   GALLERY (grandes cartes)
-   ========================================================================== */
-.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 22px; }
-.gallery .copro-card .cc-thumb { aspect-ratio: 16 / 7; }
-.gallery .copro-card .cc-name { font-size: 22px; }
-
-/* ==========================================================================
    TABLE (dense)
    ========================================================================== */
 .tablewrap { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm); }

@@ -1,5 +1,5 @@
 // Tableau de bord AMO - porté de design-reference/project/dashboard.jsx
-// Vues Kanban / Galerie / Tableau, KPI, filtres phase & secteur fonctionnels.
+// Vues Kanban / Liste (triable et exportable), KPI, filtres phase & secteur fonctionnels.
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
@@ -8,6 +8,7 @@ import { Modal } from "@/components/Modal";
 import { Avatar, Badge, DpePair, PhaseBadge, Progress, ThumbSlot } from "@/components/ui";
 import { PHASES, type DpeClass, type PhaseId } from "@/lib/referentiels";
 import { fmtEuro } from "@/lib/format";
+import { telechargerCsv } from "@/lib/csv";
 import { useUi } from "@/stores/ui";
 import {
   avancementAmo,
@@ -157,30 +158,70 @@ function KanbanView({ copros, showProgress }: { copros: CoproWithStats[]; showPr
   );
 }
 
-function GalleryView({ copros, showProgress }: { copros: CoproWithStats[]; showProgress: boolean }) {
-  return (
-    <div className="gallery">
-      {copros.map((c) => (
-        <CoproCard key={c.id} c={c} showProgress={showProgress} />
-      ))}
-    </div>
-  );
+type ColTri = "name" | "phase" | "logements" | "coproprietaires" | "montant" | "progress";
+
+const PHASE_RANK: Record<PhaseId, number> = { diagnostic: 0, etudes: 1, travaux: 2 };
+
+export interface Tri {
+  col: ColTri;
+  desc: boolean;
 }
 
-function TableView({ copros }: { copros: CoproWithStats[] }) {
+/** Tri de la vue liste - l'ordre affiché est aussi celui de l'export. */
+export function trierCopros(copros: CoproWithStats[], tri: Tri): CoproWithStats[] {
+  const valeur = (c: CoproWithStats): string | number => {
+    switch (tri.col) {
+      case "name":
+        return c.name;
+      case "phase":
+        return PHASE_RANK[c.phase];
+      case "logements":
+        return nbLogements(c);
+      case "coproprietaires":
+        return c.stats?.coproprietaires ?? 0;
+      case "montant":
+        return c.stats?.montant_ttc ?? 0;
+      case "progress":
+        return avancementAmo(c);
+    }
+  };
+  return [...copros].sort((a, b) => {
+    const va = valeur(a);
+    const vb = valeur(b);
+    const cmp = typeof va === "string" ? va.localeCompare(String(vb), "fr") : Number(va) - Number(vb);
+    return tri.desc ? -cmp : cmp;
+  });
+}
+
+/** Vue liste : colonnes triables, exportable en CSV depuis l'en-tête de page
+ *  (feedback Amir 22/09 - remplace la vue galerie, sans usage). */
+function ListeView({ copros, tri, setTri }: { copros: CoproWithStats[]; tri: Tri; setTri: (t: Tri) => void }) {
   const navigate = useNavigate();
+  const cliquerTri = (col: ColTri) => setTri({ col, desc: tri.col === col ? !tri.desc : col !== "name" });
+  const Th = ({ col, label }: { col: ColTri; label: string }) => (
+    <th
+      style={{ cursor: "pointer", userSelect: "none" }}
+      title="Trier sur cette colonne"
+      onClick={() => cliquerTri(col)}
+    >
+      {label}
+      {tri.col === col && (
+        <Icon name={tri.desc ? "chevronDown" : "chevronUp"} size={12} style={{ marginLeft: 4, verticalAlign: -1 }} />
+      )}
+    </th>
+  );
   return (
     <div className="tablewrap fade">
       <table className="dossiers">
         <thead>
           <tr>
-            <th>Copropriété</th>
-            <th>Phase</th>
+            <Th col="name" label="Copropriété" />
+            <Th col="phase" label="Phase" />
             <th>DPE</th>
-            <th>Logements</th>
-            <th>Copro.</th>
-            <th>Montant TTC</th>
-            <th>Avancement</th>
+            <Th col="logements" label="Logements" />
+            <Th col="coproprietaires" label="Copro." />
+            <Th col="montant" label="Montant TTC" />
+            <Th col="progress" label="Avancement" />
             <th>Équipe</th>
             <th></th>
           </tr>
@@ -700,13 +741,38 @@ function CorbeilleDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** Export de la liste telle qu'elle est affichée : mêmes dossiers (filtres
+ *  appliqués), même ordre de tri, toutes les colonnes utiles au reporting. */
 function exportCsv(copros: CoproWithStats[]) {
-  const head = ["Copropriété", "Ville", "Phase", "DPE avant", "DPE après", "Gain %", "Logements", "Lots", "Copropriétaires", "Bâtiments", "Montant TTC", "Avancement %", "Syndic", "Gestionnaire"];
-  const lines = copros.map((c) =>
+  telechargerCsv(
+    "coproprietes-strateco.csv",
     [
+      "Copropriété",
+      "Adresse",
+      "Code postal",
+      "Ville",
+      "Phase",
+      "DPE avant",
+      "DPE après",
+      "Gain %",
+      "Logements",
+      "Lots",
+      "Copropriétaires",
+      "Bâtiments",
+      "Montant TTC",
+      "Avancement %",
+      "Chef de projet",
+      "Syndic",
+      "Gestionnaire",
+      "Fragile",
+      "Prochaine étape",
+    ],
+    copros.map((c) => [
       c.name,
+      c.adresse ?? "",
+      c.code_postal ?? "",
       c.city ?? "",
-      c.phase,
+      PHASES.find((p) => p.id === c.phase)?.label ?? c.phase,
       c.energy_before ?? "",
       c.energy_after ?? "",
       c.gain_pct ?? "",
@@ -716,19 +782,13 @@ function exportCsv(copros: CoproWithStats[]) {
       c.stats?.batiments ?? 0,
       c.stats?.montant_ttc ?? "",
       avancementAmo(c),
+      c.chef_projet ?? "",
       c.syndic_name ?? "",
       c.gestionnaire_nom ?? "",
-    ]
-      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-      .join(";")
+      c.fragile ? "Oui" : "",
+      c.stats?.next_task ?? "",
+    ])
   );
-  const blob = new Blob(["﻿" + [head.join(";"), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "coproprietes-strateco.csv";
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 export default function Dashboard() {
@@ -738,6 +798,7 @@ export default function Dashboard() {
   const [phaseFilter, setPhaseFilter] = useState<PhaseId | "">("");
   const [cityFilter, setCityFilter] = useState<string>("");
   const [gestionnaireFilter, setGestionnaireFilter] = useState<string>("");
+  const [tri, setTri] = useState<Tri>({ col: "name", desc: false });
   const [showNew, setShowNew] = useState(false);
   const [showCorbeille, setShowCorbeille] = useState(false);
   const { data: corbeille } = useCoprosCorbeille();
@@ -769,11 +830,20 @@ export default function Dashboard() {
       (!chefProjetFilter || c.chef_projet === chefProjetFilter) &&
       (!gestionnaireFilter || c.gestionnaire_nom?.trim() === gestionnaireFilter)
   );
+  // Ce que montre la liste est aussi ce que produit l'export : mêmes filtres,
+  // même tri.
+  const lignes = useMemo(
+    () => trierCopros(filtered, tri),
+    // `filtered` est reconstruit à chaque rendu : on dépend de ce qui le détermine.
+    [copros, phaseFilter, cityFilter, chefProjetFilter, gestionnaireFilter, tri] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
+  // Deux vues seulement : le Kanban pour le pilotage par phase, la liste pour
+  // le reporting (triable et exportable) - feedback Amir 22/09, la galerie ne
+  // servait à rien.
   const views = [
     { id: "kanban" as const, label: "Kanban", icon: "columns" as const },
-    { id: "galerie" as const, label: "Galerie", icon: "grid" as const },
-    { id: "tableau" as const, label: "Tableau", icon: "table" as const },
+    { id: "liste" as const, label: "Liste", icon: "table" as const },
   ];
 
   if (error)
@@ -800,9 +870,14 @@ export default function Dashboard() {
           <Icon name="trash" size={15} />
           Corbeille{(corbeille?.length ?? 0) > 0 ? ` (${corbeille!.length})` : ""}
         </button>
-        <button className="se-btn se-btn-secondary btn-sm" onClick={() => copros && exportCsv(copros)}>
+        <button
+          className="se-btn se-btn-secondary btn-sm"
+          title="Exporter en CSV la liste affichée (filtres et tri appliqués) - s'ouvre dans Excel"
+          disabled={lignes.length === 0}
+          onClick={() => exportCsv(lignes)}
+        >
           <Icon name="download" size={16} />
-          Exporter
+          Exporter la liste
         </button>
         <button className="se-btn se-btn-primary btn-sm" onClick={() => setShowNew(true)}>
           <Icon name="plus" size={16} />
@@ -885,9 +960,11 @@ export default function Dashboard() {
         </span>
       </div>
 
-      {dashLayout === "kanban" && <KanbanView copros={filtered} showProgress={showProgress} />}
-      {dashLayout === "galerie" && <GalleryView copros={filtered} showProgress={showProgress} />}
-      {dashLayout === "tableau" && <TableView copros={filtered} />}
+      {dashLayout === "kanban" ? (
+        <KanbanView copros={filtered} showProgress={showProgress} />
+      ) : (
+        <ListeView copros={lignes} tri={tri} setTri={setTri} />
+      )}
 
       {!isLoading && filtered.length === 0 && (
         <div style={{ padding: 40, textAlign: "center", color: "var(--fg-muted)" }}>
