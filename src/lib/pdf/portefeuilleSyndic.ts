@@ -15,6 +15,8 @@ export interface LignePortefeuillePdf {
   gestionnaire?: string | null;
   /** Phase d'avancement affichée (d'après les tâches validées du syndic). */
   phase: PhaseId;
+  /** Toutes les tâches du syndic validées : « Terminé » à la place de la phase. */
+  termine?: boolean;
   dpeAvant?: string | null;
   dpeApres?: string | null;
   gainPct?: number | null;
@@ -48,7 +50,9 @@ export interface GroupeGestionnairePdf {
   logements: number;
   montant: number;
   honoraires: number;
+  /** Dossiers en cours par phase (les dossiers terminés n'y figurent pas). */
   phases: Record<PhaseId, number>;
+  termines: number;
   retard: number;
 }
 
@@ -59,12 +63,13 @@ export function regrouperParGestionnaire(lignes: LignePortefeuillePdf[]): Groupe
   const groupes = new Map<string, GroupeGestionnairePdf>();
   for (const l of lignes) {
     const nom = l.gestionnaire?.trim() || NON_ATTRIBUE;
-    const g = groupes.get(nom) ?? { nom, copros: 0, logements: 0, montant: 0, honoraires: 0, phases: { diagnostic: 0, etudes: 0, travaux: 0 }, retard: 0 };
+    const g = groupes.get(nom) ?? { nom, copros: 0, logements: 0, montant: 0, honoraires: 0, phases: { diagnostic: 0, etudes: 0, travaux: 0 }, termines: 0, retard: 0 };
     g.copros += 1;
     g.logements += l.logements;
     g.montant += l.montantTtc ?? 0;
     g.honoraires += l.honoraires ?? 0;
-    g.phases[l.phase] += 1;
+    if (l.termine) g.termines += 1;
+    else g.phases[l.phase] += 1;
     g.retard += l.retard;
     groupes.set(nom, g);
   }
@@ -91,6 +96,8 @@ const ORANGE = rgb(0.85, 0.52, 0.05); // diagnostic (warning)
 const BLEU = rgb(0.18, 0.435, 0.659); // études (secondaire #2E6FA8)
 const ROUGE_FONCE = rgb(0.6, 0.106, 0.106);
 const BLANC = rgb(1, 1, 1);
+
+const ARDOISE = rgb(0.247, 0.271, 0.286); // terminé (neutre 700 #3F4549)
 
 const COULEUR_PHASE: Record<PhaseId, RGB> = { diagnostic: ORANGE, etudes: BLEU, travaux: VERT };
 
@@ -329,7 +336,8 @@ export async function genererPortefeuilleSyndicPdf(input: PortefeuillePdfInput):
   const totalRetard = lignes.reduce((s, l) => s + l.retard, 0);
   const dossiersEnRetard = lignes.filter((l) => l.retard > 0).length;
   const fragiles = lignes.filter((l) => l.fragile).length;
-  const parPhase = PHASES.map((ph) => ({ ph, n: lignes.filter((l) => l.phase === ph.id).length }));
+  const parPhase = PHASES.map((ph) => ({ ph, n: lignes.filter((l) => !l.termine && l.phase === ph.id).length }));
+  const nbTermines = lignes.filter((l) => l.termine).length;
   const nbGest = groupes.filter((g) => g.nom !== NON_ATTRIBUE).length;
 
   f.titreSection("Synthèse du portefeuille");
@@ -345,9 +353,12 @@ export async function genererPortefeuilleSyndicPdf(input: PortefeuillePdfInput):
   let x = MARGE;
   f.page.drawText(txt("Avancement des dossiers :"), { x, y: f.y - 10, size: 8.5, font: bold, color: ENCRE });
   x += bold.widthOfTextAtSize("Avancement des dossiers :", 8.5) + 12;
-  for (const { ph, n } of parPhase) {
-    f.page.drawCircle({ x: x + 3.5, y: f.y - 7, size: 3.5, color: COULEUR_PHASE[ph.id] });
-    const s = txt(`${ph.label} : ${n}`);
+  for (const { label, n, couleur } of [
+    ...parPhase.map(({ ph, n }) => ({ label: ph.label, n, couleur: COULEUR_PHASE[ph.id] })),
+    { label: "Terminé", n: nbTermines, couleur: ARDOISE },
+  ]) {
+    f.page.drawCircle({ x: x + 3.5, y: f.y - 7, size: 3.5, color: couleur });
+    const s = txt(`${label} : ${n}`);
     f.page.drawText(s, { x: x + 11, y: f.y - 10, size: 8.5, font, color: ENCRE });
     x += 11 + font.widthOfTextAtSize(s, 8.5) + 18;
   }
@@ -357,13 +368,14 @@ export async function genererPortefeuilleSyndicPdf(input: PortefeuillePdfInput):
   if (groupes.length > 1) {
     f.titreSection("Comparatif par gestionnaire");
     const cols: Col[] = [
-      { titre: "Gestionnaire", w: 190 },
-      { titre: "Copros", w: 60, align: "right" },
-      { titre: "Logements", w: 72, align: "right" },
-      { titre: "Montant TTC", w: 90, align: "right" },
-      { titre: "Honoraires", w: 84, align: "right" },
-      ...PHASES.map((ph) => ({ titre: ph.label, w: 66, align: "right" as const })),
-      { titre: "Tâches en retard", w: LARGEUR - (190 + 60 + 72 + 90 + 84 + 66 * PHASES.length), align: "right" },
+      { titre: "Gestionnaire", w: 160 },
+      { titre: "Copros", w: 50, align: "right" },
+      { titre: "Logements", w: 64, align: "right" },
+      { titre: "Montant TTC", w: 84, align: "right" },
+      { titre: "Honoraires", w: 76, align: "right" },
+      ...PHASES.map((ph) => ({ titre: ph.label, w: 58, align: "right" as const })),
+      { titre: "Terminé", w: 58, align: "right" },
+      { titre: "Tâches en retard", w: LARGEUR - (160 + 50 + 64 + 84 + 76 + 58 * (PHASES.length + 1)), align: "right" },
     ];
     tableau(
       f,
@@ -376,11 +388,12 @@ export async function genererPortefeuilleSyndicPdf(input: PortefeuillePdfInput):
           { texte: euroCourt(g.montant) },
           { texte: euroCourt(g.honoraires) },
           ...PHASES.map((ph) => ({ texte: g.phases[ph.id] ? String(g.phases[ph.id]) : "-" })),
+          { texte: g.termines ? String(g.termines) : "-" },
           { texte: g.retard ? String(g.retard) : "-", couleur: g.retard ? ROUGE_FONCE : undefined, bold: g.retard > 0 },
         ],
       })),
       {
-        total: ["Total", String(lignes.length), nombre(totalLogements), euroCourt(totalMontant), euroCourt(totalHonoraires), ...parPhase.map(({ n }) => (n ? String(n) : "-")), totalRetard ? String(totalRetard) : "-"],
+        total: ["Total", String(lignes.length), nombre(totalLogements), euroCourt(totalMontant), euroCourt(totalHonoraires), ...parPhase.map(({ n }) => (n ? String(n) : "-")), nbTermines ? String(nbTermines) : "-", totalRetard ? String(totalRetard) : "-"],
       }
     );
   }
@@ -411,7 +424,7 @@ export async function genererPortefeuilleSyndicPdf(input: PortefeuillePdfInput):
           ...(l.ville ? wrap(l.ville, font, 7, colsC[0].w - 12, 1) : []),
         ],
         ...(multiGest ? [{ texte: l.gestionnaire?.trim() || "-" }] : []),
-        { texte: labelPhase(l.phase), pastille: COULEUR_PHASE[l.phase] },
+        l.termine ? { texte: "Terminé", pastille: ARDOISE } : { texte: labelPhase(l.phase), pastille: COULEUR_PHASE[l.phase] },
         { texte: l.dpeAvant || l.dpeApres ? `${l.dpeAvant ?? "?"} -> ${l.dpeApres ?? "?"}` : "-" },
         { texte: l.logements ? nombre(l.logements) : "-" },
         { texte: euroCourt(l.montantTtc) },
@@ -437,7 +450,7 @@ export async function genererPortefeuilleSyndicPdf(input: PortefeuillePdfInput):
   if (lignes.length === 0) f.paragraphe("Aucune copropriété dans le périmètre affiché.", { size: 9, color: GRIS });
   f.y -= 4;
   f.paragraphe(
-    "Phase : état d'avancement du dossier d'après les tâches validées par le syndic (diagnostic, études, travaux), comme dans les vues Bulles, Kanban et Tableau. DPE : étiquette avant -> après travaux. Le montant est celui du plan de financement validé (à défaut, du scénario partagé) ; les honoraires du syndic sont la ligne correspondante des frais annexes du PF validé. Avancement : part des tâches du syndic réalisées sur le dossier. Tâches en retard : tâches du syndic dont l'échéance est dépassée (page « Vos tâches »).",
+    "Phase : état d'avancement du dossier d'après les tâches validées par le syndic (diagnostic, études, travaux ; terminé quand toutes sont validées), comme dans les vues Bulles, Kanban et Tableau. DPE : étiquette avant -> après travaux. Le montant est celui du plan de financement validé (à défaut, du scénario partagé) ; les honoraires du syndic sont la ligne correspondante des frais annexes du PF validé. Avancement : part des tâches du syndic réalisées sur le dossier. Tâches en retard : tâches du syndic dont l'échéance est dépassée (page « Vos tâches »).",
     { size: 7.5, color: GRIS, interligne: 2.5 }
   );
 

@@ -6,7 +6,7 @@ import { Icon } from "@/components/Icon";
 import { Badge, DpePair, PhaseBadge, THUMB_BG } from "@/components/ui";
 import type { DpeClass } from "@/lib/referentiels";
 import { avancementSyndic, usePhotoUrl } from "@/api/copros";
-import { phaseAvancement, useSyndicTaches } from "@/api/syndicTaches";
+import { dossierTermine, phaseAvancement, useSyndicTaches } from "@/api/syndicTaches";
 import { useCoproSyndic, type SyndicCopro } from "@/api/syndic";
 import { SyndicShell, Loader, AucuneCopro } from "./index";
 import { ProjetTabSyndic } from "./ProjetTab";
@@ -76,6 +76,8 @@ export default function CoproSyndic() {
   if (!c.acces) return <AccesReserve c={c} />;
   const s = c.stats;
   const phase = phaseAvancement(c.phase, taches ?? []);
+  // toutes les tâches du syndic validées : « Terminé », comme la bulle du portefeuille (feedback 23/09)
+  const termine = dossierTermine(taches ?? [], s);
 
   return (
     <SyndicShell active={null}>
@@ -115,7 +117,14 @@ export default function CoproSyndic() {
           <div className="dh-body">
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                <PhaseBadge phase={phase} />
+                {termine ? (
+                  <Badge kind="success">
+                    <Icon name="check" size={12} />
+                    Terminé
+                  </Badge>
+                ) : (
+                  <PhaseBadge phase={phase} />
+                )}
                 {c.fragile && (
                   <Badge kind="warn">
                     <Icon name="alert" size={12} />

@@ -11,6 +11,10 @@ export type SyndicTache = Tables<"syndic_taches">;
 
 export const PHASE_RANK: Record<PhaseId, number> = { diagnostic: 0, etudes: 1, travaux: 2 };
 
+/** Couleur d'un dossier terminé (toutes les tâches du syndic validées) : ardoise,
+ *  distincte des trois phases et du gris clair des gestionnaires. */
+export const COULEUR_TERMINE = "var(--color-neutral-700)";
+
 /** Cycle du clic sur la pastille - même enchaînement que les tâches AMO :
  *  à faire → en cours (orange) → fait (vert) → à faire. */
 export type StatutTache = "todo" | "doing" | "done";
@@ -99,6 +103,20 @@ export function phaseAvancement(phaseDossier: PhaseId, taches: SyndicTache[]): P
   if (i !== -1) return PHASES[i].id;
   const j = listes.map((l) => l.length > 0).lastIndexOf(true);
   return j !== -1 ? PHASES[j].id : phaseDossier;
+}
+
+/**
+ * Dossier terminé côté syndic : toutes ses tâches validées (feedback Amir
+ * 23/09). Tâches non chargées (dossier d'un collègue, fermé par la RLS) :
+ * compteurs de copro_stats. Aucune tâche du tout : pas terminé.
+ */
+export function dossierTermine(
+  taches: Pick<SyndicTache, "statut">[],
+  stats?: { staches_total: number | null; staches_faites: number | null } | null
+): boolean {
+  if (taches.length > 0) return taches.every((t) => t.statut === "done");
+  const total = stats?.staches_total ?? 0;
+  return total > 0 && (stats?.staches_faites ?? 0) >= total;
 }
 
 /** Une tâche est en retard : non faite et échéance dépassée. */

@@ -1,7 +1,8 @@
 // Portefeuille du syndic - deux vues commutables :
 // 1. « Bulles » : un système par gestionnaire, une bulle grise au centre (ses
 //    initiales, total de logements et montant d'opération), autour de laquelle
-//    gravitent ses copropriétés (couleur = phase du dossier).
+//    gravitent ses copropriétés (couleur = phase du dossier, ardoise
+//    « Terminé » quand le syndic a validé toutes ses tâches).
 // 2. « Tableau » : pilotage direction - colonnes triables, comparatif par
 //    gestionnaire (charge, phases, tâches en retard) et export CSV.
 import { useMemo, useState } from "react";
@@ -12,7 +13,14 @@ import { PHASES, type DpeClass, type PhaseId } from "@/lib/referentiels";
 import { fmtEuroCourt } from "@/lib/format";
 import { telechargerCsv } from "@/lib/csv";
 import { avancementSyndic, nbLogements } from "@/api/copros";
-import { enRetard, phaseAvancement, useSyndicTaches, type SyndicTache } from "@/api/syndicTaches";
+import {
+  COULEUR_TERMINE,
+  dossierTermine,
+  enRetard,
+  phaseAvancement,
+  useSyndicTaches,
+  type SyndicTache,
+} from "@/api/syndicTaches";
 import { useHonorairesSyndic, type SyndicCopro } from "@/api/syndic";
 
 /** Comparaison de recherche : minuscules, sans accents. */
@@ -52,6 +60,8 @@ interface Satellite {
   id: string;
   name: string;
   phase: PhaseId;
+  /** Toutes les tâches du syndic validées : bulle ardoise « Terminé ». */
+  termine: boolean;
   fragile: boolean;
   /** Dossier ouvrable par l'utilisateur (sinon grisé : suivi par un collègue). */
   acces: boolean;
@@ -73,7 +83,11 @@ interface Systeme {
   satellites: Satellite[];
 }
 
-function construireSystemes(copros: SyndicCopro[], phaseDe: (c: SyndicCopro) => PhaseId): Systeme[] {
+function construireSystemes(
+  copros: SyndicCopro[],
+  phaseDe: (c: SyndicCopro) => PhaseId,
+  termineDe: (c: SyndicCopro) => boolean
+): Systeme[] {
   const groupes = new Map<string, { nom: string; copros: SyndicCopro[] }>();
   for (const c of copros) {
     const cle = cleGestionnaire(c);
@@ -124,6 +138,7 @@ function construireSystemes(copros: SyndicCopro[], phaseDe: (c: SyndicCopro) => 
               id: c.id,
               name: c.name,
               phase: phaseDe(c),
+              termine: termineDe(c),
               fragile: c.fragile,
               acces: c.acces,
               logements,
@@ -154,10 +169,12 @@ function VueKanban({
   copros,
   retards,
   phaseDe,
+  termineDe,
 }: {
   copros: SyndicCopro[];
   retards: Map<string, number>;
   phaseDe: (c: SyndicCopro) => PhaseId;
+  termineDe: (c: SyndicCopro) => boolean;
 }) {
   const navigate = useNavigate();
   return (
@@ -221,6 +238,12 @@ function VueKanban({
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <DpePair before={c.energy_before as DpeClass | null} after={c.energy_after as DpeClass | null} />
                       <span style={{ flex: 1 }}></span>
+                      {termineDe(c) && (
+                        <Badge kind="success">
+                          <Icon name="check" size={12} />
+                          Terminé
+                        </Badge>
+                      )}
                       {retard > 0 && (
                         <Badge kind="warn" dot>
                           {retard} en retard
@@ -261,12 +284,14 @@ function VueTableau({
   retards,
   honoraires,
   phaseDe,
+  termineDe,
   onGestionnaire,
 }: {
   copros: SyndicCopro[];
   retards: Map<string, number>;
   honoraires: Map<string, number>;
   phaseDe: (c: SyndicCopro) => PhaseId;
+  termineDe: (c: SyndicCopro) => boolean;
   onGestionnaire?: (key: string, nom: string) => void;
 }) {
   const navigate = useNavigate();
@@ -280,7 +305,7 @@ function VueTableau({
       switch (tri.col) {
         case "name": return c.name;
         case "gestionnaire": return c.gestionnaire_nom ?? "";
-        case "phase": return PHASE_RANK[phaseDe(c)];
+        case "phase": return termineDe(c) ? PHASES.length : PHASE_RANK[phaseDe(c)];
         case "logements": return nbLogements(c);
         case "montant": return c.stats?.montant_ttc ?? 0;
         case "honoraires": return honoraires.get(c.id) ?? 0;
@@ -294,7 +319,7 @@ function VueTableau({
       const cmp = typeof va === "string" ? va.localeCompare(String(vb), "fr") : Number(va) - Number(vb);
       return tri.desc ? -cmp : cmp;
     });
-  }, [copros, tri, retards, honoraires, phaseDe]);
+  }, [copros, tri, retards, honoraires, phaseDe, termineDe]);
 
   // Comparatif par gestionnaire (charge et état du portefeuille de chacun)
   const parGestionnaire = useMemo(() => {
@@ -313,11 +338,12 @@ function VueTableau({
         logements: g.copros.reduce((s, c) => s + nbLogements(c), 0),
         montant: g.copros.reduce((s, c) => s + (c.stats?.montant_ttc ?? 0), 0),
         honoraires: g.copros.reduce((s, c) => s + (honoraires.get(c.id) ?? 0), 0),
-        phases: PHASES.map((ph) => g.copros.filter((c) => phaseDe(c) === ph.id).length),
+        phases: PHASES.map((ph) => g.copros.filter((c) => !termineDe(c) && phaseDe(c) === ph.id).length),
+        termines: g.copros.filter(termineDe).length,
         retard: g.copros.reduce((s, c) => s + (retards.get(c.id) ?? 0), 0),
       }))
       .sort((a, b) => b.logements - a.logements);
-  }, [copros, retards, honoraires, phaseDe]);
+  }, [copros, retards, honoraires, phaseDe, termineDe]);
 
   // Un seul gestionnaire dans le périmètre (vrai gestionnaire chez lui, ou
   // aperçu AMO de son portefeuille) : inutile de répéter son nom sur chaque
@@ -360,6 +386,7 @@ function VueTableau({
                     {PHASES.map((ph) => (
                       <th key={ph.id} className="num">{ph.label}</th>
                     ))}
+                    <th className="num">Terminé</th>
                     <th className="num">Tâches en retard</th>
                   </tr>
                 </thead>
@@ -379,6 +406,7 @@ function VueTableau({
                       {g.phases.map((n, i) => (
                         <td key={i} className="num">{n || "-"}</td>
                       ))}
+                      <td className="num">{g.termines || "-"}</td>
                       <td className="num">
                         {g.retard > 0 ? (
                           <span style={{ color: "var(--color-error-700)", fontWeight: 700 }}>{g.retard}</span>
@@ -442,8 +470,11 @@ function VueTableau({
                       {multiGest && <td>{c.gestionnaire_nom || "-"}</td>}
                       <td>
                         <span className="leg-g" style={{ whiteSpace: "nowrap" }}>
-                          <span className="dot" style={{ background: COULEUR_PHASE[phaseDe(c)] }}></span>
-                          {PHASES.find((p) => p.id === phaseDe(c))?.label}
+                          <span
+                            className="dot"
+                            style={{ background: termineDe(c) ? COULEUR_TERMINE : COULEUR_PHASE[phaseDe(c)] }}
+                          ></span>
+                          {termineDe(c) ? "Terminé" : PHASES.find((p) => p.id === phaseDe(c))?.label}
                         </span>
                       </td>
                       <td>
@@ -527,14 +558,19 @@ export function Portefeuille({
   // Phase d'avancement (validations des tâches) : même couleur de dossier dans
   // toutes les vues - bulles, kanban, tableau - et que la pastille « En cours »
   // de la fiche (feedback 29/08). Repli sur la phase du dossier sans tâches.
-  const phases = useMemo(() => {
+  // Toutes les tâches validées : dossier « Terminé » (feedback Amir 23/09).
+  const { phases, termines } = useMemo(() => {
     const parCopro = new Map<string, SyndicTache[]>();
     for (const t of taches ?? []) parCopro.set(t.copro_id, [...(parCopro.get(t.copro_id) ?? []), t]);
-    return new Map(copros.map((c) => [c.id, phaseAvancement(c.phase, parCopro.get(c.id) ?? [])]));
+    return {
+      phases: new Map(copros.map((c) => [c.id, phaseAvancement(c.phase, parCopro.get(c.id) ?? [])])),
+      termines: new Set(copros.filter((c) => dossierTermine(parCopro.get(c.id) ?? [], c.stats)).map((c) => c.id)),
+    };
   }, [copros, taches]);
   const phaseDe = useMemo(() => (c: SyndicCopro) => phases.get(c.id) ?? c.phase, [phases]);
+  const termineDe = useMemo(() => (c: SyndicCopro) => termines.has(c.id), [termines]);
 
-  const systemes = useMemo(() => construireSystemes(copros, phaseDe), [copros, phaseDe]);
+  const systemes = useMemo(() => construireSystemes(copros, phaseDe, termineDe), [copros, phaseDe, termineDe]);
 
   // honoraires du syndic (ligne « syndic » des frais annexes du PF validé)
   const { data: honorairesData } = useHonorairesSyndic(ouvrables.map((c) => c.id));
@@ -555,7 +591,10 @@ export function Portefeuille({
       )
     : copros;
 
-  const phaseCounts = PHASES.map((ph) => ({ ph, n: copros.filter((c) => phaseDe(c) === ph.id).length }));
+  const phaseCounts = PHASES.map((ph) => ({
+    ph,
+    n: copros.filter((c) => !termineDe(c) && phaseDe(c) === ph.id).length,
+  }));
   const totalLogements = copros.reduce((s, c) => s + nbLogements(c), 0);
 
   const exporter = () =>
@@ -568,7 +607,7 @@ export function Portefeuille({
           c.name,
           c.city ?? "",
           c.gestionnaire_nom ?? "",
-          PHASES.find((p) => p.id === phaseDe(c))?.label ?? phaseDe(c),
+          termineDe(c) ? "Terminé" : (PHASES.find((p) => p.id === phaseDe(c))?.label ?? phaseDe(c)),
           c.energy_before ?? "",
           c.energy_after ?? "",
           c.gain_pct ?? "",
@@ -598,6 +637,7 @@ export function Portefeuille({
           ville: c.city,
           gestionnaire: c.gestionnaire_nom,
           phase: phaseDe(c),
+          termine: termineDe(c),
           dpeAvant: c.energy_before,
           dpeApres: c.energy_after,
           gainPct: c.gain_pct,
@@ -700,9 +740,16 @@ export function Portefeuille({
       )}
 
       {vue === "tableau" ? (
-        <VueTableau copros={coprosFiltres} retards={retards} honoraires={honoraires} phaseDe={phaseDe} onGestionnaire={onGestionnaire} />
+        <VueTableau
+          copros={coprosFiltres}
+          retards={retards}
+          honoraires={honoraires}
+          phaseDe={phaseDe}
+          termineDe={termineDe}
+          onGestionnaire={onGestionnaire}
+        />
       ) : vue === "kanban" ? (
-        <VueKanban copros={coprosFiltres} retards={retards} phaseDe={phaseDe} />
+        <VueKanban copros={coprosFiltres} retards={retards} phaseDe={phaseDe} termineDe={termineDe} />
       ) : (
         <>
       <div className="orbites">
@@ -715,11 +762,16 @@ export function Portefeuille({
               <div className="orbite-ring">
                 {s.satellites.map((sat) => {
                   const ph = PHASES.find((x) => x.id === sat.phase);
-                  const couleur = COULEUR_PHASE[sat.phase];
+                  const couleur = sat.termine ? COULEUR_TERMINE : COULEUR_PHASE[sat.phase];
                   return (
                     <div
                       key={sat.id}
-                      className={"bubble orbite-sat" + (sat.acces ? " clickable" : " verrou") + (hoverId === sat.id ? " hover" : "")}
+                      className={
+                        "bubble orbite-sat" +
+                        (sat.termine ? " termine" : "") +
+                        (sat.acces ? " clickable" : " verrou") +
+                        (hoverId === sat.id ? " hover" : "")
+                      }
                       style={{
                         left: sat.x,
                         top: sat.y,
@@ -730,7 +782,8 @@ export function Portefeuille({
                         color: "#fff",
                       }}
                       title={
-                        `${sat.name} · ${sat.logements} logements${ph ? " · " + ph.label : ""}` +
+                        `${sat.name} · ${sat.logements} logements · ` +
+                        (sat.termine ? "Terminé : toutes vos tâches sont validées" : (ph?.label ?? "")) +
                         (sat.acces ? "" : " · accès réservé à la direction et au gestionnaire en charge")
                       }
                       onMouseEnter={() => setHoverId(sat.id)}
@@ -738,7 +791,17 @@ export function Portefeuille({
                       onClick={sat.acces ? () => navigate(`/syndic/copros/${sat.id}`) : undefined}
                     >
                       <span className="b-name">{sat.name}</span>
-                      <span className="b-sub">{sat.logements} lgts</span>
+                      {/* Terminé remplace le nombre de logements (repris dans
+                          l'infobulle) : trois lignes ne tiennent pas dans les
+                          petites bulles. */}
+                      {sat.termine ? (
+                        <span className="b-sub b-termine">
+                          <Icon name="check" size={10} />
+                          Terminé
+                        </span>
+                      ) : (
+                        <span className="b-sub">{sat.logements} lgts</span>
+                      )}
                       {sat.fragile && <span className="b-flag" title="Copropriété fragile">!</span>}
                     </div>
                   );
@@ -775,6 +838,11 @@ export function Portefeuille({
             </span>
           ))}
           <span className="leg-g">
+            <span className="dot" style={{ background: COULEUR_TERMINE }}></span>
+            Terminé
+            <span className="leg-n">{termines.size}</span>
+          </span>
+          <span className="leg-g">
             <span className="dot" style={{ background: "var(--color-neutral-300)" }}></span>
             Gestionnaire
           </span>
@@ -782,7 +850,8 @@ export function Portefeuille({
       </div>
       <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12 }}>
         Chaque bulle grise est un gestionnaire, entouré des copropriétés dont il a la charge - la couleur d'un satellite
-        donne l'état d'avancement du dossier (d'après les tâches validées, comme dans les autres vues). Cliquez une
+        donne l'état d'avancement du dossier (d'après les tâches validées, comme dans les autres vues) ; une bulle
+        ardoise « Terminé » signale un dossier dont toutes vos tâches sont validées. Cliquez une
         copropriété pour ouvrir le dossier. Le montant est celui du scénario partagé, tant
         qu'il y en a un. La vue Tableau permet de trier, comparer les gestionnaires et exporter.
       </p>

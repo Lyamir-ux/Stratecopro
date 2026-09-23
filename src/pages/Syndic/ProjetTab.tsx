@@ -9,6 +9,7 @@ import { fmtDate } from "@/lib/format";
 import { StatusDot } from "@/pages/CoproDetail/ProjetTab";
 import {
   STATUT_SUIVANT,
+  dossierTermine,
   enRetard,
   phaseAvancement,
   useStatutSyndicTache,
@@ -24,8 +25,9 @@ export function ProjetTabSyndic({ c }: { c: SyndicCopro }) {
   if (isLoading) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
   // La pastille « En cours » suit les validations du syndic, comme la couleur
-  // des vues du portefeuille (feedbacks 29/08).
-  const phaseEnCours = phaseAvancement(c.phase, taches ?? []);
+  // des vues du portefeuille (feedbacks 29/08). Tout est validé : plus de
+  // phase « En cours », le dossier est terminé (feedback 23/09).
+  const phaseEnCours = dossierTermine(taches ?? []) ? null : phaseAvancement(c.phase, taches ?? []);
 
   return (
     <div className="fade">

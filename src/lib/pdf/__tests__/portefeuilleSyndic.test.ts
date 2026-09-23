@@ -37,6 +37,14 @@ describe("regrouperParGestionnaire", () => {
     expect(g[1].phases).toEqual({ diagnostic: 1, etudes: 1, travaux: 0 });
     expect(g[2].copros).toBe(1);
   });
+
+  it("compte à part les dossiers terminés, hors phases", () => {
+    const g = regrouperParGestionnaire([...lignes, ligne({ nom: "LES TILLEULS", phase: "travaux", termine: true, avancement: 100 })]);
+    expect(g[0].nom).toBe("Claude LOBSTEIN");
+    expect(g[0].phases).toEqual({ diagnostic: 0, etudes: 0, travaux: 1 });
+    expect(g[0].termines).toBe(1);
+    expect(g[1].termines).toBe(0);
+  });
 });
 
 describe("genererPortefeuilleSyndicPdf", () => {
@@ -47,6 +55,11 @@ describe("genererPortefeuilleSyndicPdf", () => {
     expect(doc.getTitle()).toBe("Portefeuille - SYNDIC HORIZON GRAND EST");
     const { width, height } = doc.getPage(0).getSize();
     expect(width).toBeGreaterThan(height);
+  });
+
+  it("affiche les dossiers terminés", async () => {
+    const bytes = await genererPortefeuilleSyndicPdf({ lignes: [...lignes, ligne({ nom: "LES TILLEULS", phase: "travaux", termine: true, avancement: 100 })], genereLe: "23 septembre 2026" });
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThanOrEqual(1);
   });
 
   it("supporte un portefeuille vide et un seul gestionnaire (pas de comparatif)", async () => {
