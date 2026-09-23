@@ -180,6 +180,51 @@ function tvaDeCoef(k: number): number {
   return Math.round((k - 1) * 1000) / 10;
 }
 
+/**
+ * TVA de chaque ligne de travaux d'après la formule du TTC
+ * « (E24+E25+E27)*1.055+(E33+E26)*1.2 » (numéro de ligne 0-based → taux) ;
+ * null si la formule a une autre forme.
+ */
+function tvaDepuisFormuleTtc(f: string | null): Map<number, number> | null {
+  if (!f) return null;
+  const termes: string[] = [];
+  let prof = 0;
+  let debut = 0;
+  for (let i = 0; i < f.length; i++) {
+    if (f[i] === "(") prof++;
+    else if (f[i] === ")") prof--;
+    else if (f[i] === "+" && prof === 0) {
+      termes.push(f.slice(debut, i));
+      debut = i + 1;
+    }
+  }
+  termes.push(f.slice(debut));
+  const out = new Map<number, number>();
+  for (const t of termes) {
+    const m = /^(?:\(([A-Z]+\d+(?:[+:][A-Z]+\d+)*)\)|(SUM\([A-Z]+\d+(?::[A-Z]+\d+)?\))|([A-Z]+\d+))(?:\*(1(?:\.\d+)?))?$/.exec(t);
+    if (!m) return null;
+    const tva = m[4] ? tvaDeCoef(parseFloat(m[4])) : 0;
+    for (const r of refsLignes(m[1] ?? m[2] ?? m[3])) out.set(r, tva);
+  }
+  return out.size ? out : null;
+}
+
+/**
+ * Remplace dans une formule les références à des cellules de paramètre hors
+ * colonnes de scénario (« $D$54 » = 0,08, taux de MOE saisi à côté du libellé)
+ * par leur valeur : « (E38*D54)*1.2 » → « (E38*0.08)*1.2 ».
+ */
+function resoudreParametres(f: string | null, g: Grille, colsScenarios: number[]): string | null {
+  if (!f) return f;
+  return f.replace(/([A-Z]{1,3})(\d+)(?![\d(:])/g, (ref, lettres: string, ligne: string, pos: number) => {
+    if (pos > 0 && (f[pos - 1] === ":" || /[A-Z]/.test(f[pos - 1]))) return ref;
+    const c = utils.decode_col(lettres);
+    if (colsScenarios.includes(c)) return ref;
+    const cell = g.cell(parseInt(ligne, 10) - 1, c);
+    return typeof cell.v === "number" && !cell.f ? String(cell.v) : ref;
+  });
+}
+
 const proche = (a: number, b: number, tol = 0.01) => Math.abs(a - b) <= tol;
 const fmt = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -207,7 +252,8 @@ function localiser(wb: WorkBook): Structure | null {
         const cols: number[] = [];
         const ordres: number[] = [];
         for (let c2 = c + 1; c2 < g.nCols; c2++) {
-          const m = /^scenario\s*(\d+)$/.exec(norm(g.str(r, c2)));
+          // « Scénario 2 » (Le Rodin) ou « Scénario V2 » (9 rue de la Gare)
+          const m = /^scenario\s*v?(\d+)$/.exec(norm(g.str(r, c2)));
           if (m) {
             cols.push(c2);
             ordres.push(parseInt(m[1], 10));
@@ -244,7 +290,8 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
   const avert: string[] = [];
   const controles: ControleEstimatif[] = [];
 
-  const lib = (r: number) => norm(g.str(r, cB));
+  // « Total travaux €TTC » (9 rue de la Gare) se lit comme « TOTAL TRAVAUX TTC € » (Le Rodin)
+  const lib = (r: number) => norm(g.str(r, cB).replace(/€/g, " "));
   const trouver = (test: (l: string) => boolean, from = 0, to = g.nRows) => {
     for (let r = from; r < to; r++) if (test(lib(r))) return r;
     return -1;
@@ -261,7 +308,12 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
   const iAides = trouver((l) => l.startsWith("aides mobilisables"), Math.max(iMoeFin, iTotalHt));
   const iAidesFin = iAides >= 0 ? trouver((l) => l.startsWith("total aides"), iAides + 1) : -1;
   const iAidesPubliques = iAidesFin >= 0 ? trouver((l) => l.startsWith("total aides publiques"), iAidesFin) : -1;
-  const iOperation = trouver((l) => (l.startsWith("total operation") || l.includes("toutes les phases")) && l.includes("avec imprevus"), iMoeFin >= 0 ? iMoeFin : iTotalHt);
+  const iOperationAvec = trouver((l) => (l.startsWith("total operation") || l.includes("toutes les phases")) && l.includes("avec imprevus"), iMoeFin >= 0 ? iMoeFin : iTotalHt);
+  // « Total opération TTC » seul (9 rue de la Gare) : imprévus compris dans sa formule
+  const iOperation =
+    iOperationAvec >= 0
+      ? iOperationAvec
+      : trouver((l) => l.startsWith("total operation") && !l.includes("sans imprevus"), iMoeFin >= 0 ? iMoeFin : iTotalHt);
   const iLogts = trouver((l) => l.includes("logements principaux"), 0, iHead);
   const iEquiv = trouver((l) => l.includes("logt + equivalent") || l.includes("logements + equivalent"), 0, iHead);
   const iSurface = trouver((l) => l.includes("surface habitable"), 0, iHead);
@@ -309,6 +361,8 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
   interface LigneTravaux {
     r: number;
     numero: number | null;
+    /** Titre du lot quand la ligne en forme un à elle seule (poste de la colonne A). */
+    titre?: string;
     designation: string;
     commentaire?: string;
     tva: number | null;
@@ -330,10 +384,16 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
       tva,
     });
   }
+  // Aucun « Lot NN » (9 rue de la Gare : poste en colonne A, « Façades avant+arrière ») :
+  // chaque ligne forme un lot, numéroté dans l'ordre du classeur pour que les
+  // scénarios restent alignés
+  if (!lignesTravaux.some((l) => l.numero != null))
+    lignesTravaux.forEach((l, i) => {
+      l.numero = i + 1;
+      l.titre = (cA >= 0 ? g.str(l.r, cA) : "") || l.designation;
+    });
   const numeroProvisions = Math.max(0, ...lignesTravaux.map((l) => l.numero ?? 0)) + 1;
-  avert.push(
-    `TVA non détaillée dans le classeur : ${String(TVA_TRAVAUX_DEFAUT).replace(".", ",")} % appliqué aux lignes de travaux, le TTC du classeur est conservé par une ligne d'ajustement si besoin.`
-  );
+  let tvaParDefaut = false;
 
   // Groupes (colonne A fusionnée) propagés sur les lignes d'une section
   const groupes = (from: number, to: number): string[] => {
@@ -368,7 +428,8 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
     data.infos.cepInitial = infoNum(ligneInfo("energie primaire initial"), k) ?? 0;
     data.infos.cepProjet = infoNum(ligneInfo("energie primaire projet"), k) ?? 0;
     data.infos.dispositifClimaxion = norm(infoStr(ligneInfo("dispositif climaxion"), k)) === "oui";
-    const etiq = /de\s+(\S+)\s+a\s+(\S+)/.exec(norm(infoStr(ligneInfo("etiquette"), k)));
+    // « De E à B » ou « F à D »
+    const etiq = /\b([a-g])\s+a\s+([a-g])\b/.exec(norm(infoStr(ligneInfo("etiquette"), k)));
     if (etiq) {
       data.infos.etiquetteInitiale = etiq[1].toUpperCase();
       data.infos.etiquetteProjet = etiq[2].toUpperCase();
@@ -378,6 +439,8 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
     const retenus = iRetenu >= 0 ? refsLignes(g.cell(iRetenu, col).f) : new Set<number>();
     if (iRetenu >= 0 && !g.cell(iRetenu, col).f && (g.num(iRetenu, col) ?? 0) > 0)
       avertS.push("« Total travaux HT retenu » saisi sans formule : lignes retenues (assiette MaPrimeRénov') à cocher dans l'éditeur.");
+    // TVA : commentaire « TVA de 10% », sinon formule du TTC, sinon 5,5 % (+ ajustement)
+    const tvaTtc = iTtc >= 0 ? tvaDepuisFormuleTtc(g.cell(iTtc, col).f) : null;
     const parLot = new Map<number, LigneTravaux[]>();
     for (const l of lignesTravaux) {
       const m = g.num(l.r, col);
@@ -391,24 +454,30 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
       const prefixes = ls.map((l) => /^(.+?)\s+-\s+(.+)$/.exec(l.designation));
       const prefixeCommun =
         !provisions && ls.length > 1 && prefixes.every((p) => p && p[1] === prefixes[0]![1]) ? prefixes[0]![1] : null;
-      const titre = provisions ? TITRE_LOT_PROVISIONS : prefixeCommun ?? ls[0].designation;
+      const titre = provisions ? TITRE_LOT_PROVISIONS : prefixeCommun ?? ls[0].titre ?? ls[0].designation;
       data.lots.push({
         numero,
         titre,
         remisePct: 0,
-        lignes: ls.map((l, i) => ({
-          designation: prefixeCommun ? prefixes[i]![2] : l.designation,
-          retenu: retenus.has(l.r),
-          montantHt: g.num(l.r, col) ?? 0,
-          tvaPct: l.tva ?? TVA_TRAVAUX_DEFAUT,
-          ...(l.commentaire ? { commentaire: l.commentaire } : {}),
-        })),
+        lignes: ls.map((l, i) => {
+          const tvaPct = l.tva ?? tvaTtc?.get(l.r);
+          if (tvaPct == null) tvaParDefaut = true;
+          return {
+            designation: prefixeCommun ? prefixes[i]![2] : l.designation,
+            retenu: retenus.has(l.r),
+            montantHt: g.num(l.r, col) ?? 0,
+            tvaPct: tvaPct ?? TVA_TRAVAUX_DEFAUT,
+            ...(l.commentaire ? { commentaire: l.commentaire } : {}),
+          };
+        }),
       });
     }
 
-    // Imprévus : libellé « avec imprévus 10 % », sinon formule « D37*1.1 », sinon rapport
+    // Imprévus : libellé « avec imprévus 10 % » / « y compris 10% imprévus »,
+    // sinon formule « D37*1.1 », sinon rapport
     if (iTtcImprevus >= 0) {
-      const m = /imprevus\s*(\d+(?:[.,]\d+)?)\s*%/.exec(lib(iTtcImprevus));
+      const m =
+        /imprevus\s*(\d+(?:[.,]\d+)?)\s*%/.exec(lib(iTtcImprevus)) ?? /(\d+(?:[.,]\d+)?)\s*%\s*(?:d')?imprevus/.exec(lib(iTtcImprevus));
       const mf = /\*(\d+(?:\.\d+)?)$/.exec(g.cell(iTtcImprevus, col).f ?? "");
       const ttcImp = g.num(iTtcImprevus, col);
       const ttc = iTtc >= 0 ? g.num(iTtc, col) : null;
@@ -458,7 +527,7 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
         const ttc = g.num(r, col);
         if (!designation || ttc == null) continue;
         const classe = classifyMoe(designation, ttc, travauxHtFichier, travauxTtcFichier, []);
-        const lu = lireMoe(cell.f, { iTotalHt, iTtc });
+        const lu = lireMoe(resoudreParametres(cell.f, g, cols), { iTotalHt, iTtc });
         let montant = classe.montant;
         let tvaPct = classe.tvaPct;
         if (lu) {
@@ -472,7 +541,7 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
             montant = lu.montant;
             tvaPct = lu.tvaPct;
           } else avertS.push(`MOE « ${designation} » : formule non reconnue, montant TTC du classeur repris.`);
-        } else if (cell.f) avertS.push(`MOE « ${designation} » : formule « =${cell.f} » non reconnue, TVA ${String(tvaPct).replace(".", ",")} % supposée.`);
+        } else if (cell.f && evalArith(cell.f) == null) avertS.push(`MOE « ${designation} » : formule « =${cell.f} » non reconnue, TVA ${String(tvaPct).replace(".", ",")} % supposée.`);
         const com = g.str(r, cCom);
         const ligne: LigneMoe = {
           designation,
@@ -489,12 +558,16 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
 
     // --- aides mobilisables ---
     const valeursAides: (number | null)[] = [];
+    /** MPR études à prorata énergétique saisi en dur : recalculé par le logiciel (arbitrage d'Amir du 23/09/2026). */
+    const etudesFigees: { i: number; prorata: number; valeur: number }[] = [];
+    /** MPR travaux saisie « plafond × logements » relue en % de l'assiette plafonnée (repli si le montant diffère). */
+    const mprAuPlafond: { i: number; repli: ModeAide; valeur: number }[] = [];
     if (iAides >= 0 && iAidesFin > iAides) {
       data.aides = [];
       const ids = new Set<string>();
       for (let r = iAides + 1; r < iAidesFin; r++) {
         const libelle = g.str(r, cB);
-        if (!libelle || /^scenario\s*\d+$/.test(norm(libelle))) continue;
+        if (!libelle || /^scenario\s*v?\d+$/.test(norm(libelle))) continue;
         const groupe = groupesAides[r] ?? "";
         const cell = g.cell(r, col);
         const valeur = g.num(r, col);
@@ -503,7 +576,24 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
         for (let n = 2; ids.has(id); n++) id = `${base.id}-${n}`;
         ids.add(id);
         const publique = !(norm(groupe) === "cee" || /\bcee\b/.test(norm(libelle)));
-        const lu = valeur == null ? null : lireAide(cell.f, { iRetenu, iTotalHt, iLogts, iEquiv, iSurface, iMoe, iMoeFin, libelle });
+        const f = resoudreParametres(cell.f, g, cols);
+        let lu = valeur == null ? null : lireAide(f, { iRetenu, iTotalHt, iLogts, iEquiv, iSurface, iMoe, iMoeFin, libelle });
+        const n = norm(libelle);
+        const mpr = n.includes("maprimerenov") && !n.includes("bonus") && !n.includes("fragile");
+        // « …/1.055)*0.3*0.9*0.825 » : taux, coefficient de prudence, prorata figé
+        const figee = mpr && n.includes("etudes") && valeur != null ? /\)\*([\d.]+)\*([\d.]+)\*(0\.\d+)$/.exec(f ?? "") : null;
+        if (figee && refsLignes(f).size) {
+          lu = { mode: "pctEtudes", taux: round2(parseFloat(figee[1]) * 100), coef: parseFloat(figee[2]) };
+          etudesFigees.push({ i: data.aides.length, prorata: parseFloat(figee[3]), valeur: valeur! });
+        }
+        // « =7500*E5 » : 30 % de l'assiette plafonnée à 25 000 € HT/logement
+        if (mpr && n.includes("travaux") && lu?.mode === "parLogement" && !lu.surEquivalent) {
+          const taux = (lu.montant / data.params.plafondTravauxParLogement) * 100;
+          if (Number.isInteger(Math.round(taux * 1e6) / 5e5)) {
+            mprAuPlafond.push({ i: data.aides.length, repli: lu, valeur: valeur! });
+            lu = { mode: "pctAssietteTravaux", taux: Math.round(taux * 1e6) / 1e6, coef: 1 };
+          }
+        }
         const aide: AideDef = {
           id,
           groupe,
@@ -514,7 +604,8 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
         const com = g.str(r, cCom);
         if (com) aide.commentaire = com;
         data.aides.push(aide);
-        valeursAides.push(valeur);
+        // le calibrage ne doit pas rabattre la MPR études figée sur le montant saisi
+        valeursAides.push(figee ? null : valeur);
       }
     }
 
@@ -522,7 +613,7 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
     // Libellés en tête de ligne : « Coût au tantième après déduction des aides,
     // fonds travaux et études déjà appelées » ne doit pas être pris pour eux
     const iFonds = trouver((l) => /^(montant du )?fonds (de )?travaux/.test(l), iAidesFin >= 0 ? iAidesFin : iTotalHt);
-    const iDejaAppele = trouver((l) => /^montants? deja appele/.test(l), iAidesFin >= 0 ? iAidesFin : iTotalHt);
+    const iDejaAppele = trouver((l) => /^(montants?|fonds) deja appele/.test(l), iAidesFin >= 0 ? iAidesFin : iTotalHt);
     const fonds = iFonds >= 0 ? g.num(iFonds, col) ?? 0 : 0;
     const dejaAppele = iDejaAppele >= 0 ? g.num(iDejaAppele, col) ?? 0 : 0;
     // « Montant déjà appelé » (études) cumulé au fonds travaux : même déduction
@@ -536,16 +627,18 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
         ` + montant déjà appelé ${fmt(dejaAppele)} €${comAppele ? ` (${comAppele})` : ""}`;
     } else if (comFonds) data.params.commentaireFondsTravaux = comFonds;
 
-    const iTant = trouver((l) => l.startsWith("cout au tantieme avant"));
+    // « Coût au taniéme avant aides » (faute de frappe du classeur 9 rue de la Gare)
+    const iTant = trouver((l) => /^cout au tan\w*me avant/.test(l));
     if (iTant >= 0) data.params.totalTantiemes = g.num(iTant, cB + 1) ?? 10000;
     const T = data.params.totalTantiemes || 10000;
     const exemples = new Set<number>();
     let pretAvance = false;
     let mensualites = false;
+    let mensualitesSansAssurance = false;
     let appelsFonds = false;
     for (let r = iAidesFin >= 0 ? iAidesFin : iTotalHt; r < g.nRows; r++) {
       const l = lib(r);
-      if (l.startsWith("quote part pour")) {
+      if (/^quote part (?:totale )?pour/.test(l)) {
         const t = g.num(r, cB + 1);
         if (t != null && t > 0 && t < T) exemples.add(t);
       }
@@ -553,15 +646,25 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
       if (mDuree) data.params.dureeEcoPtzAns = parseInt(mDuree[1], 10);
       if (l.includes("remboursement mensuel") || l.includes("mensualite")) {
         mensualites = true;
-        const m = /\/(\d+)\*(\d+(?:\.\d+)?)$/.exec(g.cell(r, col).f ?? "");
+        const f = g.cell(r, col).f ?? "";
+        const m = /\/(\d+)\*(\d+(?:\.\d+)?)$/.exec(f);
+        const sansAssurance = m ? null : /\/(\d+)$/.exec(f);
         if (m) {
           if (!mDuree) data.params.dureeEcoPtzAns = parseInt(m[1], 10) / 12;
           data.params.coefAssurance = parseFloat(m[2]);
+        } else if (sansAssurance && !mensualitesSansAssurance) {
+          // « =E84/1000*D105/240 » : le logiciel garde l'assurance ×1,03 des PF
+          // Strat Eco (arbitrage d'Amir du 23/09/2026)
+          if (!mDuree) data.params.dureeEcoPtzAns = parseInt(sansAssurance[1], 10) / 12;
+          mensualitesSansAssurance = true;
+          avertS.push(
+            `Mensualités du classeur sans assurance ; le logiciel applique le coefficient d'assurance ${String(data.params.coefAssurance).replace(".", ",")}.`
+          );
         }
       }
       if (l.includes("pret avance")) {
         pretAvance = true;
-        const m = /\*(0\.\d+)\*/.exec(g.cell(r, col).f ?? "");
+        const m = /\*(0\.\d+)[*/]/.exec(g.cell(r, col).f ?? "");
         if (m) data.params.tauxPretAvancePct = Math.round(parseFloat(m[1]) * 100000) / 1000;
       }
       if (l.includes("appels de fonds")) appelsFonds = true;
@@ -574,9 +677,24 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
     };
 
     // --- aides : formule lue vs montant du classeur (repli : calibrage, puis montant saisi) ---
+    for (const p of mprAuPlafond) {
+      if (!proche(computePlanDefinitif(data).aides[p.i].montant ?? 0, p.valeur, 1)) data.aides[p.i].calcul = p.repli;
+    }
     const avertAides: string[] = [];
     calibrerAides(data, valeursAides, avertAides);
     avertS.push(...avertAides);
+    if (etudesFigees.length) {
+      const rE = computePlanDefinitif(data);
+      const prorata = rE.totalTravauxHt > 0 ? rE.assietteMprTravaux / rE.totalTravauxHt : 0;
+      for (const e of etudesFigees) {
+        const m = rE.aides[e.i].montant ?? 0;
+        if (proche(m, e.valeur, 1)) continue;
+        const dec = (x: number, n: number) => x.toLocaleString("fr-FR", { maximumFractionDigits: n });
+        avertS.push(
+          `Aide « ${data.aides[e.i].libelle} » : prorata énergétique saisi en dur dans le classeur (${dec(e.prorata, 3)}) ; le logiciel le recalcule (assiette MPR / travaux HT = ${dec(prorata, 4)}), soit ${fmt(m)} € au lieu de ${fmt(e.valeur)} €.`
+        );
+      }
+    }
 
     // --- contrôles ---
     const r = computePlanDefinitif(data);
@@ -597,11 +715,18 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
     ctrl("Total aides", iAidesFin, r.totalAides);
     ctrl("Total aides publiques", iAidesPubliques, r.totalAidesPubliques);
     ctrl("Reste à charge définitif collectif", trouver((l) => l.startsWith("reste a charge definitif")), r.resteACharge);
+    // 9 rue de la Gare : « Résultat (Opération - Aides) » puis « Reste à financer » (+ CEE)
+    ctrl("Résultat (opération - aides)", trouver((l) => l.startsWith("resultat (operation")), r.resteACharge);
+    ctrl("Reste à financer", trouver((l) => l === "reste a financer", iAidesFin >= 0 ? iAidesFin : iTotalHt), r.collectif.resteAFinancer);
 
     avert.push(...avertS.map((a) => `${pre} : ${a}`));
     return { ordre, libelle: libelles[k], data };
   });
 
+  if (tvaParDefaut)
+    avert.unshift(
+      `TVA non détaillée dans le classeur : ${String(TVA_TRAVAUX_DEFAUT).replace(".", ",")} % appliqué aux lignes de travaux, le TTC du classeur est conservé par une ligne d'ajustement si besoin.`
+    );
   return { scenarios, avertissements: avert, controles };
 }
 
@@ -619,7 +744,8 @@ function lireMoe(
   const mPct = /^\(?[A-Z]+(\d+)\*(\d+(?:\.\d+)?)(\/100)?\)?(?:\*(1(?:\.\d+)?))?$/.exec(f);
   if (mPct) {
     const ligne = parseInt(mPct[1], 10) - 1;
-    const taux = mPct[3] ? parseFloat(mPct[2]) : parseFloat(mPct[2]) * 100;
+    // 0.018 × 100 = 1.7999999999999998 : arrondi au millionième
+    const taux = mPct[3] ? parseFloat(mPct[2]) : Math.round(parseFloat(mPct[2]) * 1e8) / 1e6;
     const tvaPct = mPct[4] ? tvaDeCoef(parseFloat(mPct[4])) : 0;
     if (ligne === rep.iTtc) return { montant: { mode: "pctTravauxTtc", taux }, tvaPct };
     if (ligne === rep.iTotalHt) return { montant: { mode: "pctTravauxHt", taux }, tvaPct };

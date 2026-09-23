@@ -331,6 +331,11 @@ export function estBonusFragile(a: Pick<AideDef, "id" | "libelle">): boolean {
   return a.id.includes("fragile") || /fragile/i.test(a.libelle);
 }
 
+/** Bonus MPR sur l'assiette travaux (copro fragile, sortie de passoire…) : hors garde-fou MPR travaux. */
+export function estBonusMpr(a: Pick<AideDef, "id" | "libelle">): boolean {
+  return estBonusFragile(a) || a.id.includes("bonus") || /bonus/i.test(a.libelle);
+}
+
 /** TVA d'une ligne de lot : montant saisi, sinon HT × taux (avant remise, convention du classeur). */
 export function tvaLigne(l: Pick<LigneLot, "montantHt" | "tvaPct" | "tvaMontant">): number {
   return l.tvaMontant ?? (l.montantHt * l.tvaPct) / 100;
@@ -534,12 +539,13 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
     }),
   };
 
-  // Garde-fous - le bonus « copro fragile » (20 % de la même assiette) a son
-  // propre plafond : il n'entre pas dans le garde-fou MPR travaux (classeur
-  // Le Rodin, ligne 122 = MPR partie travaux seule / logements).
+  // Garde-fous - les bonus « copro fragile » (20 %) et « sortie de passoire »
+  // (10 %) de la même assiette ont leur propre plafond : ils n'entrent pas dans
+  // le garde-fou MPR travaux (classeur Le Rodin, ligne 122 = MPR partie travaux
+  // seule / logements ; 9 rue de la Gare, ligne 118).
   const nb = infos.nbLogements || 1;
   const montantMprTravaux = data.aides.reduce(
-    (s, a, i) => (a.calcul.mode === "pctAssietteTravaux" && !estBonusFragile(a) ? s + (aides[i].montant ?? 0) : s),
+    (s, a, i) => (a.calcul.mode === "pctAssietteTravaux" && !estBonusMpr(a) ? s + (aides[i].montant ?? 0) : s),
     0
   );
   const gardeFous: GardeFou[] = [
