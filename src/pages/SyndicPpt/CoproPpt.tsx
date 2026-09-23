@@ -29,6 +29,7 @@ import {
   usePptAgs,
   usePptCopro,
   usePptJournal,
+  usePptMembresEnseigne,
   usePptParametres,
   usePptPostes,
   usePptDeposants,
@@ -51,6 +52,8 @@ import { SyndicShell, Loader, AucuneCopro } from "@/pages/Syndic";
 import { AgForm } from "./AgForm";
 import { ApercuDocument } from "@/components/ApercuDocument";
 import { CorrigerDocument, RenommerFichiers, type DocumentACorriger } from "./CorrigerDocument";
+import { SelectGestionnaire } from "./ChoixGestionnaire";
+import { messageTransfert } from "@/lib/ppt/gestionnaires";
 import { PrioriteBadge, RenoBadge, SeveriteBadge, StatutPosteBadge, StatutRapportBadge, VerdictBadge, anneeCourante, fmtDateCourte, fmtEur, fmtPct, issueLabel, posteLite, type PrioriteCode } from "./commun";
 
 const TABS = [
@@ -1021,6 +1024,9 @@ function FicheTab({ c }: { c: PptCoproAvecStats }) {
   // renommer la copropriété laisse son ancien nom dans les fichiers déposés (0082)
   const { data: rapports } = usePptRapports([c.id]);
   const [renommages, setRenommages] = useState<{ rapport: DocumentACorriger; nouveau: string }[]>([]);
+  // comptes de l'enseigne (AMO et direction ; vide pour un gestionnaire, qui garde la saisie libre)
+  const { data: membres } = usePptMembresEnseigne(c.organisation_id);
+  const avecMenu = (membres ?? []).length > 0;
   const champs = ["nom", "adresse", "code_postal", "commune", "immatriculation_rnc", "annee_construction", "nb_batiments", "nb_lots", "nb_logements", "surface_m2", "surface_type", "chauffage", "energie_chauffage", "etiquette_energie", "etiquette_ges", "cep_kwhep_m2_an", "date_dpe", "plus_de_15_ans", "pppt_presente", "gestionnaire_nom", "gestionnaire_email"] as const;
   type Champ = (typeof champs)[number];
   // les deux réponses oui / non du portefeuille (0077) sont éditées comme « oui » / « non »
@@ -1069,9 +1075,20 @@ function FicheTab({ c }: { c: PptCoproAvecStats }) {
         {select("plus_de_15_ans", "Copropriété de plus de 15 ans ?", ["oui", "non"])}
         {select("pppt_presente", "PPPT déjà présenté en AG ?", ["oui", "non"])}
         <span></span>
-        {champ("gestionnaire_nom", "Gestionnaire en charge")}
+        {avecMenu && (
+          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 500 }}>
+            Gestionnaire en charge
+            <SelectGestionnaire
+              membres={membres ?? []}
+              actuel={{ gestionnaire_nom: v.gestionnaire_nom || null, gestionnaire_email: v.gestionnaire_email || null }}
+              onChoisir={(g) => setV({ ...v, gestionnaire_nom: g.gestionnaire_nom ?? "", gestionnaire_email: g.gestionnaire_email ?? "" })}
+            />
+          </label>
+        )}
+        {champ("gestionnaire_nom", avecMenu ? "Nom du gestionnaire" : "Gestionnaire en charge")}
         {champ("gestionnaire_email", "E-mail du gestionnaire", { type: "email" })}
         <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>
+          {avecMenu && "Choisissez un compte de l'enseigne : le nom et l'e-mail se remplissent ; un gestionnaire sans compte se saisit à la main. "}
           Changer l'e-mail du gestionnaire transfère le dossier : l'ancien gestionnaire n'y accède plus, le nouveau y accède, l'historique est conservé (onglet Historique).
         </p>
         <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end" }}>
@@ -1079,6 +1096,10 @@ function FicheTab({ c }: { c: PptCoproAvecStats }) {
             className="se-btn se-btn-primary btn-sm"
             disabled={!dirty || maj.isPending}
             onClick={() => {
+              // transfert du dossier : même confirmation que depuis la file de revue /ppt
+              const nouvelEmail = v.gestionnaire_email.trim().toLowerCase();
+              if (nouvelEmail !== (c.gestionnaire_email ?? "").trim().toLowerCase()
+                && !window.confirm(messageTransfert(c, { gestionnaire_nom: v.gestionnaire_nom.trim() || null, gestionnaire_email: nouvelEmail || null }))) return;
               const patch: Record<string, string | number | boolean | null> = {};
               for (const k of champs) patch[k] = v[k] === "" ? null : numeriques.includes(k) ? Number(v[k]) : booleens.includes(k) ? v[k] === "oui" : v[k];
               const nouveauNom = v.nom.trim();

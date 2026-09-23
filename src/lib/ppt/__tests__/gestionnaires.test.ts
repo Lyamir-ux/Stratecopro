@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NON_ATTRIBUE, optionsGestionnaire, patchGestionnaire, valeurActuelle, type MembreEnseigne } from "../gestionnaires";
+import { NON_ATTRIBUE, messageTransfert, optionsGestionnaire, patchGestionnaire, valeurActuelle, type MembreEnseigne } from "../gestionnaires";
 
 const membres: MembreEnseigne[] = [
   { user_id: "u1", nom: "Thomas Keller", email: "Thomas.Keller@syndic3000.fr", org_role: "gestionnaire" },
@@ -44,5 +44,20 @@ describe("patchGestionnaire", () => {
     expect(patchGestionnaire(membres, c, "eric@exemple.fr")).toBeNull();
     expect(patchGestionnaire(membres, vide, NON_ATTRIBUE)).toBeNull();
     expect(patchGestionnaire(membres, vide, "inconnu@x.fr")).toBeNull();
+  });
+});
+
+describe("messageTransfert", () => {
+  const copro = { nom: "Les Tilleuls", gestionnaire_nom: "Thomas Keller", gestionnaire_email: "thomas.keller@syndic3000.fr" };
+  it("annonce le transfert et la perte d'accès de l'ancien gestionnaire", () => {
+    expect(messageTransfert(copro, { gestionnaire_nom: "Hélène Marchal", gestionnaire_email: "helene.marchal@syndic3000.fr" }))
+      .toBe("Confier « Les Tilleuls » à Hélène Marchal ? Thomas Keller n'y aura plus accès. L'historique est conservé.");
+  });
+  it("se contente de l'e-mail quand le nom manque, sans ancien gestionnaire", () => {
+    expect(messageTransfert({ ...copro, ...vide }, { gestionnaire_nom: null, gestionnaire_email: "paul@x.fr" }))
+      .toBe("Confier « Les Tilleuls » à paul@x.fr ? L'historique est conservé.");
+  });
+  it("annonce le retrait", () => {
+    expect(messageTransfert(copro, vide)).toBe("Retirer Thomas Keller de « Les Tilleuls » ? Seule la direction de l'enseigne y aura accès.");
   });
 });

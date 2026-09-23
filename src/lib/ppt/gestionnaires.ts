@@ -78,3 +78,12 @@ export function patchGestionnaire(membres: MembreEnseigne[], c: GestionnaireActu
   if (!m) return null;
   return { gestionnaire_nom: m.nom, gestionnaire_email: courriel(m.email) };
 }
+
+/** Question posée avant de changer le gestionnaire d'une copropriété. */
+export function messageTransfert(copro: GestionnaireActuel & { nom: string }, patch: GestionnaireActuel): string {
+  const ancien = copro.gestionnaire_nom?.trim() || copro.gestionnaire_email;
+  const nouveau = patch.gestionnaire_nom?.trim() || patch.gestionnaire_email;
+  return nouveau
+    ? `Confier « ${copro.nom} » à ${nouveau} ?${ancien ? ` ${ancien} n'y aura plus accès.` : ""} L'historique est conservé.`
+    : `Retirer ${ancien ?? "le gestionnaire"} de « ${copro.nom} » ? Seule la direction de l'enseigne y aura accès.`;
+}
