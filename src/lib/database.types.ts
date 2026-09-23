@@ -2218,9 +2218,12 @@ export type Database = {
           copro_id: string
           created_at: string
           data: Json
+          estimatif_groupe: string | null
           id: string
+          nature: string
           nom: string
           resultat: Json | null
+          scenario_ordre: number | null
           source_fichier: string | null
           source_fichier_id: string | null
           statut: string
@@ -2234,9 +2237,12 @@ export type Database = {
           copro_id: string
           created_at?: string
           data?: Json
+          estimatif_groupe?: string | null
           id?: string
+          nature?: string
           nom?: string
           resultat?: Json | null
+          scenario_ordre?: number | null
           source_fichier?: string | null
           source_fichier_id?: string | null
           statut?: string
@@ -2250,9 +2256,12 @@ export type Database = {
           copro_id?: string
           created_at?: string
           data?: Json
+          estimatif_groupe?: string | null
           id?: string
+          nature?: string
           nom?: string
           resultat?: Json | null
+          scenario_ordre?: number | null
           source_fichier?: string | null
           source_fichier_id?: string | null
           statut?: string

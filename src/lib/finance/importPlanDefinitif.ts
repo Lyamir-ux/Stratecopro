@@ -57,7 +57,7 @@ function str(v: unknown): string {
 }
 
 /** Taux de TVA depuis un commentaire « TVA de 10% » / « TVA de 5,5% ». */
-function parseTva(comment: string): number | null {
+export function parseTva(comment: string): number | null {
   const m = /tva\s*(?:de)?\s*([\d]+(?:[.,]\d+)?)\s*%/i.exec(comment);
   return m ? parseFloat(m[1].replace(",", ".")) : null;
 }
@@ -191,7 +191,7 @@ function parseLotSheet(grid: Grid, sheetName: string, avert: string[]): { lot: L
 // ---------- Onglet « PF définitif … » ----------
 
 /** Catégorisation d'une ligne MOE d'après son libellé (nomenclature Strat Eco). */
-function classifyMoe(
+export function classifyMoe(
   designation: string,
   ttc: number,
   travauxHt: number,
@@ -275,7 +275,7 @@ const fmtEuro = (n: number) => n.toLocaleString("fr-FR", { maximumFractionDigits
  * calculée dans le classeur sur une assiette non plafonnée est conservée en
  * formule (le logiciel applique le plafond, cf. garde-fous) avec un avertissement.
  */
-function calibrerAides(data: PlanDefinitifData, valeurs: (number | null)[], avert: string[]): void {
+export function calibrerAides(data: PlanDefinitifData, valeurs: (number | null)[], avert: string[]): void {
   const proche = (a: number, b: number) => Math.abs(a - b) <= 1;
   for (let i = 0; i < data.aides.length; i++) {
     const cible = valeurs[i];
@@ -325,7 +325,7 @@ function calibrerAides(data: PlanDefinitifData, valeurs: (number | null)[], aver
 }
 
 /** Reconnaissance d'une aide d'après son libellé - repli en montant manuel si la formule standard ne colle pas. */
-function classifyAide(groupe: string, libelle: string, montant: number | null): AideDef {
+export function classifyAide(groupe: string, libelle: string, montant: number | null): AideDef {
   const n = norm(libelle);
   const publique = norm(groupe) !== "cee";
   const base: Omit<AideDef, "calcul"> = {
@@ -336,6 +336,8 @@ function classifyAide(groupe: string, libelle: string, montant: number | null): 
   };
   if (montant == null) return { ...base, calcul: { mode: "info" } };
   if (n.includes("cee")) return { ...base, calcul: { mode: "parM2Shab", tauxEurM2: 27, coef: 0.9 } };
+  if (n.includes("maprimerenov") && n.includes("fragile"))
+    return { ...base, calcul: { mode: "pctAssietteTravaux", taux: 20, coef: 0.9 } };
   if (n.includes("maprimerenov") && n.includes("travaux"))
     return { ...base, calcul: { mode: "pctAssietteTravaux", taux: 45, coef: 0.9 } };
   if (n.includes("maprimerenov") && n.includes("etudes"))
@@ -349,7 +351,7 @@ function classifyAide(groupe: string, libelle: string, montant: number | null): 
   return { ...base, calcul: { mode: "manuel", montant } };
 }
 
-const PHASE_PAR_PREFIXE: [RegExp, PhaseMoe][] = [
+export const PHASE_PAR_PREFIXE: [RegExp, PhaseMoe][] = [
   [/etude/, "etude"],
   [/projet/, "projet"],
   [/travaux/, "travaux"],

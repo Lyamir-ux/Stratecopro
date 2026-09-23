@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import CoproDetail from "./pages/CoproDetail";
 import Ingenierie from "./pages/Ingenierie";
 import PlanDefinitifPage from "./pages/PlanDefinitif";
+import PlanEstimatifPage from "./pages/PlanEstimatif";
 import MesTaches from "./pages/MesTaches";
 import Consultations from "./pages/Consultations";
 import DemandesAmo from "./pages/DemandesAmo";
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
               { path: "/", element: <Dashboard /> },
               { path: "/copros/:id/ingenierie/:scenarioId?", element: <Ingenierie /> },
               { path: "/copros/:id/plan-definitif/:planId", element: <PlanDefinitifPage /> },
+              { path: "/copros/:id/plan-estimatif/:groupeId", element: <PlanEstimatifPage /> },
               { path: "/copros/:id/:tab?", element: <CoproDetail /> },
               { path: "/taches", element: <MesTaches /> },
               { path: "/consultations", element: <Consultations /> },

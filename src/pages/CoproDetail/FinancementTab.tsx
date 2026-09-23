@@ -24,6 +24,9 @@ import {
 } from "@/lib/finance";
 import { readParams, useBareme, useChoixFinancementScenario, usePlansIndividuels, useScenarios } from "@/api/scenarios";
 import {
+  estPlanEstimatif,
+  groupesEstimatifs,
+  useDeleteGroupeEstimatif,
   useDeletePlanDefinitif,
   usePartagerPfCopros,
   usePfPartage,
@@ -105,6 +108,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   if (!active) {
     return (
       <div className="fade" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <PlanEstimatifPanel coproId={c.id} coproNom={c.name} />
         <PlanDefinitifPanel coproId={c.id} coproNom={c.name} />
         {planValide && pv && pvData ? (
           <div className="detail-grid">
@@ -149,6 +153,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   return (
     <div className="detail-grid fade">
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <PlanEstimatifPanel coproId={c.id} coproNom={c.name} />
         <PlanDefinitifPanel coproId={c.id} coproNom={c.name} />
         {planValide && pv ? (
           <PanelCoutOperationPf plan={planValide} pv={pv} />
@@ -502,7 +507,9 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
  */
 function PlanDefinitifPanel({ coproId, coproNom }: { coproId: string; coproNom: string }) {
   const navigate = useNavigate();
-  const { data: plans } = usePlansDefinitifs(coproId);
+  // Les scénarios d'un PF estimatif ont leur propre panneau (comparatif)
+  const { data: tous } = usePlansDefinitifs(coproId);
+  const plans = (tous ?? []).filter((p) => !estPlanEstimatif(p));
   const del = useDeletePlanDefinitif(coproId);
   const valider = useValiderPlanDefinitif(coproId);
   const [importOpen, setImportOpen] = useState(false);
@@ -523,7 +530,8 @@ function PlanDefinitifPanel({ coproId, coproNom }: { coproId: string; coproNom: 
           <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
             Aucun plan définitif - importez le classeur Excel du chef de projet (onglets « PF définitif Eco PTZ
             collectif / individuel » + lots avec colonne « Retenu ») : le logiciel reconnaît la nomenclature et
-            recalcule le plan à chaque modification.
+            recalcule le plan à chaque modification. Un PF estimatif à plusieurs scénarios (une colonne par
+            scénario) s'importe par le même bouton.
           </p>
         ) : (
           (plans ?? []).map((p, i, arr) => {
@@ -595,6 +603,90 @@ function PlanDefinitifPanel({ coproId, coproNom }: { coproId: string; coproNom: 
             );
           })
         )}
+      </div>
+      {importOpen && <ImportPlanDefinitifDialog coproId={coproId} coproNom={coproNom} onClose={() => setImportOpen(false)} />}
+    </div>
+  );
+}
+
+/**
+ * PF estimatif à plusieurs scénarios (classeur « PF estimatif » du chef de
+ * projet, une colonne par scénario) : scénarios importés ensemble, ouverts
+ * un par un dans l'éditeur ou comparés côte à côte. Affiché dès qu'un PF
+ * estimatif existe ; l'import passe par « Importer un classeur », qui
+ * reconnaît la nomenclature.
+ */
+function PlanEstimatifPanel({ coproId, coproNom }: { coproId: string; coproNom: string }) {
+  const navigate = useNavigate();
+  const { data: plans } = usePlansDefinitifs(coproId);
+  const del = useDeleteGroupeEstimatif(coproId);
+  const [importOpen, setImportOpen] = useState(false);
+  const groupes = groupesEstimatifs(plans);
+  if (groupes.length === 0) return null;
+
+  return (
+    <div className="panel">
+      <div className="p-head">
+        <Icon name="columns" size={18} />
+        <h3>Plan de financement estimatif</h3>
+        <span style={{ flex: 1 }}></span>
+        <button className="se-btn se-btn-secondary btn-sm" onClick={() => setImportOpen(true)}>
+          <Icon name="upload" size={15} />
+          Importer un classeur
+        </button>
+      </div>
+      <div className="p-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {groupes.map(({ groupe, scenarios }) => (
+          <div key={groupe}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+              <span className="se-small" style={{ color: "var(--fg-muted)" }}>
+                {scenarios.length} scénario{scenarios.length > 1 ? "s" : ""} · importé le {fmtDate(scenarios[0].created_at)}
+                {scenarios[0].source_fichier ? ` de « ${scenarios[0].source_fichier} »` : ""}
+              </span>
+              <span className="spacer" style={{ flex: 1 }}></span>
+              <button
+                className="se-btn se-btn-primary btn-sm"
+                onClick={() => navigate(`/copros/${coproId}/plan-estimatif/${groupe}`)}
+              >
+                <Icon name="columns" size={14} />
+                Comparer les scénarios
+              </button>
+              <button
+                className="icon-btn"
+                title="Supprimer ce PF estimatif (tous ses scénarios)"
+                disabled={del.isPending}
+                onClick={() => {
+                  if (window.confirm(`Supprimer ce PF estimatif et ses ${scenarios.length} scénarios ?`)) del.mutate(groupe);
+                }}
+              >
+                <Icon name="trash" size={15} />
+              </button>
+            </div>
+            {scenarios.map((p, i, arr) => {
+              const res = computePlanDefinitif(readPlanDefinitif(p.data));
+              return (
+                <div
+                  key={p.id}
+                  className="task-row"
+                  style={{ padding: "11px 4px", borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none", cursor: "pointer" }}
+                  onClick={() => navigate(`/copros/${coproId}/plan-definitif/${p.id}`)}
+                >
+                  <Icon name="fileText" size={16} style={{ color: "var(--color-secondary-500)" }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div className="t-title" style={{ fontSize: 13 }}>
+                      {p.nom}
+                    </div>
+                    <div className="t-copro">
+                      {`Opération ${fmtEuro(res.totalOperationTtc)} · aides ${fmtEuro(res.totalAides)} (${Math.round(res.tauxCouverture * 100)} %) · reste à charge ${fmtEuro(res.resteACharge)}`}
+                    </div>
+                  </div>
+                  <span className="spacer"></span>
+                  <Badge kind="neutral">Estimatif</Badge>
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
       {importOpen && <ImportPlanDefinitifDialog coproId={coproId} coproNom={coproNom} onClose={() => setImportOpen(false)} />}
     </div>

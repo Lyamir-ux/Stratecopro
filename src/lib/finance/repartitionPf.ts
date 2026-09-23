@@ -5,6 +5,7 @@
 // l'AMO choisit la clé sur chaque ligne de devis et chaque ligne MOE
 // (choix porté par la ligne dans le PF définitif).
 import type { PlanDefinitifData, PlanDefinitifResult } from "./planDefinitif";
+import { tvaLigne } from "./planDefinitif";
 import { round2 } from "./round";
 
 /** Ligne du PF à répartir suivant une clé (ligne de devis ou ligne MOE, toute phase). */
@@ -25,9 +26,10 @@ export function itemsARepartirPf(data: PlanDefinitifData, r: PlanDefinitifResult
   const items: ItemRepartitionPf[] = [];
   for (const lot of data.lots) {
     lot.lignes.forEach((l, i) => {
-      if (l.montantHt === 0) return;
-      // Convention du classeur : remise sur le HT, TVA calculée sur le montant avant remise.
-      const ttc = l.montantHt * (1 - lot.remisePct / 100) + (l.montantHt * l.tvaPct) / 100;
+      if (l.montantHt === 0 && !l.tvaMontant) return;
+      // Convention du classeur : remise sur le HT, TVA calculée sur le montant
+      // avant remise (ou saisie : ligne d'ajustement d'un PF estimatif).
+      const ttc = l.montantHt * (1 - lot.remisePct / 100) + tvaLigne(l);
       items.push({
         id: `lot:${lot.numero}:${i}`,
         libelle: `Lot ${lot.numero} - ${l.designation || lot.titre}`,

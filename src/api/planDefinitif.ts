@@ -16,6 +16,7 @@ import { makeDefaultParams } from "./scenarios";
 import { uploadFichierDirect } from "./fichiers";
 import { construireNomFichier } from "@/lib/nommage";
 import { exportPlanDefinitif } from "@/lib/finance/exportPlanDefinitif";
+import { exportPlanEstimatif, libelleDepuisNom, nomScenario, type ScenarioEstimatif } from "@/lib/finance/planEstimatif";
 
 export type PlanDefinitif = Tables<"plans_definitifs">;
 
@@ -34,6 +35,8 @@ export async function archiverClasseurPf(input: {
   version: number;
   etat: "source import" | "validé" | "état courant";
   file?: File;
+  /** Objet du nom de fichier (défaut : « PF définitif <copro> vN »). */
+  objet?: string;
 }): Promise<{ id: string }> {
   let file = input.file;
   if (!file) {
@@ -46,7 +49,7 @@ export async function archiverClasseurPf(input: {
     {
       prefixe: input.coproNom,
       type: "plan_financement",
-      objet: `PF définitif ${input.data.infos.nomCopro || input.coproNom} v${input.version}`,
+      objet: input.objet ?? `PF définitif ${input.data.infos.nomCopro || input.coproNom} v${input.version}`,
       emetteur: "Strat Eco",
       date: new Date().toISOString().slice(0, 10),
       etat: input.etat,
@@ -137,6 +140,143 @@ export function useCreatePlanDefinitif(coproId: string) {
       invalidate(qc, coproId);
       void qc.invalidateQueries({ queryKey: ["fichiers", coproId] });
     },
+  });
+}
+
+/** Plan d'un PF estimatif (scénario) - nature « estimatif ». */
+export function estPlanEstimatif(p: Pick<PlanDefinitif, "nature">): boolean {
+  return p.nature === "estimatif";
+}
+
+/** Scénarios d'un groupe estimatif, dans l'ordre du classeur. */
+export function scenariosDuGroupe(plans: PlanDefinitif[] | undefined, groupe: string | null | undefined): PlanDefinitif[] {
+  return (plans ?? [])
+    .filter((p) => estPlanEstimatif(p) && p.estimatif_groupe === groupe)
+    .sort((a, b) => (a.scenario_ordre ?? 0) - (b.scenario_ordre ?? 0));
+}
+
+/** Groupes estimatifs d'une copro, du plus récent au plus ancien. */
+export function groupesEstimatifs(plans: PlanDefinitif[] | undefined): { groupe: string; scenarios: PlanDefinitif[] }[] {
+  const groupes = new Map<string, PlanDefinitif[]>();
+  for (const p of plans ?? []) {
+    if (!estPlanEstimatif(p) || !p.estimatif_groupe) continue;
+    groupes.set(p.estimatif_groupe, [...(groupes.get(p.estimatif_groupe) ?? []), p]);
+  }
+  return [...groupes.entries()]
+    .map(([groupe, ps]) => ({ groupe, scenarios: ps.sort((a, b) => (a.scenario_ordre ?? 0) - (b.scenario_ordre ?? 0)) }))
+    .sort((a, b) => (b.scenarios[0].created_at > a.scenarios[0].created_at ? 1 : -1));
+}
+
+/** Scénarios (moteur) depuis les plans d'un groupe - export et comparatif. */
+export function scenariosEstimatifs(plans: PlanDefinitif[]): ScenarioEstimatif[] {
+  return plans.map((p, i) => ({
+    ordre: p.scenario_ordre ?? i + 1,
+    libelle: libelleDepuisNom(p.nom),
+    data: readPlanDefinitif(p.data),
+  }));
+}
+
+/** Archive l'export .xlsx d'un PF estimatif (tous ses scénarios) dans l'onglet Fichiers. */
+export async function archiverClasseurEstimatif(input: {
+  coproId: string;
+  coproNom: string;
+  scenarios: ScenarioEstimatif[];
+  etat: "source import" | "état courant";
+  file?: File;
+}): Promise<{ id: string }> {
+  let file = input.file;
+  if (!file) {
+    const XLSX = await import("xlsx");
+    const buf = XLSX.write(exportPlanEstimatif(input.scenarios), { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+    file = new File([buf], "pf-estimatif.xlsx", { type: MIME_XLSX });
+  }
+  const data = input.scenarios[0]?.data ?? readPlanDefinitif({});
+  return archiverClasseurPf({
+    coproId: input.coproId,
+    coproNom: input.coproNom,
+    data,
+    version: 1,
+    etat: input.etat,
+    file,
+    objet: `PF estimatif ${data.infos.nomCopro || input.coproNom} ${input.scenarios.length} scénarios`,
+  });
+}
+
+/**
+ * Crée les scénarios d'un PF estimatif importé (un plan brouillon par
+ * scénario, même groupe) et archive le classeur source une seule fois.
+ * Retourne l'identifiant du groupe (page comparatif).
+ */
+export function useCreatePlansEstimatifs(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      scenarios: ScenarioEstimatif[];
+      sourceFichier?: string;
+      file?: File;
+      coproNom?: string;
+    }): Promise<string> => {
+      const groupe = crypto.randomUUID();
+      const { data: rows, error } = await supabase
+        .from("plans_definitifs")
+        .insert(
+          input.scenarios.map((s) => ({
+            copro_id: coproId,
+            nom: nomScenario(s.ordre, s.libelle),
+            data: s.data as unknown as Json,
+            resultat: computePlanDefinitif(s.data) as unknown as Json,
+            source_fichier: input.sourceFichier ?? null,
+            nature: "estimatif",
+            estimatif_groupe: groupe,
+            scenario_ordre: s.ordre,
+          }))
+        )
+        .select("id");
+      if (error) throw error;
+      if (input.file) {
+        // Archivage du classeur source - meilleur effort, comme le PF définitif
+        try {
+          const f = await archiverClasseurEstimatif({
+            coproId,
+            coproNom: input.coproNom ?? input.scenarios[0]?.data.infos.nomCopro ?? "copro",
+            scenarios: input.scenarios,
+            etat: "source import",
+            file: input.file,
+          });
+          await supabase
+            .from("plans_definitifs")
+            .update({ source_fichier_id: f.id })
+            .in(
+              "id",
+              (rows ?? []).map((r) => r.id)
+            );
+        } catch {
+          /* archivage facultatif */
+        }
+      }
+      return groupe;
+    },
+    onSuccess: () => {
+      invalidate(qc, coproId);
+      void qc.invalidateQueries({ queryKey: ["fichiers", coproId] });
+    },
+  });
+}
+
+/** Supprime tous les scénarios d'un PF estimatif. */
+export function useDeleteGroupeEstimatif(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (groupe: string) => {
+      const { error } = await supabase
+        .from("plans_definitifs")
+        .delete()
+        .eq("copro_id", coproId)
+        .eq("nature", "estimatif")
+        .eq("estimatif_groupe", groupe);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidate(qc, coproId),
   });
 }
 

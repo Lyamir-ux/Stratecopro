@@ -1,5 +1,7 @@
 // Import d'un classeur « Plan de financement définitif » (nomenclature chef de projet) :
 // lecture SheetJS → reconnaissance des onglets PF + lots → contrôles fichier ↔ recalcul → création.
+// Un classeur « PF estimatif » (une colonne par scénario) est reconnu et importé
+// en scénarios comparables (cas Le Rodin, 23/09/2026).
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -8,7 +10,9 @@ import { Modal } from "@/components/Modal";
 import { Badge } from "@/components/ui";
 import { fmtEuroFull } from "@/lib/format";
 import { importPlanDefinitif, type ImportPlanResult } from "@/lib/finance/importPlanDefinitif";
+import { estClasseurEstimatif, importPlanEstimatif, type ImportEstimatifResult } from "@/lib/finance/planEstimatif";
 import { useCreatePlanDefinitif } from "@/api/planDefinitif";
+import { ApercuImportEstimatif } from "@/pages/PlanEstimatif/ApercuImportEstimatif";
 
 interface Props {
   coproId: string;
@@ -23,15 +27,18 @@ export function ImportPlanDefinitifDialog({ coproId, coproNom, onClose }: Props)
   const [fileName, setFileName] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<ImportPlanResult | null>(null);
+  const [estimatif, setEstimatif] = useState<ImportEstimatifResult | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
   const create = useCreatePlanDefinitif(coproId);
 
   const onFile = async (f: File) => {
     setParseError(null);
     setResult(null);
+    setEstimatif(null);
     try {
       const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
-      setResult(importPlanDefinitif(wb));
+      if (estClasseurEstimatif(wb)) setEstimatif(importPlanEstimatif(wb));
+      else setResult(importPlanDefinitif(wb));
       setFileName(f.name);
       setFile(f);
     } catch (e) {
@@ -59,7 +66,7 @@ export function ImportPlanDefinitifDialog({ coproId, coproNom, onClose }: Props)
   const controlesKo = result?.controles.filter((c) => !c.ok) ?? [];
 
   return (
-    <Modal title="Importer un plan de financement définitif" onClose={onClose} width={780}>
+    <Modal title={estimatif ? "Importer un plan de financement estimatif" : "Importer un plan de financement"} onClose={onClose} width={780}>
       {!fileName ? (
         <div
           onClick={() => fileRef.current?.click()}
@@ -75,8 +82,9 @@ export function ImportPlanDefinitifDialog({ coproId, coproNom, onClose }: Props)
           <Icon name="upload" size={28} style={{ color: "var(--color-primary-500)" }} />
           <p style={{ margin: "12px 0 4px", fontWeight: 600 }}>Choisir le classeur .xlsx du plan de financement</p>
           <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
-            Nomenclature attendue : onglets « PF définitif Eco PTZ collectif / individuel »
+            PF définitif : onglets « PF définitif Eco PTZ collectif / individuel »
             <br />+ un onglet par lot de travaux avec la colonne « Retenu » (assiette MaPrimeRénov').
+            <br />PF estimatif : une feuille, une colonne par scénario (« Scénario 1 », « Scénario 2 »…).
             <br />Le classeur source est archivé dans l'onglet Fichiers (dossier Plans de financement).
             </p>
           <input
@@ -104,6 +112,16 @@ export function ImportPlanDefinitifDialog({ coproId, coproNom, onClose }: Props)
             Choisir un autre fichier
           </button>
         </div>
+      ) : estimatif ? (
+        <ApercuImportEstimatif
+          coproId={coproId}
+          coproNom={coproNom}
+          fileName={fileName}
+          file={file}
+          result={estimatif}
+          onReset={() => { setFileName(null); setEstimatif(null); }}
+          onClose={onClose}
+        />
       ) : result ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="import-note">

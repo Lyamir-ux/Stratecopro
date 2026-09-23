@@ -10,3 +10,4 @@ export * from "./missionsAnnexes";
 export * from "./round";
 export { BAREME_2024_HORS_IDF } from "./bareme2024";
 export { BAREME_2026_HORS_IDF, BAREME_2026_IDF } from "./bareme2026";
+export * from "./planEstimatif";

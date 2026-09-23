@@ -9,11 +9,21 @@ import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { useCopro } from "@/api/copros";
 import { useDonnees } from "@/api/donnees";
-import { useArchiverPlanDefinitif, usePlanDefinitif, useUpdatePlanDefinitif, useValiderPlanDefinitif } from "@/api/planDefinitif";
+import {
+  estPlanEstimatif,
+  scenariosDuGroupe,
+  scenariosEstimatifs,
+  useArchiverPlanDefinitif,
+  usePlanDefinitif,
+  usePlansDefinitifs,
+  useUpdatePlanDefinitif,
+  useValiderPlanDefinitif,
+} from "@/api/planDefinitif";
 import { fmtEuro, fmtEuroFull } from "@/lib/format";
 import {
   computePlanDefinitif,
   exportPlanDefinitif,
+  exportPlanEstimatif,
   itemsARepartirPf,
   makeAidesDefaut,
   PHASES_MOE,
@@ -114,6 +124,9 @@ export default function PlanDefinitifPage() {
   const update = useUpdatePlanDefinitif(coproId ?? "");
   const valider = useValiderPlanDefinitif(coproId ?? "");
   const archiver = useArchiverPlanDefinitif(coproId ?? "");
+  // Scénario d'un PF estimatif : ses scénarios frères servent à l'export (format estimatif)
+  const { data: tousPlans } = usePlansDefinitifs(coproId);
+  const estimatif = !!plan && estPlanEstimatif(plan);
 
   const [data, setData] = useState<PlanDefinitifData | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -130,7 +143,7 @@ export default function PlanDefinitifPage() {
   useCrumbs([
     { label: "Vos copropriétés", to: "/" },
     { label: c?.name ?? "…", to: `/copros/${coproId}/financement` },
-    { label: "PF définitif" },
+    { label: estimatif ? "PF estimatif" : "PF définitif" },
   ]);
 
   const r = useMemo(() => (data ? computePlanDefinitif(data) : null), [data]);
@@ -174,8 +187,16 @@ export default function PlanDefinitifPage() {
   };
 
   const doExport = () => {
+    const nom = data.infos.nomCopro || c?.name || "copro";
+    if (estimatif) {
+      // Tous les scénarios du PF estimatif, celui-ci avec les modifications en cours
+      const freres = scenariosDuGroupe(tousPlans, plan.estimatif_groupe);
+      const scenarios = scenariosEstimatifs(freres).map((s, i) => (freres[i].id === plan.id ? { ...s, data } : s));
+      XLSX.writeFile(exportPlanEstimatif(scenarios), `Plan de financement estimatif - ${nom}.xlsx`);
+      return;
+    }
     const wb = exportPlanDefinitif(data);
-    XLSX.writeFile(wb, `Plan de financement définitif - ${data.infos.nomCopro || c?.name || "copro"}.xlsx`);
+    XLSX.writeFile(wb, `Plan de financement définitif - ${nom}.xlsx`);
   };
 
   const gardeFousKo = r.gardeFous.filter((g) => !g.ok);
@@ -184,10 +205,20 @@ export default function PlanDefinitifPage() {
     <div className="page" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* ---- barre d'actions ---- */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <button className="se-btn se-btn-ghost btn-sm" onClick={() => navigate(`/copros/${coproId}/financement`)}>
-          <Icon name="chevronLeft" size={16} />
-          Financement
-        </button>
+        {estimatif ? (
+          <button
+            className="se-btn se-btn-ghost btn-sm"
+            onClick={() => navigate(`/copros/${coproId}/plan-estimatif/${plan.estimatif_groupe}`)}
+          >
+            <Icon name="chevronLeft" size={16} />
+            Comparatif des scénarios
+          </button>
+        ) : (
+          <button className="se-btn se-btn-ghost btn-sm" onClick={() => navigate(`/copros/${coproId}/financement`)}>
+            <Icon name="chevronLeft" size={16} />
+            Financement
+          </button>
+        )}
         <h1 style={{ margin: 0, fontSize: 20, fontFamily: "var(--font-display)" }}>{plan.nom}</h1>
         {plan.source_fichier && (
           <span className="se-small" style={{ color: "var(--fg-muted)" }}>
@@ -202,9 +233,13 @@ export default function PlanDefinitifPage() {
           </span>
         )}
         <span style={{ flex: 1 }}></span>
-        <Badge kind={plan.statut === "valide" ? "success" : "neutral"}>
-          {plan.statut === "valide" ? "Validé" : plan.statut === "partage" ? "Partagé" : "Brouillon"}
-        </Badge>
+        {estimatif ? (
+          <Badge kind="neutral">PF estimatif</Badge>
+        ) : (
+          <Badge kind={plan.statut === "valide" ? "success" : "neutral"}>
+            {plan.statut === "valide" ? "Validé" : plan.statut === "partage" ? "Partagé" : "Brouillon"}
+          </Badge>
+        )}
         <Badge kind={gardeFousKo.length ? "warn" : "success"}>
           {gardeFousKo.length ? `${gardeFousKo.length} garde-fou dépassé` : "Garde-fous OK"}
         </Badge>
@@ -212,16 +247,18 @@ export default function PlanDefinitifPage() {
           <Icon name="download" size={15} />
           Exporter .xlsx
         </button>
-        <button
-          className="se-btn se-btn-ghost btn-sm"
-          disabled={dirty || archiver.isPending}
-          title="Dépose l'export .xlsx de l'état actuel dans l'onglet Fichiers (dossier Plans de financement), daté et versionné"
-          onClick={() => archiver.mutate({ plan, coproNom: c?.name ?? data.infos.nomCopro })}
-        >
-          <Icon name="folder" size={15} />
-          {archiver.isPending ? "Archivage…" : archiver.isSuccess ? "Archivé dans Fichiers" : "Archiver dans Fichiers"}
-        </button>
-        {plan.statut === "valide" ? (
+        {!estimatif && (
+          <button
+            className="se-btn se-btn-ghost btn-sm"
+            disabled={dirty || archiver.isPending}
+            title="Dépose l'export .xlsx de l'état actuel dans l'onglet Fichiers (dossier Plans de financement), daté et versionné"
+            onClick={() => archiver.mutate({ plan, coproNom: c?.name ?? data.infos.nomCopro })}
+          >
+            <Icon name="folder" size={15} />
+            {archiver.isPending ? "Archivage…" : archiver.isSuccess ? "Archivé dans Fichiers" : "Archiver dans Fichiers"}
+          </button>
+        )}
+        {estimatif ? null : plan.statut === "valide" ? (
           <button
             className="se-btn se-btn-ghost btn-sm"
             disabled={valider.isPending}
@@ -415,7 +452,7 @@ export default function PlanDefinitifPage() {
                           Retenu
                         </th>
                         <th style={{ ...thR, width: 130 }}>€ HT</th>
-                        <th style={{ width: 90 }}>TVA</th>
+                        <th style={{ width: 110 }}>TVA</th>
                         {multiCles && (
                           <th style={{ width: 170 }} title="Clé de répartition appliquée à la ligne pour les plans individuels">
                             Clé de répartition
@@ -457,7 +494,18 @@ export default function PlanDefinitifPage() {
                             <NumInput value={l.montantHt} onChange={(n) => edit((d) => ((d.lots[li].lignes[i].montantHt = n), d))} />
                           </td>
                           <td>
-                            <TvaSelect value={l.tvaPct} onChange={(n) => edit((d) => ((d.lots[li].lignes[i].tvaPct = n), d))} />
+                            {l.tvaMontant != null ? (
+                              // Montant de TVA saisi : ligne d'ajustement d'un PF estimatif (TTC du classeur)
+                              <div style={{ display: "flex", alignItems: "center", gap: 4 }} title="Montant de TVA saisi (€) : cale le TTC sur celui du classeur">
+                                <NumInput
+                                  value={l.tvaMontant}
+                                  onChange={(n) => edit((d) => ((d.lots[li].lignes[i].tvaMontant = n), d))}
+                                />
+                                <span className="se-small">€</span>
+                              </div>
+                            ) : (
+                              <TvaSelect value={l.tvaPct} onChange={(n) => edit((d) => ((d.lots[li].lignes[i].tvaPct = n), d))} />
+                            )}
                           </td>
                           {multiCles && (
                             <td>

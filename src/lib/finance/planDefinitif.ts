@@ -24,6 +24,12 @@ export interface LigneLot {
   /** Taux de TVA de la ligne (5.5, 10, 20). */
   tvaPct: number;
   /**
+   * Montant de TVA saisi (€), prioritaire sur HT × taux : cale le TTC sur un
+   * chiffrage qui ne détaille pas la TVA (ligne d'ajustement d'un PF
+   * estimatif, dont le classeur saisit le TTC des travaux en dur).
+   */
+  tvaMontant?: number;
+  /**
    * Code de la clé de répartition appliquée à la ligne (copropriétés à
    * plusieurs clés) - sert aux plans individuels. Absent : clé unique de la
    * copro, ou choix legacy par lot entier (repartitionCles).
@@ -320,6 +326,16 @@ export interface PlanDefinitifResult {
 
 // ---------- Calculs ----------
 
+/** Aide « MaPrimeRénov' copro fragile » (bonus de 20 % sur l'assiette travaux). */
+export function estBonusFragile(a: Pick<AideDef, "id" | "libelle">): boolean {
+  return a.id.includes("fragile") || /fragile/i.test(a.libelle);
+}
+
+/** TVA d'une ligne de lot : montant saisi, sinon HT × taux (avant remise, convention du classeur). */
+export function tvaLigne(l: Pick<LigneLot, "montantHt" | "tvaPct" | "tvaMontant">): number {
+  return l.tvaMontant ?? (l.montantHt * l.tvaPct) / 100;
+}
+
 function htLigneMoe(m: MontantMoe, travauxHt: number, travauxTtc: number): number {
   switch (m.mode) {
     case "forfait":
@@ -337,10 +353,17 @@ export function computeLot(lot: LotTravaux): LotResult {
   const totalHtApresRemise = totalHt - remise;
   const retenuBrut = lot.lignes.filter((l) => l.retenu).reduce((s, l) => s + l.montantHt, 0);
   const totalHtRetenu = retenuBrut * (1 - lot.remisePct / 100);
-  const parTaux = new Map<number, number>();
-  for (const l of lot.lignes) parTaux.set(l.tvaPct, (parTaux.get(l.tvaPct) ?? 0) + l.montantHt);
-  const tvaParTaux = [...parTaux.entries()]
-    .map(([taux, base]) => ({ taux, montant: (base * taux) / 100 }))
+  // Lignes à taux : TVA sur la base cumulée par taux (convention du classeur) ;
+  // un montant de TVA saisi s'ajoute tel quel à son taux.
+  const baseParTaux = new Map<number, number>();
+  const saisieParTaux = new Map<number, number>();
+  for (const l of lot.lignes) {
+    if (l.tvaMontant != null) saisieParTaux.set(l.tvaPct, (saisieParTaux.get(l.tvaPct) ?? 0) + l.tvaMontant);
+    else baseParTaux.set(l.tvaPct, (baseParTaux.get(l.tvaPct) ?? 0) + l.montantHt);
+  }
+  const taux = new Set([...baseParTaux.keys(), ...saisieParTaux.keys()]);
+  const tvaParTaux = [...taux]
+    .map((t) => ({ taux: t, montant: ((baseParTaux.get(t) ?? 0) * t) / 100 + (saisieParTaux.get(t) ?? 0) }))
     .filter((t) => t.montant !== 0)
     .sort((a, b) => b.taux - a.taux);
   const totalTtc = totalHtApresRemise + tvaParTaux.reduce((s, t) => s + t.montant, 0);
@@ -511,10 +534,12 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
     }),
   };
 
-  // Garde-fous
+  // Garde-fous - le bonus « copro fragile » (20 % de la même assiette) a son
+  // propre plafond : il n'entre pas dans le garde-fou MPR travaux (classeur
+  // Le Rodin, ligne 122 = MPR partie travaux seule / logements).
   const nb = infos.nbLogements || 1;
   const montantMprTravaux = data.aides.reduce(
-    (s, a, i) => (a.calcul.mode === "pctAssietteTravaux" ? s + (aides[i].montant ?? 0) : s),
+    (s, a, i) => (a.calcul.mode === "pctAssietteTravaux" && !estBonusFragile(a) ? s + (aides[i].montant ?? 0) : s),
     0
   );
   const gardeFous: GardeFou[] = [
