@@ -933,7 +933,6 @@ export default function PlanDefinitifPage() {
               ["Imprévus (% du TTC travaux)", "imprevusPct"],
               ["Plafond assiette MPR (€ HT/logt)", "plafondTravauxParLogement"],
               ["Garde-fou MPR travaux (€/logt)", "plafondMprParLogement"],
-              ["Garde-fou AMO (€ HT/logt)", "plafondAmoParLogement"],
               ["Fonds travaux mobilisé (€)", "fondsTravaux"],
               ["Total tantièmes", "totalTantiemes"],
               ["Durée éco-PTZ (ans)", "dureeEcoPtzAns"],

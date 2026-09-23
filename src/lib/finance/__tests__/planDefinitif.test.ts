@@ -1,7 +1,7 @@
 // Non-régression du moteur « plan de financement définitif » contre le classeur
 // de référence Les Violettes : chaque valeur attendue est la valeur calculée par Excel.
 import { describe, expect, it } from "vitest";
-import { computePlanDefinitif } from "../planDefinitif";
+import { computePlanDefinitif, plafondAmoRegle } from "../planDefinitif";
 import { makeViolettes } from "./fixtureViolettes";
 
 const r = computePlanDefinitif(makeViolettes());
@@ -162,5 +162,37 @@ describe("planDefinitif - garde-fous et divers", () => {
 
   it("calcule la performance énergétique", () => {
     expect(r.performancePct).toBeCloseTo(63.02816901, 4);
+  });
+});
+
+describe("planDefinitif - plafond AMO (600 € au-delà de 20 logements, 1 000 € en dessous)", () => {
+  const mprAmo = (nbLogements: number) => {
+    const d = makeViolettes();
+    d.infos.nbLogements = nbLogements;
+    const res = computePlanDefinitif(d);
+    return { montant: res.aides.find((a) => a.id === "mpr-amo")?.montant, gardeFou: res.gardeFous[2] };
+  };
+
+  it("fixe le plafond selon le nombre de logements", () => {
+    expect(plafondAmoRegle(21)).toBe(600);
+    expect(plafondAmoRegle(20)).toBe(1000);
+    expect(plafondAmoRegle(11)).toBe(1000);
+  });
+
+  it("n'écrête pas une AMO sous le plafond", () => {
+    // Violettes : 14 400 € HT d'AMO pour 24 logements = 600 €/logt
+    expect(mprAmo(24).montant).toBeCloseTo(7200, 2);
+    const { montant, gardeFou } = mprAmo(20);
+    expect(montant).toBeCloseTo(7200, 2);
+    expect(gardeFou.plafond).toBe(1000);
+    expect(gardeFou.ok).toBe(true);
+  });
+
+  it("plafonne l'assiette MPR AMO au-delà du plafond", () => {
+    // 21 logements : assiette 600 × 21 = 12 600 € HT au lieu de 14 400 €
+    const { montant, gardeFou } = mprAmo(21);
+    expect(montant).toBeCloseTo(6300, 2);
+    expect(gardeFou.libelle).toBe("AMO < 600 €/logt");
+    expect(gardeFou.ok).toBe(false);
   });
 });

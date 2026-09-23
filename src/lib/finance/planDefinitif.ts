@@ -88,7 +88,7 @@ export interface LigneMoe {
  *  - parM2Shab        : CEE coup de pouce (27 €/m² × coef de prudence 0,9)
  *  - pctAssietteTravaux: MPR travaux (45 % de l'assiette retenue × 0,9)
  *  - pctEtudes        : MPR études (45 % du HT des lignes éligibles × 0,9 × prorata énergétique)
- *  - pctAmo           : MPR AMO (50 % du HT AMO)
+ *  - pctAmo           : MPR AMO (50 % du HT AMO, assiette plafonnée par logement - plafondAmoRegle)
  *  - forfaitPlusParLogement : Climaxion travaux (10 000 + 2 500 €/logt équivalent)
  *  - parLogement      : EMS travaux (1 000 €/logt équiv.), EMS BBC (500 €/logt)
  *  - manuel           : montant saisi (EMS MOE, EMS AMO…)
@@ -145,8 +145,11 @@ export interface ParamsFinancement {
   plafondTravauxParLogement: number;
   /** Garde-fou MPR travaux (€ / logement). */
   plafondMprParLogement: number;
-  /** Garde-fou AMO (€ HT / logement). */
-  plafondAmoParLogement: number;
+  /**
+   * @deprecated Ignoré depuis le 23/09/2026 : le plafond AMO suit la taille de
+   * la copropriété (`plafondAmoRegle`). Conservé pour relire les plans enregistrés.
+   */
+  plafondAmoParLogement?: number;
   /** Fonds travaux (loi ALUR) mobilisé. */
   fondsTravaux: number;
   commentaireFondsTravaux?: string;
@@ -336,6 +339,14 @@ export function estBonusMpr(a: Pick<AideDef, "id" | "libelle">): boolean {
   return estBonusFragile(a) || a.id.includes("bonus") || /bonus/i.test(a.libelle);
 }
 
+/**
+ * Plafond finançable de l'AMO (€ HT / logement) : 600 € pour une copropriété
+ * de plus de 20 logements, 1 000 € en dessous (règle d'Amir, 23/09/2026).
+ */
+export function plafondAmoRegle(nbLogements: number): number {
+  return nbLogements > 20 ? 600 : 1000;
+}
+
 /** TVA d'une ligne de lot : montant saisi, sinon HT × taux (avant remise, convention du classeur). */
 export function tvaLigne(l: Pick<LigneLot, "montantHt" | "tvaPct" | "tvaMontant">): number {
   return l.tvaMontant ?? (l.montantHt * l.tvaPct) / 100;
@@ -420,6 +431,10 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
     0
   );
   const htAmo = data.moe.reduce((s, l, i) => s + (l.eligibleMprAmo ? moe[i].montantHt : 0), 0);
+  // Assiette MPR AMO plafonnée par logement (pas de plafond tant que le nombre
+  // de logements n'est pas saisi)
+  const plafondAmo = plafondAmoRegle(infos.nbLogements);
+  const assietteAmo = infos.nbLogements > 0 ? Math.min(htAmo, plafondAmo * infos.nbLogements) : htAmo;
   /** Prorata énergétique : part des travaux retenus MPR dans le total travaux HT. */
   const prorataEnergetique = totalTravauxHt > 0 ? assietteMprTravaux / totalTravauxHt : 0;
 
@@ -441,7 +456,7 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
         montant = htEtudes * (c.taux / 100) * c.coef * prorataEnergetique;
         break;
       case "pctAmo":
-        montant = htAmo * (c.taux / 100);
+        montant = assietteAmo * (c.taux / 100);
         break;
       case "forfaitPlusParLogement":
         montant = c.base + c.parLogement * (c.surEquivalent ? infos.nbLogementsEquiv : infos.nbLogements);
@@ -562,10 +577,10 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
       ok: montantMprTravaux / nb <= params.plafondMprParLogement,
     },
     {
-      libelle: `AMO < ${params.plafondAmoParLogement} €/logt`,
+      libelle: `AMO < ${plafondAmo.toLocaleString("fr-FR")} €/logt`,
       valeur: htAmo / nb,
-      plafond: params.plafondAmoParLogement,
-      ok: htAmo / nb <= params.plafondAmoParLogement,
+      plafond: plafondAmo,
+      ok: htAmo / nb <= plafondAmo,
     },
   ];
 
@@ -631,7 +646,8 @@ export function makeAidesDefaut(): AideDef[] {
       libelle: "Maprimerénov' AMO",
       calcul: { mode: "pctAmo", taux: 50 },
       publique: true,
-      commentaire: "50 % du montant de la prestation d'assistance à maîtrise d'ouvrage HT",
+      commentaire:
+        "50 % du montant de la prestation d'assistance à maîtrise d'ouvrage HT - plafonné à 600 € HT par logement (1 000 € jusqu'à 20 logements)",
     },
     {
       id: "mpr-indiv",
@@ -716,7 +732,6 @@ export function makeDefaultPlanDefinitif(): PlanDefinitifData {
       imprevusPct: 7,
       plafondTravauxParLogement: 25000,
       plafondMprParLogement: 11250,
-      plafondAmoParLogement: 600,
       fondsTravaux: 0,
       totalTantiemes: 10000,
       tantiemesExemples: [],
