@@ -26,12 +26,12 @@ import {
 import {
   exporterFicheEtat,
   exporterListePrimes,
-  exporterRapportEnquete,
   libelleFinancement,
   libelleStatutDossier,
   profilAnah,
   type ContexteExport,
 } from "@/lib/exportsCopros";
+import { useGenererRapportEnquete } from "@/api/rapportEnquete";
 import type { CoproWithStats } from "@/api/copros";
 
 type FiltreStatut = "tous" | "a_relancer" | "complet";
@@ -89,6 +89,7 @@ function StatutBadge({ d }: { d: DossierCoproprietaire }) {
 export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
   const navigate = useNavigate();
   const data = useDossiersCoproprietaires(c);
+  const rapport = useGenererRapportEnquete(c, data);
   const { data: enquete } = useEnquete(c.id);
   const lb = libellesBatiments(c.denomination_batiments);
   const [bat, setBat] = useState<string>("");
@@ -144,12 +145,12 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
           </button>
           <button
             className="se-btn se-btn-secondary btn-sm"
-            title="Rapport d'enquête sociale : synthèse, profils Anah, occupation et détail des réponses par copropriétaire et par lot"
-            disabled={data.dossiers.length === 0}
-            onClick={() => exporterRapportEnquete(data, ctx)}
+            title="Rapport d'enquête sociale : synthèse, profils Anah, occupation et détail des réponses par copropriétaire et par lot - ses chiffres d'occupation alimentent la fiche État ANAH"
+            disabled={data.dossiers.length === 0 || !rapport.pret || rapport.enCours}
+            onClick={() => void rapport.generer()}
           >
             <Icon name="download" size={14} />
-            Rapport d'enquête sociale
+            {rapport.enCours ? "Génération…" : "Rapport d'enquête sociale"}
           </button>
           <button
             className="se-btn se-btn-secondary btn-sm"
@@ -162,6 +163,11 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
           </button>
         </div>
         <div className="p-body">
+          {rapport.erreur && (
+            <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 0 }}>
+              {rapport.erreur}
+            </p>
+          )}
           {data.dossiers.length === 0 ? (
             <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
               Importez d'abord les copropriétaires et leurs lots (onglet Données de la copro).

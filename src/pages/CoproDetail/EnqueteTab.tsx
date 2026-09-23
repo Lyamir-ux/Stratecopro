@@ -22,6 +22,8 @@ import {
   type Scope,
 } from "@/lib/enqueteCatalogue";
 import type { CoproWithStats } from "@/api/copros";
+import { useGenererRapportEnquete } from "@/api/rapportEnquete";
+import { useFicheEtat } from "@/api/ficheEtat";
 
 // Libellés grand public (plafonds Anah) - les couleurs MPR restent un simple repère visuel.
 const PROFIL_META: { p: Profil; label: string; color: string }[] = [
@@ -210,6 +212,10 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
   const { data: donnees } = useDonnees(c.id);
   const { data: bareme } = useBareme();
   const updateEnquete = useUpdateEnquete(c.id);
+  // feedback Amir du 23/09/2026 : le rapport se génère d'ici et alimente la fiche État ANAH
+  const rapport = useGenererRapportEnquete(c);
+  const { data: ficheEtat } = useFicheEtat(c.id);
+  const dernierRapport = ficheEtat?.data.occupation?.genereLe ?? null;
 
   const [configuring, setConfiguring] = useState(false);
   const [draft, setDraft] = useState<ConfigItem[] | null>(null);
@@ -359,11 +365,30 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
             <Icon name="users" size={18} />
             <h3>Profils MaPrimeRénov'</h3>
             <span style={{ flex: 1 }}></span>
-            <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
+            <span style={{ fontSize: 13, color: "var(--fg-muted)", marginRight: 10 }}>
               {repondants}/{total} répondants
             </span>
+            <button
+              className="se-btn se-btn-primary btn-sm"
+              title="Classeur Excel : synthèse, profils Anah, occupation, détail par copropriétaire et par lot - les chiffres d'occupation sont reportés dans la fiche État ANAH"
+              disabled={total === 0 || !rapport.pret || rapport.enCours}
+              onClick={() => void rapport.generer()}
+            >
+              <Icon name="download" size={14} />
+              {rapport.enCours ? "Génération…" : "Générer le rapport d'enquête sociale"}
+            </button>
           </div>
           <div className="p-body">
+            <p className="se-small" style={{ marginTop: 0, marginBottom: 14, color: "var(--fg-muted)" }}>
+              {dernierRapport
+                ? `Dernier rapport généré le ${fmtDate(dernierRapport)} - ses chiffres d'occupation sont reportés dans la fiche « État de la copropriété » du dossier ANAH.`
+                : "La génération du rapport reporte aussi l'occupation (propriétaires occupants et bailleurs, tantièmes, ménages modestes) dans la fiche « État de la copropriété » du dossier ANAH."}
+            </p>
+            {rapport.erreur && (
+              <p className="se-small" style={{ marginTop: 0, color: "var(--color-error-700)" }}>
+                {rapport.erreur}
+              </p>
+            )}
             {repondants === 0 ? (
               <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
                 Aucune réponse pour l'instant - saisissez les réponses ci-dessous ou lancez la campagne.

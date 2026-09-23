@@ -7,6 +7,7 @@ import * as XLSX from "xlsx";
 import type { DossierCoproprietaire, DossiersCopro, EtatItem } from "@/api/dossiersCopros";
 import { PROFILS_MPR, libellesBatiments } from "@/lib/referentiels";
 import { CATALOGUE } from "@/lib/enqueteCatalogue";
+import type { OccupationFiche, SourceOccupation, StatutLot } from "@/lib/ficheEtat";
 
 type Cell = string | number | null;
 
@@ -298,7 +299,60 @@ const HEAD_SYNTHESE_ENQUETE = [
   "Accord pour la visite",
 ];
 
-export function exporterRapportEnquete(data: DossiersCopro, ctx: ContexteExport) {
+const LIBELLE_STATUT_LOT: Record<StatutLot, string> = { PO: "Occupant", PB: "Bailleur", vacant: "Vacant", inconnu: "Inconnue" };
+const LIBELLE_SOURCE: Record<SourceOccupation, string> = { enquete: "enquête", adresse: "adresse postale", inconnu: "-" };
+const LIBELLE_STATUT_CP: Record<OccupationFiche["detail"][number]["statut"], string> = {
+  PO: "Propriétaire occupant",
+  PB: "Propriétaire bailleur",
+  mixte: "Occupant et bailleur",
+  inconnu: "Inconnue",
+};
+
+/** Onglet « Fiche État - occupation » : les chiffres reportés dans la fiche État ANAH, et d'où ils viennent. */
+function feuilleOccupationFicheEtat(wb: XLSX.WorkBook, used: Set<string>, ctx: ContexteExport, o: OccupationFiche) {
+  const titre = entete(ctx, "Rapport d'enquête sociale - fiche État ANAH", "Occupation reportée dans la fiche « État de la copropriété »");
+  const indicateurs: Cell[][] = [
+    ["Nombre total de propriétaires de logements", o.nbProprietaires],
+    ["Nombre de propriétaires occupants", o.nbPO],
+    ["Tantièmes des propriétaires occupants", o.tantiemesPO],
+    ["Nombre de propriétaires bailleurs", o.nbPB],
+    ["Tantièmes des propriétaires bailleurs", o.tantiemesPB],
+    ["Copropriétaires occupants aux ressources modestes (Anah)", o.nbModestes],
+    ["Copropriétaires occupants aux ressources très modestes (Anah)", o.nbTresModestes],
+    [],
+    ["Occupation connue par l'enquête", o.sources.enquete],
+    ["Occupation déduite de l'adresse postale importée", o.sources.adresse],
+    ["Occupation inconnue", o.sources.inconnu],
+    ["Propriétaires dont l'occupation est inconnue", o.inconnus.join(", ")],
+    ["Propriétaires à la fois occupants et bailleurs (comptés dans les deux)", o.mixtes.join(", ")],
+  ];
+  const head = ["Copropriétaire", "Occupation retenue", "Source", "Profil Anah", "Tantièmes occupants", "Tantièmes bailleurs"];
+  const detail: Cell[][] = o.detail.map((x) => [
+    x.nom,
+    LIBELLE_STATUT_CP[x.statut],
+    LIBELLE_SOURCE[x.source],
+    profilAnah(x.profil),
+    x.tantiemesPO,
+    x.tantiemesPB,
+  ]);
+  const aoa: Cell[][] = [...titre.map((t) => [t]), [], ["Indicateur", "Valeur"], ...indicateurs, [], head, ...detail];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [{ wch: 62 }, { wch: 26 }, { wch: 18 }, { wch: 22 }, { wch: 18 }, { wch: 18 }];
+  XLSX.utils.book_append_sheet(wb, ws, nomOnglet("Fiche État - occupation", used));
+}
+
+function occupationLot(o: OccupationFiche | null | undefined, lotId: string): string {
+  const x = o?.parLot[lotId];
+  if (!x) return "";
+  return x.source === "inconnu" ? LIBELLE_STATUT_LOT[x.statut] : `${LIBELLE_STATUT_LOT[x.statut]} (${LIBELLE_SOURCE[x.source]})`;
+}
+
+/**
+ * Rapport d'enquête sociale. `occupation` (calculée par src/lib/ficheEtat) :
+ * onglet des chiffres reportés dans la fiche État ANAH + occupation retenue
+ * par lot - mêmes chiffres que la fiche (feedback Amir 23/09/2026).
+ */
+export function exporterRapportEnquete(data: DossiersCopro, ctx: ContexteExport, occupation?: OccupationFiche | null) {
   const wb = XLSX.utils.book_new();
   const used = new Set<string>();
   const groupes = parBatiment(data.dossiers, ctx);
@@ -322,11 +376,19 @@ export function exporterRapportEnquete(data: DossiersCopro, ctx: ContexteExport)
     feuille(wb, used, g.label, entete(ctx, `Rapport d'enquête sociale - ${g.label}`), HEAD_ENQUETE, g.dossiers.map(ligneEnquete), EURO_ENQUETE);
   }
   // Volet lots (occupation, résidence, projet de vente…) : une ligne par lot.
-  const headLots = ["Copropriétaire", "Bâtiment", "Lot", "Usage (import)", ...Q_LOT.map(tagDe)];
+  const headLots = ["Copropriétaire", "Bâtiment", "Lot", "Usage (import)", ...Q_LOT.map(tagDe), ...(occupation ? ["Occupation retenue (source)"] : [])];
   const lots: Cell[][] = data.dossiers.flatMap((d) =>
-    d.lots.map((l) => [d.nom, l.batiment?.code ?? "", l.num, l.usage, ...Q_LOT.map((q) => reponseTexte(d, q, l.id))])
+    d.lots.map((l) => [
+      d.nom,
+      l.batiment?.code ?? "",
+      l.num,
+      l.usage,
+      ...Q_LOT.map((q) => reponseTexte(d, q, l.id)),
+      ...(occupation ? [occupationLot(occupation, l.id)] : []),
+    ])
   );
   feuille(wb, used, "Détail par lot", entete(ctx, "Rapport d'enquête sociale - réponses par lot"), headLots, lots, []);
+  if (occupation) feuilleOccupationFicheEtat(wb, used, ctx, occupation);
   XLSX.writeFile(wb, nomFichier(ctx, "Rapport d'enquête sociale"));
 }
 

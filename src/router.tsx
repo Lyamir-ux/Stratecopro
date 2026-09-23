@@ -25,6 +25,7 @@ import CoproPpt from "./pages/SyndicPpt/CoproPpt";
 import FileRevue from "./pages/Ppt/FileRevue";
 import Revue from "./pages/Ppt/Revue";
 import SignaturePublique from "./pages/Signature";
+import SignatureFichePublique from "./pages/SignatureFiche";
 import CguSignature from "./pages/CguSignature";
 
 export const router = createBrowserRouter([
@@ -33,6 +34,7 @@ export const router = createBrowserRouter([
   { path: "/reinitialisation", element: <Reinitialisation /> },
   // pages publiques : cosignataires sans compte (lien tokenisé) et CGU
   { path: "/signature/:token", element: <SignaturePublique /> },
+  { path: "/signature-fiche/:token", element: <SignatureFichePublique /> },
   { path: "/cgu-signature", element: <CguSignature /> },
   {
     element: <RequireAuth />,

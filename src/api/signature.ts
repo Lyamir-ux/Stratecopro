@@ -36,6 +36,13 @@ export const ERREURS_SIGNATURE: Record<string, string> = {
   bulletin_verrouille: "Ce bulletin n'est plus modifiable.",
   niveau_2_sans_lecture:
     "Votre habilitation (niveau 2 - chef de projet) ne permet pas de consulter le contenu des pièces justificatives.",
+  // fiche « État de la copropriété » (signature-fiche-etat)
+  fiche_absente: "La fiche État n'est pas encore enregistrée.",
+  fiche_non_validee: "La fiche doit d'abord être validée par Strat Eco.",
+  email_president_invalide: "Renseignez un courriel valide pour le président du conseil syndical.",
+  email_compte_absent: "Votre compte n'a pas d'adresse e-mail : impossible d'envoyer le code.",
+  interdit: "Action non autorisée sur ce dossier.",
+  envoi_echec: "L'e-mail n'a pas pu être envoyé. Réessayez dans quelques minutes ou contactez contact@strateco.fr.",
 };
 
 export function messageErreurSignature(code: string | undefined): string {

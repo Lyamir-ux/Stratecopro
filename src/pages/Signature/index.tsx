@@ -34,7 +34,8 @@ const TYPES_PIECE = [
   { id: "titre_sejour", label: "Titre de séjour" },
 ];
 
-function Cadre({ children }: { children: React.ReactNode }) {
+/** Habillage des pages publiques de signature (réutilisé par /signature-fiche/:token). */
+export function Cadre({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ minHeight: "100vh", background: "#f1f2ee", display: "flex", flexDirection: "column" }}>
       <div

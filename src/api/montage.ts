@@ -14,8 +14,9 @@ export type MontageId = "ecoptz" | "anah" | "cee" | "climaxion" | "do";
 export type MontageDoc = Tables<"montage_docs">;
 export type MontageFormulaire = Tables<"montage_formulaires">;
 /** Formulaires in-app du montage : fiche avant AG et demande de prêt (CEGEE),
- *  récapitulatif des coordonnées pour la demande de cotation CEE (13/09/2026). */
-export type FormulaireType = "fiche_avant_ag" | "demande_pret" | "coordonnees_cee";
+ *  récapitulatif des coordonnées pour la demande de cotation CEE (13/09/2026),
+ *  fiche « État de la copropriété » du dossier ANAH (23/09/2026). */
+export type FormulaireType = "fiche_avant_ag" | "demande_pret" | "coordonnees_cee" | "fiche_etat_anah";
 
 /** Un fichier déposé sur un document du montage (montage_docs.files). */
 export interface MontageFile {
@@ -598,7 +599,14 @@ export const ANAH_ETAPES: EtapeDef[] = [
     num: 1,
     label: "Copropriété et gouvernance",
     intro:
-      "Pièces qui attestent de la décision de l'assemblée générale, du mandat du syndic et de la situation administrative du syndicat des copropriétaires. Toutes relèvent du syndic.",
+      "Pièces qui attestent de la décision de l'assemblée générale, du mandat du syndic et de la situation administrative du syndicat des copropriétaires. Toutes relèvent du syndic. La fiche « État de la copropriété » se complète en ligne : elle est pré-remplie depuis le dossier, validée par Strat Eco puis signée électroniquement par le président du conseil syndical et par vous.",
+    formulaires: [
+      {
+        type: "fiche_etat_anah",
+        name: "Fiche « État de la copropriété » (ANAH)",
+        hint: "Pré-remplie depuis le dossier et le rapport d'enquête sociale - complétez, puis signature électronique",
+      },
+    ],
     groupes: [
       {
         docs: [
@@ -626,8 +634,8 @@ export const ANAH_ETAPES: EtapeDef[] = [
           },
           {
             key: "fiche_etat",
-            name: "Fiche « État de la copropriété »",
-            hint: "Complétée par le syndic puis signée par le président du conseil syndical avant dépôt - mentionne le taux d'impayés rapporté au budget de l'année n-1",
+            name: "Fiche « État de la copropriété » signée",
+            hint: "PDF déposé automatiquement une fois la fiche en ligne signée par le président du conseil syndical et le syndic",
             fournisseur: "syndic",
             type: "fiche_etat_anah",
           },
@@ -1210,7 +1218,8 @@ export function etapeProgress(
   let total = defs.length;
   for (const f of etape.formulaires ?? []) {
     total += 1;
-    if (forms.get(f.type)?.statut === "transmis") done += 1;
+    const st = forms.get(f.type)?.statut;
+    if (st === "transmis" || st === "valide") done += 1;
   }
   return { done, total };
 }

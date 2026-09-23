@@ -1394,6 +1394,62 @@ export type Database = {
         }
         Relationships: []
       }
+      fiche_etat_signatures: {
+        Row: {
+          attestation_le: string | null
+          copro_id: string
+          created_at: string
+          donnees_hash: string | null
+          email: string
+          id: string
+          lien_envoye_le: string | null
+          nom: string
+          role: string
+          signe_le: string | null
+          statut: string
+          token_expire_le: string | null
+          updated_at: string
+        }
+        Insert: {
+          attestation_le?: string | null
+          copro_id: string
+          created_at?: string
+          donnees_hash?: string | null
+          email?: string
+          id?: string
+          lien_envoye_le?: string | null
+          nom?: string
+          role: string
+          signe_le?: string | null
+          statut?: string
+          token_expire_le?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attestation_le?: string | null
+          copro_id?: string
+          created_at?: string
+          donnees_hash?: string | null
+          email?: string
+          id?: string
+          lien_envoye_le?: string | null
+          nom?: string
+          role?: string
+          signe_le?: string | null
+          statut?: string
+          token_expire_le?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiche_etat_signatures_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fichiers: {
         Row: {
           copro_id: string

@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { ANAH_ETAPES, PARCOURS, docsOfEtape, docDef, etapeProgress } from "../montage";
 import { CHECKLIST_TEMPLATES } from "../fichiers";
-import type { MontageDoc } from "../montage";
+import type { MontageDoc, MontageFormulaire } from "../montage";
 
 const docsAnah = ANAH_ETAPES.flatMap(docsOfEtape);
 
@@ -62,5 +62,16 @@ describe("dossier ANAH - MaPrimeRénov' Copro", () => {
     const docs = new Map([["avis_imposition", row("avis_imposition")]]);
     expect(etapeProgress(etape, docs, new Map(), true)).toEqual({ done: 1, total: 4 });
     expect(etapeProgress(etape, docs, new Map(), false)).toEqual({ done: 0, total: 2 });
+  });
+
+  it("ouvre l'étape 1 sur la fiche État en ligne, comptée faite une fois transmise ou validée (23/09/2026)", () => {
+    const etape = ANAH_ETAPES.find((e) => e.id === "copropriete")!;
+    expect(etape.formulaires?.map((f) => f.type)).toEqual(["fiche_etat_anah"]);
+    expect(docDef("anah", "fiche_etat")?.type).toBe("fiche_etat_anah");
+    const forme = (statut: string) => new Map([["fiche_etat_anah" as const, { statut } as unknown as MontageFormulaire]]);
+    const total = docsOfEtape(etape).length + 1;
+    expect(etapeProgress(etape, new Map(), forme("brouillon"))).toEqual({ done: 0, total });
+    expect(etapeProgress(etape, new Map(), forme("transmis"))).toEqual({ done: 1, total });
+    expect(etapeProgress(etape, new Map(), forme("valide"))).toEqual({ done: 1, total });
   });
 });

@@ -40,6 +40,7 @@ import {
 } from "@/api/montage";
 import type { SyndicCopro } from "@/api/syndic";
 import { FormulaireMontage } from "./MontageForms";
+import { FicheEtatForm } from "./FicheEtatForm";
 
 function fmtSize(bytes: number | null): string {
   if (bytes == null) return "";
@@ -128,6 +129,7 @@ function MontageParcours({
     [forms]
   );
 
+  if (formOpen === "fiche_etat_anah") return <FicheEtatForm c={c} onBack={() => setFormOpen(null)} />;
   if (formOpen) return <FormulaireMontage c={c} type={formOpen} onBack={() => setFormOpen(null)} />;
   if (isLoading) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
@@ -294,7 +296,8 @@ function EtapePanel({
 
           {(etape.formulaires ?? []).map((f) => {
             const saved = formsByType.get(f.type);
-            const transmis = saved?.statut === "transmis";
+            const valide = saved?.statut === "valide";
+            const transmis = saved?.statut === "transmis" || valide;
             return (
               <div
                 key={f.type}
@@ -308,7 +311,9 @@ function EtapePanel({
                 <div>
                   <div className="dz-name">{f.name}</div>
                   <div className="dz-hint">
-                    {transmis
+                    {valide
+                      ? "Validée par Strat Eco - mise à jour le " + fmtDate(saved!.updated_at)
+                      : transmis
                       ? "Transmise à Strat Eco le " + fmtDate(saved!.updated_at)
                       : saved
                         ? "Brouillon enregistré le " + fmtDate(saved.updated_at)

@@ -5,7 +5,8 @@
 //     ensuite le fichier Excel à partir de ces réponses) ;
 //   - le récapitulatif des coordonnées du syndic et de la copropriété pour la
 //     demande de cotation CEE (feedback Amir 13/09/2026).
-// Les valeurs saisies vivent dans montage_formulaires.data (jsonb).
+// Les valeurs saisies vivent dans montage_formulaires.data (jsonb). La fiche
+// « État de la copropriété » (ANAH) a son propre écran : ./FicheEtatForm.
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
@@ -18,6 +19,9 @@ import {
   useSaveFormulaireMontage,
   type FormulaireType,
 } from "@/api/montage";
+
+/** Formulaires rendus par l'écran générique (la fiche État ANAH a le sien). */
+export type FormulaireGenerique = Exclude<FormulaireType, "fiche_etat_anah">;
 import type { SyndicCopro } from "@/api/syndic";
 
 // Coordonnées de l'opérateur - constantes Strat Eco (section AMO des fiches CEGEE)
@@ -281,7 +285,7 @@ const COORD_SECTIONS: SectionDef[] = [
 
 // complète automatiquement l'autre (feedback du 03/09/2026). Clé du formulaire
 // courant → clé du formulaire source (identique quand le nom est le même).
-const CHAMPS_PARTAGES: Record<FormulaireType, Record<string, string>> = {
+const CHAMPS_PARTAGES: Record<FormulaireGenerique, Record<string, string>> = {
   fiche_avant_ag: {
     syndic_nom: "syndic_nom",
     syndic_siren: "pro_siren",
@@ -338,7 +342,7 @@ const EQUIV_DEMANDE_PRET: Record<string, string> = {
 /** Valeurs reprises des autres formulaires déjà saisis par le syndic (une
  *  saisie dans l'un complète les autres). */
 function reprisesAutresFormulaires(
-  type: FormulaireType,
+  type: FormulaireGenerique,
   autres: { type: string; data: Record<string, string> }[]
 ): Record<string, string> {
   const out: Record<string, string> = {};
@@ -353,7 +357,7 @@ function reprisesAutresFormulaires(
   return out;
 }
 
-function usePrefill(c: SyndicCopro, type: FormulaireType): Record<string, string> {
+function usePrefill(c: SyndicCopro, type: FormulaireGenerique): Record<string, string> {
   const { data: scenarios } = useScenariosPartages(c.id);
   const { data: finConfig } = useFinancementConfig(c.id);
   const { data: forms } = useFormulairesMontage(c.id);
@@ -448,7 +452,7 @@ function usePrefill(c: SyndicCopro, type: FormulaireType): Record<string, string
 
 // ========== Rendu générique ==========
 
-const FORM_META: Record<FormulaireType, { titre: string; sous: string; sections: SectionDef[] }> = {
+const FORM_META: Record<FormulaireGenerique, { titre: string; sous: string; sections: SectionDef[] }> = {
   fiche_avant_ag: {
     titre: "Fiche de renseignements avant AG",
     sous: "À compléter avant la convocation à l'assemblée générale - la banque prépare les résolutions d'emprunt et le projet de contrat à partir de ces informations.",
@@ -467,7 +471,7 @@ const FORM_META: Record<FormulaireType, { titre: string; sous: string; sections:
 };
 
 /** Libellé du bouton de retour : le montage auquel le formulaire appartient. */
-const FORM_MONTAGE: Record<FormulaireType, string> = {
+const FORM_MONTAGE: Record<FormulaireGenerique, string> = {
   fiche_avant_ag: "Montage Éco-PTZ",
   demande_pret: "Montage Éco-PTZ",
   coordonnees_cee: "Dossier CEE",
@@ -479,7 +483,7 @@ export function FormulaireMontage({
   onBack,
 }: {
   c: SyndicCopro;
-  type: FormulaireType;
+  type: FormulaireGenerique;
   onBack: () => void;
 }) {
   const meta = FORM_META[type];
