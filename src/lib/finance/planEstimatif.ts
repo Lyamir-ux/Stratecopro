@@ -15,7 +15,9 @@
 // le TTC sur celui du classeur - arbitrage d'Amir du 23/09/2026.
 import { utils, type CellObject, type WorkBook, type WorkSheet } from "xlsx";
 import type { AideDef, LigneLot, LigneMoe, LotTravaux, ModeAide, PhaseMoe, PlanDefinitifData } from "./planDefinitif";
-import { computePlanDefinitif, makeDefaultPlanDefinitif, PHASES_MOE } from "./planDefinitif";
+import { computePlanDefinitif, estBonusMpr, makeDefaultPlanDefinitif, PHASES_MOE } from "./planDefinitif";
+import { BAREME_2026_HORS_IDF } from "./bareme2026";
+import { suggestMprCoproPct } from "./compute";
 import {
   calibrerAides,
   classifyAide,
@@ -542,6 +544,9 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
             tvaPct = lu.tvaPct;
           } else avertS.push(`MOE « ${designation} » : formule non reconnue, montant TTC du classeur repris.`);
         } else if (cell.f && evalArith(cell.f) == null) avertS.push(`MOE « ${designation} » : formule « =${cell.f} » non reconnue, TVA ${String(tvaPct).replace(".", ",")} % supposée.`);
+        // Montant saisi (dommage ouvrage « =9056 » de L'Hippocrate) : forfait à la
+        // TVA du libellé, pas un % des travaux qui suivrait leur montant
+        else if (montant.mode !== "forfait") montant = { mode: "forfait", montantHt: ttc / (1 + tvaPct / 100) };
         const com = g.str(r, cCom);
         const ligne: LigneMoe = {
           designation,
@@ -692,6 +697,23 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
         const dec = (x: number, n: number) => x.toLocaleString("fr-FR", { maximumFractionDigits: n });
         avertS.push(
           `Aide « ${data.aides[e.i].libelle} » : prorata énergétique saisi en dur dans le classeur (${dec(e.prorata, 3)}) ; le logiciel le recalcule (assiette MPR / travaux HT = ${dec(prorata, 4)}), soit ${fmt(m)} € au lieu de ${fmt(e.valeur)} €.`
+        );
+      }
+    }
+
+    // Palier MaPrimeRénov' Copro du gain énergétique (30 % de 35 à 50 %, 45 %
+    // au-delà) : L'Hippocrate applique 45 % à des scénarios à 39-40 % de gain
+    const { cepInitial, cepProjet } = data.infos;
+    if (cepInitial > 0 && cepProjet > 0) {
+      const gain = 100 - (100 * cepProjet) / cepInitial;
+      const palier = suggestMprCoproPct(gain, BAREME_2026_HORS_IDF);
+      const pct = (x: number) => x.toLocaleString("fr-FR", { maximumFractionDigits: 1 });
+      for (const a of data.aides) {
+        if (a.calcul.mode !== "pctAssietteTravaux" || estBonusMpr(a) || a.calcul.taux === palier) continue;
+        avertS.push(
+          palier == null
+            ? `Aide « ${a.libelle} » à ${pct(a.calcul.taux)} % alors que le gain énergétique (${pct(gain)} %) est sous le seuil de 35 % de MaPrimeRénov' Copro.`
+            : `Aide « ${a.libelle} » à ${pct(a.calcul.taux)} % alors que le gain énergétique (${pct(gain)} %) donne le palier à ${palier} % : taux à vérifier.`
         );
       }
     }
@@ -886,6 +908,7 @@ export function alignerMoe(scenarios: Pick<ScenarioEstimatif, "data">[]): LigneM
   const ordre: string[] = [];
   scenarios.forEach((s, k) => {
     const vus = new Map<string, number>();
+    let precedente: string | null = null;
     s.data.moe.forEach((l, i) => {
       const base = `${l.phase}|${norm(l.designation)}`;
       const occ = (vus.get(base) ?? 0) + 1;
@@ -895,9 +918,12 @@ export function alignerMoe(scenarios: Pick<ScenarioEstimatif, "data">[]): LigneM
       if (!row) {
         row = { key, phase: l.phase, designation: l.designation, index: scenarios.map(() => null), commentaire: l.commentaire };
         rows.set(key, row);
-        ordre.push(key);
+        // ligne propre à ce scénario : à sa place, après la ligne qui la précède
+        // (test d'étanchéité avant le dommage ouvrage, L'Hippocrate)
+        ordre.splice(precedente == null ? 0 : ordre.indexOf(precedente) + 1, 0, key);
       }
       row.index[k] = i;
+      precedente = key;
     });
   });
   const rang = (p: PhaseMoe) => PHASES_MOE.findIndex((x) => x.id === p);
@@ -1060,7 +1086,23 @@ export function exportPlanEstimatif(scenarios: ScenarioEstimatif[]): WorkBook {
     },
     "Pour le calcul MPR"
   );
-  const rTtc = ligne("TOTAL TRAVAUX TTC €", (k) => ({ v: R[k].totalTravauxTtc }));
+  // TTC en formule par taux « (D20+D22)*1.055+(D19)*1.1 », relue à l'import
+  // (sinon les lignes à 5,5 % reviennent en « TVA non détaillée ») ; valeur
+  // seule si une remise ou un ajustement de TVA ne s'y laisse pas écrire
+  const formuleTtc = (k: number): string | undefined => {
+    if (S[k].data.lots.some((l) => l.remisePct !== 0 || l.lignes.some(estAjustementTva))) return undefined;
+    const parTaux = new Map<number, string[]>();
+    travaux.forEach((t, i) => {
+      const tva = t.tva[k];
+      if (t.montants[k] == null || tva == null) return;
+      parTaux.set(tva, [...(parTaux.get(tva) ?? []), ref(cols[k], rTravaux[i])]);
+    });
+    if (!parTaux.size) return undefined;
+    return [...parTaux.entries()]
+      .map(([tva, refs]) => `(${refs.join("+")})${tva ? `*${Math.round((1 + tva / 100) * 10000) / 10000}` : ""}`)
+      .join("+");
+  };
+  const rTtc = ligne("TOTAL TRAVAUX TTC €", (k) => ({ v: R[k].totalTravauxTtc, f: formuleTtc(k) }));
   const imprevus = S.map((s) => s.data.params.imprevusPct);
   const rTtcImp = ligne(
     `Total TTC € avec imprévus ${pareil(imprevus) ? String(imprevus[0]).replace(".", ",") : "N"} %`,
