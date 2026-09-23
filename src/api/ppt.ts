@@ -12,6 +12,7 @@ import type { CorrectionJson } from "@/lib/ppt/import";
 import type { LigneImport } from "@/lib/ppt/importPortefeuille";
 import { cheminDepot } from "@/lib/ppt/depot";
 import { PARAMETRES_ORG_DEFAUT, type ParametresOrg } from "@/lib/ppt/formules";
+import type { MembreEnseigne } from "@/lib/ppt/gestionnaires";
 
 export type PptCopro = Tables<"ppt_coproprietes">;
 export type PptStats = Tables<"ppt_copro_stats">;
@@ -310,7 +311,7 @@ export function usePptRapports(coproIds: string[]) {
 
 /** Tous les rapports (file de revue AMO), avec la copro et l'enseigne. */
 export interface RapportRevue extends PptRapport {
-  copro: Pick<PptCopro, "id" | "nom" | "commune" | "organisation_id" | "gestionnaire_nom" | "nb_logements"> | null;
+  copro: Pick<PptCopro, "id" | "nom" | "commune" | "organisation_id" | "gestionnaire_nom" | "gestionnaire_email" | "nb_logements"> | null;
   enseigne: string | null;
 }
 
@@ -319,7 +320,7 @@ export function usePptRapportsRevue() {
     queryKey: ["ppt", "rapports", "revue"],
     queryFn: async (): Promise<RapportRevue[]> => {
       const [{ data, error }, { data: orgs, error: e2 }] = await Promise.all([
-        supabase.from("ppt_rapports").select("*, copro:ppt_coproprietes(id, nom, commune, organisation_id, gestionnaire_nom, nb_logements)").order("depose_le", { ascending: false }),
+        supabase.from("ppt_rapports").select("*, copro:ppt_coproprietes(id, nom, commune, organisation_id, gestionnaire_nom, gestionnaire_email, nb_logements)").order("depose_le", { ascending: false }),
         supabase.from("organisations").select("id, nom"),
       ]);
       if (error) throw error;
@@ -340,7 +341,7 @@ export function usePptRapport(id: string | undefined) {
     queryFn: async (): Promise<RapportRevue | null> => {
       const { data, error } = await supabase
         .from("ppt_rapports")
-        .select("*, copro:ppt_coproprietes(id, nom, commune, organisation_id, gestionnaire_nom, nb_logements)")
+        .select("*, copro:ppt_coproprietes(id, nom, commune, organisation_id, gestionnaire_nom, gestionnaire_email, nb_logements)")
         .eq("id", id!)
         .maybeSingle();
       if (error) throw error;
@@ -820,6 +821,26 @@ export function usePptMembresEnseigne(orgId: string | null | undefined) {
       const { data, error } = await supabase.rpc("ppt_membres_enseigne", { p_org: orgId! });
       if (error) throw error;
       return (data ?? []).map((m) => ({ user_id: m.user_id, nom: m.nom ?? "-", email: m.email ?? null, org_role: m.org_role }));
+    },
+  });
+}
+
+/** Membres de plusieurs enseignes à la fois (file de revue /ppt : désigner le
+ *  gestionnaire d'une copropriété parmi les comptes de son enseigne). */
+export function usePptMembresEnseignes(orgIds: string[]) {
+  const ids = [...new Set(orgIds)].sort();
+  return useQuery({
+    queryKey: ["ppt", "membres", "multi", ids.join(",")],
+    enabled: ids.length > 0,
+    queryFn: async (): Promise<Map<string, MembreEnseigne[]>> => {
+      const listes = await Promise.all(
+        ids.map(async (id) => {
+          const { data, error } = await supabase.rpc("ppt_membres_enseigne", { p_org: id });
+          if (error) throw error;
+          return [id, (data ?? []).map((m) => ({ user_id: m.user_id, nom: m.nom ?? "-", email: m.email ?? null, org_role: m.org_role }))] as const;
+        })
+      );
+      return new Map(listes);
     },
   });
 }

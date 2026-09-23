@@ -7,18 +7,21 @@
 // rangés dans la copropriété. Rien ne disparaît pour autant : ils ont leur vue
 // « Autres documents », la recherche porte sur tous les dépôts et le dirigeant
 // peut requalifier un document mal deviné pour le ramener dans la file.
+// Colonne Gestionnaire (feedback 23/09) : l'AMO adresse la copropriété à un
+// compte de son enseigne, le trigger 0072 transfère l'accès et le journalise.
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
-import { telechargerPptRapport, useRequalifierPptRapport, usePptCopros, usePptRapportsRevue, type RapportRevue, type TypeRapport } from "@/api/ppt";
+import { telechargerPptRapport, useRequalifierPptRapport, usePptCopros, usePptMembresEnseignes, usePptRapportsRevue, type RapportRevue, type TypeRapport } from "@/api/ppt";
 import { TYPES_DEPOT } from "@/lib/ppt/depot";
 import { aRevoir, filtrerRevue, requalifiable } from "@/lib/ppt/fileRevue";
 import { STATUT_RAPPORT_LABEL, TYPE_RAPPORT_LABEL } from "@/lib/ppt/referentiels";
 import { StatutRapportBadge, VerdictBadge, fmtDateCourte } from "@/pages/SyndicPpt/commun";
 import { CorrigerDocument, type DocumentACorriger } from "@/pages/SyndicPpt/CorrigerDocument";
+import { ChoixGestionnaire } from "@/pages/SyndicPpt/ChoixGestionnaire";
 
 const STATUTS = ["depose", "a_relire", "valide", "rejete", "echec"] as const;
 
@@ -39,6 +42,8 @@ export default function FileRevue() {
   const analysables = tous.filter(aRevoir);
   const autres = tous.filter((r) => !aRevoir(r));
   const n = (s: string) => analysables.filter((r) => r.statut === s).length;
+  // comptes des enseignes présentes dans la file, pour désigner le gestionnaire
+  const { data: membres } = usePptMembresEnseignes(tous.map((r) => r.copro?.organisation_id).filter((o): o is string => !!o));
   const enseignes = useMemo(() => [...new Set(tous.map((r) => r.enseigne).filter((e): e is string => !!e))].sort((a, b) => a.localeCompare(b, "fr")), [tous]);
 
   // la recherche porte sur tous les dépôts, filtre de statut ignoré : on doit
@@ -114,6 +119,7 @@ export default function FileRevue() {
                   <tr>
                     <th>Copropriété</th>
                     <th>Enseigne</th>
+                    <th>Gestionnaire</th>
                     <th>Document</th>
                     <th>Déposé le</th>
                     <th>Statut</th>
@@ -127,10 +133,17 @@ export default function FileRevue() {
                       <td style={{ fontWeight: 600 }}>
                         {r.copro?.nom ?? "-"}
                         <span style={{ display: "block", fontSize: 11.5, color: "var(--fg-muted)", fontWeight: 400 }}>
-                          {[r.copro?.commune, r.copro?.gestionnaire_nom, r.copro?.nb_logements ? `${r.copro.nb_logements} logts` : null].filter(Boolean).join(" · ")}
+                          {[r.copro?.commune, r.copro?.nb_logements ? `${r.copro.nb_logements} logts` : null].filter(Boolean).join(" · ")}
                         </span>
                       </td>
                       <td>{r.enseigne ?? <span style={{ color: "var(--fg-muted)" }}>-</span>}</td>
+                      <td>
+                        {r.copro ? (
+                          <ChoixGestionnaire copro={r.copro} membres={membres?.get(r.copro.organisation_id) ?? []} petit />
+                        ) : (
+                          <span style={{ color: "var(--fg-muted)" }}>-</span>
+                        )}
+                      </td>
                       <td>
                         {requalifiable(r, !!profile?.dirigeant) ? (
                           <select
@@ -163,7 +176,7 @@ export default function FileRevue() {
                   ))}
                   {lignes.length === 0 && (
                     <tr>
-                      <td colSpan={7} style={{ color: "var(--fg-muted)", cursor: "default" }}>
+                      <td colSpan={8} style={{ color: "var(--fg-muted)", cursor: "default" }}>
                         {q
                           ? "Aucun document ne correspond à cette recherche."
                           : statut === "a_traiter"
