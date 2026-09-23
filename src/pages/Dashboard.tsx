@@ -158,7 +158,7 @@ function KanbanView({ copros, showProgress }: { copros: CoproWithStats[]; showPr
   );
 }
 
-type ColTri = "name" | "phase" | "logements" | "coproprietaires" | "montant" | "progress";
+type ColTri = "name" | "phase" | "logements" | "montant" | "progress";
 
 const PHASE_RANK: Record<PhaseId, number> = { diagnostic: 0, etudes: 1, travaux: 2 };
 
@@ -177,8 +177,6 @@ export function trierCopros(copros: CoproWithStats[], tri: Tri): CoproWithStats[
         return PHASE_RANK[c.phase];
       case "logements":
         return nbLogements(c);
-      case "coproprietaires":
-        return c.stats?.coproprietaires ?? 0;
       case "montant":
         return c.stats?.montant_ttc ?? 0;
       case "progress":
@@ -194,7 +192,9 @@ export function trierCopros(copros: CoproWithStats[], tri: Tri): CoproWithStats[
 }
 
 /** Vue liste : colonnes triables, exportable en CSV depuis l'en-tête de page
- *  (feedback Amir 22/09 - remplace la vue galerie, sans usage). */
+ *  (feedback Amir 22/09 - remplace la vue galerie, sans usage). Le nombre de
+ *  copropriétaires n'est plus affiché (feedback Amir 23/09, inutile à l'écran) :
+ *  il reste dans l'export et dans les KPI. */
 function ListeView({ copros, tri, setTri }: { copros: CoproWithStats[]; tri: Tri; setTri: (t: Tri) => void }) {
   const navigate = useNavigate();
   const cliquerTri = (col: ColTri) => setTri({ col, desc: tri.col === col ? !tri.desc : col !== "name" });
@@ -219,7 +219,6 @@ function ListeView({ copros, tri, setTri }: { copros: CoproWithStats[]; tri: Tri
             <Th col="phase" label="Phase" />
             <th>DPE</th>
             <Th col="logements" label="Logements" />
-            <Th col="coproprietaires" label="Copro." />
             <Th col="montant" label="Montant TTC" />
             <Th col="progress" label="Avancement" />
             <th>Équipe</th>
@@ -247,7 +246,6 @@ function ListeView({ copros, tri, setTri }: { copros: CoproWithStats[]; tri: Tri
                 <DpePair before={c.energy_before as DpeClass | null} after={c.energy_after as DpeClass | null} />
               </td>
               <td style={{ fontWeight: 600 }}>{nbLogements(c)}</td>
-              <td>{c.stats?.coproprietaires ?? 0}</td>
               <td style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}>{fmtEuro(c.stats?.montant_ttc)}</td>
               <td>
                 <div className="td-prog">
