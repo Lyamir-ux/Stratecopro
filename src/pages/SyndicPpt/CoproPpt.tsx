@@ -45,7 +45,7 @@ import {
 import { remplacerCoproDansNom } from "@/lib/ppt/depot";
 import { PARAMETRES_ORG_DEFAUT, anneeEffective, cepApres, etiquetteDepuisCep, gainCumule, montantTtcPoste, parametresDepuisOrg } from "@/lib/ppt/formules";
 import { controlerResolutions } from "@/lib/ppt/indicateurs";
-import { anneeAffichee, decalagesEffectifs, plageAnnees, posteDeplacable } from "@/lib/ppt/echeancier";
+import { anneeAffichee, anneeCiblePossible, decalagesEffectifs, plageAnnees, posteDeplacable } from "@/lib/ppt/echeancier";
 import { FONDS_TRAVAUX, TYPE_RAPPORT_LABEL } from "@/lib/ppt/referentiels";
 import { SyndicShell, Loader, AucuneCopro } from "@/pages/Syndic";
 import { AgForm } from "./AgForm";
@@ -306,7 +306,7 @@ function SuiviEcheancier({ copro, postes, retirees, params, annee }: { copro: Pp
   const nbDeplaces = (a: number) => lignes.filter((p) => anneeAffichee(p, brouillon, p.id) === a).length;
 
   const poser = (p: PptPoste, a: number) => {
-    if (!posteDeplacable(p) || decaler.isPending) return;
+    if (!anneeCiblePossible(p, a, annee) || decaler.isPending) return;
     setErreur(null);
     setBrouillon((b) => {
       const n = { ...b };
@@ -384,15 +384,19 @@ function SuiviEcheancier({ copro, postes, retirees, params, annee }: { copro: Pp
                     {sansAnnee && <td className="num">{courante == null && <span className="ech-chip ech-chip-vide">à fixer</span>}</td>}
                     {annees.map((a) => {
                       const ici = courante === a;
-                      // flèche verte sur l'année suivante : « décaler d'un an » en un clic (feedback 20/09)
-                      const suivante = libre && courante != null && a === courante + 1;
+                      // jamais avant l'année en cours (feedback 23/09)
+                      const cible = !ici && anneeCiblePossible(p, a, annee);
+                      // flèches vertes sur l'année suivante et la précédente : repousser
+                      // (feedback 20/09) ou avancer (feedback 23/09) d'un an en un clic
+                      const suivante = cible && courante != null && a === courante + 1;
+                      const precedente = cible && courante != null && a === courante - 1;
                       const montant = montantTtcPoste(posteLite(p), params, a);
                       return (
                         <td
                           key={a}
-                          className={"num ech-cell" + (ici ? " ici" : "") + (libre && !ici ? " libre" : "")}
-                          onClick={libre && !ici ? () => poser(p, a) : undefined}
-                          title={ici ? (libre ? "Année actuelle du poste" : "Poste figé : voté, réalisé ou abandonné") : suivante ? `Décaler « ${p.libelle} » d'un an, en ${a}` : libre ? `Décaler « ${p.libelle} » en ${a}` : undefined}
+                          className={"num ech-cell" + (ici ? " ici" : "") + (cible ? " libre" : "")}
+                          onClick={cible ? () => poser(p, a) : undefined}
+                          title={ici ? (libre ? "Année actuelle du poste" : "Poste figé : voté, réalisé ou abandonné") : suivante ? `Repousser « ${p.libelle} » d'un an, en ${a}` : precedente ? `Avancer « ${p.libelle} » d'un an, en ${a}` : cible ? `Décaler « ${p.libelle} » en ${a}` : libre ? `Impossible de programmer avant ${annee}` : undefined}
                         >
                           {ici ? (
                             <button
@@ -413,11 +417,16 @@ function SuiviEcheancier({ copro, postes, retirees, params, annee }: { copro: Pp
                               {p.commentaire_syndic && <Icon name="message" size={11} />}
                             </button>
                           ) : suivante ? (
-                            <span className="ech-suivant" aria-label={`Décaler en ${a}`}>
+                            <span className="ech-suivant" aria-label={`Repousser en ${a}`}>
                               <Icon name="arrowRight" size={15} />
                               <span className="ech-suivant-lbl">{a}</span>
                             </span>
-                          ) : libre ? (
+                          ) : precedente ? (
+                            <span className="ech-suivant" aria-label={`Avancer en ${a}`}>
+                              <Icon name="arrowLeft" size={15} />
+                              <span className="ech-suivant-lbl">{a}</span>
+                            </span>
+                          ) : cible ? (
                             <span className="ech-cible">{initiale === a && modifie ? "↺" : "·"}</span>
                           ) : null}
                         </td>
@@ -444,7 +453,7 @@ function SuiviEcheancier({ copro, postes, retirees, params, annee }: { copro: Pp
           </table>
         </div>
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
-          La flèche verte décale le poste d'un an ; un clic sur toute autre année le décale à cette année. Puis Enregistrer : le récap ci-dessus et le tableau de bord suivent. Le montant est recalculé pour l'année choisie (inflation, TVA, honoraires). Un clic sur un montant permet de le saisir à la main et d'y joindre un commentaire, visible au survol, ou de retirer la ligne du plan avec un motif obligatoire ; « Lignes retirées » les liste et permet de les rétablir. Les postes votés, réalisés ou abandonnés sont figés. Tout est tracé dans l'historique.
+          Les flèches vertes repoussent (→) ou avancent (←) le poste d'un an ; un clic sur toute autre année le décale à cette année, jamais avant {annee}. Puis Enregistrer : le récap ci-dessus et le tableau de bord suivent. Le montant est recalculé pour l'année choisie (inflation, TVA, honoraires). Un clic sur un montant permet de le saisir à la main et d'y joindre un commentaire, visible au survol, ou de retirer la ligne du plan avec un motif obligatoire ; « Lignes retirées » les liste et permet de les rétablir. Les postes votés, réalisés ou abandonnés sont figés. Tout est tracé dans l'historique.
         </p>
       </div>
       {bulleEtat &&

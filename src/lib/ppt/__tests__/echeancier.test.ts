@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decalagesEffectifs, plageAnnees, posteDeplacable } from "../echeancier";
+import { anneeCiblePossible, decalagesEffectifs, plageAnnees, posteDeplacable } from "../echeancier";
 
 const postes = [
   { id: "a", annee_prevue: 2027, annee_prochaine_presentation: null, statut: "programme" },
@@ -35,6 +35,24 @@ describe("posteDeplacable", () => {
     expect(posteDeplacable({ annee_prevue: 2027, statut: "vote" })).toBe(false);
     expect(posteDeplacable({ annee_prevue: 2027, statut: "realise" })).toBe(false);
     expect(posteDeplacable({ annee_prevue: 2027, statut: "abandonne" })).toBe(false);
+  });
+});
+
+describe("anneeCiblePossible", () => {
+  it("repousse ou avance un poste, jamais avant l'année en cours", () => {
+    const p = { annee_prevue: 2028, annee_prochaine_presentation: null, statut: "programme" };
+    expect(anneeCiblePossible(p, 2029, 2026)).toBe(true);
+    expect(anneeCiblePossible(p, 2027, 2026)).toBe(true);
+    expect(anneeCiblePossible(p, 2026, 2026)).toBe(true);
+    expect(anneeCiblePossible(p, 2025, 2026)).toBe(false);
+  });
+  it("laisse revenir un poste en retard sur son année enregistrée (annule le brouillon)", () => {
+    const enRetard = { annee_prevue: 2024, annee_prochaine_presentation: null, statut: "programme" };
+    expect(anneeCiblePossible(enRetard, 2024, 2026)).toBe(true);
+    expect(anneeCiblePossible(enRetard, 2025, 2026)).toBe(false);
+  });
+  it("ne bouge jamais un poste figé", () => {
+    expect(anneeCiblePossible({ annee_prevue: 2028, annee_prochaine_presentation: null, statut: "vote" }, 2027, 2026)).toBe(false);
   });
 });
 

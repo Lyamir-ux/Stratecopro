@@ -12,6 +12,15 @@ export function posteDeplacable(p: PosteEcheancier): boolean {
   return !STATUTS_FIGES.has(p.statut ?? "");
 }
 
+/**
+ * Années où l'on peut poser un poste : on repousse ou on avance les travaux,
+ * jamais avant l'année en cours (feedback Amir 23/09). Le retour sur l'année
+ * enregistrée reste possible : il annule le brouillon.
+ */
+export function anneeCiblePossible(p: PosteEcheancier, a: number, anneeCourante: number): boolean {
+  return posteDeplacable(p) && (a >= anneeCourante || a === anneeEffective(p));
+}
+
 /** Année affichée pour un poste, brouillon compris. */
 export function anneeAffichee(p: PosteEcheancier, brouillon: Record<string, number>, id: string): number | null {
   return brouillon[id] ?? anneeEffective(p);
