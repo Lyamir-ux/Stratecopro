@@ -103,6 +103,16 @@ class Grille {
     const v = this.cell(r, c).v;
     return typeof v === "string" ? v.trim() : v == null ? "" : String(v);
   }
+  /** Ligne de tête de la cellule fusionnée qui couvre (r, c) sur plusieurs lignes ; null sinon. */
+  debutFusion(r: number, c: number): number | null {
+    const m = (this.ws["!merges"] ?? []).find((x) => x.s.r <= r && r <= x.e.r && x.s.c <= c && c <= x.e.c && x.e.r > x.s.r);
+    return m ? m.s.r : null;
+  }
+  /** Texte de la cellule, ou de la tête de sa fusion (« Ventilation » B24:B25, Dornach III). */
+  strFusion(r: number, c: number): string {
+    const debut = this.debutFusion(r, c);
+    return this.str(debut ?? r, c);
+  }
   num(r: number, c: number): number | null {
     const v = this.cell(r, c).v;
     if (typeof v === "number" && isFinite(v)) return v;
@@ -126,6 +136,27 @@ function refsLignes(f: string | null): Set<number> {
     const debut = parseInt(m[2], 10) - 1;
     const fin = m[4] ? parseInt(m[4], 10) - 1 : debut;
     for (let r = Math.min(debut, fin); r <= Math.max(debut, fin); r++) out.add(r);
+  }
+  return out;
+}
+
+/**
+ * Lignes retenues (assiette MPR) d'après la formule du « Total travaux HT
+ * retenu » : somme des lignes retenues « D22+D23+… » (Le Rodin), ou total
+ * moins les lignes non retenues « D35-D22-D28 » (Dornach III).
+ */
+function lignesRetenues(f: string | null, iTotalHt: number, lignesTravaux: number[]): Set<number> {
+  if (!f) return new Set();
+  const termes = f.match(/[+-]?[^+-]+/g) ?? [];
+  if (!termes.every((t) => /^[+-]?(?:SUM\()?[A-Z]+\d+(?::[A-Z]+\d+)?\)?$/.test(t))) return refsLignes(f);
+  const out = new Set<number>();
+  for (const t of termes) {
+    const refs = refsLignes(t);
+    const lignes = refs.has(iTotalHt) ? lignesTravaux : [...refs];
+    for (const r of lignes) {
+      if (t.startsWith("-")) out.delete(r);
+      else out.add(r);
+    }
   }
   return out;
 }
@@ -241,6 +272,8 @@ interface Structure {
   cols: number[];
   /** Numéros des scénarios lus dans les en-têtes (« Scénario 2 » → 2). */
   ordres: number[];
+  /** Suite de l'en-tête (« Scénario 4 : Scénario choisi » → « Scénario choisi »). */
+  suffixes: string[];
   /** Colonne des commentaires (après le dernier scénario). */
   cCom: number;
 }
@@ -253,15 +286,18 @@ function localiser(wb: WorkBook): Structure | null {
         if (norm(g.str(r, c)) !== "descriptif des travaux") continue;
         const cols: number[] = [];
         const ordres: number[] = [];
+        const suffixes: string[] = [];
         for (let c2 = c + 1; c2 < g.nCols; c2++) {
-          // « Scénario 2 » (Le Rodin) ou « Scénario V2 » (9 rue de la Gare)
-          const m = /^scenario\s*v?(\d+)$/.exec(norm(g.str(r, c2)));
+          // « Scénario 2 » (Le Rodin), « Scénario V2 » (9 rue de la Gare) ou
+          // « Scénario 4 : Scénario choisi » (Dornach III)
+          const m = /^scenario\s*v?(\d+)(?:\s|$)/.exec(norm(g.str(r, c2)));
           if (m) {
             cols.push(c2);
             ordres.push(parseInt(m[1], 10));
+            suffixes.push(g.str(r, c2).replace(/^sc\S*nario\s*v?\d+\s*[:\-–]?\s*/i, "").trim());
           }
         }
-        if (cols.length) return { sheet, g, iHead: r, cB: c, cols, ordres, cCom: Math.max(...cols) + 1 };
+        if (cols.length) return { sheet, g, iHead: r, cB: c, cols, ordres, suffixes, cCom: Math.max(...cols) + 1 };
       }
     }
   }
@@ -287,7 +323,7 @@ export function estClasseurEstimatif(wb: WorkBook): boolean {
 export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
   const s = localiser(wb);
   if (!s) throw new Error("Aucune feuille « Descriptif des travaux » avec des colonnes « Scénario N » dans ce classeur.");
-  const { g, iHead, cB, cols, ordres, cCom } = s;
+  const { g, iHead, cB, cols, ordres, suffixes, cCom } = s;
   const cA = cB - 1;
   const avert: string[] = [];
   const controles: ControleEstimatif[] = [];
@@ -327,10 +363,11 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
   const iMprEtudes = iAides >= 0 ? trouver((l) => l.includes("maprimerenov") && l.includes("etudes"), iAides, iAidesFin) : -1;
   const iMprAmo = iAides >= 0 ? trouver((l) => l.includes("maprimerenov") && /\bamo\b/.test(l), iAides, iAidesFin) : -1;
 
-  // Libellés des scénarios (ligne sous les en-têtes, si ce sont des textes)
-  const libelles = cols.map((c) => {
+  // Libellés des scénarios (ligne sous les en-têtes, si ce sont des textes),
+  // sinon suite de l'en-tête (« Scénario choisi »)
+  const libelles = cols.map((c, k) => {
     const v = g.cell(iHead + 1, c).v;
-    return typeof v === "string" ? v.trim() : "";
+    return typeof v === "string" && v.trim() ? v.trim() : suffixes[k];
   });
 
   // Valeur d'une ligne d'infos : colonne du scénario, sinon la première renseignée
@@ -365,22 +402,28 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
     numero: number | null;
     /** Titre du lot quand la ligne en forme un à elle seule (poste de la colonne A). */
     titre?: string;
+    /** Titre écrit après le numéro (« Lot 02 - Toiture », export du logiciel). */
+    titreLot?: string;
     designation: string;
     commentaire?: string;
     tva: number | null;
   }
   const lignesTravaux: LigneTravaux[] = [];
   for (let r = iHead + 1; r < iTotalHt; r++) {
-    const designation = g.str(r, cB);
+    // Désignation fusionnée sur deux lignes (« Ventilation » + plus-value, Dornach III)
+    const designation = g.strFusion(r, cB);
     if (!designation) continue;
     if (!cols.some((c) => g.num(r, c) != null)) continue;
-    const mLot = /^lot\s*0?(\d+)/.exec(norm(cA >= 0 ? g.str(r, cA) : ""));
+    const a = cA >= 0 ? g.str(r, cA) : "";
+    const mLot = /^lot\s*0?(\d+)/.exec(norm(a));
+    const titreLot = mLot ? a.replace(/^lot\s*\d+\s*(?:[-:–]\s*)?/i, "").trim() : "";
     const com = g.str(r, cCom);
     const tva = parseTva(com);
     const comNet = com.replace(/\s*-?\s*tva\s*(?:de)?\s*[\d.,]+\s*%/i, "").trim();
     lignesTravaux.push({
       r,
       numero: mLot ? parseInt(mLot[1], 10) : null,
+      ...(titreLot ? { titreLot } : {}),
       designation,
       commentaire: comNet && norm(comNet) !== norm(designation) ? comNet : undefined,
       tva,
@@ -388,12 +431,19 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
   }
   // Aucun « Lot NN » (9 rue de la Gare : poste en colonne A, « Façades avant+arrière ») :
   // chaque ligne forme un lot, numéroté dans l'ordre du classeur pour que les
-  // scénarios restent alignés
-  if (!lignesTravaux.some((l) => l.numero != null))
-    lignesTravaux.forEach((l, i) => {
-      l.numero = i + 1;
-      l.titre = (cA >= 0 ? g.str(l.r, cA) : "") || l.designation;
-    });
+  // scénarios restent alignés ; les lignes d'un poste fusionné en colonne A
+  // (« Toiture » A21:A22, Dornach III) forment un seul lot
+  if (!lignesTravaux.some((l) => l.numero != null)) {
+    let numero = 0;
+    let fusionPrec: number | null = null;
+    for (const l of lignesTravaux) {
+      const fusion = cA >= 0 ? g.debutFusion(l.r, cA) : null;
+      if (fusion == null || fusion !== fusionPrec) numero++;
+      fusionPrec = fusion;
+      l.numero = numero;
+      l.titre = (cA >= 0 ? g.strFusion(l.r, cA) : "") || l.designation;
+    }
+  }
   const numeroProvisions = Math.max(0, ...lignesTravaux.map((l) => l.numero ?? 0)) + 1;
   let tvaParDefaut = false;
 
@@ -438,7 +488,8 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
     }
 
     // --- lots ---
-    const retenus = iRetenu >= 0 ? refsLignes(g.cell(iRetenu, col).f) : new Set<number>();
+    const lignesR = lignesTravaux.map((l) => l.r);
+    const retenus = iRetenu >= 0 ? lignesRetenues(g.cell(iRetenu, col).f, iTotalHt, lignesR) : new Set<number>();
     if (iRetenu >= 0 && !g.cell(iRetenu, col).f && (g.num(iRetenu, col) ?? 0) > 0)
       avertS.push("« Total travaux HT retenu » saisi sans formule : lignes retenues (assiette MaPrimeRénov') à cocher dans l'éditeur.");
     // TVA : commentaire « TVA de 10% », sinon formule du TTC, sinon 5,5 % (+ ajustement)
@@ -456,7 +507,7 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
       const prefixes = ls.map((l) => /^(.+?)\s+-\s+(.+)$/.exec(l.designation));
       const prefixeCommun =
         !provisions && ls.length > 1 && prefixes.every((p) => p && p[1] === prefixes[0]![1]) ? prefixes[0]![1] : null;
-      const titre = provisions ? TITRE_LOT_PROVISIONS : prefixeCommun ?? ls[0].titre ?? ls[0].designation;
+      const titre = provisions ? TITRE_LOT_PROVISIONS : ls[0].titreLot ?? prefixeCommun ?? ls[0].titre ?? ls[0].designation;
       data.lots.push({
         numero,
         titre,
@@ -632,8 +683,9 @@ export function importPlanEstimatif(wb: WorkBook): ImportEstimatifResult {
         ` + montant déjà appelé ${fmt(dejaAppele)} €${comAppele ? ` (${comAppele})` : ""}`;
     } else if (comFonds) data.params.commentaireFondsTravaux = comFonds;
 
-    // « Coût au taniéme avant aides » (faute de frappe du classeur 9 rue de la Gare)
-    const iTant = trouver((l) => /^cout au tan\w*me avant/.test(l));
+    // « Coût au taniéme avant aides » (faute de frappe du classeur 9 rue de la Gare),
+    // « Coût au millième avant aides » (Dornach III, tantièmes sur 1 000)
+    const iTant = trouver((l) => /^cout au (?:tan\w*me|millieme)s? avant/.test(l));
     if (iTant >= 0) data.params.totalTantiemes = g.num(iTant, cB + 1) ?? 10000;
     const T = data.params.totalTantiemes || 10000;
     const exemples = new Set<number>();
@@ -1053,23 +1105,20 @@ export function exportPlanEstimatif(scenarios: ScenarioEstimatif[]): WorkBook {
   ligne("Descriptif des travaux", (k) => ({ v: `Scénario ${S[k].ordre}` }));
   ligne(null, (k) => (S[k].libelle ? { v: S[k].libelle } : null));
   const travaux = alignerTravaux(S);
-  const lotsMulti = new Set<number>();
-  for (const t of travaux) {
-    const n = travaux.filter((x) => x.lotNumero === t.lotNumero && !x.provisions).length;
-    if (n > 1) lotsMulti.add(t.lotNumero);
-  }
   const rTravaux: number[] = [];
   const retenusParScenario: number[][] = S.map(() => []);
   for (const t of travaux) {
-    const b = !t.provisions && lotsMulti.has(t.lotNumero) ? `${t.lotTitre} - ${t.designation}` : t.designation;
+    const b = t.designation;
     const tvas = t.tva.filter((x): x is number => x != null);
     const tva = tvas.length && tvas[0] !== TVA_TRAVAUX_DEFAUT ? tvas[0] : null;
     const com = [t.commentaire ?? b, tva != null ? `TVA de ${String(tva).replace(".", ",")}%` : null].filter(Boolean).join(" - ");
+    // Titre du lot après son numéro (« Lot 02 - Toiture ») quand il diffère de la désignation
+    const numero = `Lot ${String(t.lotNumero).padStart(2, "0")}`;
     const r = ligne(
       b,
       (k) => (t.montants[k] != null ? { v: t.montants[k] } : null),
       com,
-      t.provisions ? null : `Lot ${String(t.lotNumero).padStart(2, "0")}`
+      t.provisions ? null : t.lotTitre !== t.designation ? `${numero} - ${t.lotTitre}` : numero
     );
     rTravaux.push(r);
     t.retenus.forEach((x, k) => x && retenusParScenario[k].push(r));
