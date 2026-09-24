@@ -9,6 +9,9 @@
 // Import du portefeuille (0077) : bouton « Importer mon portefeuille » ou tableau
 // Excel / CSV glissé sur la zone de dépôt et reconnu par ses en-têtes ; chaque
 // ligne est rapprochée de la base AMO → statut « En rénovation » dans la liste.
+// Suppression (feedback Amir 24/09, 0095) : le dépôt qui vient d'être fait se
+// supprime depuis le bandeau de confirmation ; le badge « Rapport » ouvre
+// l'onglet Documents, où un rapport validé se supprime (dirigeant) pour recommencer.
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
@@ -26,6 +29,7 @@ import { TYPES_ANALYSES, TYPES_DEPOT, trouverCopro, typeDevine } from "@/lib/ppt
 import { estPortefeuille, lireClasseur, statutParc, type StatutParc } from "@/lib/ppt/importPortefeuille";
 import { STATUT_PARC_LABEL, StatutParcBadge, StatutRapportBadge, TITRE_VERROU, fmtDateCourte } from "./commun";
 import { CorrigerDocument, type DocumentACorriger } from "./CorrigerDocument";
+import { SupprimerDocument, type DocumentASupprimer } from "./SupprimerDocument";
 import { ImportPortefeuilleDialog } from "./ImportPortefeuille";
 import type { PortefeuillePpt } from "./index";
 
@@ -240,6 +244,8 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
   const [confirmation, setConfirmation] = useState<{ copro: Pick<PptCopro, "id" | "nom">; type: TypeRapport; creee: boolean; acces: boolean; rapport: PptRapport } | null>(null);
   // correction d'un dépôt qui vient d'être rangé sous la mauvaise copropriété (0081)
   const [aCorriger, setACorriger] = useState<DocumentACorriger | null>(null);
+  // dépôt à retirer pour recommencer (0082 / 0095)
+  const [aSupprimer, setASupprimer] = useState<DocumentASupprimer | null>(null);
   // import du portefeuille (0077) : fenêtre ouverte par le bouton ou par un tableau reconnu, bilan affiché ensuite
   const [importOuvert, setImportOuvert] = useState(false);
   const [fichierImport, setFichierImport] = useState<File | null>(null);
@@ -341,6 +347,9 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
           <button className="se-btn se-btn-ghost btn-sm" title="Mauvaise copropriété, mauvais type ou nom de fichier à revoir" onClick={() => setACorriger(confirmation.rapport)}>
             <Icon name="edit" size={14} /> Corriger
           </button>
+          <button className="se-btn se-btn-ghost btn-sm" style={{ color: "var(--color-error-700)" }} title="Retirer ce dépôt pour recommencer : le document et son fichier sont supprimés" onClick={() => setASupprimer(confirmation.rapport)}>
+            <Icon name="trash" size={14} /> Supprimer
+          </button>
           {confirmation.acces && (
             <button className="se-btn se-btn-secondary btn-sm" onClick={() => navigate(`/syndic/ppt/copros/${confirmation.copro.id}`)}>
               Ouvrir <Icon name="arrowRight" size={14} />
@@ -350,6 +359,16 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
             <Icon name="x" size={15} />
           </button>
         </div>
+      )}
+
+      {aSupprimer && (
+        <SupprimerDocument
+          rapport={aSupprimer}
+          onClose={(supprime) => {
+            setASupprimer(null);
+            if (supprime) setConfirmation(null);
+          }}
+        />
       )}
 
       {aCorriger && (
@@ -458,7 +477,25 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
                     <td><StatutParcBadge c={c} /></td>
                     <td>{c.etiquette_energie ? <DpeChip cls={c.etiquette_energie as DpeClass} /> : "-"}</td>
                     <td className="num">{c.nb_logements ?? "-"}</td>
-                    <td>{c.stats?.statut_rapport ? <StatutRapportBadge statut={c.stats.statut_rapport} /> : <Badge kind="neutral">Aucun</Badge>}</td>
+                    <td>
+                      {c.acces && c.stats?.statut_rapport ? (
+                        <button
+                          type="button"
+                          style={{ all: "unset", cursor: "pointer" }}
+                          title="Documents de la copropriété : aperçu, correction, suppression"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/syndic/ppt/copros/${c.id}/documents`);
+                          }}
+                        >
+                          <StatutRapportBadge statut={c.stats.statut_rapport} />
+                        </button>
+                      ) : c.stats?.statut_rapport ? (
+                        <StatutRapportBadge statut={c.stats.statut_rapport} />
+                      ) : (
+                        <Badge kind="neutral">Aucun</Badge>
+                      )}
+                    </td>
                     <td className="num">{c.stats?.postes || "-"}{c.stats?.postes_non_chiffres ? <span title="postes non chiffrés" style={{ color: "var(--color-warning-700)" }}> ({c.stats.postes_non_chiffres} ?)</span> : null}</td>
                     <td className="num">{c.stats?.montant_ht_base ? fmtEuroCourt(c.stats.montant_ht_base) : "-"}</td>
                     <td className="num">{c.stats?.prochaine_annee ?? "-"}</td>

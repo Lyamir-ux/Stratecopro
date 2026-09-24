@@ -37,7 +37,6 @@ import {
   usePptRemarques,
   usePptResolutions,
   useSupprimerAg,
-  useSupprimerPptRapport,
   type PptCoproAvecStats,
   type PptCoproPatch,
   type PptPoste,
@@ -53,6 +52,7 @@ import { AgForm } from "./AgForm";
 import { ApercuDocument } from "@/components/ApercuDocument";
 import { CorrigerDocument, RenommerFichiers, type DocumentACorriger } from "./CorrigerDocument";
 import { SelectGestionnaire } from "./ChoixGestionnaire";
+import { SupprimerDocument, peutSupprimer, type DocumentASupprimer } from "./SupprimerDocument";
 import { messageTransfert } from "@/lib/ppt/gestionnaires";
 import { PrioriteBadge, RenoBadge, SeveriteBadge, StatutPosteBadge, StatutRapportBadge, VerdictBadge, anneeCourante, fmtDateCourte, fmtEur, fmtPct, issueLabel, posteLite, type PrioriteCode } from "./commun";
 
@@ -914,6 +914,7 @@ function RemarquesTab({ c, postes }: { c: PptCoproAvecStats; postes: PptPoste[] 
 
 // ---------- Documents ----------
 function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
+  const { profile } = useAuth();
   const { data: rapports } = usePptRapports([c.id]);
   const deposer = useDeposerPptRapport();
   // correction d'un dépôt mal rattaché (mauvaise copropriété, type ou nom) - 0081
@@ -921,7 +922,8 @@ function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
   // aperçu sans téléchargement et retrait d'un dépôt - 0082
   const [apercu, setApercu] = useState<{ name: string; storage_path: string } | null>(null);
   const { data: deposants } = usePptDeposants(c.id);
-  const supprimer = useSupprimerPptRapport();
+  // suppression (0082) ; un rapport validé, par le dirigeant seul, emporte son plan pour recommencer (0095)
+  const [aSupprimer, setASupprimer] = useState<DocumentASupprimer | null>(null);
   const [type, setType] = useState<TypeRapport>("dpe_collectif");
   const { data: orgParams } = usePptParametres(c.organisation_id);
   const [taux, setTaux] = useState("");
@@ -982,16 +984,11 @@ function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
                 <button className="icon-btn" title="Corriger : copropriété, type ou nom du fichier" onClick={() => setACorriger(r)}><Icon name="edit" size={17} /></button>
               )}
               <button className="icon-btn" title="Télécharger" onClick={() => void telechargerPptRapport(r)}><Icon name="download" size={18} /></button>
-              {r.statut !== "valide" && (
+              {peutSupprimer(r, !!profile?.dirigeant) && (
                 <button
                   className="icon-btn"
-                  title="Supprimer ce document"
-                  disabled={supprimer.isPending}
-                  onClick={() => {
-                    if (!window.confirm(`Supprimer « ${r.name} » ? Le document et son fichier sont retirés définitivement.`)) return;
-                    setErreur(null);
-                    supprimer.mutateAsync(r.id).catch((err) => setErreur(err instanceof Error ? err.message : "Suppression refusée"));
-                  }}
+                  title={r.statut === "valide" ? "Supprimer ce rapport validé et son plan, pour recommencer" : "Supprimer ce document"}
+                  onClick={() => setASupprimer(r)}
                 >
                   <Icon name="trash" size={17} />
                 </button>
@@ -1001,9 +998,10 @@ function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
         )}
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
           Un nouveau PPPT (actualisation décennale, nouvelle version du rédacteur) se dépose ici : après validation il remplace le plan précédent, dont les postes et l'historique d'AG sont conservés.
-          Un document rangé sous la mauvaise copropriété se corrige avec le crayon : le fichier suit.
+          Un document rangé sous la mauvaise copropriété se corrige avec le crayon : le fichier suit. La corbeille supprime un document ; un rapport validé ne se supprime que par Strat Eco, avec son plan, pour recommencer.
         </p>
         {aCorriger && <CorrigerDocument rapport={aCorriger} onClose={() => setACorriger(null)} />}
+        {aSupprimer && <SupprimerDocument rapport={aSupprimer} onClose={() => setASupprimer(null)} />}
         {apercu && (
           <ApercuDocument
             name={apercu.name}
@@ -1163,7 +1161,8 @@ function HistoriqueTab({ c }: { c: PptCoproAvecStats }) {
     if (type === "poste_ajoute") return `${d.libelle ?? "poste"}${d.annee ? ` · ${d.annee}` : ""}${d.montant != null ? ` · ${fmtEur(Number(d.montant))}` : ""}`;
     if (type === "poste_retire") return `${d.libelle ?? "poste"}${d.motif ? ` - ${d.motif}` : ""}`;
     if (type === "poste_retabli") return `${d.libelle ?? "poste"}${d.motif_retrait ? ` (retirée pour : ${d.motif_retrait})` : ""}`;
-    if (type === "suppression") return `${TYPE_RAPPORT_LABEL[String(d.type)] ?? d.type} - ${d.name}`;
+    if (type === "suppression")
+      return `${TYPE_RAPPORT_LABEL[String(d.type)] ?? d.type} - ${d.name}${d.statut === "valide" ? ` - rapport validé, ${d.postes ?? 0} postes supprimés${d.restaure ? ", version précédente remise en vigueur" : ""}` : ""}${d.motif ? ` - ${d.motif}` : ""}`;
     if (type === "requalification") return `${TYPE_RAPPORT_LABEL[String(d.avant)] ?? d.avant} → ${TYPE_RAPPORT_LABEL[String(d.apres)] ?? d.apres}`;
     if (type === "correction")
       return [

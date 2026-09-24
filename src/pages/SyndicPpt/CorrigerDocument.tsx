@@ -103,7 +103,7 @@ export function CorrigerDocument({ rapport, onClose }: { rapport: DocumentACorri
 
         {rapport.statut === "valide" ? (
           <p style={{ margin: 0, padding: "8px 12px", borderRadius: "var(--radius-md)", background: "var(--color-warning-50)", color: "var(--color-warning-700)", fontSize: 13 }}>
-            Ce rapport est validé : son plan, ses remarques et son échéancier appartiennent à la copropriété. Rejetez-le depuis la revue avant de le déplacer.
+            Ce rapport est validé : son plan, ses remarques et son échéancier appartiennent à la copropriété. Pour le ranger ailleurs, Strat Eco le supprime (avec son plan) puis il se dépose à nouveau sur la bonne copropriété.
           </p>
         ) : (
           <>

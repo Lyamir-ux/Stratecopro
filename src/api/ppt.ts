@@ -465,12 +465,13 @@ export function usePptDeposants(coproId: string | undefined) {
 }
 
 /** Suppression d'un document déposé (0082) : la ligne part avec son fichier.
- *  Réservée au déposant et à l'équipe Strat Eco, interdite sur un rapport validé. */
+ *  Réservée au déposant et à l'équipe Strat Eco ; un rapport validé se supprime
+ *  par le seul dirigeant et emporte son plan et ses remarques (0095). */
 export function useSupprimerPptRapport() {
   const refresh = useRefreshPpt();
   return useMutation({
-    mutationFn: async (rapportId: string) => {
-      const { data: chemin, error } = await supabase.rpc("ppt_supprimer_rapport", { p_rapport_id: rapportId });
+    mutationFn: async ({ rapportId, motif }: { rapportId: string; motif?: string | null }) => {
+      const { data: chemin, error } = await supabase.rpc("ppt_supprimer_rapport", { p_rapport_id: rapportId, p_motif: motif ?? undefined });
       if (error) throw error;
       // le fichier suit ; un échec ici ne laisse qu'un fichier orphelin, jamais une ligne cassée
       if (chemin) {

@@ -4125,7 +4125,7 @@ export type Database = {
         Returns: { rapport_id: string; user_id: string | null; nom: string | null; email: string | null }[]
       }
       ppt_supprimer_rapport: {
-        Args: { p_rapport_id: string }
+        Args: { p_motif?: string; p_rapport_id: string }
         Returns: string
       }
       ppt_decaler_postes: {

@@ -41,6 +41,7 @@ import { STATUT_VALIDATION_LABEL, accepterEnBloc, aReprendre, bilanPropositions,
 import { montantTtcPoste, parametresDepuisJson, postesDepuisJson, totauxParAnnee } from "@/lib/ppt/formules";
 import { STATUT_CONTROLE_LABEL, TYPE_RAPPORT_LABEL, VERDICT_LABEL } from "@/lib/ppt/referentiels";
 import { SeveriteBadge, StatutRapportBadge, VerdictBadge, fmtDateCourte, fmtEur, fmtPct } from "@/pages/SyndicPpt/commun";
+import { SupprimerDocument } from "@/pages/SyndicPpt/SupprimerDocument";
 
 const PRIORITES: TravailNormalise["priorite"][] = ["Préservation", "Énergétique", "Amélioration"];
 
@@ -182,6 +183,8 @@ export default function Revue() {
   const [message, setMessage] = useState<string | null>(null);
   const [erreurDecision, setErreurDecision] = useState<string | null>(null);
   const [erreurRetour, setErreurRetour] = useState<string | null>(null);
+  // supprimer le rapport (même validé et retouché par le cabinet) pour recommencer - 0095
+  const [suppression, setSuppression] = useState(false);
 
   // le JSON de travail suit l'analyse chargée (import ou enregistrement)
   useEffect(() => {
@@ -373,6 +376,12 @@ export default function Revue() {
               {devalider.isPending ? "Retour…" : "Revenir au mode vérification"}
             </button>
           )}
+          {dirigeant && (
+            <button className="se-btn se-btn-ghost btn-sm" style={{ color: "var(--color-error-700)" }} title={rapport.statut === "valide" ? "Supprimer le rapport et son plan (postes, remarques), pour recommencer depuis un nouveau dépôt" : "Supprimer le document et son fichier"} onClick={() => setSuppression(true)}>
+              <Icon name="trash" size={14} />
+              Supprimer
+            </button>
+          )}
           {revueActive && (
             <label className="se-btn se-btn-primary btn-sm" style={{ cursor: "pointer" }}>
               <Icon name="upload" size={14} />
@@ -399,7 +408,17 @@ export default function Revue() {
       {erreurRetour && (
         <div className="panel" style={{ padding: "12px 16px", marginBottom: 16, background: "var(--color-error-50)", color: "var(--color-error-700)" }}>
           <b>Retour en vérification refusé</b> - {erreurRetour}
+          <span style={{ display: "block", marginTop: 4 }}>Pour recommencer malgré tout, supprimez le rapport (bouton « Supprimer ») puis déposez-le à nouveau.</span>
         </div>
+      )}
+      {suppression && (
+        <SupprimerDocument
+          rapport={rapport}
+          onClose={(supprime) => {
+            setSuppression(false);
+            if (supprime) navigate("/ppt");
+          }}
+        />
       )}
       {message && <p className="se-small" style={{ padding: "8px 12px", borderRadius: "var(--radius-md)", background: "var(--bg-soft)", border: "1px solid var(--border)" }}>{message}</p>}
 
