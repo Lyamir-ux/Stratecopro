@@ -3,6 +3,8 @@
 // fichier, afin de recommencer en cas de validation »). Ce que la suppression
 // emporte, calculé avant la confirmation avec les mêmes règles que la RPC
 // ppt_supprimer_rapport. Logique pure, testée à part.
+// Variante « supprimer le JSON » (0096, précision d'Amir du 24/09) : le PDF
+// reste et repasse « déposé », seul le plan issu du JSON part avec le JSON.
 
 export interface RapportSuppression {
   id: string;
@@ -81,6 +83,16 @@ export function impactSuppression(
 
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 
+/** Postes du plan retirés, en une phrase ; null s'il n'y en a pas. */
+function phrasePostes(i: ImpactSuppression): string | null {
+  if (!i.postes) return null;
+  return (
+    `${pluriel(i.postes, "poste")} du plan${i.valide && !i.enVigueur ? " (version archivée)" : ""}` +
+    (i.travailles ? `, dont ${i.travailles} retouché${i.travailles > 1 ? "s" : ""} par le cabinet${i.votes ? ` (${i.votes} voté${i.votes > 1 ? "s" : ""} ou réalisé${i.votes > 1 ? "s" : ""})` : ""}` : "") +
+    "."
+  );
+}
+
 /** Ce qui part et ce qui reste, en phrases courtes pour la fenêtre de confirmation. */
 export function consequencesSuppression(i: ImpactSuppression): { part: string[]; reste: string[] } {
   if (!i.valide) {
@@ -88,17 +100,27 @@ export function consequencesSuppression(i: ImpactSuppression): { part: string[];
   }
   const part: string[] = [];
   const reste: string[] = [];
-  if (i.postes) {
-    part.push(
-      `${pluriel(i.postes, "poste")} du plan${i.enVigueur ? "" : " (version archivée)"}` +
-        (i.travailles ? `, dont ${i.travailles} retouché${i.travailles > 1 ? "s" : ""} par le cabinet${i.votes ? ` (${i.votes} voté${i.votes > 1 ? "s" : ""} ou réalisé${i.votes > 1 ? "s" : ""})` : ""}` : "") +
-        ".",
-    );
-  }
+  const postes = phrasePostes(i);
+  if (postes) part.push(postes);
   if (i.remarques) part.push(`${pluriel(i.remarques, "remarque")} du rapport.`);
   part.push("L'analyse importée, la revue et le fichier.");
   if (i.versionRestauree) reste.push(`La version validée précédente (« ${i.versionRestauree.name} ») redevient le plan en vigueur.`);
   else if (i.enVigueur) reste.push("La copropriété n'a plus de plan validé de ce type : déposez le document à nouveau pour recommencer.");
+  reste.push("Les lignes ajoutées par le cabinet, les assemblées générales et leurs résolutions sont conservées.");
+  reste.push("Les données de la fiche complétées à la validation (adresse, DPE…) sont gardées.");
+  return { part, reste };
+}
+
+/** Supprimer le JSON intégré (0096) : le plan issu du JSON part, le PDF reste et la revue repart de zéro. */
+export function consequencesSuppressionAnalyse(i: ImpactSuppression, corrections: number): { part: string[]; reste: string[] } {
+  const part: string[] = [];
+  const postes = phrasePostes(i);
+  if (postes) part.push(postes);
+  if (i.remarques) part.push(`${pluriel(i.remarques, "remarque")} du rapport.`);
+  part.push(`Le JSON importé${corrections ? ` et ${pluriel(corrections, "correction")} journalisée${corrections > 1 ? "s" : ""} de la revue` : ""}.`);
+  const reste: string[] = ["Le PDF, qui repasse « Déposé » : importez le nouveau JSON depuis la revue."];
+  if (i.versionRestauree) reste.push(`En attendant, la version validée précédente (« ${i.versionRestauree.name} ») redevient le plan en vigueur.`);
+  else if (i.enVigueur) reste.push("En attendant, le cabinet ne voit plus de plan pour cette copropriété.");
   reste.push("Les lignes ajoutées par le cabinet, les assemblées générales et leurs résolutions sont conservées.");
   reste.push("Les données de la fiche complétées à la validation (adresse, DPE…) sont gardées.");
   return { part, reste };

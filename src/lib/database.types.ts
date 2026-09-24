@@ -4128,6 +4128,10 @@ export type Database = {
         Args: { p_motif?: string; p_rapport_id: string }
         Returns: string
       }
+      ppt_supprimer_analyse: {
+        Args: { p_motif?: string; p_rapport_id: string }
+        Returns: undefined
+      }
       ppt_decaler_postes: {
         Args: { p_decalages: Json }
         Returns: number

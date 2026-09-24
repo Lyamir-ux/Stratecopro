@@ -52,7 +52,7 @@ import { AgForm } from "./AgForm";
 import { ApercuDocument } from "@/components/ApercuDocument";
 import { CorrigerDocument, RenommerFichiers, type DocumentACorriger } from "./CorrigerDocument";
 import { SelectGestionnaire } from "./ChoixGestionnaire";
-import { SupprimerDocument, peutSupprimer, type DocumentASupprimer } from "./SupprimerDocument";
+import { SupprimerDocument, peutSupprimer, peutSupprimerJson, type DocumentASupprimer } from "./SupprimerDocument";
 import { messageTransfert } from "@/lib/ppt/gestionnaires";
 import { PrioriteBadge, RenoBadge, SeveriteBadge, StatutPosteBadge, StatutRapportBadge, VerdictBadge, anneeCourante, fmtDateCourte, fmtEur, fmtPct, issueLabel, posteLite, type PrioriteCode } from "./commun";
 
@@ -923,7 +923,7 @@ function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
   const [apercu, setApercu] = useState<{ name: string; storage_path: string } | null>(null);
   const { data: deposants } = usePptDeposants(c.id);
   // suppression (0082) ; un rapport validé, par le dirigeant seul, emporte son plan pour recommencer (0095)
-  const [aSupprimer, setASupprimer] = useState<DocumentASupprimer | null>(null);
+  const [aSupprimer, setASupprimer] = useState<{ rapport: DocumentASupprimer; mode: "document" | "analyse" } | null>(null);
   const [type, setType] = useState<TypeRapport>("dpe_collectif");
   const { data: orgParams } = usePptParametres(c.organisation_id);
   const [taux, setTaux] = useState("");
@@ -984,11 +984,20 @@ function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
                 <button className="icon-btn" title="Corriger : copropriété, type ou nom du fichier" onClick={() => setACorriger(r)}><Icon name="edit" size={17} /></button>
               )}
               <button className="icon-btn" title="Télécharger" onClick={() => void telechargerPptRapport(r)}><Icon name="download" size={18} /></button>
+              {peutSupprimerJson(r, !!profile?.dirigeant) && (
+                <button
+                  className="icon-btn"
+                  title="Supprimer le JSON intégré (et le plan qu'il a produit) en gardant le PDF, pour importer un nouveau JSON"
+                  onClick={() => setASupprimer({ rapport: r, mode: "analyse" })}
+                >
+                  <Icon name="refresh" size={17} />
+                </button>
+              )}
               {peutSupprimer(r, !!profile?.dirigeant) && (
                 <button
                   className="icon-btn"
                   title={r.statut === "valide" ? "Supprimer ce rapport validé et son plan, pour recommencer" : "Supprimer ce document"}
-                  onClick={() => setASupprimer(r)}
+                  onClick={() => setASupprimer({ rapport: r, mode: "document" })}
                 >
                   <Icon name="trash" size={17} />
                 </button>
@@ -1001,7 +1010,7 @@ function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
           Un document rangé sous la mauvaise copropriété se corrige avec le crayon : le fichier suit. La corbeille supprime un document ; un rapport validé ne se supprime que par Strat Eco, avec son plan, pour recommencer.
         </p>
         {aCorriger && <CorrigerDocument rapport={aCorriger} onClose={() => setACorriger(null)} />}
-        {aSupprimer && <SupprimerDocument rapport={aSupprimer} onClose={() => setASupprimer(null)} />}
+        {aSupprimer && <SupprimerDocument rapport={aSupprimer.rapport} mode={aSupprimer.mode} onClose={() => setASupprimer(null)} />}
         {apercu && (
           <ApercuDocument
             name={apercu.name}
@@ -1143,6 +1152,7 @@ const JOURNAL_LABEL: Record<string, string> = {
   correction: "Document corrigé",
   requalification: "Type de document corrigé",
   suppression: "Document supprimé",
+  analyse_supprimee: "JSON intégré supprimé par Strat Eco",
 };
 
 function HistoriqueTab({ c }: { c: PptCoproAvecStats }) {
@@ -1163,6 +1173,8 @@ function HistoriqueTab({ c }: { c: PptCoproAvecStats }) {
     if (type === "poste_retabli") return `${d.libelle ?? "poste"}${d.motif_retrait ? ` (retirée pour : ${d.motif_retrait})` : ""}`;
     if (type === "suppression")
       return `${TYPE_RAPPORT_LABEL[String(d.type)] ?? d.type} - ${d.name}${d.statut === "valide" ? ` - rapport validé, ${d.postes ?? 0} postes supprimés${d.restaure ? ", version précédente remise en vigueur" : ""}` : ""}${d.motif ? ` - ${d.motif}` : ""}`;
+    if (type === "analyse_supprimee")
+      return `${d.name ?? "rapport"}${d.postes ? ` - ${d.postes} postes retirés${d.restaure ? ", version précédente remise en vigueur" : ""}` : ""}${d.motif ? ` - ${d.motif}` : ""}`;
     if (type === "requalification") return `${TYPE_RAPPORT_LABEL[String(d.avant)] ?? d.avant} → ${TYPE_RAPPORT_LABEL[String(d.apres)] ?? d.apres}`;
     if (type === "correction")
       return [

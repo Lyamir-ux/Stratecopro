@@ -183,18 +183,27 @@ export default function Revue() {
   const [message, setMessage] = useState<string | null>(null);
   const [erreurDecision, setErreurDecision] = useState<string | null>(null);
   const [erreurRetour, setErreurRetour] = useState<string | null>(null);
-  // supprimer le rapport (même validé et retouché par le cabinet) pour recommencer - 0095
-  const [suppression, setSuppression] = useState(false);
+  // supprimer le rapport (même validé et retouché par le cabinet) pour recommencer - 0095,
+  // ou seulement le JSON intégré en gardant le PDF, pour en importer un nouveau - 0096
+  const [suppression, setSuppression] = useState<"document" | "analyse" | null>(null);
 
   // le JSON de travail suit l'analyse chargée (import ou enregistrement)
   useEffect(() => {
+    // JSON supprimé (0096) : la revue repart de zéro, en attente d'un nouvel import
+    if (analyse === null) {
+      setJson(null);
+      setBase(null);
+      setLeves([]);
+      setMotifLevee("");
+      return;
+    }
     if (analyse?.json_corrige) {
       // une analyse importée avant la 1.1 n'a pas de bloc propositions : migrée à la lecture
       const j = migrerJson(analyse.json_corrige as unknown as PpptVerifJson);
       setJson(cloner(j));
       setBase(cloner(j));
     }
-  }, [analyse?.json_corrige, analyse?.updated_at]);
+  }, [analyse, analyse?.json_corrige, analyse?.updated_at]);
 
   const fiche = useMemo(() => (copro ? { nom: copro.nom, adresse: copro.adresse, commune: copro.commune, nb_lots: copro.nb_lots, nb_logements: copro.nb_logements, surface_m2: copro.surface_m2, annee_construction: copro.annee_construction, etiquette_energie: copro.etiquette_energie, cep_kwhep_m2_an: copro.cep_kwhep_m2_an, date_dpe: copro.date_dpe, fonds_travaux_solde: copro.fonds_travaux_solde, fonds_travaux_cotisation_annuelle: copro.fonds_travaux_cotisation_annuelle, budget_previsionnel_annuel: copro.budget_previsionnel_annuel } : {}), [copro]);
   // contrôles plateforme rejoués à chaque modification ; la visibilité syndic choisie est conservée par clé
@@ -376,8 +385,14 @@ export default function Revue() {
               {devalider.isPending ? "Retour…" : "Revenir au mode vérification"}
             </button>
           )}
+          {dirigeant && rapport.schema_version != null && (
+            <button className="se-btn se-btn-ghost btn-sm" style={{ color: "var(--color-error-700)" }} title="Garder le PDF et supprimer le JSON intégré, avec le plan qu'il a produit (même retouché par le cabinet), pour importer un nouveau JSON" onClick={() => setSuppression("analyse")}>
+              <Icon name="refresh" size={14} />
+              Supprimer le JSON
+            </button>
+          )}
           {dirigeant && (
-            <button className="se-btn se-btn-ghost btn-sm" style={{ color: "var(--color-error-700)" }} title={rapport.statut === "valide" ? "Supprimer le rapport et son plan (postes, remarques), pour recommencer depuis un nouveau dépôt" : "Supprimer le document et son fichier"} onClick={() => setSuppression(true)}>
+            <button className="se-btn se-btn-ghost btn-sm" style={{ color: "var(--color-error-700)" }} title={rapport.statut === "valide" ? "Supprimer le rapport et son plan (postes, remarques), pour recommencer depuis un nouveau dépôt" : "Supprimer le document et son fichier"} onClick={() => setSuppression("document")}>
               <Icon name="trash" size={14} />
               Supprimer
             </button>
@@ -408,15 +423,24 @@ export default function Revue() {
       {erreurRetour && (
         <div className="panel" style={{ padding: "12px 16px", marginBottom: 16, background: "var(--color-error-50)", color: "var(--color-error-700)" }}>
           <b>Retour en vérification refusé</b> - {erreurRetour}
-          <span style={{ display: "block", marginTop: 4 }}>Pour recommencer malgré tout, supprimez le rapport (bouton « Supprimer ») puis déposez-le à nouveau.</span>
+          <span style={{ display: "block", marginTop: 4 }}>Pour recommencer malgré tout, supprimez le JSON intégré (bouton « Supprimer le JSON ») : le PDF reste et vous importez le nouveau JSON.</span>
         </div>
       )}
       {suppression && (
         <SupprimerDocument
           rapport={rapport}
+          mode={suppression}
           onClose={(supprime) => {
-            setSuppression(false);
-            if (supprime) navigate("/ppt");
+            const mode = suppression;
+            setSuppression(null);
+            if (!supprime) return;
+            if (mode === "document") navigate("/ppt");
+            else {
+              setErreurRetour(null);
+              setErreurs([]);
+              setAvertissements([]);
+              setMessage("JSON supprimé : le PPPT repasse « Déposé » et le cabinet ne voit plus ce plan. Importez le nouveau JSON (bouton « Importer le JSON »).");
+            }
           }}
         />
       )}

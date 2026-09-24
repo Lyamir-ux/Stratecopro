@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { consequencesSuppression, impactSuppression, posteTravaille, type PosteSuppression, type RapportSuppression } from "../suppression";
+import { consequencesSuppression, consequencesSuppressionAnalyse, impactSuppression, posteTravaille, type PosteSuppression, type RapportSuppression } from "../suppression";
 
 const rapport = (id: string, patch: Partial<RapportSuppression> = {}): RapportSuppression => ({ id, type: "pppt", statut: "valide", valide_le: "2026-09-22T10:00:00Z", name: `${id}.pdf`, ...patch });
 const poste = (id: string, rapport_id: string | null, patch: Partial<PosteSuppression> = {}): PosteSuppression => ({
@@ -61,5 +61,23 @@ describe("impactSuppression", () => {
     const d = rapport("d1", { statut: "depose", valide_le: null });
     expect(impactSuppression(d, { rapports: [d], postes: [poste("s", null)], remarques: [], nbAg: 0 }).coproVidee).toBe(false);
     expect(impactSuppression(d, { rapports: [d], postes: [], remarques: [], nbAg: 1 }).coproVidee).toBe(false);
+  });
+});
+
+describe("consequencesSuppressionAnalyse", () => {
+  it("le plan et le JSON partent, le PDF reste et repasse « Déposé »", () => {
+    const r = rapport("r1");
+    const i = impactSuppression(r, { rapports: [r], postes: [poste("p1", "r1", { annee_prochaine_presentation: 2029 }), poste("p2", "r1")], remarques: [{ rapport_id: "r1" }], nbAg: 0 });
+    const c = consequencesSuppressionAnalyse(i, 4);
+    expect(c.part).toEqual(["2 postes du plan, dont 1 retouché par le cabinet.", "1 remarque du rapport.", "Le JSON importé et 4 corrections journalisées de la revue."]);
+    expect(c.reste[0]).toMatch(/repasse « Déposé »/);
+    expect(c.reste[1]).toBe("En attendant, le cabinet ne voit plus de plan pour cette copropriété.");
+  });
+
+  it("JSON importé mais pas encore validé : seul le JSON part", () => {
+    const r = rapport("r1", { statut: "a_relire", valide_le: null });
+    const c = consequencesSuppressionAnalyse(impactSuppression(r, { rapports: [r], postes: [], remarques: [], nbAg: 0 }), 0);
+    expect(c.part).toEqual(["Le JSON importé."]);
+    expect(c.reste).toHaveLength(3);
   });
 });

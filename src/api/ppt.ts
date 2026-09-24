@@ -483,6 +483,20 @@ export function useSupprimerPptRapport() {
   });
 }
 
+/** Supprimer le JSON intégré d'un rapport (dirigeant, 0096) : le plan issu du
+ *  JSON part (postes retouchés compris), le PDF reste et repasse « déposé » pour
+ *  qu'un nouveau JSON soit importé. */
+export function useSupprimerAnalyse() {
+  const refresh = useRefreshPpt();
+  return useMutation({
+    mutationFn: async ({ rapportId, motif }: { rapportId: string; motif?: string | null }) => {
+      const { error } = await supabase.rpc("ppt_supprimer_analyse", { p_rapport_id: rapportId, p_motif: motif ?? undefined });
+      if (error) throw error;
+    },
+    onSuccess: refresh,
+  });
+}
+
 /** URL signée (5 min) d'un document du bucket ppt-files. */
 export async function urlSigneePpt(path: string, download?: string): Promise<string> {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 300, download ? { download: nomFichierSansAccents(download) } : undefined);
