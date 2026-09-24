@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EXEMPLE } from "./exemple";
-import { cloner, diffJson, validerJson } from "../import";
+import { cloner, diffJson, migrerJson, normaliserPeriode, validerJson } from "../import";
+import type { PpptVerifJson } from "../schema";
 
 describe("import du JSON pppt-verif", () => {
   it("accepte le jeu d'essai", () => {
@@ -15,30 +16,25 @@ describe("import du JSON pppt-verif", () => {
     expect(validerJson(null).ok).toBe(false);
   });
 
-  it("refuse une version de schéma inconnue", () => {
-    const j = cloner(EXEMPLE) as unknown as Record<string, unknown>;
-    j.schema_version = "audit-verif/2.0";
-    const r = validerJson(j);
-    expect(r.ok).toBe(false);
-    expect(r.erreurs[0]).toContain("schema_version");
+  it("refuse une version de schéma non prise en charge, ou absente, avec le message du contrat", () => {
+    for (const v of ["pppt-verif/2.0", "pppt-verif/1.0", "audit-verif/2.0"]) {
+      const j = cloner(EXEMPLE) as unknown as Record<string, unknown>;
+      j.schema_version = v;
+      const r = validerJson(j);
+      expect(r.ok).toBe(false);
+      expect(r.erreurs).toEqual([`Version de schéma non prise en charge : ${v} (versions acceptées : 1.1, 1.2)`]);
+    }
+    const sans = cloner(EXEMPLE) as unknown as Record<string, unknown>;
+    delete sans.schema_version;
+    expect(validerJson(sans).erreurs).toEqual(["Version de schéma non prise en charge : absente (versions acceptées : 1.1, 1.2)"]);
   });
 
-  it("accepte une 1.2 avec avertissement", () => {
+  it("accepte une 1.2 sans avertissement de version", () => {
     const j = cloner(EXEMPLE) as unknown as Record<string, unknown>;
     j.schema_version = "pppt-verif/1.2";
     const r = validerJson(j);
     expect(r.ok).toBe(true);
-    expect(r.avertissements.some((a) => a.includes("1.2"))).toBe(true);
-  });
-
-  it("migre un JSON 1.0 : propositions vides, avertissement sur l'absence de décisions tracées", () => {
-    const j = cloner(EXEMPLE) as unknown as Record<string, unknown>;
-    j.schema_version = "pppt-verif/1.0";
-    delete j.propositions;
-    const r = validerJson(j);
-    expect(r.ok).toBe(true);
-    expect(r.json?.propositions).toEqual([]);
-    expect(r.avertissements.some((a) => a.includes("1.0"))).toBe(true);
+    expect(r.avertissements.some((a) => a.includes("1.2"))).toBe(false);
   });
 
   it("une 1.1 sans bloc propositions passe avec avertissement", () => {
@@ -103,12 +99,48 @@ describe("import du JSON pppt-verif", () => {
     expect(r.erreurs.some((e) => e.includes("sévérité"))).toBe(true);
   });
 
-  it("signale des paramètres exprimés en pourcentage plutôt qu'en fraction", () => {
+  it("les paramètres en fraction d'une analyse 1.0 relue en base passent en points d'après leur clé", () => {
+    const j = cloner(EXEMPLE) as unknown as { parametres_ppt: Record<string, unknown> };
+    j.parametres_ppt = { annee_base: 2026, premiere_annee: 2027, horizon: 10, inflation: 0.035, tva_facades_toitures: 0.1, tva_energetique: 0.055, honoraires_moe: 0.06, honoraires_syndic: 0.03, cep_base_kwhep_m2_an: 289 };
+    const m = migrerJson(j as unknown as PpptVerifJson);
+    expect(m.parametres_ppt).toMatchObject({ inflation_pct: 3.5, tva_facades_toitures_pct: 10, tva_energetique_pct: 5.5, honoraires_moe_pct: 6, honoraires_syndic_pct: 3, reevaluation_prix_coef: 1, moe_sur_energetique: false, annee_prix_source: null });
+    expect("inflation" in m.parametres_ppt).toBe(false);
+    expect(migrerJson(m)).toEqual(m); // idempotent
+  });
+
+  it("un _pct inférieur à 1 n'est jamais multiplié par 100", () => {
     const j = cloner(EXEMPLE);
-    j.parametres_ppt.inflation = 3.5;
+    j.travaux_normalises[0].gain_energetique_pct = 0.5;
+    const r = validerJson(j);
+    expect(r.json?.travaux_normalises[0].gain_energetique_pct).toBe(0.5);
+  });
+
+  it("normalise les libellés de période de l'échéancier source", () => {
+    expect(normaliserPeriode("0-1 an")).toBe("0 à 1 an");
+    expect(normaliserPeriode("1-5 ans")).toBe("1 à 5 ans");
+    expect(normaliserPeriode("5 - 10 ans")).toBe("5 à 10 ans");
+    expect(normaliserPeriode("0 à 1 an")).toBe("0 à 1 an");
+    expect(normaliserPeriode("2027")).toBe("2027");
+    expect(normaliserPeriode("Court terme")).toBe("Court terme");
+  });
+
+  it("une ligne regroupée est acceptée si tous ses postes source existent", () => {
+    const j = cloner(EXEMPLE);
+    j.travaux_normalises.push({ ...j.travaux_normalises[6], id: "T20", regroupe_ids: ["T07", "T08"], cout_ht_origine: "regroupement_micro_postes" });
+    j.travaux_normalises = j.travaux_normalises.filter((t) => t.id !== "T07" && t.id !== "T08");
+    expect(validerJson(j).ok).toBe(true);
+    j.travaux_normalises[j.travaux_normalises.length - 1].regroupe_ids = ["T07", "T42"];
+    const r = validerJson(j);
+    expect(r.ok).toBe(false);
+    expect(r.erreurs.some((e) => e.includes("T42"))).toBe(true);
+  });
+
+  it("ignore les remarques plateforme présentes dans le fichier", () => {
+    const j = { ...cloner(EXEMPLE), remarques_plateforme: [cloner(EXEMPLE.controles[1])] };
     const r = validerJson(j);
     expect(r.ok).toBe(true);
-    expect(r.avertissements.some((a) => a.includes("inflation"))).toBe(true);
+    expect(r.json?.remarques_plateforme).toBeUndefined();
+    expect(r.avertissements.some((a) => a.includes("remarques_plateforme"))).toBe(true);
   });
 
   it("journalise chaque correction manuelle avec son chemin, avant / après", () => {

@@ -2824,6 +2824,10 @@ export type Database = {
           commentaire: string | null
           cout_ht_base: number | null
           cout_origine: string | null
+          // retouche manuelle (0098) : schéma pppt-verif 1.2 (montant source, réévaluation, regroupement)
+          cout_ht_source: number | null
+          reevaluation_prix_coef: number
+          regroupe_ids: string[] | null
           created_at: string
           critere: string | null
           gain_energetique_pct: number | null
@@ -2858,6 +2862,10 @@ export type Database = {
           commentaire?: string | null
           cout_ht_base?: number | null
           cout_origine?: string | null
+          // retouche manuelle (0098) : schéma pppt-verif 1.2 (montant source, réévaluation, regroupement)
+          cout_ht_source?: number | null
+          reevaluation_prix_coef?: number
+          regroupe_ids?: string[] | null
           created_at?: string
           critere?: string | null
           gain_energetique_pct?: number | null
@@ -2891,6 +2899,10 @@ export type Database = {
           commentaire?: string | null
           cout_ht_base?: number | null
           cout_origine?: string | null
+          // retouche manuelle (0098) : schéma pppt-verif 1.2 (montant source, réévaluation, regroupement)
+          cout_ht_source?: number | null
+          reevaluation_prix_coef?: number
+          regroupe_ids?: string[] | null
           created_at?: string
           critere?: string | null
           gain_energetique_pct?: number | null

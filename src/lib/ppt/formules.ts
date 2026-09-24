@@ -1,8 +1,11 @@
 // Formules du tableau PPT Strat Eco, recalculées côté plateforme pour que les
 // tableaux de bord concordent avec le classeur produit par le skill :
-//   TTC d'un poste prévu en AN+k = HT × (1+inflation)^k × (1 + TVA + [MOE si préservation] + syndic)
+//   TTC d'un poste prévu en AN+k = HT × (1+inflation)^k × (1 + TVA + [MOE si avec_moe] + syndic)
 //   gain cumulé à l'année N = 1 - Π(1 - g_i) sur les postes énergétiques réalisés jusqu'à N
 //   Cep après = Cep base × (1 - gain)
+// `avec_moe` est porté par chaque ligne (le skill le pose, jamais recalculé
+// depuis la priorité). Les `_pct` sont des points de pourcentage : divisés par
+// 100 ici, au moment du calcul, jamais à l'import ni par heuristique.
 // Fonctions pures, testées (formules.test.ts).
 
 import { codePriorite, type PrioriteCode, Etiquette, ParametresPpt, PpptVerifJson } from "./schema";
@@ -47,6 +50,7 @@ export interface PosteCalcul {
   avec_moe: boolean;
   annee_prevue: number | null;
   annee_prochaine_presentation?: number | null;
+  /** Points de pourcentage (0.5 = 0,5 %). */
   gain_energetique_pct: number | null;
   priorite: PrioriteCode;
   statut?: string;
@@ -58,17 +62,17 @@ export interface PosteCalcul {
 export function parametresDepuisJson(p: ParametresPpt | null | undefined, org: ParametresOrg = PARAMETRES_ORG_DEFAUT): ParametresCalcul {
   return {
     anneeBase: p?.annee_base ?? new Date().getFullYear(),
-    inflation: p?.inflation ?? org.inflation_pct / 100,
-    tvaFacades: p?.tva_facades_toitures ?? org.tva_facades_pct / 100,
-    tvaEnergetique: p?.tva_energetique ?? org.tva_energetique_pct / 100,
-    moe: p?.honoraires_moe ?? org.moe_pct / 100,
-    syndic: p?.honoraires_syndic ?? org.syndic_pct / 100,
+    inflation: (p?.inflation_pct ?? org.inflation_pct) / 100,
+    tvaFacades: (p?.tva_facades_toitures_pct ?? org.tva_facades_pct) / 100,
+    tvaEnergetique: (p?.tva_energetique_pct ?? org.tva_energetique_pct) / 100,
+    moe: (p?.honoraires_moe_pct ?? org.moe_pct) / 100,
+    syndic: (p?.honoraires_syndic_pct ?? org.syndic_pct) / 100,
     cepBase: p?.cep_base_kwhep_m2_an ?? null,
   };
 }
 
 export function parametresDepuisOrg(org: ParametresOrg, anneeBase: number, cepBase: number | null = null): ParametresCalcul {
-  return parametresDepuisJson({ annee_base: anneeBase, premiere_annee: anneeBase + 1, horizon: 10, inflation: org.inflation_pct / 100, tva_facades_toitures: org.tva_facades_pct / 100, tva_energetique: org.tva_energetique_pct / 100, honoraires_moe: org.moe_pct / 100, honoraires_syndic: org.syndic_pct / 100, cep_base_kwhep_m2_an: cepBase }, org);
+  return parametresDepuisJson({ annee_base: anneeBase, premiere_annee: anneeBase + 1, horizon: 10, inflation_pct: org.inflation_pct, tva_facades_toitures_pct: org.tva_facades_pct, tva_energetique_pct: org.tva_energetique_pct, honoraires_moe_pct: org.moe_pct, honoraires_syndic_pct: org.syndic_pct, cep_base_kwhep_m2_an: cepBase }, org);
 }
 
 /** Année où le poste est réellement attendu : nouvelle présentation si rejeté / reporté, sinon année prévue. */
@@ -104,26 +108,24 @@ export function honorairesPoste(p: PosteCalcul, params: ParametresCalcul, org: P
   return assiette == null ? null : arrondi(assiette * (org.taux_honoraires_pct / 100));
 }
 
-/** Gain énergétique composé des postes énergétiques réalisés jusqu'à l'année incluse. */
+/** Gain énergétique composé (fraction) des postes énergétiques réalisés jusqu'à l'année incluse. */
 export function gainCumule(postes: PosteCalcul[], annee: number): number {
-  let produit = 1;
-  for (const p of postes) {
-    const a = anneeEffective(p);
-    if (p.priorite !== "energetique" || p.gain_energetique_pct == null || a == null || a > annee) continue;
-    if (p.statut === "abandonne") continue;
-    const g = p.gain_energetique_pct > 1 ? p.gain_energetique_pct / 100 : p.gain_energetique_pct;
-    produit *= 1 - Math.min(0.95, Math.max(0, g));
-  }
-  return 1 - produit;
+  return gainCompose(
+    postes
+      .filter((p) => {
+        const a = anneeEffective(p);
+        return p.priorite === "energetique" && a != null && a <= annee && p.statut !== "abandonne";
+      })
+      .map((p) => p.gain_energetique_pct)
+  );
 }
 
-/** Gain composé d'une liste de gains (fractions ou pourcents). */
-export function gainCompose(gains: (number | null | undefined)[]): number {
+/** Gain composé 1 - Π(1 - g/100) d'une liste de gains en points de pourcentage ; résultat en fraction. */
+export function gainCompose(gainsPct: (number | null | undefined)[]): number {
   let produit = 1;
-  for (const g0 of gains) {
-    if (g0 == null) continue;
-    const g = g0 > 1 ? g0 / 100 : g0;
-    produit *= 1 - Math.min(0.95, Math.max(0, g));
+  for (const g of gainsPct) {
+    if (g == null) continue;
+    produit *= 1 - Math.min(0.95, Math.max(0, g / 100));
   }
   return 1 - produit;
 }
@@ -164,4 +166,13 @@ export function postesDepuisJson(json: PpptVerifJson): PosteCalcul[] {
     gain_energetique_pct: t.gain_energetique_pct,
     priorite: codePriorite(t.priorite),
   }));
+}
+
+/** TTC du plan recalculé depuis le JSON (formule du skill, section 5 de la
+ *  requête 1.2) : total et totaux par millésime, au centime. */
+export function totauxTtcJson(json: PpptVerifJson): { total: number; parAnnee: Record<string, number> } {
+  const m = totauxParAnnee(postesDepuisJson(json), parametresDepuisJson(json.parametres_ppt));
+  const parAnnee: Record<string, number> = {};
+  for (const [a, v] of [...m.entries()].sort((x, y) => x[0] - y[0])) parAnnee[String(a)] = v;
+  return { total: arrondi([...m.values()].reduce((s, v) => s + v, 0)), parAnnee };
 }

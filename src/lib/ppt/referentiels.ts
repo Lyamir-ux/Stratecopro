@@ -23,14 +23,19 @@ export const SEUILS_CEP: { classe: Etiquette; max: number }[] = [
 export const ORDRE_ETIQUETTES: Etiquette[] = ["A", "B", "C", "D", "E", "F", "G"];
 
 /**
- * Fourchettes usuelles de coût HT par famille d'ouvrage, ramenées au logement
- * (le PPPT ne donne presque jamais les surfaces de façade ou de toiture ; le
- * brief parle d'ailleurs d'« €/lot hors bornes de marché »). Bornes larges :
- * on ne signale qu'au-delà d'un facteur 2, on bloque au-delà d'un facteur 4.
- * Les mots-clés sont comparés mot entier, sans accents (« ite » ne matche pas « toiture »).
+ * Fourchettes usuelles de coût HT d'une opération complète par famille
+ * d'ouvrage, ramenées au logement (le PPPT ne donne presque jamais les surfaces
+ * de façade ou de toiture ; le brief parle d'ailleurs d'« €/lot hors bornes de
+ * marché »). Indicatives : on ne signale qu'au-delà d'un facteur 2, jamais en
+ * bloquant. Les mots-clés sont comparés mot entier, sans accents (« ite » ne
+ * matche pas « toiture »). `ouvrages` : champ `ouvrage` des lignes rattachées à
+ * la famille - quand l'ouvrage d'une ligne est connu, seules ses familles sont
+ * candidates (des balcons classés « Façades » ne se comparent pas à une toiture
+ * parce que leur libellé parle d'étanchéité).
  */
 export interface FourchetteCout {
   mots: string[];
+  ouvrages: string[];
   libelle: string;
   unite: "logement" | "appareil";
   min: number;
@@ -38,23 +43,29 @@ export interface FourchetteCout {
 }
 
 export const FOURCHETTES_COUT: FourchetteCout[] = [
-  { mots: ["ite", "isolation thermique par l'exterieur", "isolation exterieure", "isolation des facades"], libelle: "ITE", unite: "logement", min: 8000, max: 25000 },
-  { mots: ["ravalement"], libelle: "Ravalement simple", unite: "logement", min: 1500, max: 10000 },
-  { mots: ["toiture", "couverture", "etancheite", "terrasse"], libelle: "Toiture", unite: "logement", min: 2000, max: 15000 },
-  { mots: ["vmc", "ventilation"], libelle: "VMC hygro B", unite: "logement", min: 800, max: 1500 },
-  { mots: ["menuiserie", "menuiseries", "fenetre", "fenetres", "chassis"], libelle: "Menuiseries", unite: "logement", min: 3000, max: 12000 },
-  { mots: ["ascenseur", "ascenseurs"], libelle: "Ascenseur", unite: "appareil", min: 25000, max: 60000 },
-  { mots: ["colonne", "colonnes", "eaux usees", "eaux vannes", "chute", "chutes"], libelle: "Colonnes EU / EV", unite: "logement", min: 2000, max: 6000 },
-  { mots: ["electricite", "electrique", "tableau"], libelle: "Électricité des communs", unite: "logement", min: 300, max: 900 },
-  { mots: ["chaudiere", "chaufferie", "pac", "pompe a chaleur", "generateur"], libelle: "Générateur de chauffage", unite: "logement", min: 1500, max: 6000 },
-  { mots: ["plancher bas", "plafond de cave", "plafonds de cave"], libelle: "Isolation plancher bas", unite: "logement", min: 500, max: 3000 },
+  { mots: ["ite", "isolation thermique par l'exterieur", "isolation exterieure", "isolation des facades"], ouvrages: ["facade", "facades", "murs"], libelle: "ITE", unite: "logement", min: 8000, max: 25000 },
+  { mots: ["ravalement"], ouvrages: ["facade", "facades"], libelle: "Ravalement simple", unite: "logement", min: 1500, max: 10000 },
+  { mots: ["toiture", "toitures", "couverture", "etancheite", "terrasse", "terrasses"], ouvrages: ["toiture", "toitures", "couverture", "terrasses"], libelle: "Toiture", unite: "logement", min: 2000, max: 15000 },
+  { mots: ["vmc", "ventilation"], ouvrages: ["ventilation", "vmc"], libelle: "VMC hygro B", unite: "logement", min: 800, max: 1500 },
+  { mots: ["menuiserie", "menuiseries", "fenetre", "fenetres", "chassis"], ouvrages: ["menuiserie", "menuiseries"], libelle: "Menuiseries", unite: "logement", min: 3000, max: 12000 },
+  { mots: ["ascenseur", "ascenseurs"], ouvrages: ["ascenseur", "ascenseurs"], libelle: "Ascenseur", unite: "appareil", min: 25000, max: 60000 },
+  { mots: ["colonne", "colonnes", "eaux usees", "eaux vannes", "chute", "chutes"], ouvrages: ["reseaux", "plomberie", "colonnes"], libelle: "Colonnes EU / EV", unite: "logement", min: 2000, max: 6000 },
+  { mots: ["electricite", "electrique", "tableau"], ouvrages: ["electricite"], libelle: "Électricité des communs", unite: "logement", min: 300, max: 900 },
+  { mots: ["chaudiere", "chaufferie", "pac", "pompe a chaleur", "pompes a chaleur", "generateur"], ouvrages: ["chauffage", "chaufferie", "thermique"], libelle: "Générateur de chauffage", unite: "logement", min: 1500, max: 6000 },
+  { mots: ["plancher bas", "planchers bas", "plafond de cave", "plafonds de cave"], ouvrages: ["plancher bas", "planchers bas"], libelle: "Isolation plancher bas", unite: "logement", min: 500, max: 3000 },
 ];
 
-/** Fourchettes de gain énergétique par geste (fraction). */
+/** C04 ne compare pas aux fourchettes d'opération complète les lignes sous ce montant HT (reprises, micro-postes). */
+export const SEUIL_ORDRE_DE_GRANDEUR_HT = 5000;
+
+/** Mots ignorés quand on compare deux libellés (C15, doublon possible). */
+export const MOTS_VIDES = ["des", "les", "une", "avec", "sur", "pour", "par", "aux", "dans", "sans", "entre", "bat", "batiment", "batiments"];
+
+/** Fourchettes de gain énergétique par geste (fraction ; le gain d'une ligne est en points, divisé par 100 pour comparer). */
 export const FOURCHETTES_GAIN: { mots: string[]; libelle: string; min: number; max: number }[] = [
   { mots: ["ite", "isolation thermique par l'exterieur", "isolation exterieure", "iti", "isolation des murs", "isolation des facades"], libelle: "Isolation des murs", min: 0.2, max: 0.3 },
   { mots: ["toiture", "combles", "terrasse"], libelle: "Toiture", min: 0.08, max: 0.15 },
-  { mots: ["plancher bas", "plafond de cave"], libelle: "Plancher bas", min: 0.03, max: 0.07 },
+  { mots: ["plancher bas", "planchers bas", "plafond de cave"], libelle: "Plancher bas", min: 0.03, max: 0.07 },
   { mots: ["menuiserie", "menuiseries", "fenetre", "fenetres"], libelle: "Menuiseries", min: 0.08, max: 0.15 },
   { mots: ["vmc", "ventilation"], libelle: "VMC hygro B", min: 0.03, max: 0.06 },
   { mots: ["chaudiere", "pac", "pompe a chaleur", "generateur", "chaufferie"], libelle: "Générateur performant", min: 0.15, max: 0.3 },
@@ -76,7 +87,7 @@ export const ENCHAINEMENTS: { avant: string[]; apres: string[]; libelle: string 
   { avant: ["isolation", "ite", "iti", "menuiserie", "menuiseries"], apres: ["chaudiere", "pac", "pompe a chaleur", "generateur"], libelle: "Isolation avant le changement de générateur" },
 ];
 
-/** Charge annuelle par logement au-delà de laquelle on signale (C16). */
+/** Charge annuelle TTC par logement au-delà de laquelle on signale (C16). */
 export const CHARGE_ANNUELLE_MAX_PAR_LOGEMENT = 5000;
 
 /** Total du plan par logement sur 10 ans : bornes de vraisemblance (P07). */

@@ -55,7 +55,7 @@ describe("formules du tableau PPT Strat Eco", () => {
     // 2030 : + chaudière 20 % + menuiseries 10 % → 1 - 0,75 × 0,96 × 0,8 × 0,9 = 48,16 %
     expect(gainCumule(postes, 2030)).toBeCloseTo(0.4816, 6);
     expect(gainCumule(postes, 2026)).toBe(0);
-    // les pourcentages (> 1) sont acceptés
+    // les gains sont en points de pourcentage (25 = 25 %)
     expect(gainCompose([25, 4])).toBeCloseTo(0.28, 6);
   });
 

@@ -24,12 +24,12 @@ const poste = (o: Partial<PosteEcheancierPdf> & { id: string; libelle: string })
 });
 
 const postes: PosteEcheancierPdf[] = [
-  poste({ id: "a", libelle: "Façade / Ravalement + ITE", cout_ht_base: 172000, priorite: "energetique", gain_energetique_pct: 0.22, annee_prevue: 2027, position: 1 }),
-  poste({ id: "b", libelle: "Ventilation / VMC hygro B", cout_ht_base: 38000, priorite: "energetique", gain_energetique_pct: 0.06, annee_prevue: 2027, annee_prochaine_presentation: 2028, montant_syndic: 48000, commentaire_syndic: "Devis Aéraulix reçu le 12/09, périmètre élargi aux caves", position: 2 }),
+  poste({ id: "a", libelle: "Façade / Ravalement + ITE", cout_ht_base: 172000, priorite: "energetique", gain_energetique_pct: 22, annee_prevue: 2027, position: 1 }),
+  poste({ id: "b", libelle: "Ventilation / VMC hygro B", cout_ht_base: 38000, priorite: "energetique", gain_energetique_pct: 6, annee_prevue: 2027, annee_prochaine_presentation: 2028, montant_syndic: 48000, commentaire_syndic: "Devis Aéraulix reçu le 12/09, périmètre élargi aux caves", position: 2 }),
   poste({ id: "c", libelle: "Réseaux / Colonnes EU", cout_ht_base: 26000, statut: "vote", montant_vote: 31200, position: 3 }),
   poste({ id: "d", libelle: "Toiture / Réfection complète de la couverture et des ouvrages de zinguerie", cout_ht_base: 95000, annee_prevue: 2028, annee_prochaine_presentation: 2029, statut: "reporte", position: 4 }),
-  poste({ id: "e", libelle: "Chauffage / Chaudière THPE", cout_ht_base: 61000, priorite: "energetique", gain_energetique_pct: 0.12, annee_prevue: 2029, position: 5 }),
-  poste({ id: "f", libelle: "Menuiseries / Remplacement", cout_ht_base: 88000, priorite: "energetique", gain_energetique_pct: 0.09, annee_prevue: 2030, position: 6 }),
+  poste({ id: "e", libelle: "Chauffage / Chaudière THPE", cout_ht_base: 61000, priorite: "energetique", gain_energetique_pct: 12, annee_prevue: 2029, position: 5 }),
+  poste({ id: "f", libelle: "Menuiseries / Remplacement", cout_ht_base: 88000, priorite: "energetique", gain_energetique_pct: 9, annee_prevue: 2030, position: 6 }),
   poste({ id: "g", libelle: "Ascenseur / Mise aux normes", cout_ht_base: null, annee_prevue: 2032, origine: "syndic", montant_syndic: 35000, commentaire_syndic: "Rapport de contrôle quinquennal", position: 7 }),
   poste({ id: "h", libelle: "Parties communes / Peintures", cout_ht_base: 12000, annee_prevue: null, position: 8 }),
   poste({ id: "i", libelle: "Étanchéité terrasse", cout_ht_base: 40000, annee_prevue: 2039, position: 9 }),

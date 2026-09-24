@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EXEMPLE } from "./exemple";
 import { cloner } from "../import";
-import { accepterEnBloc, aReprendre, bilanPropositions, commentaireRequis, decider, libelleChoix, lignesAReprendre, propositionsEnAttente, propositionsSansCommentaire, texteDecisions } from "../propositions";
+import { accepterEnBloc, aReprendre, bilanPropositions, codesRetenus, commentaireRequis, decider, libelleChoix, lignesAReprendre, propositionsEnAttente, propositionsSansCommentaire, statutGlobal, texteDecisions } from "../propositions";
 
 describe("propositions du skill (pppt-verif/1.1)", () => {
   it("le jeu d'essai a trois propositions à valider, aucune à reprendre", () => {
@@ -63,5 +63,22 @@ describe("propositions du skill (pppt-verif/1.1)", () => {
     const j = { ...EXEMPLE, propositions: undefined as never };
     expect(propositionsEnAttente(j)).toEqual([]);
     expect(texteDecisions(j)).toBe("");
+  });
+
+  it("1.2 : la date de validation suit la décision, le statut global passe à VALIDE quand tout est tranché", () => {
+    const lundi = new Date("2026-09-21T09:00:00");
+    const mardi = new Date("2026-09-22T09:00:00");
+    let j = decider(cloner(EXEMPLE), "P01", "VALIDEE", undefined, lundi);
+    expect(j.propositions[0].date_validation).toBe("2026-09-21");
+    j = decider(j, "P01", "VALIDEE", "ok", mardi); // simple commentaire : la date reste
+    expect(j.propositions[0].date_validation).toBe("2026-09-21");
+    j = decider(j, "P01", "MODIFIEE", "MOE 5 %", mardi);
+    expect(j.propositions[0].date_validation).toBe("2026-09-22");
+    expect(decider(j, "P01", "A_VALIDER", null, mardi).propositions[0].date_validation).toBeNull();
+    expect(statutGlobal(j)).toBe("A_VALIDER");
+    const tout = accepterEnBloc(j, mardi);
+    expect(statutGlobal(tout)).toBe("VALIDE");
+    expect(tout.propositions.map((p) => p.date_validation)).toEqual(["2026-09-22", "2026-09-22", "2026-09-22"]);
+    expect(codesRetenus(tout)).toEqual(["P01", "P02"]); // P03 (alternative) non retenue
   });
 });

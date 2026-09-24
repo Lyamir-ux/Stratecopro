@@ -54,7 +54,7 @@ import { CorrigerDocument, RenommerFichiers, type DocumentACorriger } from "./Co
 import { SelectGestionnaire } from "./ChoixGestionnaire";
 import { SupprimerDocument, peutSupprimer, peutSupprimerJson, type DocumentASupprimer } from "./SupprimerDocument";
 import { messageTransfert } from "@/lib/ppt/gestionnaires";
-import { PrioriteBadge, RenoBadge, SeveriteBadge, StatutPosteBadge, StatutRapportBadge, VerdictBadge, anneeCourante, fmtDateCourte, fmtEur, fmtPct, issueLabel, posteLite, type PrioriteCode } from "./commun";
+import { PrioriteBadge, RenoBadge, SeveriteBadge, StatutPosteBadge, StatutRapportBadge, VerdictBadge, anneeCourante, fmtDateCourte, fmtEur, fmtPct, fmtPoints, issueLabel, posteLite, type PrioriteCode } from "./commun";
 import { messageErreur } from "@/lib/erreurs";
 
 const TABS = [
@@ -253,7 +253,7 @@ function EcheancierTab({ c, postes }: { c: PptCoproAvecStats; postes: PptPoste[]
                         fmtEur(montantTtcPoste(posteLite(p), params))
                       )}
                     </td>
-                    <td className="num">{p.gain_energetique_pct != null ? fmtPct(p.gain_energetique_pct) : "-"}</td>
+                    <td className="num">{fmtPoints(p.gain_energetique_pct)}</td>
                     <td><StatutPosteBadge statut={p.statut} /></td>
                   </tr>
                 ))}

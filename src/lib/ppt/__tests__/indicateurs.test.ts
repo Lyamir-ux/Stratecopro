@@ -43,7 +43,7 @@ const poste = (p: Partial<PosteLite> & Pick<PosteLite, "id" | "ppt_copro_id" | "
 });
 
 const postes: PosteLite[] = [
-  poste({ id: "p1", ppt_copro_id: "c1", libelle: "Ravalement + ITE", priorite: "energetique", tva_pct: 5.5, avec_moe: false, cout_ht_base: 186000, gain_energetique_pct: 0.25 }),
+  poste({ id: "p1", ppt_copro_id: "c1", libelle: "Ravalement + ITE", priorite: "energetique", tva_pct: 5.5, avec_moe: false, cout_ht_base: 186000, gain_energetique_pct: 25 }),
   poste({ id: "p2", ppt_copro_id: "c1", libelle: "Toiture", annee_prevue: 2026, statut: "rejete", annee_prochaine_presentation: 2027, cout_ht_base: 48000 }),
   poste({ id: "p3", ppt_copro_id: "c1", libelle: "Colonnes EU", statut: "vote", montant_vote: 40000, cout_ht_base: 31000 }),
   poste({ id: "p4", ppt_copro_id: "c2", libelle: "Chaufferie", priorite: "energetique", tva_pct: 5.5, avec_moe: false, annee_prevue: 2029, cout_ht_base: 120000 }),

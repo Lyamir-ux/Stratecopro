@@ -172,4 +172,50 @@ describe("contrôles déterministes de la plateforme", () => {
     expect(n.MINEUR).toBe(1);
     expect(n.MAJEUR).toBe(0);
   });
+
+  it("C15 : doublon = même ouvrage, bâtiment et année ET libellés proches", () => {
+    const j = cloner(EXEMPLE);
+    j.travaux_source.push({ ...j.travaux_source[1], id: "T09", libelle_source: "Réfection complète de la couverture" });
+    j.travaux_normalises.push({ ...j.travaux_normalises[1], id: "T09", libelle: "Toiture / Réfection complète de la couverture" });
+    j.travaux_source.push({ ...j.travaux_source[1], id: "T10", libelle_source: "Démoussage" });
+    j.travaux_normalises.push({ ...j.travaux_normalises[1], id: "T10", libelle: "Toiture / Démoussage des tuiles" });
+    const c15 = controlesPlateforme(j, {}, AUJOURDHUI).filter((c) => c.code === "C15" && c.libelle === "Doublon possible");
+    expect(c15).toHaveLength(1);
+    expect(c15[0].constat).toContain("Réfection complète");
+    expect(c15[0].constat).not.toContain("Démoussage");
+  });
+
+  it("C04 : pas de comparaison sous 5 000 € HT ni sur un regroupement ; l'ouvrage choisit la famille", () => {
+    const j = cloner(EXEMPLE);
+    j.travaux_source.push({ ...j.travaux_source[6], id: "T10", libelle_source: "Reprise main courante ascenseur", ouvrage: "Ascenseur", cout_source_eur: 900 });
+    j.travaux_normalises.push({ ...j.travaux_normalises[6], id: "T10", libelle: "Reprise main courante ascenseur", ouvrage: "Ascenseur", priorite: "Préservation", cout_ht_base_eur: 900 });
+    // balcons classés Façades : l'étanchéité ne les rapproche pas d'une toiture
+    j.travaux_source.push({ ...j.travaux_source[0], id: "T11", libelle_source: "Étanchéité des balcons", ouvrage: "Façades", cout_source_eur: 300000 });
+    j.travaux_normalises.push({ ...j.travaux_normalises[1], id: "T11", libelle: "Reprise de l'étanchéité des balcons", ouvrage: "Façades", cout_ht_base_eur: 300000 });
+    const c04 = controlesPlateforme(j, {}, AUJOURDHUI).filter((c) => c.code === "C04");
+    expect(c04.some((c) => c.poste_code === "T10")).toBe(false);
+    expect(c04.some((c) => c.poste_code === "T11")).toBe(false);
+  });
+
+  it("C01 / C05 : un poste exclu ne compte pas, les périodes se joignent sur periode_source", () => {
+    const j = cloner(EXEMPLE);
+    j.travaux_source[1].retenu_dans_ppt = false; // couverture 48 000 € exclue
+    j.echeancier_source.total_annonce_eur = 375000; // 423 000 - 48 000
+    j.echeancier_source.totaux_par_annee_annonces = { "2027": 217000, "0 à 1 an": 96000 };
+    j.travaux_source[5].periode_source = "0-1 an"; // menuiseries 96 000 €
+    const codes = controlesPlateforme(j, {}, AUJOURDHUI).map((c) => c.code);
+    expect(codes).not.toContain("C01");
+    expect(codes).not.toContain("C05");
+  });
+
+  it("une proposition acceptée sur la ligne et le contrôle lié (controle_lie) transforme l'alerte en info", () => {
+    const j = cloner(EXEMPLE);
+    j.travaux_normalises[5].tva_pct = 10; // menuiseries à 10 % → C03
+    j.propositions.push({ code: "P09", theme: "TVA menuiseries", decision: "Garder 10 %", valeur_source: null, valeur_proposee: "TVA 10 %", impact: "", alternative: null, appliquee_dans_ppt: true, lignes_concernees: ["T06"], controle_lie: "C03", statut_validation: "VALIDEE", commentaire_validateur: null, date_validation: "2026-09-20" });
+    const c03 = controlesPlateforme(j, {}, AUJOURDHUI).find((c) => c.code === "C03" && c.poste_code === "T06");
+    expect(c03).toMatchObject({ severite: "INFO", statut: "CONFORME" });
+    expect(c03?.constat).toContain("Choix validé par l'AMO le 20/09/2026 (P09");
+    j.propositions[3].statut_validation = "A_VALIDER";
+    expect(controlesPlateforme(j, {}, AUJOURDHUI).find((c) => c.code === "C03" && c.poste_code === "T06")?.severite).toBe("MAJEUR");
+  });
 });

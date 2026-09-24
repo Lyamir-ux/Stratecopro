@@ -1,7 +1,7 @@
 // Revue d'un PPPT (dirigeant) - /ppt/rapports/:id
 // 1. Télécharger le PDF, l'analyser en local avec le skill pppt-verif, importer
-//    le JSON pppt-verif/1.1 produit (contrat strict : refus explicite ; un 1.0
-//    est migré, sans propositions).
+//    le JSON produit (pppt-verif 1.1 ou 1.2, contrat strict : refus explicite de
+//    toute autre version ; un 1.1 est migré avec les valeurs par défaut de la 1.2).
 // 2. Les propositions du skill (décisions prises par défaut) sont validées en
 //    bloc : accepter / refuser / modifier, commentaire quand on s'écarte du
 //    tableau ; les lignes à reprendre à la main sont marquées dans les postes.
@@ -13,7 +13,9 @@
 //    à l'enregistrement.
 // 4. Valider (bloquants levés avec motif) ou rejeter. Le syndic ne voit rien
 //    avant la validation. Les décisions se copient au format « P04 oui, P11 non »
-//    pour que le skill régénère le classeur Excel.
+//    pour que le skill régénère le classeur Excel, ou s'exportent en JSON 1.2
+//    (révision + 1 dès qu'une décision ou une correction est prise ; remarques
+//    de la plateforme dans un fichier séparé).
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
@@ -34,17 +36,28 @@ import {
   useValiderRapport,
 } from "@/api/ppt";
 import type { Controle, PpptVerifJson, Proposition, StatutValidationProposition, TravailNormalise } from "@/lib/ppt/schema";
-import { codePriorite } from "@/lib/ppt/schema";
+import { codePriorite, coutHtSource, estRetenu } from "@/lib/ppt/schema";
 import { bloquantsRestants, compterSeverites, controlesPlateforme } from "@/lib/ppt/controles";
 import { cleRemarque, cloner, diffJson, migrerJson, validerJson } from "@/lib/ppt/import";
-import { STATUT_VALIDATION_LABEL, accepterEnBloc, aReprendre, bilanPropositions, commentaireRequis, decider, libelleChoix, lignesAReprendre, propositionsEnAttente, propositionsSansCommentaire, texteDecisions } from "@/lib/ppt/propositions";
+import { exporterJson, exporterRemarques, nomFichierExport, revisionCourante } from "@/lib/ppt/export";
+import { STATUT_VALIDATION_LABEL, accepterEnBloc, aReprendre, bilanPropositions, commentaireRequis, decider, decisionsDejaAppliquees, libelleChoix, lignesAReprendre, propositionsEnAttente, propositionsSansCommentaire, statutGlobal, texteDecisions } from "@/lib/ppt/propositions";
 import { montantTtcPoste, parametresDepuisJson, postesDepuisJson, totauxParAnnee } from "@/lib/ppt/formules";
 import { STATUT_CONTROLE_LABEL, TYPE_RAPPORT_LABEL, VERDICT_LABEL } from "@/lib/ppt/referentiels";
-import { SeveriteBadge, StatutRapportBadge, VerdictBadge, fmtDateCourte, fmtEur, fmtPct } from "@/pages/SyndicPpt/commun";
+import { SeveriteBadge, StatutRapportBadge, VerdictBadge, fmtDateCourte, fmtEur, fmtPoints } from "@/pages/SyndicPpt/commun";
 import { SupprimerDocument } from "@/pages/SyndicPpt/SupprimerDocument";
 import { messageErreur } from "@/lib/erreurs";
 
 const PRIORITES: TravailNormalise["priorite"][] = ["Préservation", "Énergétique", "Amélioration"];
+
+/** Téléchargement d'un objet en fichier JSON. */
+function telechargerFichier(nom: string, contenu: unknown) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(contenu, null, 2)], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nom;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function Chrono({ depuis }: { depuis: number }) {
   const [, tick] = useState(0);
@@ -98,9 +111,9 @@ const COULEUR_STATUT: Record<StatutValidationProposition, string> = {
 };
 
 /** Une proposition du skill : la décision, son contexte, et les trois choix du dirigeant. */
-function LigneProposition({ p, editable, onDecider }: { p: Proposition; editable: boolean; onDecider?: (statut: StatutValidationProposition, commentaire?: string) => void }) {
+function LigneProposition({ p, editable, dejaAppliquee = false, onDecider }: { p: Proposition; editable: boolean; dejaAppliquee?: boolean; onDecider?: (statut: StatutValidationProposition, commentaire?: string) => void }) {
   const [ouvert, setOuvert] = useState(p.statut_validation === "A_VALIDER");
-  const reprendre = aReprendre(p);
+  const reprendre = !dejaAppliquee && aReprendre(p);
   const manqueCommentaire = commentaireRequis(p) && !(p.commentaire_validateur ?? "").trim();
   const choix: StatutValidationProposition[] = ["VALIDEE", "REFUSEE", "MODIFIEE"];
   const aide = (st: StatutValidationProposition) => {
@@ -132,6 +145,7 @@ function LigneProposition({ p, editable, onDecider }: { p: Proposition; editable
           <span style={{ fontSize: 12, fontWeight: 600, color: COULEUR_STATUT[p.statut_validation] }}>{STATUT_VALIDATION_LABEL[p.statut_validation]}</span>
         )}
         {reprendre && <span className="se-small" title="La décision prise s'écarte du tableau du skill : reprenez les lignes concernées dans les postes" style={{ color: "var(--color-warning-700)" }}>↺ lignes à reprendre</span>}
+        {dejaAppliquee && p.statut_validation !== "VALIDEE" && <span className="se-small" title={p.note_application ?? "Décision répercutée par le skill dans la révision importée"} style={{ color: "var(--fg-muted)" }}>✓ appliquée par le skill</span>}
       </div>
       {(ouvert || manqueCommentaire || reprendre) && (
         <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.5 }}>
@@ -139,6 +153,7 @@ function LigneProposition({ p, editable, onDecider }: { p: Proposition; editable
           {(p.valeur_source || p.valeur_proposee) && <p className="se-small" style={{ margin: "3px 0 0", color: "var(--fg-muted)" }}>{p.valeur_source ? `source ${p.valeur_source} → ` : ""}proposé {p.valeur_proposee}</p>}
           {p.impact && <p className="se-small" style={{ margin: "3px 0 0", color: "var(--fg-muted)" }}>impact : {p.impact}</p>}
           {p.alternative && <p className="se-small" style={{ margin: "3px 0 0", color: "var(--fg-muted)" }}>alternative : {p.alternative}</p>}
+          {p.note_application && <p className="se-small" style={{ margin: "3px 0 0", color: "var(--fg-muted)" }}>application : {p.note_application}{p.date_validation ? ` (décision du ${fmtDateCourte(p.date_validation)})` : ""}</p>}
           {editable && onDecider && p.statut_validation !== "A_VALIDER" ? (
             <input
               className="edit-inp sm"
@@ -214,6 +229,9 @@ export default function Revue() {
     return controlesPlateforme(json, fiche).map((c) => ({ ...c, visible_syndic: precedentes.get(cleRemarque(c))?.visible_syndic ?? true }));
   }, [json, fiche]);
   const jsonComplet = useMemo(() => (json ? { ...json, remarques_plateforme: remarquesPlateforme } : null), [json, remarquesPlateforme]);
+  // JSON tel qu'importé (immuable) : référence de la révision exportée
+  const importe = useMemo(() => (analyse?.json_verif ? migrerJson(analyse.json_verif as unknown as PpptVerifJson) : null), [analyse?.json_verif]);
+  const revision = useMemo(() => (jsonComplet ? revisionCourante(jsonComplet, importe) : null), [jsonComplet, importe]);
   const bloquants = jsonComplet ? bloquantsRestants(jsonComplet) : [];
   const bloquantsRestant = jsonComplet ? bloquantsRestants(jsonComplet, leves) : [];
   // une levée porte sur une remarque précise : un même code (C04, P20) peut viser plusieurs postes
@@ -225,11 +243,17 @@ export default function Revue() {
   const revuePossible = dirigeant && rapport && ["depose", "en_analyse", "a_relire", "echec", "rejete"].includes(rapport.statut);
   const revueActive = revuePossible && rapport?.statut !== "valide";
   // propositions du skill : à trancher avant de matérialiser les postes
-  const bilan = json ? bilanPropositions(json) : null;
+  // 1.2 : décisions déjà répercutées par le skill dans la révision importée, inchangées depuis
+  const dejaAppliquees = useMemo(() => (json ? decisionsDejaAppliquees(json, importe) : new Set<string>()), [json, importe]);
+  const bilan = json ? bilanPropositions(json, dejaAppliquees) : null;
   const enAttente = json ? propositionsEnAttente(json) : [];
   const sansCommentaire = json ? propositionsSansCommentaire(json) : [];
-  const lignesReprise = useMemo(() => (json ? lignesAReprendre(json) : new Map<string, string[]>()), [json]);
+  const lignesReprise = useMemo(() => (json ? lignesAReprendre(json, dejaAppliquees) : new Map<string, string[]>()), [json, dejaAppliquees]);
   const [propositionsRepliees, setPropositionsRepliees] = useState(false);
+  const [revisionOuverte, setRevisionOuverte] = useState(false);
+  const statutDossier = json ? statutGlobal(json) : null;
+  const ttcRecalcule = totaux ? [...totaux.values()].reduce((s, v) => s + v, 0) : null;
+  const sourcesExclues = json ? json.travaux_source.filter((s) => !estRetenu(s)) : [];
 
   const importerFichier = async (f: File) => {
     setMessage(null);
@@ -249,8 +273,13 @@ export default function Revue() {
     }
     try {
       await importer.mutateAsync({ rapportId: id!, json: r.json });
-      const nbProp = r.json.propositions.length;
-      setMessage(`Analyse importée : ${r.json.travaux_normalises.length} postes, verdict ${VERDICT_LABEL[r.json.synthese.verdict] ?? r.json.synthese.verdict}${nbProp ? `, ${nbProp} proposition${nbProp > 1 ? "s" : ""} du skill à valider avant la création du tableau` : ""}.`);
+      const nbAttente = propositionsEnAttente(r.json).length;
+      const exclus = r.json.travaux_source.filter((s) => !estRetenu(s)).length;
+      setMessage(
+        `Analyse ${r.json.schema_version.replace("pppt-verif/", "")}${r.json.revision ? ` (révision ${r.json.revision.numero})` : ""} importée : ${r.json.travaux_normalises.length} postes, ${r.json.travaux_source.length} postes source${exclus ? ` dont ${exclus} exclu${exclus > 1 ? "s" : ""}` : ""}, verdict ${VERDICT_LABEL[r.json.synthese.verdict] ?? r.json.synthese.verdict}` +
+          (r.json.propositions.length ? (nbAttente ? `, ${nbAttente} proposition${nbAttente > 1 ? "s" : ""} du skill à valider avant la création du tableau` : `, ${r.json.propositions.length} propositions déjà tranchées`) : "") +
+          "."
+      );
     } catch (e) {
       setErreurs([messageErreur(e, "Import refusé par la base.")]);
     }
@@ -272,8 +301,8 @@ export default function Revue() {
       const idN = `A${String(n).padStart(2, "0")}`;
       return {
         ...j,
-        travaux_source: [...j.travaux_source, { id: idN, libelle_source: "(ajouté en revue)", batiment: null, ouvrage: null, priorite_source: null, annee_source: null, periode_source: null, cout_source_eur: null, cout_source_base: null, tva_source_pct: null, gain_energetique_source_pct: null, justification: null, page: null }],
-        travaux_normalises: [...j.travaux_normalises, { id: idN, libelle: "Nouveau poste", priorite: "Préservation", critere: null, batiment: null, ouvrage: "", cout_ht_base_eur: null, cout_ht_origine: "estime_strateco", tva_pct: 10, regle_tva: null, avec_moe: true, annee_prevue: j.parametres_ppt.annee_base + 1, annee_origine: "a_confirmer", gain_energetique_pct: null, commentaire: "ajouté en revue", controles_lies: [] }],
+        travaux_source: [...j.travaux_source, { id: idN, libelle_source: "(ajouté en revue)", batiment: null, ouvrage: null, priorite_source: null, annee_source: null, periode_source: null, cout_source_eur: null, cout_source_base: null, tva_source_pct: null, gain_energetique_source_pct: null, justification: null, page: null, retenu_dans_ppt: true, motif_exclusion: null }],
+        travaux_normalises: [...j.travaux_normalises, { id: idN, libelle: "Nouveau poste", priorite: "Préservation", critere: null, batiment: null, ouvrage: "", cout_ht_base_eur: null, cout_ht_origine: "estime_strateco", tva_pct: 10, regle_tva: null, avec_moe: true, annee_prevue: j.parametres_ppt.annee_base + 1, annee_origine: "a_confirmer", gain_energetique_pct: null, commentaire: "ajouté en revue", controles_lies: [], cout_ht_source_eur: null, reevaluation_prix_coef: 1, regroupe_ids: null }],
       };
     });
   const retirerPoste = (idPoste: string) => setJson((j) => (j ? { ...j, travaux_normalises: j.travaux_normalises.filter((t) => t.id !== idPoste) } : j));
@@ -295,21 +324,25 @@ export default function Revue() {
       setMessage(`Décisions : ${texte}`);
     }
   };
+  // JSON renvoyé au skill : pppt-verif/1.2, sans remarques plateforme (fichier à part)
   const telechargerJson = () => {
     if (!jsonComplet) return;
-    const nom = `PPPT_VERIF_${(rapport?.copro?.nom ?? "copro").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "")}_valide.json`;
-    const url = URL.createObjectURL(new Blob([JSON.stringify(jsonComplet, null, 2)], { type: "application/json" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = nom;
-    a.click();
-    URL.revokeObjectURL(url);
+    const sortie = exporterJson(jsonComplet, importe);
+    telechargerFichier(nomFichierExport(rapport?.copro?.nom ?? "copro", sortie), sortie);
   };
+  const telechargerRemarques = () => {
+    if (!jsonComplet) return;
+    const sortie = exporterJson(jsonComplet, importe);
+    telechargerFichier(nomFichierExport(rapport?.copro?.nom ?? "copro", sortie, "_remarques"), exporterRemarques(sortie, remarquesPlateforme));
+  };
+  // le JSON enregistré porte la révision courante (import + 1 dès qu'une décision ou une correction est prise)
+  const aEnregistrer = () => (jsonComplet ? { ...jsonComplet, revision: revisionCourante(jsonComplet, importe) } : null);
 
   const sauvegarder = async (motif: string | null = null) => {
-    if (!jsonComplet || !base) return;
-    const diff = diffJson(base, jsonComplet, motif);
-    await enregistrer.mutateAsync({ rapportId: id!, json: jsonComplet, corrections: diff });
+    const j = aEnregistrer();
+    if (!j || !base) return;
+    const diff = diffJson(base, j, motif);
+    await enregistrer.mutateAsync({ rapportId: id!, json: j, corrections: diff });
     setMessage(`Revue enregistrée${diff.length ? ` - ${diff.length} correction${diff.length > 1 ? "s" : ""} journalisée${diff.length > 1 ? "s" : ""}` : ""}.`);
   };
 
@@ -355,9 +388,10 @@ export default function Revue() {
       setErreurDecision("Indiquez le motif de levée des bloquants : il est journalisé et le syndic voit la remarque comme traitée.");
       return;
     }
-    const diff = base ? diffJson(base, jsonComplet) : [];
+    const j = aEnregistrer() ?? jsonComplet;
+    const diff = base ? diffJson(base, j) : [];
     if (leves.length) diff.push({ chemin_json: "levee_bloquants", poste_code: null, valeur_avant: leves, valeur_apres: null, motif: motifLevee.trim() });
-    await enregistrer.mutateAsync({ rapportId: id!, json: jsonComplet, corrections: diff });
+    await enregistrer.mutateAsync({ rapportId: id!, json: j, corrections: diff });
     await valider.mutateAsync({ rapportId: id!, levees });
     navigate("/ppt");
   };
@@ -416,7 +450,7 @@ export default function Revue() {
       )}
       {erreurs.length > 0 && (
         <div className="panel" style={{ padding: "12px 16px", marginBottom: 16, background: "var(--color-error-50)", color: "var(--color-error-700)" }}>
-          <b>Import refusé</b> - le JSON ne respecte pas le contrat pppt-verif/1.1 :
+          <b>Import refusé</b> - le JSON ne respecte pas le contrat pppt-verif (versions 1.1 et 1.2) :
           <ul style={{ margin: "6px 0 0 18px", padding: 0, fontSize: 13 }}>{erreurs.map((e, i) => <li key={i}>{e}</li>)}</ul>
         </div>
       )}
@@ -467,7 +501,40 @@ export default function Revue() {
             {severites && <span>🔴 {severites.BLOQUANT} · 🟡 {severites.MAJEUR} · {severites.MINEUR} mineurs · {severites.INFO} infos</span>}
             <span style={{ color: "var(--fg-muted)" }}>{json.travaux_normalises.length} postes · année de base {json.parametres_ppt.annee_base}</span>
             {(traitements ?? []).length > 0 && <span style={{ color: "var(--fg-muted)" }}>importé le {fmtDateCourte(traitements![0].demarre_le)} ({traitements![0].mode === "api" ? `API ${traitements![0].modele ?? ""}, ${traitements![0].cout_usd ?? "?"} $` : "analyse locale"})</span>}
+            <span style={{ flex: 1 }}></span>
+            <button className="se-btn se-btn-ghost btn-sm" title="JSON pppt-verif/1.2 à renvoyer au skill : décisions, corrections et révision courante, sans les remarques de la plateforme" onClick={telechargerJson}>
+              <Icon name="download" size={14} />
+              JSON 1.2
+            </button>
+            <button className="se-btn se-btn-ghost btn-sm" title="Remarques recalculées par la plateforme, dans un fichier séparé du JSON du skill" onClick={telechargerRemarques}>
+              <Icon name="download" size={14} />
+              Remarques
+            </button>
           </div>
+
+          {/* Révision du dossier (1.2) : celle du fichier importé, ou import + 1 dès qu'une décision ou une correction est prise */}
+          {revision && (
+            <div className="panel" style={{ padding: "10px 18px", marginBottom: 16, fontSize: 13 }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", cursor: revision.changements.length ? "pointer" : undefined }} onClick={() => setRevisionOuverte((v) => !v)}>
+                <b>Révision {revision.numero}</b>
+                <span style={{ color: "var(--fg-muted)" }}>du {fmtDateCourte(revision.date)}{importe?.revision && revision.numero !== importe.revision.numero ? ` · en cours sur la plateforme (révision ${importe.revision.numero} importée)` : ""} · schéma {json.schema_version.replace("pppt-verif/", "")}</span>
+                <span style={{ fontWeight: 600, color: statutDossier === "VALIDE" ? "var(--color-primary-700)" : "var(--color-warning-700)" }}>{statutDossier === "VALIDE" ? "Dossier validé" : "Dossier à valider"}</span>
+                {revision.propositions_appliquees.length > 0 && <span style={{ color: "var(--fg-muted)" }}>{revision.propositions_appliquees.length} proposition{revision.propositions_appliquees.length > 1 ? "s" : ""} appliquée{revision.propositions_appliquees.length > 1 ? "s" : ""}</span>}
+                {ttcRecalcule != null && revision.total_ttc_estime_eur != null && (
+                  <span title="TTC recalculé par la plateforme avec la formule du skill, comparé au total de la révision" style={{ color: Math.abs(ttcRecalcule - revision.total_ttc_estime_eur) > 1 ? "var(--color-warning-700)" : "var(--fg-muted)" }}>
+                    TTC {fmtEur(ttcRecalcule)}{Math.abs(ttcRecalcule - revision.total_ttc_estime_eur) > 1 ? ` ≠ ${fmtEur(revision.total_ttc_estime_eur)} de la révision` : " = révision"}
+                  </span>
+                )}
+                {revision.changements.length > 0 && <span style={{ color: "var(--fg-muted)" }}>{revision.changements.length} changement{revision.changements.length > 1 ? "s" : ""} <Icon name={revisionOuverte ? "chevronUp" : "chevronDown"} size={12} /></span>}
+              </div>
+              {revisionOuverte && revision.changements.length > 0 && (
+                <ul style={{ margin: "6px 0 0 18px", padding: 0, lineHeight: 1.5 }}>
+                  {revision.base && <li style={{ color: "var(--fg-muted)" }}>base : {revision.base}</li>}
+                  {revision.changements.map((c, i) => <li key={i}>{c}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
 
           {/* Propositions du skill : à valider en bloc avant la création du tableau */}
           {bilan && bilan.total > 0 && (
@@ -489,10 +556,6 @@ export default function Revue() {
                   <Icon name="copy" size={14} />
                   Copier les décisions
                 </button>
-                <button className="se-btn se-btn-ghost btn-sm" title="Télécharger le JSON de travail avec les statuts de validation" onClick={telechargerJson}>
-                  <Icon name="download" size={14} />
-                  JSON
-                </button>
                 <button className="icon-btn" title={propositionsRepliees ? "Afficher" : "Replier"} onClick={() => setPropositionsRepliees((v) => !v)}>
                   <Icon name={propositionsRepliees ? "chevronDown" : "chevronUp"} size={14} />
                 </button>
@@ -503,7 +566,7 @@ export default function Revue() {
                     Le skill a décidé, vous validez en bloc : une décision « appliquée au tableau » est déjà dans les postes ci-dessous ; une « alternative » ne l'est pas. Refuser une décision appliquée, retenir une alternative ou modifier vous oblige à reprendre les lignes marquées ↺ dans les postes. Chaque décision est journalisée à l'enregistrement.
                   </p>
                   {json.propositions.map((p) => (
-                    <LigneProposition key={p.code} p={p} editable={!!revueActive} onDecider={revueActive ? (st, com) => deciderProposition(p.code, st, com) : undefined} />
+                    <LigneProposition key={p.code} p={p} editable={!!revueActive} dejaAppliquee={dejaAppliquees.has(p.code)} onDecider={revueActive ? (st, com) => deciderProposition(p.code, st, com) : undefined} />
                   ))}
                 </div>
               )}
@@ -578,19 +641,24 @@ export default function Revue() {
                     <tbody>
                       {json.travaux_normalises.map((t) => {
                         const src = json.travaux_source.find((s) => s.id === t.id);
+                        // micro-postes regroupés (1.2) : les postes source fusionnés dans la ligne
+                        const regroupes = (t.regroupe_ids ?? []).map((r) => json.travaux_source.find((s) => s.id === r)).filter((s): s is NonNullable<typeof s> => !!s);
+                        const coef = t.reevaluation_prix_coef ?? 1;
+                        const htSource = coutHtSource(t);
                         const ttc = params ? montantTtcPoste({ cout_ht_base: t.cout_ht_base_eur, tva_pct: t.tva_pct, avec_moe: t.avec_moe, annee_prevue: t.annee_prevue, gain_energetique_pct: t.gain_energetique_pct, priorite: codePriorite(t.priorite) }, params) : null;
                         const lie = [...json.controles, ...remarquesPlateforme].some((c) => (c.poste_code === t.id || t.controles_lies.includes(c.code)) && (c.statut === "NON_CONFORME" || c.statut === "PARTIEL"));
                         const reprise = lignesReprise.get(t.id);
                         return (
                           <tr key={t.id} style={{ cursor: "default", background: lie || reprise ? "var(--color-warning-50, transparent)" : undefined }}>
-                            <td style={{ color: "var(--fg-muted)", whiteSpace: "nowrap" }} title={src ? `${src.libelle_source}${src.page ? ` (p. ${src.page})` : ""}` : ""}>{t.id}{lie && <span title="contrôle non conforme lié"> ⚠</span>}{reprise && <span title={`à reprendre suite à votre décision sur ${reprise.join(", ")}`} style={{ color: "var(--color-warning-700)" }}> ↺ {reprise.join(", ")}</span>}</td>
+                            <td style={{ color: "var(--fg-muted)", whiteSpace: "nowrap" }} title={src ? `${src.libelle_source}${src.page ? ` (p. ${src.page})` : ""}` : regroupes.map((s) => `${s.id} : ${s.libelle_source} (${fmtEur(s.cout_source_eur)})`).join("\n")}>{t.id}{lie && <span title="contrôle non conforme lié"> ⚠</span>}{reprise && <span title={`à reprendre suite à votre décision sur ${reprise.join(", ")}`} style={{ color: "var(--color-warning-700)" }}> ↺ {reprise.join(", ")}</span>}</td>
                             <td style={{ minWidth: 200 }}>
                               {revueActive ? <input className="edit-inp sm" style={{ maxWidth: "none", width: "100%" }} value={t.libelle} onChange={(e) => majPoste(t.id, { libelle: e.target.value })} /> : <b>{t.libelle}</b>}
                               {src && src.libelle_source !== t.libelle && <span style={{ display: "block", fontSize: 11, color: "var(--fg-muted)" }}>{src.libelle_source}{src.page ? ` · p. ${src.page}` : ""}</span>}
+                              {regroupes.length > 0 && <span style={{ display: "block", fontSize: 11, color: "var(--fg-muted)" }} title={regroupes.map((s) => `${s.id} : ${s.libelle_source} (${fmtEur(s.cout_source_eur)})`).join("\n")}>regroupe {regroupes.map((s) => s.id).join(", ")}</span>}
                             </td>
                             <td>
                               {revueActive ? (
-                                <select className="edit-inp sm" style={{ maxWidth: 120 }} value={t.priorite} onChange={(e) => { const p = e.target.value as TravailNormalise["priorite"]; majPoste(t.id, { priorite: p, avec_moe: codePriorite(p) === "preservation", tva_pct: codePriorite(p) === "energetique" ? 5.5 : t.tva_pct === 5.5 ? 10 : t.tva_pct }); }}>
+                                <select className="edit-inp sm" style={{ maxWidth: 120 }} value={t.priorite} onChange={(e) => { const p = e.target.value as TravailNormalise["priorite"]; majPoste(t.id, { priorite: p, avec_moe: codePriorite(p) === "preservation" || (codePriorite(p) === "energetique" && !!json.parametres_ppt.moe_sur_energetique), tva_pct: codePriorite(p) === "energetique" ? 5.5 : t.tva_pct === 5.5 ? 10 : t.tva_pct }); }}>
                                   {PRIORITES.map((p) => <option key={p} value={p}>{p}</option>)}
                                 </select>
                               ) : t.priorite}
@@ -601,6 +669,7 @@ export default function Revue() {
                             </td>
                             <td className="num">
                               {revueActive ? <input className="edit-inp sm" style={{ width: 96, textAlign: "right", borderColor: t.cout_ht_base_eur == null ? "var(--color-warning-500)" : undefined }} type="number" value={t.cout_ht_base_eur ?? ""} placeholder="à chiffrer" onChange={(e) => majPoste(t.id, { cout_ht_base_eur: e.target.value ? Number(e.target.value) : null, cout_ht_origine: e.target.value ? "estime_strateco" : null })} /> : (t.cout_ht_base_eur != null ? fmtEur(t.cout_ht_base_eur) : <span style={{ color: "var(--color-warning-700)" }}>à chiffrer</span>)}
+                              {htSource != null && (coef !== 1 || htSource !== t.cout_ht_base_eur) && <span style={{ display: "block", fontSize: 11, color: "var(--fg-muted)" }} title="montant HT du document source, avant réévaluation des prix">source {fmtEur(htSource)}{coef !== 1 ? ` × ${coef.toLocaleString("fr-FR", { maximumFractionDigits: 4 })}` : ""}</span>}
                             </td>
                             <td className="num">
                               {revueActive ? (
@@ -611,8 +680,8 @@ export default function Revue() {
                             </td>
                             <td className="num">
                               {revueActive && codePriorite(t.priorite) === "energetique" ? (
-                                <input className="edit-inp sm" style={{ width: 64, textAlign: "right" }} type="number" step={1} min={0} max={70} value={t.gain_energetique_pct == null ? "" : Math.round((t.gain_energetique_pct > 1 ? t.gain_energetique_pct : t.gain_energetique_pct * 100) * 10) / 10} onChange={(e) => majPoste(t.id, { gain_energetique_pct: e.target.value ? Number(e.target.value) / 100 : null })} />
-                              ) : t.gain_energetique_pct != null ? fmtPct(t.gain_energetique_pct) : "-"}
+                                <input className="edit-inp sm" style={{ width: 64, textAlign: "right" }} type="number" step={0.1} min={0} max={70} title="gain en points de pourcentage (0,5 = 0,5 %)" value={t.gain_energetique_pct ?? ""} onChange={(e) => majPoste(t.id, { gain_energetique_pct: e.target.value ? Number(e.target.value) : null })} />
+                              ) : fmtPoints(t.gain_energetique_pct)}
                             </td>
                             <td className="num">{ttc != null ? fmtEur(ttc) : "-"}</td>
                             {revueActive && <td><button className="icon-btn" title="Retirer ce poste" onClick={() => { if (window.confirm(`Retirer « ${t.libelle} » du plan ?`)) retirerPoste(t.id); }}><Icon name="trash" size={14} /></button></td>}
@@ -622,9 +691,23 @@ export default function Revue() {
                     </tbody>
                   </table>
                 </div>
-                <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10, marginBottom: 0 }}>
-                  TTC = HT × (1 + {(json.parametres_ppt.inflation * 100).toLocaleString("fr-FR")} %)^k × (1 + TVA{json.parametres_ppt.honoraires_moe ? ` + MOE ${(json.parametres_ppt.honoraires_moe * 100).toLocaleString("fr-FR")} % si préservation` : ""} + syndic {(json.parametres_ppt.honoraires_syndic * 100).toLocaleString("fr-FR")} %), k = année - {json.parametres_ppt.annee_base}. « ~ » : année déduite ou à confirmer.
-                </p>
+                {sourcesExclues.length > 0 && (
+                  <div className="se-small" style={{ marginTop: 10, color: "var(--fg-muted)" }}>
+                    <b>Postes source exclus du PPT</b> (hors totaux et contrôles) :
+                    <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>
+                      {sourcesExclues.map((s) => (
+                        <li key={s.id}>{s.id} · {s.libelle_source} ({fmtEur(s.cout_source_eur)} {s.cout_source_base ?? "HT"}){s.motif_exclusion ? ` - ${s.motif_exclusion}` : ""}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {params && (
+                  <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10, marginBottom: 0 }}>
+                    TTC = HT × (1 + {(params.inflation * 100).toLocaleString("fr-FR")} %)^k × (1 + TVA{params.moe ? ` + MOE ${(params.moe * 100).toLocaleString("fr-FR")} % sur les lignes avec maîtrise d'œuvre (préservation${json.parametres_ppt.moe_sur_energetique ? " et énergétique" : ""})` : ""} + syndic {(params.syndic * 100).toLocaleString("fr-FR")} %), k = année - {params.anneeBase}.
+                    {(json.parametres_ppt.reevaluation_prix_coef ?? 1) !== 1 && ` HT = HT source × ${(json.parametres_ppt.reevaluation_prix_coef ?? 1).toLocaleString("fr-FR", { maximumFractionDigits: 6 })} (prix ${json.parametres_ppt.annee_prix_source ?? "du document"} réévalués).`}
+                    {" "}« ~ » : année déduite, lissée ou à confirmer.
+                  </p>
+                )}
               </div>
             </div>
           </div>

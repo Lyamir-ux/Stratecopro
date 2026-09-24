@@ -38,8 +38,8 @@ export function StatutParcBadge({ c }: { c: PptCoproAvecStats }) {
 export const fmtEur = (n: number | null | undefined, decimales = 0) =>
   n == null ? "-" : n.toLocaleString("fr-FR", { maximumFractionDigits: decimales }) + " €";
 
-export const fmtPct = (f: number | null | undefined) =>
-  f == null ? "-" : (f > 1 ? f : f * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " %";
+/** fmtPct : fraction → % (gains cumulés, couverture) ; fmtPoints : champs `_pct` en points, sans conversion. */
+export { fmtPct, fmtPoints } from "@/lib/ppt/formats";
 
 export const fmtDateCourte = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "-";

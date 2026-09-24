@@ -1,13 +1,16 @@
 // Contrôles déterministes de la plateforme (étape [4] du brief), rejoués sur le
-// JSON pppt-verif/1.0 à l'import et à chaque enregistrement de la revue.
-// Les codes R/C recalculés reprennent la numérotation du skill ; les codes P
-// sont propres à la plateforme (données de la fiche, cycle de vie).
+// JSON pppt-verif (forme 1.2, import.ts) à l'import et à chaque enregistrement
+// de la revue. Les codes R/C recalculés reprennent la numérotation du skill ;
+// les codes P sont propres à la plateforme (données de la fiche, cycle de vie).
 // Chaque règle produit une remarque de famille « plateforme » : ce sont elles
 // qui, matérialisées à la validation, remontent au syndic les trous du rapport
-// qu'il a payé (argument commercial du brief). Fonctions pures, testées.
+// qu'il a payé (argument commercial du brief). Une proposition du skill
+// acceptée ou modifiée par l'AMO n'est jamais contredite : l'alerte qu'elle
+// tranche devient une info « choix validé » (propositionsValidees).
+// Fonctions pures, testées.
 
-import type { Controle, PpptVerifJson, SeveriteControle, StatutControle, TravailNormalise, TravailSource } from "./schema";
-import { cleControle, codePriorite } from "./schema";
+import type { Controle, PpptVerifJson, Proposition, SeveriteControle, StatutControle, TravailNormalise, TravailSource } from "./schema";
+import { cleControle, codePriorite, coutHtSource, estRetenu, posteRacine } from "./schema";
 import {
   CHARGE_ANNUELLE_MAX_PAR_LOGEMENT,
   ENCHAINEMENTS,
@@ -16,8 +19,10 @@ import {
   FOURCHETTES_GAIN,
   MOTS_TVA_10,
   MOTS_TVA_5_5,
+  MOTS_VIDES,
   ORDRE_ETIQUETTES,
   PLAFOND_GAIN,
+  SEUIL_ORDRE_DE_GRANDEUR_HT,
   SURFACE_PAR_LOGEMENT,
   TAUX_TVA_ADMIS,
   TOTAL_PAR_LOGEMENT,
@@ -25,7 +30,8 @@ import {
   normaliser,
   tolerance,
 } from "./referentiels";
-import { etiquetteDepuisCep, gainCompose } from "./formules";
+import { etiquetteDepuisCep, gainCompose, montantTtcPoste, parametresDepuisJson } from "./formules";
+import { normaliserPeriode } from "./import";
 
 /** Données de la fiche plateforme confrontées au document. */
 export interface FicheCopro {
@@ -84,6 +90,78 @@ function coutSourceHt(s: TravailSource, tvaDefaut: number): number | null {
   return s.cout_source_eur;
 }
 
+/** Coût source dans la base d'un total annoncé (HT par défaut). */
+function coutSourceDansBase(s: TravailSource, base: "HT" | "TTC" | null | undefined, tvaDefaut: number): number | null {
+  const ht = coutSourceHt(s, tvaDefaut);
+  if (ht == null || base !== "TTC") return ht;
+  return s.cout_source_base === "TTC" ? s.cout_source_eur : ht * (1 + (s.tva_source_pct ?? tvaDefaut) / 100);
+}
+
+/** Ligne proposée en option par le skill (P01 « lignes marquées option ») : hors du plan de base. */
+export const estOption = (t: Pick<TravailNormalise, "libelle" | "commentaire">): boolean => contientUn(`${t.libelle} ${t.commentaire ?? ""}`, ["option"]);
+
+/** Mots significatifs d'un libellé, pour rapprocher deux postes (C15). */
+function motsLibelle(s: string): Set<string> {
+  return new Set(
+    normaliser(s)
+      .split(/[^a-z0-9]+/)
+      .filter((m) => m.length >= 3 && !MOTS_VIDES.includes(m) && !/^t\d+[a-z]?$/.test(m))
+  );
+}
+
+/** Deux libellés proches : la moitié de leurs mots en commun, ou l'un contenu dans l'autre. */
+export function libellesProches(a: string, b: string): boolean {
+  const ma = motsLibelle(a);
+  const mb = motsLibelle(b);
+  if (!ma.size || !mb.size) return normaliser(a).trim() === normaliser(b).trim();
+  const communs = [...ma].filter((m) => mb.has(m)).length;
+  const union = new Set([...ma, ...mb]).size;
+  return communs / union >= 0.5 || (communs >= 2 && communs === Math.min(ma.size, mb.size));
+}
+
+const fmtDate = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+};
+
+/**
+ * Une proposition acceptée ou modifiée par l'AMO porte-t-elle sur cette ligne
+ * et ce contrôle ? Ligne : citée dans `lignes_concernees`, directement, par son
+ * poste d'origine (T06a cité → T06c couvert : même poste éclaté par période) ou
+ * par un poste qu'elle regroupe. Contrôle : lien explicite `controle_lie`, ou
+ * décision de TVA pour C03.
+ */
+function propositionQuiTranche(c: Controle, propositions: Proposition[], ligne: TravailNormalise | undefined): Proposition | undefined {
+  if (!c.poste_code) return undefined;
+  const ids = new Set([c.poste_code, ...(ligne?.regroupe_ids ?? [])]);
+  const racines = new Set([...ids].map(posteRacine));
+  return propositions.find((p) => {
+    if (p.statut_validation !== "VALIDEE" && p.statut_validation !== "MODIFIEE") return false;
+    const couvre = p.lignes_concernees.some((l) => ids.has(l) || racines.has(posteRacine(l)));
+    const surCeControle = p.controle_lie === c.code || (c.code === "C03" && contientUn(`${p.theme} ${p.decision} ${p.valeur_proposee}`, ["tva"]));
+    return couvre && surCeControle;
+  });
+}
+
+/** Les alertes de ligne tranchées par une proposition validée deviennent une info « choix validé par l'AMO ». */
+function propositionsValidees(remarques: Controle[], json: PpptVerifJson): Controle[] {
+  const propositions = json.propositions ?? [];
+  if (!propositions.length) return remarques;
+  const lignes = new Map((json.travaux_normalises ?? []).map((t) => [t.id, t]));
+  return remarques.map((c) => {
+    const p = propositionQuiTranche(c, propositions, c.poste_code ? lignes.get(c.poste_code) : undefined);
+    if (!p) return c;
+    const quand = p.date_validation ? ` le ${fmtDate(p.date_validation)}` : "";
+    return {
+      ...c,
+      severite: "INFO",
+      statut: "CONFORME",
+      constat: `Choix validé par l'AMO${quand} (${p.code}${p.valeur_proposee ? ` : ${p.valeur_proposee}` : ""}). Alerte de la plateforme non retenue : ${c.constat ?? ""}`.trim(),
+      action: null,
+    };
+  });
+}
+
 /**
  * Tous les contrôles déterministes applicables à un JSON et à la fiche de la
  * copropriété. `aujourdHui` est injectable pour les tests.
@@ -94,8 +172,15 @@ export function controlesPlateforme(json: PpptVerifJson, fiche: FicheCopro = {},
   const copro = json.copropriete ?? ({} as PpptVerifJson["copropriete"]);
   const normalises = json.travaux_normalises ?? [];
   const sources = json.travaux_source ?? [];
+  // un poste source exclu du PPT (1.2, retenu_dans_ppt: false) ne compte dans aucun total
+  const sourcesRetenues = sources.filter(estRetenu);
   const params = json.parametres_ppt;
   const anneeBase = params?.annee_base ?? json.echeancier_source?.annee_base ?? anneeCourante;
+  const calcul = parametresDepuisJson(params);
+  const ttcLigne = (t: TravailNormalise) =>
+    montantTtcPoste({ cout_ht_base: t.cout_ht_base_eur, tva_pct: t.tva_pct, avec_moe: t.avec_moe, annee_prevue: t.annee_prevue, gain_energetique_pct: t.gain_energetique_pct, priorite: codePriorite(t.priorite) }, calcul);
+  /** Ligne du tableau qui reprend un poste source : même identifiant ou regroupement. */
+  const ligneDeSource = (id: string) => normalises.find((t) => t.id === id) ?? normalises.find((t) => t.regroupe_ids?.includes(id));
   const dpe = json.diagnostics_sources?.dpe_collectif;
   const nbLogements = copro.nb_logements ?? fiche.nb_logements ?? null;
   const nbLots = copro.nb_lots_total ?? fiche.nb_lots ?? null;
@@ -118,33 +203,72 @@ export function controlesPlateforme(json: PpptVerifJson, fiche: FicheCopro = {},
   }
 
   // ---------- B. Arithmétique ----------
-  const totalSourceBrut = sources.reduce((s, x) => s + (x.cout_source_eur ?? 0), 0);
+  // Totaux annoncés : comparés aux seuls postes source retenus, dans la base du
+  // total (HT par défaut) ; le total général est celui du plan de référence.
+  const baseAnnonce = json.echeancier_source?.total_annonce_base ?? "HT";
+  const exclus = sources.filter((s) => !estRetenu(s));
+  const totalSourceRetenu = sourcesRetenues.reduce((s, x) => s + (coutSourceDansBase(x, baseAnnonce, tvaDefaut) ?? 0), 0);
   const totalAnnonce = json.echeancier_source?.total_annonce_eur ?? null;
-  if (totalAnnonce != null && sources.some((s) => s.cout_source_eur != null)) {
-    const ecart = Math.abs(totalSourceBrut - totalAnnonce);
+  const plan = json.echeancier_source?.scenario_reference ? ` du plan « ${json.echeancier_source.scenario_reference} »` : "";
+  const horsExclus = exclus.length ? ` hors poste${exclus.length > 1 ? "s" : ""} exclu${exclus.length > 1 ? "s" : ""} du PPT (${exclus.map((s) => s.id).join(", ")})` : "";
+  if (totalAnnonce != null && sourcesRetenues.some((s) => s.cout_source_eur != null)) {
+    const ecart = Math.abs(totalSourceRetenu - totalAnnonce);
     if (ecart > tolerance(totalAnnonce))
       out.push(
-        rem("C01", "Total général du plan", "BLOQUANT", `La somme des postes (${fmt(totalSourceBrut)}) ne retombe pas sur le total annoncé (${fmt(totalAnnonce)}).`, {
-          attendu: fmt(totalSourceBrut),
+        rem("C01", "Total général du plan", "BLOQUANT", `La somme des postes retenus${horsExclus} (${fmt(totalSourceRetenu)} ${baseAnnonce}) ne retombe pas sur le total annoncé${plan} (${fmt(totalAnnonce)}).`, {
+          attendu: fmt(totalSourceRetenu),
           observe: fmt(totalAnnonce),
-          ecart: fmt(totalSourceBrut - totalAnnonce),
-          action: "Retrouver le poste manquant ou l'erreur d'addition dans le rapport ; corriger avant validation.",
+          ecart: fmt(totalSourceRetenu - totalAnnonce),
+          action: "Retrouver le poste manquant ou l'erreur d'addition dans le rapport, ou vérifier le plan de référence (scenario_reference) ; corriger avant validation.",
         })
       );
   }
 
+  // totaux par période : jointure sur le libellé de `periode_source` (« 0 à 1 an »),
+  // ou sur l'année quand la clé est un millésime
   const totauxAnnonces = json.echeancier_source?.totaux_par_annee_annonces ?? {};
-  for (const [annee, annonce] of Object.entries(totauxAnnonces)) {
+  for (const [cle, annonce] of Object.entries(totauxAnnonces)) {
     if (annonce == null) continue;
-    const somme = sources.filter((s) => String(s.annee_source) === annee).reduce((a, s) => a + (s.cout_source_eur ?? 0), 0);
+    const k = normaliserPeriode(cle);
+    const millesime = /^\d{4}$/.test(k);
+    const concernes = sourcesRetenues.filter((s) => normaliserPeriode(s.periode_source) === k || (millesime && String(s.annee_source) === k));
+    const somme = concernes.reduce((a, s) => a + (coutSourceDansBase(s, baseAnnonce, tvaDefaut) ?? 0), 0);
+    const quoi = millesime ? `l'année ${k}` : `la période « ${k} »`;
     if (Math.abs(somme - annonce) > tolerance(annonce))
-      out.push(rem("C05", `Total de l'année ${annee}`, "MAJEUR", `Postes de ${annee} : ${fmt(somme)} ; total annuel annoncé : ${fmt(annonce)}.`, { attendu: fmt(somme), observe: fmt(annonce), ecart: fmt(somme - annonce), action: "Vérifier l'affectation des postes à l'année." }));
+      out.push(
+        rem("C05", millesime ? `Total de l'année ${k}` : `Total de la période « ${k} »`, "MAJEUR", concernes.length ? `Postes retenus de ${quoi} : ${fmt(somme)} ; total annoncé : ${fmt(annonce)}.` : `Aucun poste source rattaché à ${quoi} (total annoncé ${fmt(annonce)}).`, {
+          attendu: fmt(somme),
+          observe: fmt(annonce),
+          ecart: fmt(somme - annonce),
+          action: "Vérifier l'affectation des postes à la période.",
+        })
+      );
   }
 
+  // traçabilité : montants source des lignes (avant réévaluation) ↔ postes source retenus
   const sommeNormHt = normalises.reduce((s, t) => s + (t.cout_ht_base_eur ?? 0), 0);
-  const sommeSourceHt = sources.reduce((s, x) => s + (coutSourceHt(x, tvaDefaut) ?? 0), 0);
-  if (sommeSourceHt > 0 && normalises.length && ecartRelatif(sommeNormHt, sommeSourceHt) > 0.02 && Math.abs(sommeNormHt - sommeSourceHt) > 500)
-    out.push(rem("P04", "Traçabilité de la normalisation", "MAJEUR", `Somme des postes normalisés (${fmt(sommeNormHt)} HT) éloignée de la somme des postes source ramenés en HT (${fmt(sommeSourceHt)}).`, { attendu: fmt(sommeSourceHt), observe: fmt(sommeNormHt), action: "Contrôler les conversions TTC → HT et les postes ajoutés ou fusionnés." }));
+  const sommeNormSource = normalises.reduce((s, t) => s + (coutHtSource(t) ?? 0), 0);
+  const sommeSourceHt = sourcesRetenues.reduce((s, x) => s + (coutSourceHt(x, tvaDefaut) ?? 0), 0);
+  if (sommeSourceHt > 0 && normalises.length && ecartRelatif(sommeNormSource, sommeSourceHt) > 0.02 && Math.abs(sommeNormSource - sommeSourceHt) > 500) {
+    const nonRepris = sourcesRetenues.filter((s) => !ligneDeSource(s.id)).map((s) => s.id);
+    out.push(
+      rem("P04", "Traçabilité de la normalisation", "MAJEUR", `Somme des lignes en montant source (${fmt(sommeNormSource)} HT, avant réévaluation) éloignée de la somme des postes source retenus ramenés en HT (${fmt(sommeSourceHt)})${nonRepris.length ? ` ; postes source retenus sans ligne : ${nonRepris.join(", ")}` : ""}.`, {
+        attendu: fmt(sommeSourceHt),
+        observe: fmt(sommeNormSource),
+        action: "Contrôler les conversions TTC → HT, les postes ajoutés, fusionnés ou à exclure (retenu_dans_ppt: false).",
+      })
+    );
+  }
+
+  // réévaluation des prix (1.2) : HT de base = HT source × coefficient, à 1 € près
+  for (const t of normalises) {
+    const source = t.cout_ht_source_eur;
+    if (source == null || t.cout_ht_base_eur == null || t.cout_ht_origine === "estime_strateco") continue;
+    const coef = t.reevaluation_prix_coef ?? 1;
+    const attendu = source * coef;
+    if (Math.abs(attendu - t.cout_ht_base_eur) > 1)
+      out.push(rem("P25", "Réévaluation des prix", "MINEUR", `« ${t.libelle} » : ${fmt(source)} HT source × ${coef.toLocaleString("fr-FR", { maximumFractionDigits: 6 })} = ${fmt(attendu)}, la ligne porte ${fmt(t.cout_ht_base_eur)} HT.`, { poste_code: t.id, attendu: fmt(attendu), observe: fmt(t.cout_ht_base_eur), action: "Recalculer le HT de base ou corriger le coefficient de la ligne." }));
+  }
 
   for (const t of normalises) {
     if (t.cout_ht_origine !== "converti_depuis_TTC" || t.cout_ht_base_eur == null) continue;
@@ -159,22 +283,36 @@ export function controlesPlateforme(json: PpptVerifJson, fiche: FicheCopro = {},
   for (const t of normalises) if (t.cout_ht_base_eur) parCout.set(t.cout_ht_base_eur, [...(parCout.get(t.cout_ht_base_eur) ?? []), t]);
   for (const [cout, liste] of parCout)
     if (liste.length >= 3)
-      out.push(rem("P06", "Coûts identiques répétés", "INFO", `${liste.length} postes distincts au même montant (${fmt(cout)}) : ${liste.map((t) => t.libelle).join(", ")}.`, { action: "S'assurer qu'il ne s'agit pas d'un copier-coller du rédacteur." }));
+      out.push(rem("P06", `Coûts identiques répétés - ${fmt(cout)}`, "INFO", `${liste.length} postes distincts au même montant (${fmt(cout)}) : ${liste.map((t) => t.libelle).join(", ")}.`, { action: "S'assurer qu'il ne s'agit pas d'un copier-coller du rédacteur." }));
 
   if (nbLogements && nbLogements > 0) {
-    const parAnnee = new Map<number, number>();
-    for (const t of normalises) if (t.annee_prevue != null && t.cout_ht_base_eur != null) parAnnee.set(t.annee_prevue, (parAnnee.get(t.annee_prevue) ?? 0) + t.cout_ht_base_eur);
-    for (const [annee, total] of parAnnee)
-      if (total / nbLogements > CHARGE_ANNUELLE_MAX_PAR_LOGEMENT)
-        out.push(rem("C16", `Charge annuelle ${annee}`, "INFO", `${fmt(total)} HT en ${annee}, soit ${fmt(total / nbLogements)} par logement, sans phasage ni aide mentionnés.`, { action: "Prévoir un phasage, le fonds travaux ou un prêt collectif." }));
+    // charge et concentration : TTC actualisé des lignes, sur leurs années du tableau (lissage compris)
+    const parAnnee = new Map<number, { total: number; options: number; idsOptions: string[] }>();
+    for (const t of normalises) {
+      const ttc = t.annee_prevue != null ? ttcLigne(t) : null;
+      if (ttc == null || t.annee_prevue == null) continue;
+      const a = parAnnee.get(t.annee_prevue) ?? { total: 0, options: 0, idsOptions: [] };
+      a.total += ttc;
+      if (estOption(t)) {
+        a.options += ttc;
+        a.idsOptions.push(t.id);
+      }
+      parAnnee.set(t.annee_prevue, a);
+    }
+    const totalTtc = [...parAnnee.values()].reduce((s, a) => s + a.total, 0);
+    const dontOptions = (a: { total: number; options: number; idsOptions: string[] }) =>
+      a.options > 0 ? `, dont ${fmt(a.options)} d'option${a.idsOptions.length > 1 ? "s" : ""} (${a.idsOptions.join(", ")}, ${pct(a.options / a.total)} de l'année)` : "";
+    for (const [annee, a] of [...parAnnee].sort((x, y) => x[0] - y[0]))
+      if (a.total / nbLogements > CHARGE_ANNUELLE_MAX_PAR_LOGEMENT)
+        out.push(rem("C16", `Charge annuelle ${annee}`, "INFO", `${fmt(a.total)} TTC en ${annee}, soit ${fmt(a.total / nbLogements)} par logement${dontOptions(a)}.`, { action: "Prévoir un phasage, le fonds travaux ou un prêt collectif." }));
     if (sommeNormHt > 0) {
       const parLogt = sommeNormHt / nbLogements;
       if (parLogt < TOTAL_PAR_LOGEMENT.min || parLogt > TOTAL_PAR_LOGEMENT.max)
         out.push(rem("P07", "Montant du plan par logement", "MAJEUR", `${fmt(sommeNormHt)} HT sur 10 ans pour ${nbLogements} logements, soit ${fmt(parLogt)} par logement.`, { attendu: `entre ${fmt(TOTAL_PAR_LOGEMENT.min)} et ${fmt(TOTAL_PAR_LOGEMENT.max)} par logement`, observe: fmt(parLogt), action: "Vérifier le nombre de logements et l'exhaustivité du chiffrage." }));
     }
-    const maxAnnee = [...parAnnee.values()].reduce((a, b) => Math.max(a, b), 0);
-    if (sommeNormHt > 0 && parAnnee.size > 1 && maxAnnee / sommeNormHt > 0.6)
-      out.push(rem("P21", "Concentration du plan sur une année", "INFO", `${pct(maxAnnee / sommeNormHt)} du montant total sur une seule année.`, { action: "Vérifier que ce phasage est voulu (opération groupée) et finançable." }));
+    const pic = [...parAnnee].reduce<[number, { total: number; options: number; idsOptions: string[] }] | null>((m, x) => (!m || x[1].total > m[1].total ? x : m), null);
+    if (pic && totalTtc > 0 && parAnnee.size > 1 && pic[1].total / totalTtc > 0.6)
+      out.push(rem("P21", "Concentration du plan sur une année", "INFO", `${pct(pic[1].total / totalTtc)} du montant total TTC en ${pic[0]}${dontOptions(pic[1])}.`, { action: "Vérifier que ce phasage est voulu (opération groupée) et finançable." }));
   }
 
   // ---------- C. Temporalité ----------
@@ -188,9 +326,9 @@ export function controlesPlateforme(json: PpptVerifJson, fiche: FicheCopro = {},
     if (t.annee_prevue != null && t.annee_prevue < anneeCourante)
       out.push(rem("P08", "Poste dans le passé", "MAJEUR", `« ${t.libelle} » est prévu en ${t.annee_prevue}, avant l'année courante.`, { poste_code: t.id, action: "Requalifier : réalisé, reporté ou abandonné." }));
 
-  for (const s of sources) {
+  for (const s of sourcesRetenues) {
     const p = normaliser(s.priorite_source);
-    const t = normalises.find((x) => x.id === s.id);
+    const t = ligneDeSource(s.id);
     const annee = t?.annee_prevue ?? s.annee_source;
     if (annee == null) continue;
     if ((p.includes("urgent") || p.includes("immediat")) && annee > anneeBase + 2)
@@ -257,13 +395,20 @@ export function controlesPlateforme(json: PpptVerifJson, fiche: FicheCopro = {},
   if (perf?.etiquette_visee && etiqInit && ORDRE_ETIQUETTES.indexOf(perf.etiquette_visee) > ORDRE_ETIQUETTES.indexOf(etiqInit))
     out.push(rem("P16", "Étiquette visée moins bonne que l'actuelle", "BLOQUANT", `Actuelle ${etiqInit}, visée ${perf.etiquette_visee}.`, { action: "Erreur de lecture ou de rapport : corriger avant validation." }));
 
-  const gainsGestes = normalises.filter((t) => codePriorite(t.priorite) === "energetique").map((t) => t.gain_energetique_pct);
-  const gainCompo = gainCompose(gainsGestes);
-  if (perf?.gain_total_annonce_pct != null && gainsGestes.some((g) => g != null)) {
-    const annonce = perf.gain_total_annonce_pct > 1 ? perf.gain_total_annonce_pct / 100 : perf.gain_total_annonce_pct;
-    const brut = gainsGestes.reduce((s: number, g) => s + (g == null ? 0 : g > 1 ? g / 100 : g), 0);
-    if (Math.abs(annonce - gainCompo) > 0.05)
-      out.push(rem("C12", "Gain énergétique total", "MAJEUR", `Gain annoncé ${pct(annonce)} ; gains par geste composés (1 - Π(1 - g)) : ${pct(gainCompo)}${Math.abs(annonce - brut) < 0.02 ? " - le rapport additionne les gains bruts" : ""}.`, { attendu: pct(gainCompo), observe: pct(annonce), action: "Retenir le gain composé ; demander la méthode d'estimation au rédacteur." }));
+  // gains : `gain_*_pct` en points de pourcentage (0.5 = 0,5 %), divisés par 100
+  // pour calculer, sans heuristique sur la valeur. Le gain annoncé se compare au
+  // gain composé de tous les gestes et, quand le skill a ajouté des gestes en
+  // option (P01), au gain composé du plan de base : l'un des deux doit coller.
+  const gestes = normalises.filter((t) => codePriorite(t.priorite) === "energetique");
+  if (perf?.gain_total_annonce_pct != null && gestes.some((t) => t.gain_energetique_pct != null)) {
+    const annonce = perf.gain_total_annonce_pct / 100;
+    const horsOptions = gestes.filter((t) => !estOption(t));
+    const perimetres = [{ libelle: "tous les gestes", gain: gainCompose(gestes.map((t) => t.gain_energetique_pct)) }];
+    if (horsOptions.length && horsOptions.length < gestes.length) perimetres.push({ libelle: "hors options", gain: gainCompose(horsOptions.map((t) => t.gain_energetique_pct)) });
+    const brut = gestes.reduce((s, t) => s + (t.gain_energetique_pct ?? 0), 0) / 100;
+    const detail = perimetres.map((p) => `${pct(p.gain)} (${p.libelle})`).join(", ");
+    if (!perimetres.some((p) => Math.abs(annonce - p.gain) <= 0.05))
+      out.push(rem("C12", "Gain énergétique total", "MAJEUR", `Gain annoncé ${pct(annonce)} ; gains par geste composés (1 - Π(1 - g)) : ${detail}${Math.abs(annonce - brut) < 0.02 ? " - le rapport additionne les gains bruts" : ""}.`, { attendu: perimetres.map((p) => pct(p.gain)).join(" / "), observe: pct(annonce), action: "Retenir le gain composé ; demander la méthode d'estimation au rédacteur." }));
     if (annonce > PLAFOND_GAIN) out.push(rem("C12", "Gain énergétique total", "MAJEUR", `Gain annoncé ${pct(annonce)} au-delà du plafond de vraisemblance (${pct(PLAFOND_GAIN)}).`));
   }
   for (const t of normalises) {
@@ -271,9 +416,9 @@ export function controlesPlateforme(json: PpptVerifJson, fiche: FicheCopro = {},
     if (p === "energetique" && t.gain_energetique_pct == null)
       out.push(rem("P17", "Poste énergétique sans gain", "MINEUR", `« ${t.libelle} » est classé énergétique sans gain estimé.`, { poste_code: t.id, action: "Renseigner un gain indicatif ou reclasser le poste." }));
     if (p !== "energetique" && t.gain_energetique_pct)
-      out.push(rem("P17", "Gain sur un poste non énergétique", "MINEUR", `« ${t.libelle} » (${t.priorite}) porte un gain de ${pct(t.gain_energetique_pct > 1 ? t.gain_energetique_pct / 100 : t.gain_energetique_pct)}.`, { poste_code: t.id }));
+      out.push(rem("P17", "Gain sur un poste non énergétique", "MINEUR", `« ${t.libelle} » (${t.priorite}) porte un gain de ${pct(t.gain_energetique_pct / 100)}.`, { poste_code: t.id }));
     if (p === "energetique" && t.gain_energetique_pct != null) {
-      const g = t.gain_energetique_pct > 1 ? t.gain_energetique_pct / 100 : t.gain_energetique_pct;
+      const g = t.gain_energetique_pct / 100;
       const f = FOURCHETTES_GAIN.find((x) => contientUn(texte(t), x.mots));
       if (f && (g < f.min / 2 || g > f.max * 1.5))
         out.push(rem("C12", `Gain du geste « ${f.libelle} »`, "MAJEUR", `« ${t.libelle} » : gain ${pct(g)} hors de la fourchette usuelle ${pct(f.min)} à ${pct(f.max)}.`, { poste_code: t.id, attendu: `${pct(f.min)} à ${pct(f.max)}`, observe: pct(g) }));
@@ -288,13 +433,18 @@ export function controlesPlateforme(json: PpptVerifJson, fiche: FicheCopro = {},
   }
 
   // ---------- F. Ordres de grandeur ----------
-  // Rapprochement par mots-clés d'une fourchette de plein exercice : c'est une
+  // Rapprochement d'une fourchette indicative d'opération complète : c'est une
   // alerte de vraisemblance, jamais un manquement réglementaire, donc jamais
-  // BLOQUANT (un poste en tranches ou une reprise ponctuelle sort légitimement
-  // de la fourchette).
+  // BLOQUANT. Les micro-postes (sous le seuil, ou regroupés) n'ont rien d'une
+  // opération complète : pas de comparaison. Quand l'ouvrage de la ligne est
+  // connu, seules ses familles sont candidates et le libellé les confirme ;
+  // sinon, reconnaissance par mots-clés sur le libellé et l'ouvrage.
   for (const t of normalises) {
-    if (!t.cout_ht_base_eur) continue;
-    const f = FOURCHETTES_COUT.find((x) => contientUn(texte(t), x.mots, { horsNegation: true }));
+    if (!t.cout_ht_base_eur || t.cout_ht_base_eur < SEUIL_ORDRE_DE_GRANDEUR_HT || t.cout_ht_origine === "regroupement_micro_postes") continue;
+    const familles = t.ouvrage ? FOURCHETTES_COUT.filter((x) => contientUn(t.ouvrage ?? "", x.ouvrages)) : [];
+    const f = familles.length
+      ? familles.find((x) => contientUn(t.libelle, x.mots, { horsNegation: true }))
+      : FOURCHETTES_COUT.find((x) => contientUn(texte(t), x.mots, { horsNegation: true }));
     if (!f) continue;
     const denominateur = f.unite === "appareil" ? 1 : nbLogements;
     const unite = f.unite === "appareil" ? "par appareil" : "par logement";
@@ -304,9 +454,9 @@ export function controlesPlateforme(json: PpptVerifJson, fiche: FicheCopro = {},
     const facteur = sousFourchette ? f.min / ratio : ratio > f.max ? ratio / f.max : 1;
     if (facteur < 2) continue;
     out.push(
-      rem("C04", `Ordre de grandeur - ${f.libelle}`, facteur >= 4 ? "MAJEUR" : "MINEUR", `« ${t.libelle} » : ${fmt(ratio)} ${unite}, fourchette usuelle ${fmt(f.min)} à ${fmt(f.max)} (écart × ${Math.round(facteur * 10) / 10}).`, {
+      rem("C04", `Ordre de grandeur - ${f.libelle}`, facteur >= 4 ? "MAJEUR" : "MINEUR", `« ${t.libelle} » : ${fmt(ratio)} ${unite}, fourchette indicative d'une opération complète ${fmt(f.min)} à ${fmt(f.max)} (écart × ${Math.round(facteur * 10) / 10}).`, {
         poste_code: t.id,
-        attendu: `${fmt(f.min)} à ${fmt(f.max)} ${unite}`,
+        attendu: `${fmt(f.min)} à ${fmt(f.max)} ${unite} (indicatif)`,
         observe: fmt(ratio),
         action: sousFourchette
           ? "Vérifier le périmètre : tranche, reprise ponctuelle ou poste partiel plutôt qu'une opération complète ; sinon confirmer par devis."
@@ -338,14 +488,26 @@ export function controlesPlateforme(json: PpptVerifJson, fiche: FicheCopro = {},
   if (normalises.length && !normalises.some((t) => codePriorite(t.priorite) === "energetique"))
     out.push(rem("R08", "Aucun poste d'économie d'énergie", "BLOQUANT", "Le plan ne contient aucun poste énergétique ni justification de son absence.", { action: "Demander au rédacteur le volet énergie (décret 2022-663)." }));
 
+  // doublon : même ouvrage, même bâtiment, même année ET libellés proches (un
+  // ouvrage générique ne suffit pas). Deux regroupements de micro-postes ne se
+  // doublonnent pas : leurs postes source (regroupe_ids) sont distincts.
   const cles = new Map<string, TravailNormalise[]>();
   for (const t of normalises) {
+    if (!t.ouvrage) continue;
     const k = `${normaliser(t.ouvrage)}|${normaliser(t.batiment)}|${t.annee_prevue ?? ""}`;
     cles.set(k, [...(cles.get(k) ?? []), t]);
   }
-  for (const liste of cles.values())
-    if (liste.length > 1 && liste[0].ouvrage)
-      out.push(rem("C15", "Doublon possible", "MAJEUR", `${liste.length} postes « ${liste[0].ouvrage} »${liste[0].batiment ? ` (${liste[0].batiment})` : ""} la même année ${liste[0].annee_prevue ?? ""} : ${liste.map((t) => t.libelle).join(" / ")}.`, { poste_code: liste[0].id, action: "Fusionner ou justifier." }));
+  const regroupement = (t: TravailNormalise) => t.cout_ht_origine === "regroupement_micro_postes" || !!t.regroupe_ids?.length;
+  for (const liste of cles.values()) {
+    const vus = new Set<string>();
+    for (const t of liste) {
+      if (vus.has(t.id)) continue;
+      const groupe = [t, ...liste.filter((u) => u !== t && !vus.has(u.id) && !(regroupement(t) && regroupement(u)) && libellesProches(t.libelle, u.libelle))];
+      if (groupe.length < 2) continue;
+      groupe.forEach((u) => vus.add(u.id));
+      out.push(rem("C15", "Doublon possible", "MAJEUR", `${groupe.length} postes « ${t.ouvrage} »${t.batiment ? ` (${t.batiment})` : ""} aux libellés proches la même année ${t.annee_prevue ?? ""} : ${groupe.map((u) => u.libelle).join(" / ")}.`, { poste_code: t.id, action: "Fusionner ou justifier." }));
+    }
+  }
 
   for (const e of json.etat_des_lieux ?? []) {
     const lie = normalises.filter((t) => contientUn(texte(t), [e.ouvrage]) || (t.ouvrage && normaliser(t.ouvrage) === normaliser(e.ouvrage)));
@@ -393,7 +555,7 @@ export function controlesPlateforme(json: PpptVerifJson, fiche: FicheCopro = {},
     }
   }
 
-  return out;
+  return propositionsValidees(out, json);
 }
 
 /**
