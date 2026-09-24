@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { useMajPptCopro, type PptCopro } from "@/api/ppt";
 import { NON_ATTRIBUE, messageTransfert, optionsGestionnaire, patchGestionnaire, valeurActuelle, type GestionnaireActuel, type MembreEnseigne } from "@/lib/ppt/gestionnaires";
+import { messageErreur } from "@/lib/erreurs";
 
 type CoproGestion = Pick<PptCopro, "id" | "nom" | "gestionnaire_nom" | "gestionnaire_email">;
 
@@ -52,7 +53,7 @@ export function ChoixGestionnaire({ copro, membres, petit, style }: { copro: Cop
   const choisir = (patch: GestionnaireActuel) => {
     if (!window.confirm(messageTransfert(copro, patch))) return;
     setErreur(null);
-    maj.mutate({ id: copro.id, ...patch }, { onError: (e) => setErreur(e instanceof Error ? e.message : "Enregistrement impossible") });
+    maj.mutate({ id: copro.id, ...patch }, { onError: (e) => setErreur(messageErreur(e, "Enregistrement impossible")) });
   };
 
   return (

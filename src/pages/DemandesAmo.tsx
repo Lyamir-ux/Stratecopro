@@ -17,6 +17,7 @@ import {
   useStatutDemandeAmo,
   type DemandeAmo,
 } from "@/api/demandesAmo";
+import { messageErreur } from "@/lib/erreurs";
 
 const STATUTS: { id: DemandeAmo["statut"]; label: string }[] = [
   { id: "nouvelle", label: "À traiter" },
@@ -76,7 +77,7 @@ function Carte({ d }: { d: DemandeAmo }) {
       });
       navigate(`/copros/${copro.id}`);
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : "La création du dossier a échoué.");
+      setErreur(messageErreur(err, "La création du dossier a échoué."));
     }
   };
 
@@ -85,7 +86,7 @@ function Carte({ d }: { d: DemandeAmo }) {
     try {
       await statut.mutateAsync({ id: d.id, statut: s, commentaire: commentaire.trim() || null });
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : "La mise à jour a échoué.");
+      setErreur(messageErreur(err, "La mise à jour a échoué."));
     }
   };
 

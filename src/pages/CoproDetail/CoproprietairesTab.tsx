@@ -33,6 +33,7 @@ import {
 } from "@/lib/exportsCopros";
 import { useGenererRapportEnquete } from "@/api/rapportEnquete";
 import type { CoproWithStats } from "@/api/copros";
+import { messageErreur } from "@/lib/erreurs";
 
 type FiltreStatut = "tous" | "a_relancer" | "complet";
 
@@ -372,7 +373,7 @@ function FicheCoproprietaire({
         bareme: data.bareme,
         verifie,
       },
-      { onSuccess: () => setEdit(false), onError: (e) => setErreur(e instanceof Error ? e.message : "Enregistrement impossible") }
+      { onSuccess: () => setEdit(false), onError: (e) => setErreur(messageErreur(e, "Enregistrement impossible")) }
     );
   };
 
@@ -380,7 +381,7 @@ function FicheCoproprietaire({
     try {
       window.open(await urlSigneePiece(path), "_blank", "noopener");
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : "Ouverture impossible");
+      setErreur(messageErreur(e, "Ouverture impossible"));
     }
   };
 

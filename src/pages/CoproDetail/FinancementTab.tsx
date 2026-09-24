@@ -49,6 +49,7 @@ import {
   useMarquerInstruction,
   useRelancerSignataire,
 } from "@/api/signature";
+import { messageErreur } from "@/lib/erreurs";
 
 export function FinancementTab({ c }: { c: CoproWithStats }) {
   const navigate = useNavigate();
@@ -1116,7 +1117,7 @@ function SignaturesElectroniquesPanel({ coproId }: { coproId: string }) {
 
   const agir = (p: Promise<unknown>) => {
     setErreur(null);
-    p.catch((e) => setErreur(e instanceof Error ? e.message : "Action impossible"));
+    p.catch((e) => setErreur(messageErreur(e, "Action impossible")));
   };
 
   return (

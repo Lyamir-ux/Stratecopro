@@ -11,6 +11,7 @@ import { Cadre } from "@/pages/Signature";
 import { messageErreurSignature } from "@/api/signature";
 import { appelFicheEtatPublique, octetsUrl } from "@/api/ficheEtat";
 import { genFicheEtat, type SignatureFichePdf } from "@/lib/pdf/ficheEtat";
+import { messageErreur } from "@/lib/erreurs";
 
 interface EtatLienFiche {
   copro: string;
@@ -68,7 +69,7 @@ export default function SignatureFichePublique() {
     try {
       await fn();
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : messageErreurSignature(undefined));
+      setErreur(messageErreur(e, messageErreurSignature(undefined)));
     } finally {
       setBusy(null);
     }

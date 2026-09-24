@@ -28,6 +28,7 @@ import {
 import type { Tables } from "@/lib/database.types";
 import { useActiverModulePpt, useMajPptParametres, usePptParametres } from "@/api/ppt";
 import { PARAMETRES_ORG_DEFAUT, type ParametresOrg } from "@/lib/ppt/formules";
+import { messageErreur } from "@/lib/erreurs";
 
 const ROLE_LABEL: Record<OrgRole, string> = {
   directeur: "Direction - tout le portefeuille",
@@ -145,7 +146,7 @@ function NouveauMembre({ org }: { org: Organisation }) {
       setEmail("");
       setRole("gestionnaire");
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : "La création du compte a échoué. Réessayez.");
+      setErreur(messageErreur(e, "La création du compte a échoué. Réessayez."));
     }
   };
 

@@ -34,6 +34,7 @@ import { CorrigerDocument, type DocumentACorriger } from "./CorrigerDocument";
 import { DocumentsASupprimer, SupprimerDocument, type DocumentASupprimer } from "./SupprimerDocument";
 import { ImportPortefeuilleDialog } from "./ImportPortefeuille";
 import type { PortefeuillePpt } from "./index";
+import { messageErreur } from "@/lib/erreurs";
 
 /** Un tableau (Excel / CSV) dont les en-têtes ressemblent au portefeuille est routé vers l'import, pas vers le dépôt de document. */
 async function estFichierPortefeuille(f: File): Promise<boolean> {
@@ -163,7 +164,7 @@ function FenetreDepot({
       const rapport = await deposer.mutateAsync({ copro, file: fichier, type, date_document: date || null, taux_honoraires_pct: avecHonoraires ? tauxNum : null });
       onFait(copro, type, creee, rapport);
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : "Le dépôt a échoué. Réessayez.");
+      setErreur(messageErreur(err, "Le dépôt a échoué. Réessayez."));
     }
   };
 

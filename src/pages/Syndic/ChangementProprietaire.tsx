@@ -18,6 +18,7 @@ import {
   type LotFull,
   type MotifMutation,
 } from "@/api/donnees";
+import { messageErreur } from "@/lib/erreurs";
 
 const champ = (label: string, input: React.ReactNode) => (
   <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--fg2)" }}>
@@ -78,7 +79,7 @@ export function ChangementProprietaire({
       });
       onClose();
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : "Le changement de propriétaire a échoué.");
+      setErreur(messageErreur(err, "Le changement de propriétaire a échoué."));
     }
   };
 

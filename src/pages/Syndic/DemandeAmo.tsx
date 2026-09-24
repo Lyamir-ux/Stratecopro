@@ -20,6 +20,7 @@ import {
   useDemandesAmo,
   useDeposerDemandeAmo,
 } from "@/api/demandesAmo";
+import { messageErreur } from "@/lib/erreurs";
 
 function fmtTaille(bytes: number | null): string {
   if (bytes == null) return "";
@@ -103,7 +104,7 @@ export function DemandeAmo({ syndicNom }: { syndicNom?: string }) {
       setVmc("");
       setFichiers([]);
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : "L'envoi de la demande a échoué.");
+      setErreur(messageErreur(err, "L'envoi de la demande a échoué."));
     }
   };
 

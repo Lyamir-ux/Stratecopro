@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
 import { LIBELLE_STATUT_PIECE, QUALIFICATIONS_PIECE, libelleQualification, useQualifierPiece } from "@/api/portail";
 import type { PieceJustificative } from "@/api/dossiersCopros";
+import { messageErreur } from "@/lib/erreurs";
 
 export function StatutPieceBadge({ piece }: { piece: Pick<PieceJustificative, "statut" | "qualification"> }) {
   const kind = piece.statut === "valide" ? "success" : piece.statut === "refuse" ? "warn" : "neutral";
@@ -41,7 +42,7 @@ export function VerificationPiece({ piece, compact }: { piece: PieceJustificativ
     setErreur(null);
     qualifier.mutate(
       { piece, qualification: q || null, motifLibre: q === "autre" ? motif : null },
-      { onError: (e) => setErreur(e instanceof Error ? e.message : "Enregistrement impossible") }
+      { onError: (e) => setErreur(messageErreur(e, "Enregistrement impossible")) }
     );
   };
 

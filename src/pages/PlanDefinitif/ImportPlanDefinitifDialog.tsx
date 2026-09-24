@@ -13,6 +13,7 @@ import { importPlanDefinitif, type ImportPlanResult } from "@/lib/finance/import
 import { estClasseurEstimatif, importPlanEstimatif, type ImportEstimatifResult } from "@/lib/finance/planEstimatif";
 import { useCreatePlanDefinitif } from "@/api/planDefinitif";
 import { ApercuImportEstimatif } from "@/pages/PlanEstimatif/ApercuImportEstimatif";
+import { messageErreur } from "@/lib/erreurs";
 
 interface Props {
   coproId: string;
@@ -43,7 +44,7 @@ export function ImportPlanDefinitifDialog({ coproId, coproNom, onClose }: Props)
       setFile(f);
     } catch (e) {
       setFileName(f.name);
-      setParseError(e instanceof Error ? e.message : String(e));
+      setParseError(messageErreur(e, String(e)));
     }
   };
 

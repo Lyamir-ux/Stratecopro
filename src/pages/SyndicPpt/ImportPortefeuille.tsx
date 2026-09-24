@@ -22,6 +22,7 @@ import {
   type ClasseurLu,
 } from "@/lib/ppt/importPortefeuille";
 import type { PortefeuillePpt } from "./index";
+import { messageErreur } from "@/lib/erreurs";
 
 const CHAMPS_CHOIX: ChampImport[] = [...COLONNES_IMPORT.map((c) => c.id), "ignorer"];
 
@@ -91,7 +92,7 @@ export function ImportPortefeuilleDialog({
       const r = await importer.mutateAsync({ organisation_id: pf.orgId, lignes: lecture.lignes });
       setResultat(r);
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : "L'import a échoué. Réessayez.");
+      setErreur(messageErreur(e, "L'import a échoué. Réessayez."));
     }
   };
 

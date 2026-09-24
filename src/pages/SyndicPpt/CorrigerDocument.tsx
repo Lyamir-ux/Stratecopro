@@ -20,6 +20,7 @@ import {
 import { TYPES_DEPOT, nomPourCopro, trouverCopro } from "@/lib/ppt/depot";
 import { fmtDateCourte } from "./commun";
 import { TYPE_RAPPORT_LABEL } from "@/lib/ppt/referentiels";
+import { messageErreur } from "@/lib/erreurs";
 
 export type DocumentACorriger = Pick<PptRapport, "id" | "ppt_copro_id" | "storage_path" | "name" | "type" | "statut" | "date_document" | "depose_le">;
 
@@ -86,7 +87,7 @@ export function CorrigerDocument({ rapport, onClose }: { rapport: DocumentACorri
       if (origineVidee && viderOrigine && origine) await corbeille.mutateAsync({ id: origine.id });
       onClose(true);
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : "La correction a échoué.");
+      setErreur(messageErreur(err, "La correction a échoué."));
     }
   };
 
@@ -190,7 +191,7 @@ export function RenommerFichiers({
       }
       onClose();
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : "Le renommage a échoué.");
+      setErreur(messageErreur(err, "Le renommage a échoué."));
     }
   };
 

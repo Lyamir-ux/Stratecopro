@@ -49,6 +49,7 @@ import {
 } from "@/lib/ficheEtat";
 import { nomFichierFicheEtat } from "@/lib/pdf/ficheEtat";
 import { libellesBatiments } from "@/lib/referentiels";
+import { messageErreur } from "@/lib/erreurs";
 
 const ROLES: { role: "president_cs" | "syndic"; label: string }[] = [
   { role: "president_cs", label: "Président(e) du conseil syndical" },
@@ -253,7 +254,7 @@ export function FicheEtatForm({ c, onBack }: { c: SyndicCopro; onBack: () => voi
     try {
       await fn();
     } catch (err) {
-      setMessage({ ok: false, texte: err instanceof Error ? err.message : "L'opération a échoué. Réessayez." });
+      setMessage({ ok: false, texte: messageErreur(err, "L'opération a échoué. Réessayez.") });
     }
   };
 

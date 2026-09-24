@@ -42,6 +42,7 @@ import { montantTtcPoste, parametresDepuisJson, postesDepuisJson, totauxParAnnee
 import { STATUT_CONTROLE_LABEL, TYPE_RAPPORT_LABEL, VERDICT_LABEL } from "@/lib/ppt/referentiels";
 import { SeveriteBadge, StatutRapportBadge, VerdictBadge, fmtDateCourte, fmtEur, fmtPct } from "@/pages/SyndicPpt/commun";
 import { SupprimerDocument } from "@/pages/SyndicPpt/SupprimerDocument";
+import { messageErreur } from "@/lib/erreurs";
 
 const PRIORITES: TravailNormalise["priorite"][] = ["Préservation", "Énergétique", "Amélioration"];
 
@@ -251,7 +252,7 @@ export default function Revue() {
       const nbProp = r.json.propositions.length;
       setMessage(`Analyse importée : ${r.json.travaux_normalises.length} postes, verdict ${VERDICT_LABEL[r.json.synthese.verdict] ?? r.json.synthese.verdict}${nbProp ? `, ${nbProp} proposition${nbProp > 1 ? "s" : ""} du skill à valider avant la création du tableau` : ""}.`);
     } catch (e) {
-      setErreurs([e instanceof Error ? e.message : "Import refusé par la base."]);
+      setErreurs([messageErreur(e, "Import refusé par la base.")]);
     }
   };
 
@@ -328,7 +329,7 @@ export default function Revue() {
       await devalider.mutateAsync({ rapportId: id!, motif: null });
       setMessage("Rapport revenu en vérification : la revue est de nouveau modifiable, le cabinet ne voit plus le plan.");
     } catch (e) {
-      setErreurRetour(e instanceof Error ? e.message : "Retour en vérification refusé.");
+      setErreurRetour(messageErreur(e, "Retour en vérification refusé."));
     }
   };
 
@@ -373,7 +374,7 @@ export default function Revue() {
             {rapport.enseigne ?? "sans enseigne"} · {rapport.copro?.gestionnaire_nom ?? "gestionnaire non désigné"} · {TYPE_RAPPORT_LABEL[rapport.type] ?? rapport.type} déposé le {fmtDateCourte(rapport.depose_le)}{rapport.taux_honoraires_pct != null ? <> · <strong title="taux d'honoraires de suivi de travaux indiqué par le syndic au dépôt, à appliquer au tableau PPT de sortie">honoraires syndic {rapport.taux_honoraires_pct.toLocaleString("fr-FR")} %</strong></> : null} · <StatutRapportBadge statut={rapport.statut} />
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginLeft: "auto", justifyContent: "flex-end" }}>
           <Chrono depuis={depuis} />
           <button className="se-btn se-btn-secondary btn-sm" onClick={() => void telechargerPptRapport(rapport)}>
             <Icon name="download" size={14} />

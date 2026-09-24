@@ -55,6 +55,7 @@ import { SelectGestionnaire } from "./ChoixGestionnaire";
 import { SupprimerDocument, peutSupprimer, peutSupprimerJson, type DocumentASupprimer } from "./SupprimerDocument";
 import { messageTransfert } from "@/lib/ppt/gestionnaires";
 import { PrioriteBadge, RenoBadge, SeveriteBadge, StatutPosteBadge, StatutRapportBadge, VerdictBadge, anneeCourante, fmtDateCourte, fmtEur, fmtPct, issueLabel, posteLite, type PrioriteCode } from "./commun";
+import { messageErreur } from "@/lib/erreurs";
 
 const TABS = [
   { id: "echeancier", label: "Échéancier" },
@@ -326,7 +327,7 @@ function SuiviEcheancier({ copro, postes, retirees, params, annee }: { copro: Pp
       await decaler.mutateAsync(changements);
       setBrouillon({});
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : "L'enregistrement a échoué.");
+      setErreur(messageErreur(e, "L'enregistrement a échoué."));
     }
   };
 
@@ -506,7 +507,7 @@ function SaisieMontant({ poste, params, annee, onClose }: { poste: PptPoste; par
       await saisir.mutateAsync({ poste_id: poste.id, montant: valeur, commentaire: commentaire.trim() || null });
       onClose();
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : "L'enregistrement a échoué.");
+      setErreur(messageErreur(err, "L'enregistrement a échoué."));
     }
   };
 
@@ -551,7 +552,7 @@ function SaisieMontant({ poste, params, annee, onClose }: { poste: PptPoste; par
                 disabled={busy || !motif.trim()}
                 onClick={() => {
                   setErreur(null);
-                  retirer.mutateAsync({ poste_id: poste.id, motif: motif.trim() }).then(onClose).catch((err) => setErreur(err instanceof Error ? err.message : "Le retrait a échoué."));
+                  retirer.mutateAsync({ poste_id: poste.id, motif: motif.trim() }).then(onClose).catch((err) => setErreur(messageErreur(err, "Le retrait a échoué.")));
                 }}
               >
                 <Icon name="trash" size={13} />
@@ -642,7 +643,7 @@ function LignesRetirees({ retirees, params, onClose }: { retirees: PptPoste[]; p
                         title="Remettre cette ligne dans le plan"
                         onClick={() => {
                           setErreur(null);
-                          retablir.mutateAsync(p.id).catch((err) => setErreur(err instanceof Error ? err.message : "Le rétablissement a échoué."));
+                          retablir.mutateAsync(p.id).catch((err) => setErreur(messageErreur(err, "Le rétablissement a échoué.")));
                         }}
                       >
                         <Icon name="refresh" size={13} />
@@ -685,7 +686,7 @@ function AjoutLigne({ copro, annee, onClose }: { copro: PptCoproAvecStats; annee
       await ajouter.mutateAsync({ copro_id: copro.id, libelle: libelle.trim(), priorite, annee: an, montant: valeur, commentaire: commentaire.trim() || null });
       onClose();
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : "L'ajout a échoué.");
+      setErreur(messageErreur(err, "L'ajout a échoué."));
     }
   };
 
@@ -956,7 +957,7 @@ function DocumentsTab({ c }: { c: PptCoproAvecStats }) {
         <label className={"se-btn se-btn-secondary btn-sm" + (!tauxValide ? " disabled" : "")} style={{ cursor: tauxValide ? "pointer" : "not-allowed", opacity: tauxValide ? 1 : 0.6 }} title={tauxValide ? undefined : "Indiquez le taux d'honoraires de suivi (0 à 100 %)"}>
           <Icon name="upload" size={14} />
           {deposer.isPending ? "Dépôt…" : "Déposer"}
-          <input type="file" accept="application/pdf,.pdf,.xlsx" style={{ display: "none" }} disabled={deposer.isPending || !tauxValide} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; setErreur(null); deposer.mutateAsync({ copro: c, file: f, type, taux_honoraires_pct: avecHonoraires ? tauxSaisi : null }).catch((err) => setErreur(err instanceof Error ? err.message : "Échec du dépôt")); }} />
+          <input type="file" accept="application/pdf,.pdf,.xlsx" style={{ display: "none" }} disabled={deposer.isPending || !tauxValide} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; setErreur(null); deposer.mutateAsync({ copro: c, file: f, type, taux_honoraires_pct: avecHonoraires ? tauxSaisi : null }).catch((err) => setErreur(messageErreur(err, "Échec du dépôt"))); }} />
         </label>
       </div>
       <div className="p-body" style={{ paddingTop: 4 }}>

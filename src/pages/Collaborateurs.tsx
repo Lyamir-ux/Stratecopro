@@ -12,6 +12,7 @@ import { Modal } from "@/components/Modal";
 import { supabase } from "@/lib/supabase";
 import { useTeamProfiles, useCreerCollaborateur, type CollaborateurCree } from "@/api/profiles";
 import { useAuth } from "@/auth/AuthProvider";
+import { messageErreur } from "@/lib/erreurs";
 
 function useUpdateProfile() {
   const qc = useQueryClient();
@@ -54,7 +55,7 @@ function NouveauCollaborateur({ onClose }: { onClose: () => void }) {
       });
       setCree(res);
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : "La création du collaborateur a échoué. Réessayez.");
+      setErreur(messageErreur(e, "La création du collaborateur a échoué. Réessayez."));
     }
   };
 

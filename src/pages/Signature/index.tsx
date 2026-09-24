@@ -8,6 +8,7 @@ import { Icon } from "@/components/Icon";
 import { PdfLecteur } from "@/components/PdfLecteur";
 import { appelSignaturePublique, uploadVersBucket, messageErreurSignature } from "@/api/signature";
 import { assemblerPieceIdentite, validerFichiersPiece } from "@/lib/pdf/pieceIdentite";
+import { messageErreur } from "@/lib/erreurs";
 
 interface EtatLien {
   copro: string;
@@ -117,7 +118,7 @@ export default function SignaturePublique() {
     try {
       await fn();
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : messageErreurSignature(undefined));
+      setErreur(messageErreur(e, messageErreurSignature(undefined)));
     } finally {
       setBusy(null);
     }

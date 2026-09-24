@@ -11,6 +11,7 @@ import { useDossiersCoproprietaires, type DossiersCopro } from "@/api/dossiersCo
 import { useEcrireOccupationFiche } from "@/api/ficheEtat";
 import { exporterRapportEnquete, type ContexteExport } from "@/lib/exportsCopros";
 import type { Reponse } from "@/api/enquete";
+import { messageErreur } from "@/lib/erreurs";
 
 export function contexteExport(c: CoproWithStats, data: DossiersCopro): ContexteExport {
   return {
@@ -39,7 +40,7 @@ export function useGenererRapportEnquete(c: CoproWithStats, dossiers?: DossiersC
       const { occupation } = await ecrire.mutateAsync({ copro: c, donnees, reponses, auteur: profile?.full_name ?? null });
       exporterRapportEnquete(data, contexteExport(c, data), occupation);
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : "La génération du rapport a échoué. Réessayez.");
+      setErreur(messageErreur(e, "La génération du rapport a échoué. Réessayez."));
     }
   };
 

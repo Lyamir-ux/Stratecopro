@@ -29,6 +29,7 @@ import {
 import { consequencesSuppression, consequencesSuppressionAnalyse, impactSuppression } from "@/lib/ppt/suppression";
 import { TYPE_RAPPORT_LABEL } from "@/lib/ppt/referentiels";
 import { StatutRapportBadge, fmtDateCourte } from "./commun";
+import { messageErreur } from "@/lib/erreurs";
 
 export type DocumentASupprimer = Pick<PptRapport, "id" | "ppt_copro_id" | "name" | "type" | "statut" | "valide_le" | "depose_le" | "schema_version">;
 
@@ -90,7 +91,7 @@ export function SupprimerDocument({
       if (proposeCorbeille && viderCopro) await corbeille.mutateAsync({ id: rapport.ppt_copro_id });
       onClose(true);
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : "Suppression refusée.");
+      setErreur(messageErreur(err, "Suppression refusée."));
     }
   };
 

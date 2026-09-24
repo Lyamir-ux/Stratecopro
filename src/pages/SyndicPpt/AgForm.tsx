@@ -8,6 +8,7 @@ import { Modal } from "@/components/Modal";
 import { useDeposerPptRapport, useSaisirAg, type PptCopro, type PptPoste, type PptResolution, type ResolutionSaisie } from "@/api/ppt";
 import { articleSuggere } from "@/lib/ppt/referentiels";
 import { fmtEur, type PrioriteCode } from "./commun";
+import { messageErreur } from "@/lib/erreurs";
 
 type Article = NonNullable<PptResolution["article"]>;
 type Issue = PptResolution["issue"];
@@ -69,7 +70,7 @@ export function AgForm({ copro, postes, onClose }: { copro: Pick<PptCopro, "id" 
       await saisir.mutateAsync({ ppt_copro_id: copro.id, date_ag: dateAg, type, notes: notes.trim() || null, pv_rapport_id: pvId, resolutions });
       onClose();
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : "L'enregistrement a échoué.");
+      setErreur(messageErreur(e, "L'enregistrement a échoué."));
     }
   };
 
