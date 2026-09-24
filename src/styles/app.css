@@ -297,7 +297,9 @@ button { font-family: inherit; }
 /* ==========================================================================
    TABLE (dense)
    ========================================================================== */
-.tablewrap { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm); }
+/* overflow-x : un tableau plus large que l'écran défile au lieu d'être coupé (feedback Amir 24/09,
+   colonnes de droite invisibles sur /syndic/ppt/copros) ; le cadre arrondi reste rogné. */
+.tablewrap { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow-x: auto; box-shadow: var(--shadow-sm); }
 table.dossiers { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.dossiers thead th {
   text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
@@ -307,6 +309,13 @@ table.dossiers tbody td { padding: 13px 16px; border-bottom: 1px solid var(--bor
 table.dossiers tbody tr { cursor: pointer; transition: background var(--dur-fast); }
 table.dossiers tbody tr:hover { background: var(--bg-soft); }
 table.dossiers tbody tr:last-child td { border-bottom: none; }
+/* colonne d'actions collée au bord droit : visible même quand le tableau défile */
+table.dossiers .col-actions { position: sticky; right: 0; z-index: 1; width: 1%; white-space: nowrap; background: var(--bg); box-shadow: inset 1px 0 0 var(--border); padding-left: 8px; padding-right: 8px; text-align: center; }
+table.dossiers tbody tr:hover td.col-actions { background: var(--bg-soft); }
+/* liste des copropriétés PPT (11 colonnes) : cellules resserrées, nom lisible sur une ou deux lignes */
+table.dossiers.ppt-copros thead th, table.dossiers.ppt-copros tbody td { padding: 10px 10px; }
+table.dossiers.ppt-copros thead th { white-space: normal; vertical-align: bottom; }
+table.dossiers.ppt-copros th:first-child, table.dossiers.ppt-copros td:first-child { min-width: 190px; padding-left: 16px; }
 .td-name { display: flex; align-items: center; gap: 12px; }
 .td-thumb { width: 46px; height: 36px; border-radius: var(--radius-sm); flex: none; object-fit: cover; background: var(--bg-muted); display: flex; align-items: center; justify-content: center; color: var(--color-primary-600); }
 .td-name .nm { font-weight: 700; font-family: var(--font-display); font-size: 16px; }

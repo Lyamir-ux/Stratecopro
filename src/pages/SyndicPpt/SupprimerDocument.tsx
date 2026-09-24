@@ -4,14 +4,16 @@
 // ou équipe Strat Eco) ; un rapport validé se supprime par le seul dirigeant et
 // emporte son plan et ses remarques - la fenêtre dit avant confirmation ce qui
 // part (postes retouchés par le cabinet compris) et ce qui reste.
+// Depuis la liste des copropriétés (feedback 24/09, 11:48), la corbeille de la
+// ligne ouvre d'abord le choix du document (DocumentsASupprimer).
 import { useState, type FormEvent } from "react";
 import { Modal } from "@/components/Modal";
 import { Icon } from "@/components/Icon";
 import { useAuth } from "@/auth/AuthProvider";
-import { useCorbeillePptCopro, usePptAgs, usePptCopro, usePptPostes, usePptRapports, usePptRemarques, useSupprimerPptRapport, type PptRapport } from "@/api/ppt";
+import { useCorbeillePptCopro, usePptAgs, usePptCopro, usePptPostes, usePptRapports, usePptRemarques, useSupprimerPptRapport, type PptCopro, type PptRapport } from "@/api/ppt";
 import { consequencesSuppression, impactSuppression } from "@/lib/ppt/suppression";
 import { TYPE_RAPPORT_LABEL } from "@/lib/ppt/referentiels";
-import { fmtDateCourte } from "./commun";
+import { StatutRapportBadge, fmtDateCourte } from "./commun";
 
 export type DocumentASupprimer = Pick<PptRapport, "id" | "ppt_copro_id" | "name" | "type" | "statut" | "valide_le" | "depose_le">;
 
@@ -118,6 +120,61 @@ export function SupprimerDocument({ rapport, onClose }: { rapport: DocumentASupp
           </button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+/** Choix du document à supprimer parmi ceux d'une copropriété (corbeille d'une ligne de la liste). */
+export function DocumentsASupprimer({ copro, rapports, onClose }: { copro: Pick<PptCopro, "id" | "nom">; rapports: DocumentASupprimer[]; onClose: () => void }) {
+  const { profile } = useAuth();
+  const dirigeant = !!profile?.dirigeant;
+  const [choisi, setChoisi] = useState<DocumentASupprimer | null>(null);
+  const docs = [...rapports].sort((a, b) => b.depose_le.localeCompare(a.depose_le));
+
+  if (choisi) {
+    return (
+      <SupprimerDocument
+        rapport={choisi}
+        onClose={(supprime) => {
+          setChoisi(null);
+          // dernier document supprimé : plus rien à choisir
+          if (supprime && docs.length <= 1) onClose();
+        }}
+      />
+    );
+  }
+  return (
+    <Modal title="Supprimer un document" onClose={onClose} width={560}>
+      <p className="se-small" style={{ margin: "0 0 10px", color: "var(--fg-muted)" }}>
+        {copro.nom} · {docs.length} document{docs.length > 1 ? "s" : ""}. Choisissez celui à supprimer : la fenêtre suivante dit ce qui part et ce qui reste.
+      </p>
+      {docs.length === 0 && <p className="se-small" style={{ margin: 0 }}>Aucun document.</p>}
+      {docs.map((r) => {
+        const possible = peutSupprimer(r, dirigeant);
+        return (
+          <div key={r.id} className="doc-row" style={{ padding: "10px 0" }}>
+            <span className="d-ico"><Icon name="fileText" size={18} /></span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div className="d-name" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.name}>{r.name}</div>
+              <div className="d-sub">
+                {TYPE_RAPPORT_LABEL[r.type] ?? r.type} · déposé le {fmtDateCourte(r.depose_le)}
+                {r.valide_le ? ` · validé le ${fmtDateCourte(r.valide_le)}` : ""}
+              </div>
+            </div>
+            {(r.type === "pppt" || r.type === "ppt_adopte") && <StatutRapportBadge statut={r.statut} />}
+            <button
+              type="button"
+              className="se-btn se-btn-ghost btn-sm"
+              style={{ color: possible ? "var(--color-error-700)" : undefined, flex: "none" }}
+              disabled={!possible}
+              title={possible ? (r.statut === "valide" ? "Supprimer ce rapport validé et son plan, pour recommencer" : "Supprimer ce document") : "Rapport validé : seul le dirigeant de Strat Eco peut le supprimer"}
+              onClick={() => setChoisi(r)}
+            >
+              <Icon name="trash" size={14} /> Supprimer
+            </button>
+          </div>
+        );
+      })}
     </Modal>
   );
 }

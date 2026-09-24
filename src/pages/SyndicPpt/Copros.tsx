@@ -10,8 +10,10 @@
 // Excel / CSV glissé sur la zone de dépôt et reconnu par ses en-têtes ; chaque
 // ligne est rapprochée de la base AMO → statut « En rénovation » dans la liste.
 // Suppression (feedback Amir 24/09, 0095) : le dépôt qui vient d'être fait se
-// supprime depuis le bandeau de confirmation ; le badge « Rapport » ouvre
-// l'onglet Documents, où un rapport validé se supprime (dirigeant) pour recommencer.
+// supprime depuis le bandeau de confirmation ; chaque ligne porte une corbeille
+// (colonne collée à droite, visible même quand le tableau défile - feedback
+// 11:48) qui ouvre le choix du document ; un rapport validé se supprime
+// (dirigeant) pour recommencer. Le badge « Rapport » ouvre l'onglet Documents.
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
@@ -29,7 +31,7 @@ import { TYPES_ANALYSES, TYPES_DEPOT, trouverCopro, typeDevine } from "@/lib/ppt
 import { estPortefeuille, lireClasseur, statutParc, type StatutParc } from "@/lib/ppt/importPortefeuille";
 import { STATUT_PARC_LABEL, StatutParcBadge, StatutRapportBadge, TITRE_VERROU, fmtDateCourte } from "./commun";
 import { CorrigerDocument, type DocumentACorriger } from "./CorrigerDocument";
-import { SupprimerDocument, type DocumentASupprimer } from "./SupprimerDocument";
+import { DocumentsASupprimer, SupprimerDocument, type DocumentASupprimer } from "./SupprimerDocument";
 import { ImportPortefeuilleDialog } from "./ImportPortefeuille";
 import type { PortefeuillePpt } from "./index";
 
@@ -246,6 +248,13 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
   const [aCorriger, setACorriger] = useState<DocumentACorriger | null>(null);
   // dépôt à retirer pour recommencer (0082 / 0095)
   const [aSupprimer, setASupprimer] = useState<DocumentASupprimer | null>(null);
+  // corbeille d'une ligne : choix parmi les documents de la copropriété
+  const [docsDe, setDocsDe] = useState<Pick<PptCopro, "id" | "nom"> | null>(null);
+  const docsParCopro = useMemo(() => {
+    const m = new Map<string, PptRapport[]>();
+    for (const r of pf.rapports) m.set(r.ppt_copro_id, [...(m.get(r.ppt_copro_id) ?? []), r]);
+    return m;
+  }, [pf.rapports]);
   // import du portefeuille (0077) : fenêtre ouverte par le bouton ou par un tableau reconnu, bilan affiché ensuite
   const [importOuvert, setImportOuvert] = useState(false);
   const [fichierImport, setFichierImport] = useState<File | null>(null);
@@ -371,6 +380,8 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
         />
       )}
 
+      {docsDe && <DocumentsASupprimer copro={docsDe} rapports={docsParCopro.get(docsDe.id) ?? []} onClose={() => setDocsDe(null)} />}
+
       {aCorriger && (
         <CorrigerDocument
           rapport={aCorriger}
@@ -450,7 +461,7 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
         </div>
         <div className="p-body" style={{ paddingTop: 0 }}>
           <div className="tablewrap">
-            <table className="dossiers" style={{ fontSize: 13 }}>
+            <table className="dossiers ppt-copros" style={{ fontSize: 13 }}>
               <thead>
                 <tr>
                   <th>Copropriété</th>
@@ -464,6 +475,7 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
                   <th className="num">Prochain jalon</th>
                   <th>Dernière AG</th>
                   <th className="num">Remarques</th>
+                  <th className="col-actions" aria-label="Actions"></th>
                 </tr>
               </thead>
               <tbody>
@@ -501,11 +513,27 @@ export function CoprosPpt({ pf }: { pf: PortefeuillePpt }) {
                     <td className="num">{c.stats?.prochaine_annee ?? "-"}</td>
                     <td>{c.stats?.derniere_ag ? fmtDateCourte(c.stats.derniere_ag) : <span style={{ color: "var(--fg-muted)" }}>jamais</span>}</td>
                     <td className="num">{c.stats?.remarques_ouvertes ? <span style={{ color: "var(--color-warning-700)", fontWeight: 700 }}>{c.stats.remarques_ouvertes}</span> : "-"}</td>
+                    <td className="col-actions">
+                      {c.acces && (docsParCopro.get(c.id)?.length ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title={`Supprimer un document de cette copropriété (${docsParCopro.get(c.id)!.length})`}
+                          aria-label="Supprimer un document"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDocsDe(c);
+                          }}
+                        >
+                          <Icon name="trash" size={16} />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {lignes.length === 0 && (
                   <tr>
-                    <td colSpan={11} style={{ color: "var(--fg-muted)" }}>
+                    <td colSpan={12} style={{ color: "var(--fg-muted)" }}>
                       {pf.copros.length === 0 ? "Aucune copropriété pour l'instant : importez votre portefeuille (bouton ci-dessus) ou déposez un premier fichier." : "Aucun dossier ne correspond à la recherche."}
                     </td>
                   </tr>
