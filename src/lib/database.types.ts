@@ -1047,6 +1047,7 @@ export type Database = {
           nb_logements: number | null
           organisation_id: string | null
           phase: Database["public"]["Enums"]["phase_copro"]
+          photo_cadrage: Json | null
           photo_path: string | null
           progress: number
           slug: string | null
@@ -1073,6 +1074,7 @@ export type Database = {
           nb_logements?: number | null
           organisation_id?: string | null
           phase?: Database["public"]["Enums"]["phase_copro"]
+          photo_cadrage?: Json | null
           photo_path?: string | null
           progress?: number
           slug?: string | null
@@ -1099,6 +1101,7 @@ export type Database = {
           nb_logements?: number | null
           organisation_id?: string | null
           phase?: Database["public"]["Enums"]["phase_copro"]
+          photo_cadrage?: Json | null
           photo_path?: string | null
           progress?: number
           slug?: string | null
@@ -3435,6 +3438,7 @@ export type Database = {
           initials: string
           job_title: string | null
           niveau_pieces: number
+          recoit_demandes_amo: boolean
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
@@ -3447,6 +3451,7 @@ export type Database = {
           initials: string
           job_title?: string | null
           niveau_pieces?: number
+          recoit_demandes_amo?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
@@ -3459,6 +3464,7 @@ export type Database = {
           initials?: string
           job_title?: string | null
           niveau_pieces?: number
+          recoit_demandes_amo?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
@@ -4023,7 +4029,6 @@ export type Database = {
         Args: { p_copro_id: string }
         Returns: {
           coproprietaire_id: string
-          nb_personnes: number
           profil_mpr: string
           statut_occupation: string
           updated_at: string
@@ -4061,6 +4066,44 @@ export type Database = {
         Returns: Database["public"]["Enums"]["type_consultation"][]
       }
       my_prestataire_id: { Args: never; Returns: string }
+      org_acces_copro: {
+        Args: { p_acces: boolean; p_copro: string; p_user: string }
+        Returns: undefined
+      }
+      org_changer_role: {
+        Args: {
+          p_org: string
+          p_role: Database["public"]["Enums"]["org_role"]
+          p_user: string
+        }
+        Returns: undefined
+      }
+      org_designer_gestionnaire: {
+        Args: { p_copro: string; p_user: string | null }
+        Returns: undefined
+      }
+      org_equipe: {
+        Args: { p_org: string }
+        Returns: {
+          active: boolean
+          derniere_connexion: string | null
+          email: string
+          full_name: string
+          job_title: string | null
+          mot_de_passe_provisoire: boolean
+          org_role: Database["public"]["Enums"]["org_role"]
+          user_id: string
+        }[]
+      }
+      org_rattachements: {
+        Args: { p_org: string }
+        Returns: {
+          branche: string
+          copro_id: string
+          gestionnaire: boolean
+          user_id: string
+        }[]
+      }
       peut_postuler: { Args: { p_consultation_id: string }; Returns: boolean }
       peut_voir_consultation: {
         Args: { p_consultation_id: string }

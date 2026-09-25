@@ -2,6 +2,8 @@
 import type { ReactNode } from "react";
 import { Icon } from "./Icon";
 import { DPE, TEAM_FALLBACK, type DpeClass, type PhaseId } from "@/lib/referentiels";
+import { PhotoCadree } from "@/components/PhotoCadrage";
+import { lireCadrage } from "@/lib/photoCadrage";
 
 export const THUMB_BG =
   "repeating-linear-gradient(135deg, rgba(122,181,44,0.14) 0 14px, rgba(122,181,44,0.05) 14px 28px), #E8F1D7";
@@ -83,11 +85,11 @@ export function Badge({ kind, children, dot }: { kind: BadgeKind; children: Reac
 }
 
 // Miniature photo - placeholder de marque en attendant l'upload (M3, Supabase Storage)
-export function ThumbSlot({ photoUrl, placeholder }: { photoUrl?: string | null; placeholder?: string }) {
+export function ThumbSlot({ photoUrl, placeholder, cadrage }: { photoUrl?: string | null; placeholder?: string; cadrage?: unknown }) {
   return (
-    <div className="cc-thumb">
+    <div className="cc-thumb" style={{ overflow: "hidden" }}>
       {photoUrl ? (
-        <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        <PhotoCadree src={photoUrl} cadrage={lireCadrage(cadrage)} />
       ) : (
         <div
           style={{

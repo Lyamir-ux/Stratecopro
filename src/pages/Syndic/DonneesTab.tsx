@@ -2,22 +2,38 @@
 // L'import et l'édition des tantièmes restent côté AMO ; depuis le 22/09/2026
 // (feedback Amir) le gestionnaire met à jour le propriétaire d'un lot en
 // cliquant sa ligne : vente, succession ou autre mutation.
+// Feedbacks syndic du 24/09/2026 : la liste des lots se filtre par bâtiment
+// (tous par défaut, sélecteur en tête de liste ou clic sur un bâtiment du
+// panneau de droite) et se cherche par copropriétaire ou numéro de lot.
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { libellesBatiments, USAGE_LOT_LABEL } from "@/lib/referentiels";
 import { useDonnees, useMutationsLots, type LotFull } from "@/api/donnees";
 import type { SyndicCopro } from "@/api/syndic";
+import { normaliserRecherche } from "@/lib/format";
 import { ChangementProprietaire, JournalMutations } from "./ChangementProprietaire";
 
 export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
   const { data: donnees, isLoading } = useDonnees(c.id);
   const { data: mutations } = useMutationsLots(c.id);
   const [lotEdite, setLotEdite] = useState<LotFull | null>(null);
+  // bâtiment affiché (null : tous, la vue par défaut) et recherche en cours
+  const [bat, setBat] = useState<string | null>(null);
+  const [recherche, setRecherche] = useState("");
   const lb = libellesBatiments(c.denomination_batiments);
   if (isLoading || !donnees) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
   const { batiments, coproprietaires, lots, cles } = donnees;
+  // bâtiments portant au moins un lot, dans l'ordre du panneau de droite
+  const codesBat = batiments.map((b) => b.code).filter((code) => lots.some((l) => l.batiment?.code === code));
+  const batActif = bat && codesBat.includes(bat) ? bat : null;
+  const q = normaliserRecherche(recherche.trim());
+  const lotsBat = batActif ? lots.filter((l) => l.batiment?.code === batActif) : lots;
+  const lotsVisibles = q
+    ? lotsBat.filter((l) => normaliserRecherche(l.coproprietaire?.nom ?? "").includes(q) || normaliserRecherche(String(l.num)).includes(q))
+    : lotsBat;
+  const filtre = batActif !== null || q !== "";
   const lotsByCp = new Map<string, number>();
   for (const l of lots) {
     if (l.coproprietaire_id) lotsByCp.set(l.coproprietaire_id, (lotsByCp.get(l.coproprietaire_id) ?? 0) + 1);
@@ -37,13 +53,59 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
             <h3>Lots</h3>
             <span style={{ flex: 1 }}></span>
             <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
-              {lots.length} lots{cleDefaut ? ` · ${totalCle.toLocaleString("fr-FR")} tantièmes${suffixeCle}` : ""}
+              {filtre ? `${lotsVisibles.length} sur ${lots.length} lots` : `${lots.length} lots`}
+              {cleDefaut ? ` · ${totalCle.toLocaleString("fr-FR")} tantièmes${suffixeCle}` : ""}
             </span>
           </div>
           <div className="p-body">
+            {lots.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 14 }}>
+                {codesBat.length > 1 &&
+                  (codesBat.length <= 6 ? (
+                    <div className="seg" role="group" aria-label={`Filtrer les lots par ${lb.singulier.toLowerCase()}`}>
+                      <button className={batActif === null ? "on" : ""} onClick={() => setBat(null)}>
+                        Tous · {lots.length}
+                      </button>
+                      {codesBat.map((code) => (
+                        <button key={code} className={batActif === code ? "on" : ""} onClick={() => setBat(code)} title={`Lots ${lb.court} ${code}`}>
+                          {code} · {lots.filter((l) => l.batiment?.code === code).length}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <select className="edit-inp" value={batActif ?? ""} onChange={(e) => setBat(e.target.value || null)} style={{ maxWidth: 200 }}>
+                      <option value="">{lb.pluriel} : tous</option>
+                      {codesBat.map((code) => (
+                        <option key={code} value={code}>
+                          {lb.singulier} {code}
+                        </option>
+                      ))}
+                    </select>
+                  ))}
+                <div className="search" style={{ margin: 0, width: 280, maxWidth: "100%" }}>
+                  <Icon name="search" size={16} />
+                  <input
+                    placeholder="Rechercher un copropriétaire, un lot…"
+                    value={recherche}
+                    onChange={(e) => setRecherche(e.target.value)}
+                    aria-label="Rechercher un copropriétaire ou un numéro de lot"
+                  />
+                  {recherche && (
+                    <button className="icon-btn" style={{ width: 22, height: 22, flex: "none" }} title="Effacer la recherche" onClick={() => setRecherche("")}>
+                      <Icon name="x" size={13} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             {lots.length === 0 ? (
               <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
                 Les lots seront visibles dès leur import par l'équipe Strat Eco.
+              </p>
+            ) : lotsVisibles.length === 0 ? (
+              <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
+                Aucun lot ne correspond{q ? ` à « ${recherche.trim()} »` : ""}
+                {batActif ? ` (${lb.court} ${batActif})` : ""}.
               </p>
             ) : (
               <div className="tablewrap" style={{ maxHeight: 460, overflowY: "auto" }}>
@@ -59,7 +121,7 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {lots.map((l) => (
+                    {lotsVisibles.map((l) => (
                       <tr
                         key={l.id}
                         onClick={() => setLotEdite(l)}
@@ -142,12 +204,28 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
             <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{batiments.length}</span>
           </div>
           <div className="p-body" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {batiments.map((b) => (
-              <Badge key={b.id} kind="neutral">
-                {b.code}
-                {b.label ? " · " + b.label : ""}
-              </Badge>
-            ))}
+            {/* un clic sur un bâtiment filtre la liste des lots ; un second clic rend tous les lots */}
+            {batiments.map((b) =>
+              codesBat.includes(b.code) && codesBat.length > 1 ? (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => setBat(batActif === b.code ? null : b.code)}
+                  title={batActif === b.code ? "Revoir tous les lots" : `N'afficher que les lots ${lb.court} ${b.code}`}
+                  style={{ border: "none", background: "none", padding: 0, cursor: "pointer" }}
+                >
+                  <Badge kind={batActif === b.code ? "primary" : "neutral"}>
+                    {b.code}
+                    {b.label ? " · " + b.label : ""}
+                  </Badge>
+                </button>
+              ) : (
+                <Badge key={b.id} kind="neutral">
+                  {b.code}
+                  {b.label ? " · " + b.label : ""}
+                </Badge>
+              )
+            )}
             {batiments.length === 0 && (
               <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
                 Aucun bâtiment renseigné.

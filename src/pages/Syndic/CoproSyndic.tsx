@@ -16,6 +16,8 @@ import { FinancementTabSyndic } from "./FinancementTab";
 import { MontageTabSyndic } from "./MontageTab";
 import { FichiersTabSyndic } from "./FichiersTab";
 import { SuiviFinancierTabSyndic } from "./SuiviFinancierTab";
+import { PhotoCadree } from "@/components/PhotoCadrage";
+import { lireCadrage } from "@/lib/photoCadrage";
 
 const TABS = [
   { id: "projet", label: "Projet" },
@@ -94,7 +96,7 @@ export default function CoproSyndic() {
         <div className="detail-hero">
           <div className="dh-banner">
             {photoUrl ? (
-              <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <PhotoCadree src={photoUrl} cadrage={lireCadrage(c.photo_cadrage)} />
             ) : (
               <div
                 style={{

@@ -25,6 +25,7 @@ function useUpdateProfile() {
       job_title?: string | null;
       active?: boolean;
       niveau_pieces?: number;
+      recoit_demandes_amo?: boolean;
     }) => {
       const { error } = await supabase.from("profiles").update(patch).eq("user_id", userId);
       if (error) throw error;
@@ -254,6 +255,25 @@ export default function Collaborateurs() {
                 )}
               </div>
               <span className="spacer"></span>
+              {/* Destinataire des alertes e-mail « demande d'AMO » des syndics
+                  (feedback Amir 24/09/2026) : réglage du seul dirigeant,
+                  verrouillé aussi en base (trigger, migration 0100). */}
+              <label
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--fg2)", cursor: me?.dirigeant ? "pointer" : "default", whiteSpace: "nowrap" }}
+                title={
+                  me?.dirigeant
+                    ? "Reçoit par e-mail les nouvelles demandes d'AMO déposées par les syndics"
+                    : "Seul le dirigeant choisit qui reçoit les demandes des syndics"
+                }
+              >
+                <input
+                  type="checkbox"
+                  checked={p.recoit_demandes_amo}
+                  disabled={!me?.dirigeant || update.isPending}
+                  onChange={(e) => void update.mutateAsync({ userId: p.user_id, recoit_demandes_amo: e.target.checked })}
+                />
+                Demandes syndics
+              </label>
               {/* Habilitation pièces justificatives (CGU art. 7.5.1) : le
                   niveau 1 lit le contenu des pièces (chaque consultation est
                   journalisée), le niveau 2 n'y a aucun accès en lecture.
@@ -299,6 +319,14 @@ export default function Collaborateurs() {
               - chaque consultation est journalisée ; le <b>niveau 2</b> (chef de projet) n'y a aucun
               accès en lecture et ne voit que les métadonnées. Par défaut, tout nouveau collaborateur est
               au niveau 2, le plus restrictif. Seul le <b>dirigeant</b> peut modifier ces niveaux.
+            </span>
+          </div>
+          <div className="import-note" style={{ marginTop: 10 }}>
+            <Icon name="megaphone" size={16} />
+            <span>
+              <b>Demandes syndics</b> : les collaborateurs cochés reçoivent par e-mail chaque nouvelle demande
+              d'AMO déposée depuis l'espace syndic (page Demandes des syndics). Si personne n'est coché, l'alerte
+              part au dirigeant. Seul le <b>dirigeant</b> modifie ce réglage.
             </span>
           </div>
           <div className="import-note" style={{ marginTop: 10 }}>

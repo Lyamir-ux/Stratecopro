@@ -1,7 +1,10 @@
 // Edge function « notifier-demande-amo » - un syndic vient de déposer une
 // demande d'AMO depuis son espace (feedbacks Amir 22/09/2026). L'équipe Strat
-// Eco est alertée par e-mail : la demande ne porte pas encore sur un dossier,
-// donc tous les comptes AMO actifs sont prévenus.
+// Eco est alertée par e-mail. Depuis le 24/09/2026 (feedback Amir), seuls les
+// collaborateurs désignés par le dirigeant sont prévenus
+// (profiles.recoit_demandes_amo, migration 0100 : Louis, Cyrielle, Ryan et
+// Amir) ; si personne n'est désigné, l'alerte revient au dirigeant plutôt que
+// de partir à toute l'équipe.
 // Envoi réel via Resend si RESEND_API_KEY est configuré, sinon 'simule'.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -59,12 +62,23 @@ Deno.serve(async (req: Request) => {
     return json(403, { error: "Cette demande n'est pas la vôtre" });
   }
 
-  // Destinataires : l'équipe AMO (la demande ne porte pas encore sur un dossier)
-  const { data: amos } = await admin
+  // Destinataires : les AMO désignés pour les demandes des syndics, à défaut le dirigeant
+  const { data: designes } = await admin
     .from("profiles")
-    .select("user_id, full_name, active, role")
+    .select("user_id, full_name")
     .eq("role", "amo")
-    .eq("active", true);
+    .eq("active", true)
+    .eq("recoit_demandes_amo", true);
+  let amos = designes ?? [];
+  if (amos.length === 0) {
+    const { data: dirigeants } = await admin
+      .from("profiles")
+      .select("user_id, full_name")
+      .eq("role", "amo")
+      .eq("active", true)
+      .eq("dirigeant", true);
+    amos = dirigeants ?? [];
+  }
 
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const from = Deno.env.get("RESEND_FROM") ?? "Strat Eco <onboarding@resend.dev>";
@@ -95,7 +109,7 @@ Deno.serve(async (req: Request) => {
   });
 
   let envoyes = 0, simules = 0, erreurs = 0;
-  const cibles = (amos ?? []).filter((a) => a.user_id !== userData.user.id);
+  const cibles = amos.filter((a) => a.user_id !== userData.user.id);
 
   for (const cible of cibles) {
     const { data: u } = await admin.auth.admin.getUserById(cible.user_id);

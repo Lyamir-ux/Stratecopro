@@ -18,3 +18,7 @@ export const fmtDate = (iso: string | null | undefined): string =>
   iso == null
     ? "-"
     : new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+
+/** Texte comparable pour une recherche : minuscules, sans accents. */
+export const normaliserRecherche = (s: string): string =>
+  s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");

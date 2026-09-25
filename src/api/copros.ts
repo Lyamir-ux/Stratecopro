@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import type { Cadrage } from "@/lib/photoCadrage";
 import type { Tables, TablesInsert } from "@/lib/database.types";
 import { buildTaskTemplate } from "@/lib/taskTemplate";
 import type { PhaseId } from "@/lib/referentiels";
@@ -271,22 +272,44 @@ export function useUpdateCopro(id: string) {
   });
 }
 
-/** Téléverse la photo du dossier dans le bucket privé et met à jour photo_path. */
+/**
+ * Téléverse la photo du dossier dans le bucket privé et met à jour photo_path,
+ * avec le cadrage choisi dans la fenêtre « Cadrer la nouvelle photo »
+ * (photo_cadrage, 0101 - la photo d'origine n'est jamais retouchée).
+ */
 export function useUploadPhoto(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async ({ file, cadrage }: { file: File; cadrage: Cadrage }) => {
       const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
       const path = `${id}/hero.${ext}`;
       const { error: eUp } = await supabase.storage.from("copro-photos").upload(path, file, { upsert: true });
       if (eUp) throw eUp;
-      const { error: eDb } = await supabase.from("coproprietes").update({ photo_path: path }).eq("id", id);
+      const { error: eDb } = await supabase
+        .from("coproprietes")
+        .update({ photo_path: path, photo_cadrage: { ...cadrage } })
+        .eq("id", id);
       if (eDb) throw eDb;
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["copro", id] });
       void qc.invalidateQueries({ queryKey: ["copros"] });
       void qc.invalidateQueries({ queryKey: ["photo-url"] });
+    },
+  });
+}
+
+/** Recadre la photo déjà en place (feedback Amir 24/09/2026) : seul le cadrage change. */
+export function useCadrerPhoto(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (cadrage: Cadrage) => {
+      const { error } = await supabase.from("coproprietes").update({ photo_cadrage: { ...cadrage } }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["copro", id] });
+      void qc.invalidateQueries({ queryKey: ["copros"] });
     },
   });
 }

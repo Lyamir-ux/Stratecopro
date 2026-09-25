@@ -4,9 +4,13 @@
 // blanc, feedback 20/09). Trois parties : synthèse,
 // grille année par année (les décalages et montants saisis du syndic sont
 // repris tels quels), détail des postes avec commentaires. Montants indicatifs.
+// Le même module produit l'échéancier de tout le portefeuille (page
+// Échéancier) et, depuis le 24/09/2026, le PDF du portefeuille complet du
+// tableau de bord PPT (genererPortefeuillePptPdf).
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb, type RGB } from "pdf-lib";
 import { anneeEffective, cepApres, etiquetteDepuisCep, gainCumule, montantTtcPoste, type ParametresCalcul, type PosteCalcul } from "@/lib/ppt/formules";
 import { plageAnnees, posteDeplacable } from "@/lib/ppt/echeancier";
+import { ETATS_PPT, ETAT_PPT_LABEL, type EtatPpt } from "@/lib/ppt/indicateurs";
 
 /** Poste tel qu'attendu par l'export (sous-ensemble de ppt_postes). */
 export interface PosteEcheancierPdf extends PosteCalcul {
@@ -167,8 +171,9 @@ class Flux {
     if (this.y - h < 48) this.nouvellePage();
   }
 
-  titreSection(s: string) {
-    this.besoin(34);
+  /** Titre de section ; `suite` = hauteur à garder sous le titre (en-tête et première ligne d'un tableau) pour ne pas le laisser seul en bas de page. */
+  titreSection(s: string, suite = 0) {
+    this.besoin(34 + suite);
     this.y -= 10;
     this.page.drawRectangle({ x: MARGE, y: this.y - 13, width: 3.5, height: 14, color: BLEU });
     this.page.drawText(txt(s.toUpperCase()), { x: MARGE + 10, y: this.y - 11, size: 11, font: this.bold, color: BLEU_FONCE });
@@ -441,57 +446,40 @@ export interface EcheancierPortefeuillePdfInput {
   logoPng?: Uint8Array | ArrayBuffer;
 }
 
-/** PDF de l'échéancier de toutes les copropriétés : copro × année, totaux (feedback 20/09). */
-export async function genererEcheancierPortefeuillePdf(input: EcheancierPortefeuillePdfInput): Promise<Uint8Array> {
-  const { params, annee, annees } = input;
-  const lignes = [...input.lignes].sort((a, b) => b.total - a.total || a.nom.localeCompare(b.nom, "fr"));
-
-  const doc = await PDFDocument.create();
-  doc.setTitle(`Échéancier PPT du portefeuille${input.nomEnseigne ? ` - ${input.nomEnseigne}` : ""}`);
-  doc.setAuthor("Strat Eco pro");
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  let logo: PDFImage | null = null;
+/** Logo Strat Eco pro blanc : fourni (tests) ou chargé depuis /logo-strateco-pro-white.png dans le navigateur. */
+async function chargerLogo(doc: PDFDocument, logoPng?: Uint8Array | ArrayBuffer): Promise<PDFImage | null> {
   try {
-    if (input.logoPng) logo = await doc.embedPng(input.logoPng);
-    else if (typeof fetch === "function" && typeof window !== "undefined") {
+    if (logoPng) return await doc.embedPng(logoPng);
+    if (typeof fetch === "function" && typeof window !== "undefined") {
       const res = await fetch("/logo-strateco-pro-white.png");
-      if (res.ok) logo = await doc.embedPng(await res.arrayBuffer());
+      if (res.ok) return await doc.embedPng(await res.arrayBuffer());
     }
   } catch {
-    logo = null;
+    /* logo facultatif : le texte « STRAT ECO pro » le remplace */
   }
-  const genereLe = input.genereLe ?? new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-  const f = new Flux(doc, font, bold, logo, genereLe, `Échéancier PPT du portefeuille${input.nomEnseigne ? ` - ${input.nomEnseigne}` : ""}`);
+  return null;
+}
 
-  // bandeau
+/** Bandeau bleu de première page : logo, titre, sous-titre à gauche, mention à droite. */
+function bandeau(f: Flux, titre: string, sousTitre: string, droite: string) {
   const bandeauH = 78;
   f.page.drawRectangle({ x: 0, y: PAGE.h - bandeauH, width: PAGE.w, height: bandeauH, color: BLEU });
-  if (logo) {
+  if (f.logo) {
     const lh = 20;
-    f.page.drawImage(logo, { x: MARGE, y: PAGE.h - 18 - lh, width: (logo.width / logo.height) * lh, height: lh });
-  } else f.page.drawText("STRAT ECO pro", { x: MARGE, y: PAGE.h - 32, size: 14, font: bold, color: BLANC });
-  f.page.drawText(txt("Échéancier des travaux - toutes les copropriétés"), { x: MARGE, y: PAGE.h - 56, size: 16, font: bold, color: BLANC });
-  f.page.drawText(txt([input.nomEnseigne, input.gestionnaire ? `gestionnaire : ${input.gestionnaire}` : "tout le portefeuille"].filter(Boolean).join(" - ")), { x: MARGE, y: PAGE.h - 70, size: 9, font, color: BLANC });
-  const droite = txt(`${lignes.length} copropriété${lignes.length > 1 ? "s" : ""}  ·  édité le ${genereLe}`);
-  f.page.drawText(droite, { x: PAGE.w - MARGE - font.widthOfTextAtSize(droite, 8.5), y: PAGE.h - 70, size: 8.5, font, color: BLANC });
+    f.page.drawImage(f.logo, { x: MARGE, y: PAGE.h - 18 - lh, width: (f.logo.width / f.logo.height) * lh, height: lh });
+  } else f.page.drawText("STRAT ECO pro", { x: MARGE, y: PAGE.h - 32, size: 14, font: f.bold, color: BLANC });
+  f.page.drawText(txt(titre), { x: MARGE, y: PAGE.h - 56, size: 16, font: f.bold, color: BLANC });
+  f.page.drawText(wrap(sousTitre, f.font, 9, LARGEUR * 0.6, 1)[0] ?? "", { x: MARGE, y: PAGE.h - 70, size: 9, font: f.font, color: BLANC });
+  const d = txt(droite);
+  f.page.drawText(d, { x: PAGE.w - MARGE - f.font.widthOfTextAtSize(d, 8.5), y: PAGE.h - 70, size: 8.5, font: f.font, color: BLANC });
   f.y = PAGE.h - bandeauH - 8;
+}
 
-  // synthèse
+/** Grille copro × année (blocs de 12 ans au plus), totaux par année et total général. */
+function grillePortefeuille(f: Flux, lignes: LigneEcheancierPdf[], annees: number[], annee: number) {
+  const { font, bold } = f;
   const total = lignes.reduce((s, l) => s + l.total, 0);
   const totaux = annees.map((a) => lignes.reduce((s, l) => s + (l.parAnnee.get(a) ?? 0), 0));
-  const iMax = totaux.indexOf(Math.max(...totaux));
-  const logements = lignes.reduce((s, l) => s + (l.nb_logements ?? 0), 0);
-  f.titreSection("Synthèse");
-  f.tuiles([
-    { label: "Copropriétés", valeur: String(lignes.length), pied: logements ? `${logements} logements` : undefined },
-    { label: "TTC retenu sur la période", valeur: euroCourt(total), pied: `${annees[0]} à ${annees[annees.length - 1]}`, accent: true },
-    { label: "Année la plus chargée", valeur: iMax >= 0 && totaux[iMax] > 0 ? String(annees[iMax]) : "-", pied: iMax >= 0 && totaux[iMax] > 0 ? euroCourt(totaux[iMax]) : undefined },
-    { label: "Moyenne par an", valeur: euroCourt(total / Math.max(1, annees.length)), pied: "sur la période affichée" },
-  ]);
-
-  // grille copro × année
-  f.titreSection("Échéancier par copropriété");
   const colCopro = 200;
   const colTotal = 62;
   const blocs = blocsAnnees(annees, 12);
@@ -555,11 +543,474 @@ export async function genererEcheancierPortefeuillePdf(input: EcheancierPortefeu
     }
     f.y = yT - 18 - (blocs.length > 1 ? 14 : 6);
   });
+}
+
+/** Note sous la grille : d'où viennent les montants retenus. */
+const noteMontantsRetenus = (params: ParametresCalcul) =>
+  `Montants TTC retenus par année : montant voté, sinon montant saisi par le syndic, sinon TTC actualisé du rapport (inflation ${pct(params.inflation)} par an depuis ${params.anneeBase}, TVA ${pct(params.tvaFacades)} ou ${pct(params.tvaEnergetique)} pour l'énergétique, maîtrise d'œuvre ${pct(params.moe)} le cas échéant, honoraires syndic ${pct(params.syndic)}). Un poste rejeté ou reporté figure à l'année de sa nouvelle présentation ; la dernière colonne cumule les années suivantes. Montants indicatifs, à confirmer par devis.`;
+
+/** PDF de l'échéancier de toutes les copropriétés : copro × année, totaux (feedback 20/09). */
+export async function genererEcheancierPortefeuillePdf(input: EcheancierPortefeuillePdfInput): Promise<Uint8Array> {
+  const { params, annee, annees } = input;
+  const lignes = [...input.lignes].sort((a, b) => b.total - a.total || a.nom.localeCompare(b.nom, "fr"));
+
+  const doc = await PDFDocument.create();
+  doc.setTitle(`Échéancier PPT du portefeuille${input.nomEnseigne ? ` - ${input.nomEnseigne}` : ""}`);
+  doc.setAuthor("Strat Eco pro");
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const logo = await chargerLogo(doc, input.logoPng);
+  const genereLe = input.genereLe ?? new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  const f = new Flux(doc, font, bold, logo, genereLe, `Échéancier PPT du portefeuille${input.nomEnseigne ? ` - ${input.nomEnseigne}` : ""}`);
+
+  bandeau(
+    f,
+    "Échéancier des travaux - toutes les copropriétés",
+    [input.nomEnseigne, input.gestionnaire ? `gestionnaire : ${input.gestionnaire}` : "tout le portefeuille"].filter(Boolean).join(" - "),
+    `${lignes.length} copropriété${lignes.length > 1 ? "s" : ""}  ·  édité le ${genereLe}`
+  );
+
+  // synthèse
+  const total = lignes.reduce((s, l) => s + l.total, 0);
+  const totaux = annees.map((a) => lignes.reduce((s, l) => s + (l.parAnnee.get(a) ?? 0), 0));
+  const iMax = totaux.indexOf(Math.max(...totaux));
+  const logements = lignes.reduce((s, l) => s + (l.nb_logements ?? 0), 0);
+  f.titreSection("Synthèse");
+  f.tuiles([
+    { label: "Copropriétés", valeur: String(lignes.length), pied: logements ? `${logements} logements` : undefined },
+    { label: "TTC retenu sur la période", valeur: euroCourt(total), pied: `${annees[0]} à ${annees[annees.length - 1]}`, accent: true },
+    { label: "Année la plus chargée", valeur: iMax >= 0 && totaux[iMax] > 0 ? String(annees[iMax]) : "-", pied: iMax >= 0 && totaux[iMax] > 0 ? euroCourt(totaux[iMax]) : undefined },
+    { label: "Moyenne par an", valeur: euroCourt(total / Math.max(1, annees.length)), pied: "sur la période affichée" },
+  ]);
+
+  f.titreSection("Échéancier par copropriété");
+  grillePortefeuille(f, lignes, annees, annee);
   if (lignes.length === 0) f.paragraphe("Aucun poste programmé : les postes apparaissent une fois le PPPT analysé et validé par Strat Eco pro.", { size: 9, color: GRIS });
+  f.paragraphe(noteMontantsRetenus(params), { size: 7.5, color: GRIS, interligne: 2.5 });
+
+  numeroterPages(doc, font);
+  return doc.save();
+}
+
+// ---------- portefeuille complet (page /syndic/ppt, feedback syndic 24/09/2026) ----------
+// « Exporter le portefeuille complet en PDF » : tout ce que montre le tableau
+// de bord, sur le périmètre affiché (direction ou gestionnaire, recherche et
+// filtre d'état appliqués) - synthèse et états, comparatif par gestionnaire,
+// copropriétés (mêmes colonnes que l'export CSV), échéancier à 10 ans,
+// honoraires projetés (direction) ou points à préparer (gestionnaire), alertes.
+
+const COULEUR_ETAT: Record<EtatPpt, RGB> = {
+  inconnu: rgb(0.659, 0.678, 0.627), // --color-neutral-400 #A8ADA0
+  analyse: rgb(0.361, 0.392, 0.439), // --color-neutral-600 #5C6470
+  a_presenter: rgb(0.961, 0.62, 0.043), // --color-warning-500 #F59E0B
+  presente: rgb(0.31, 0.533, 0.745), // bleu PPT 400 #4F88BE
+  vote: BLEU_FONCE, // bleu PPT 700 #1E4F7C
+  reno: rgb(0.478, 0.71, 0.173), // vert Strat Eco #7AB52C (dossier en rénovation globale)
+};
+/** En-têtes courts du comparatif (une colonne par état). */
+const ETAT_COURT: Record<EtatPpt, string> = { inconnu: "À qualifier", analyse: "Analyse", a_presenter: "À présenter", presente: "Présenté", vote: "Voté", reno: "Rénovation" };
+const COULEUR_NIVEAU: Record<"haute" | "moyenne" | "basse", RGB> = { haute: ROUGE, moyenne: rgb(0.961, 0.62, 0.043), basse: GRIS };
+const NIVEAU_LABEL: Record<"haute" | "moyenne" | "basse", string> = { haute: "Haute", moyenne: "Moyenne", basse: "Basse" };
+const NON_ATTRIBUE = "Non attribué";
+
+export interface LignePortefeuillePptPdf {
+  nom: string;
+  commune?: string | null;
+  gestionnaire?: string | null;
+  etat: EtatPpt;
+  /** Libellé d'état affiché (précisé par la phase du dossier de rénovation). */
+  etatLibelle: string;
+  dpe?: string | null;
+  logements?: number | null;
+  postes: number;
+  /** TTC actualisé des postes à venir (montant voté s'il existe). */
+  montantTtc: number;
+  honorairesPotentiels: number;
+  honorairesAcquis: number;
+  prochaineAnnee: number | null;
+  /** TTC des seuls postes à voter l'année du prochain jalon. */
+  montantProchaineAnnee: number;
+  alertes: number;
+  alerteHaute: boolean;
+  /** Échéancier : TTC retenu par année et total. */
+  parAnnee: Map<number, number>;
+  totalEcheancier: number;
+}
+
+export interface HonorairesAnneePdf {
+  annee: number;
+  nbPostes: number;
+  montantTtc: number;
+  acquis: number;
+  potentiel: number;
+}
+
+export interface AlertePortefeuillePdf {
+  copro: string;
+  libelle: string;
+  niveau: "haute" | "moyenne" | "basse";
+}
+
+export interface APreparerPdf {
+  copro: string;
+  prochaineAg: string | null;
+  postes: string[];
+  aRepresenter: string[];
+}
+
+export interface PortefeuillePptPdfInput {
+  nomEnseigne?: string | null;
+  /** Vue direction (toute l'enseigne) ; sinon portefeuille du gestionnaire connecté. */
+  direction: boolean;
+  /** Périmètre affiché (recherche, état filtré) ; null : tout le portefeuille. */
+  filtre?: string | null;
+  lignes: LignePortefeuillePptPdf[];
+  /** Honoraires de suivi par année (direction). */
+  honoraires?: HonorairesAnneePdf[];
+  tauxHonorairesPct?: number;
+  /** Ce qu'il faut préparer pour les prochaines AG (gestionnaire). */
+  aPreparer?: APreparerPdf[];
+  alertes: AlertePortefeuillePdf[];
+  annees: number[];
+  params: ParametresCalcul;
+  annee: number;
+  genereLe?: string;
+  logoPng?: Uint8Array | ArrayBuffer;
+}
+
+export interface GroupeGestionnairePptPdf {
+  nom: string;
+  copros: number;
+  logements: number;
+  montantTtc: number;
+  honoraires: number;
+  parEtat: Record<EtatPpt, number>;
+  alertes: number;
+}
+
+/** Comparatif par gestionnaire : du plus gros parc de logements au plus petit, « Non attribué » en dernier. */
+export function regrouperGestionnairesPpt(lignes: LignePortefeuillePptPdf[]): GroupeGestionnairePptPdf[] {
+  const groupes = new Map<string, GroupeGestionnairePptPdf>();
+  for (const l of lignes) {
+    const nom = l.gestionnaire?.trim() || NON_ATTRIBUE;
+    const g = groupes.get(nom) ?? { nom, copros: 0, logements: 0, montantTtc: 0, honoraires: 0, parEtat: { inconnu: 0, analyse: 0, a_presenter: 0, presente: 0, vote: 0, reno: 0 }, alertes: 0 };
+    g.copros += 1;
+    g.logements += l.logements ?? 0;
+    g.montantTtc += l.montantTtc;
+    g.honoraires += l.honorairesPotentiels + l.honorairesAcquis;
+    g.parEtat[l.etat] += 1;
+    g.alertes += l.alertes;
+    groupes.set(nom, g);
+  }
+  return [...groupes.values()].sort((a, b) =>
+    a.nom === NON_ATTRIBUE ? 1 : b.nom === NON_ATTRIBUE ? -1 : b.logements - a.logements || a.nom.localeCompare(b.nom, "fr")
+  );
+}
+
+interface ColPdf {
+  titre: string;
+  w: number;
+  align?: "right";
+}
+type CellulePdf = string[] | { texte: string; couleur?: RGB; bold?: boolean; pastille?: RGB };
+
+/** Tableau générique : en-tête bleu clair, lignes à hauteur variable, en-tête répété en haut de page, ligne de total facultative. */
+function tableau(f: Flux, cols: ColPdf[], lignes: { cellules: CellulePdf[]; fond?: RGB }[], opts: { size?: number; total?: (string | null)[] } = {}) {
+  const size = opts.size ?? 8;
+  const xs: number[] = [];
+  cols.reduce((x, c) => {
+    xs.push(x);
+    return x + c.w;
+  }, MARGE);
+  const wTotal = cols.reduce((s, c) => s + c.w, 0);
+  const entete = () => {
+    f.besoin(20 + 16);
+    f.page.drawRectangle({ x: MARGE, y: f.y - 18, width: wTotal, height: 18, color: FOND_BLEU });
+    cols.forEach((c, i) => {
+      const s = txt(c.titre);
+      const x = c.align === "right" ? xs[i] + c.w - 6 - f.bold.widthOfTextAtSize(s, size) : xs[i] + 6;
+      f.page.drawText(s, { x, y: f.y - 12.5, size, font: f.bold, color: BLEU_FONCE });
+    });
+    f.y -= 18;
+  };
+  entete();
+  for (const l of lignes) {
+    const rendu = l.cellules.map((c) => (Array.isArray(c) ? { lignes: c } : { lignes: [txt(c.texte)], couleur: c.couleur, bold: c.bold, pastille: c.pastille }));
+    const nl = Math.max(1, ...rendu.map((r) => r.lignes.length));
+    const h = 8 + nl * 10;
+    if (f.y - h < 48) {
+      f.nouvellePage();
+      entete();
+    }
+    const y0 = f.y;
+    if (l.fond) f.page.drawRectangle({ x: MARGE, y: y0 - h, width: wTotal, height: h, color: l.fond });
+    f.page.drawLine({ start: { x: MARGE, y: y0 - h }, end: { x: MARGE + wTotal, y: y0 - h }, thickness: 0.4, color: GRIS_CLAIR });
+    rendu.forEach((r, i) => {
+      const c = cols[i];
+      r.lignes.forEach((s, k) => {
+        const fnt = r.bold || (i === 0 && k === 0) ? f.bold : f.font;
+        const sz = i === 0 && k > 0 ? 7 : size;
+        const decal = r.pastille ? 11 : 0;
+        const x = c.align === "right" ? xs[i] + c.w - 6 - fnt.widthOfTextAtSize(s, sz) : xs[i] + 6 + decal;
+        if (r.pastille && k === 0) f.page.drawCircle({ x: xs[i] + 9.5, y: y0 - 9, size: 3.2, color: r.pastille });
+        f.page.drawText(s, { x, y: y0 - 12 - k * 10, size: sz, font: fnt, color: r.couleur ?? (i === 0 && k > 0 ? GRIS : ENCRE) });
+      });
+    });
+    f.y = y0 - h;
+  }
+  if (opts.total) {
+    f.besoin(20);
+    const yT = f.y;
+    f.page.drawRectangle({ x: MARGE, y: yT - 18, width: wTotal, height: 18, color: FOND_DOUX });
+    f.page.drawLine({ start: { x: MARGE, y: yT }, end: { x: MARGE + wTotal, y: yT }, thickness: 1, color: GRIS });
+    opts.total.forEach((s, i) => {
+      if (s == null) return;
+      const c = cols[i];
+      const t = txt(s);
+      const x = c.align === "right" ? xs[i] + c.w - 6 - f.bold.widthOfTextAtSize(t, size) : xs[i] + 6;
+      f.page.drawText(t, { x, y: yT - 12.5, size, font: f.bold, color: ENCRE });
+    });
+    f.y = yT - 18 - 6;
+  }
+}
+
+/** Colonne élastique : la dernière prend la largeur restante. */
+function completer(cols: ColPdf[]): ColPdf[] {
+  cols[cols.length - 1].w = LARGEUR - cols.slice(0, -1).reduce((s, c) => s + c.w, 0);
+  return cols;
+}
+
+const euroOuTiret = (n: number) => (n ? euroCourt(n) : "-");
+
+export async function genererPortefeuillePptPdf(input: PortefeuillePptPdfInput): Promise<Uint8Array> {
+  const { params, annee, annees } = input;
+  const lignes = [...input.lignes].sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  const groupes = regrouperGestionnairesPpt(lignes);
+  const multiGest = groupes.length > 1;
+  const titreCourt = `Portefeuille PPT${input.nomEnseigne ? ` - ${input.nomEnseigne}` : ""}`;
+
+  const doc = await PDFDocument.create();
+  doc.setTitle(titreCourt);
+  doc.setAuthor("Strat Eco pro");
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const logo = await chargerLogo(doc, input.logoPng);
+  const genereLe = input.genereLe ?? new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  const f = new Flux(doc, font, bold, logo, genereLe, titreCourt);
+
+  bandeau(
+    f,
+    input.direction ? "Suivi des PPT - portefeuille complet" : "Mes PPT - portefeuille complet",
+    [input.nomEnseigne, input.filtre].filter(Boolean).join("  ·  ") || "Ensemble du portefeuille",
+    `${lignes.length} copropriété${lignes.length > 1 ? "s" : ""}  ·  édité le ${genereLe}`
+  );
+
+  // ----- synthèse -----
+  const logements = lignes.reduce((s, l) => s + (l.logements ?? 0), 0);
+  const travaux = lignes.reduce((s, l) => s + l.montantTtc, 0);
+  const acquis = lignes.reduce((s, l) => s + l.honorairesAcquis, 0);
+  const honoraires = lignes.reduce((s, l) => s + l.honorairesPotentiels + l.honorairesAcquis, 0);
+  const nbAlertes = lignes.reduce((s, l) => s + l.alertes, 0);
+  const hautes = input.alertes.filter((a) => a.niveau === "haute").length;
+  const avecPostes = lignes.filter((l) => l.postes > 0).length;
+  const nbGest = groupes.filter((g) => g.nom !== NON_ATTRIBUE).length;
+  f.titreSection("Synthèse du portefeuille");
+  f.tuiles([
+    { label: "Copropriétés", valeur: String(lignes.length), pied: input.direction && nbGest ? `${nbGest} gestionnaire${nbGest > 1 ? "s" : ""}` : undefined },
+    { label: "Logements", valeur: logements.toLocaleString("fr-FR") },
+    { label: "Travaux TTC à venir", valeur: euroOuTiret(travaux), pied: `${avecPostes} copropriété${avecPostes > 1 ? "s" : ""} avec un plan chiffré`, accent: true },
+    { label: "Honoraires de suivi", valeur: euroOuTiret(honoraires), pied: acquis ? `dont ${euroCourt(acquis)} votés` : "aucun poste voté" },
+    { label: "Alertes", valeur: String(nbAlertes), pied: hautes ? `dont ${hautes} haute${hautes > 1 ? "s" : ""}` : nbAlertes ? "aucune alerte haute" : "rien à signaler" },
+  ]);
+  // répartition par état : une ligne de pastilles
+  f.besoin(16);
+  let x = MARGE;
+  const lib = "États de suivi :";
+  f.page.drawText(txt(lib), { x, y: f.y - 10, size: 8.5, font: bold, color: ENCRE });
+  x += bold.widthOfTextAtSize(txt(lib), 8.5) + 12;
+  for (const e of ETATS_PPT) {
+    const n = lignes.filter((l) => l.etat === e).length;
+    f.page.drawCircle({ x: x + 3.5, y: f.y - 7, size: 3.5, color: COULEUR_ETAT[e] });
+    const s = txt(`${ETAT_PPT_LABEL[e]} : ${n}`);
+    f.page.drawText(s, { x: x + 11, y: f.y - 10, size: 8.5, font, color: n ? ENCRE : GRIS });
+    x += 11 + font.widthOfTextAtSize(s, 8.5) + 16;
+  }
+  f.y -= 22;
+
+  // ----- comparatif par gestionnaire -----
+  if (multiGest) {
+    f.titreSection("Comparatif par gestionnaire", 50);
+    const cols = completer([
+      { titre: "Gestionnaire", w: 150 },
+      { titre: "Copros", w: 44, align: "right" },
+      { titre: "Logements", w: 58, align: "right" },
+      ...ETATS_PPT.map((e) => ({ titre: ETAT_COURT[e], w: 54, align: "right" as const })),
+      { titre: "Travaux TTC", w: 78, align: "right" },
+      { titre: "Honoraires", w: 0, align: "right" },
+    ]);
+    tableau(
+      f,
+      cols,
+      groupes.map((g) => ({
+        cellules: [
+          { texte: g.nom, bold: true },
+          { texte: String(g.copros) },
+          { texte: g.logements ? String(g.logements) : "-" },
+          ...ETATS_PPT.map((e) => ({ texte: g.parEtat[e] ? String(g.parEtat[e]) : "-", couleur: g.parEtat[e] ? COULEUR_ETAT[e] : GRIS, bold: g.parEtat[e] > 0 })),
+          { texte: euroOuTiret(g.montantTtc) },
+          { texte: euroOuTiret(g.honoraires) },
+        ],
+      })),
+      {
+        total: ["Total", String(lignes.length), logements ? String(logements) : "-", ...ETATS_PPT.map((e) => String(lignes.filter((l) => l.etat === e).length || "-")), euroOuTiret(travaux), euroOuTiret(honoraires)],
+      }
+    );
+  }
+
+  // ----- copropriétés -----
+  f.titreSection("Copropriétés du portefeuille", 50);
+  const colsC = completer([
+    { titre: "Copropriété", w: multiGest ? 170 : 230 },
+    ...(multiGest ? [{ titre: "Gestionnaire", w: 100 }] : []),
+    { titre: "État", w: 108 },
+    { titre: "DPE", w: 32 },
+    { titre: "Lgts", w: 36, align: "right" as const },
+    { titre: "Postes", w: 40, align: "right" as const },
+    { titre: "Travaux TTC", w: 70, align: "right" as const },
+    { titre: "Honoraires", w: 66, align: "right" as const },
+    { titre: "Prochain jalon", w: 86, align: "right" as const },
+    { titre: "Alertes", w: 0, align: "right" as const },
+  ]);
+  tableau(
+    f,
+    colsC,
+    lignes.map((l) => ({
+      cellules: [
+        [...wrap(l.nom, bold, 8, colsC[0].w - 12, 1), ...(l.commune ? wrap(l.commune, font, 7, colsC[0].w - 12, 1) : [])],
+        ...(multiGest ? [wrap(l.gestionnaire?.trim() || "-", font, 8, 100 - 12, 2)] : []),
+        { texte: wrap(l.etatLibelle, font, 8, colsC[multiGest ? 2 : 1].w - 20, 1)[0] ?? "", pastille: COULEUR_ETAT[l.etat] },
+        { texte: l.dpe || "-" },
+        { texte: l.logements ? String(l.logements) : "-" },
+        { texte: l.postes ? String(l.postes) : "-" },
+        { texte: euroOuTiret(l.montantTtc) },
+        { texte: euroOuTiret(l.honorairesPotentiels + l.honorairesAcquis) },
+        { texte: l.prochaineAnnee != null ? `${l.prochaineAnnee} · ${euroOuTiret(l.montantProchaineAnnee)}` : "-" },
+        { texte: l.alertes ? String(l.alertes) : "-", couleur: l.alerteHaute ? ROUGE_FONCE : undefined, bold: l.alerteHaute },
+      ],
+    })),
+    {
+      total: [
+        `Total - ${lignes.length} copropriété${lignes.length > 1 ? "s" : ""}`,
+        ...(multiGest ? [null] : []),
+        null,
+        null,
+        logements ? String(logements) : "-",
+        String(lignes.reduce((s, l) => s + l.postes, 0) || "-"),
+        euroOuTiret(travaux),
+        euroOuTiret(honoraires),
+        null,
+        nbAlertes ? String(nbAlertes) : "-",
+      ],
+    }
+  );
+  if (lignes.length === 0) f.paragraphe("Aucune copropriété dans le périmètre affiché.", { size: 9, color: GRIS });
+  f.y -= 4;
   f.paragraphe(
-    `Montants TTC retenus par année : montant voté, sinon montant saisi par le syndic, sinon TTC actualisé du rapport (inflation ${pct(params.inflation)} par an depuis ${params.anneeBase}, TVA ${pct(params.tvaFacades)} ou ${pct(params.tvaEnergetique)} pour l'énergétique, maîtrise d'œuvre ${pct(params.moe)} le cas échéant, honoraires syndic ${pct(params.syndic)}). Un poste rejeté ou reporté figure à l'année de sa nouvelle présentation ; la dernière colonne cumule les années suivantes. Montants indicatifs, à confirmer par devis.`,
+    "Travaux TTC : postes du plan encore à venir, actualisés à l'année où ils passeront en AG (montant voté s'il existe). Honoraires : suivi de travaux au taux de l'enseigne, votés et potentiels. Prochain jalon : première année où un poste doit être présenté, avec le TTC des seuls postes à voter cette année-là.",
     { size: 7.5, color: GRIS, interligne: 2.5 }
   );
+
+  // ----- échéancier à 10 ans -----
+  const lignesEch: LigneEcheancierPdf[] = lignes
+    .filter((l) => l.totalEcheancier > 0 || l.postes > 0)
+    .map((l) => ({ nom: l.nom, commune: l.commune, gestionnaire_nom: multiGest ? l.gestionnaire : null, nb_logements: l.logements, parAnnee: l.parAnnee, total: l.totalEcheancier }))
+    .sort((a, b) => b.total - a.total || a.nom.localeCompare(b.nom, "fr"));
+  f.titreSection("Échéancier des travaux par copropriété", 50);
+  if (lignesEch.length === 0) f.paragraphe("Aucun poste programmé : les postes apparaissent une fois le PPPT analysé et validé par Strat Eco pro.", { size: 9, color: GRIS });
+  else {
+    grillePortefeuille(f, lignesEch, annees, annee);
+    f.paragraphe(noteMontantsRetenus(params), { size: 7.5, color: GRIS, interligne: 2.5 });
+  }
+
+  // ----- honoraires projetés (direction) -----
+  if (input.direction && input.honoraires && input.honoraires.length > 0) {
+    f.titreSection("Honoraires de suivi de travaux projetés par année", 50);
+    const h = input.honoraires;
+    const cols = completer([
+      { titre: "Année", w: 90 },
+      { titre: "Postes", w: 90, align: "right" },
+      { titre: "Travaux TTC", w: 140, align: "right" },
+      { titre: "Honoraires votés", w: 140, align: "right" },
+      { titre: "Honoraires potentiels", w: 150, align: "right" },
+      { titre: "Total", w: 0, align: "right" },
+    ]);
+    tableau(
+      f,
+      cols,
+      h.map((l, i) => ({
+        cellules: [
+          { texte: String(l.annee) + (i === h.length - 1 ? " et +" : ""), bold: true },
+          { texte: l.nbPostes ? String(l.nbPostes) : "-" },
+          { texte: l.montantTtc ? euro(l.montantTtc) : "-" },
+          { texte: l.acquis ? euro(l.acquis) : "-", couleur: l.acquis ? BLEU_FONCE : undefined },
+          { texte: l.potentiel ? euro(l.potentiel) : "-" },
+          { texte: l.acquis + l.potentiel ? euro(l.acquis + l.potentiel) : "-", bold: l.acquis + l.potentiel > 0 },
+        ],
+      })),
+      {
+        total: [
+          "Total",
+          String(h.reduce((s, l) => s + l.nbPostes, 0) || "-"),
+          euro(h.reduce((s, l) => s + l.montantTtc, 0)),
+          euro(h.reduce((s, l) => s + l.acquis, 0)),
+          euro(h.reduce((s, l) => s + l.potentiel, 0)),
+          euro(h.reduce((s, l) => s + l.acquis + l.potentiel, 0)),
+        ],
+      }
+    );
+    f.paragraphe(
+      `Honoraires de suivi de travaux au taux de l'enseigne${input.tauxHonorairesPct != null ? ` (${txt(input.tauxHonorairesPct.toLocaleString("fr-FR"))} %)` : ""}. Votés : postes adoptés en AG, au montant voté. Potentiels : postes programmés, présentés ou à représenter. Un poste rejeté compte à l'année de sa nouvelle présentation ; la dernière ligne cumule les années suivantes.`,
+      { size: 7.5, color: GRIS, interligne: 2.5 }
+    );
+  }
+
+  // ----- à préparer (gestionnaire) -----
+  if (!input.direction && input.aPreparer) {
+    f.titreSection("À préparer pour les prochaines AG", 50);
+    if (input.aPreparer.length === 0) f.paragraphe(`Rien à présenter d'ici ${annee + 1} - ou aucun PPT validé pour l'instant.`, { size: 9, color: GRIS });
+    for (const p of input.aPreparer) {
+      f.besoin(30);
+      f.paragraphe(`${p.copro} - ${p.prochaineAg ? `AG le ${new Date(p.prochaineAg).toLocaleDateString("fr-FR")}` : "aucune AG programmée"}`, { size: 9, bold: true });
+      for (const s of p.postes) f.paragraphe(`· ${s}`, { size: 8.5 });
+      for (const s of p.aRepresenter) f.paragraphe(`· À représenter : ${s}`, { size: 8.5, color: ORANGE });
+      f.y -= 4;
+    }
+  }
+
+  // ----- alertes -----
+  f.titreSection(input.direction ? "Alertes" : "Points de vigilance", 50);
+  if (input.alertes.length === 0) f.paragraphe("Aucune alerte sur le périmètre affiché.", { size: 9, color: GRIS });
+  else {
+    const ordre = { haute: 0, moyenne: 1, basse: 2 };
+    const cols = completer([
+      { titre: "Niveau", w: 80 },
+      { titre: "Copropriété", w: 200 },
+      { titre: "Alerte", w: 0 },
+    ]);
+    tableau(
+      f,
+      cols,
+      [...input.alertes]
+        .sort((a, b) => ordre[a.niveau] - ordre[b.niveau] || a.copro.localeCompare(b.copro, "fr"))
+        .map((a) => ({
+          cellules: [
+            { texte: NIVEAU_LABEL[a.niveau], pastille: COULEUR_NIVEAU[a.niveau], couleur: a.niveau === "haute" ? ROUGE_FONCE : undefined, bold: a.niveau === "haute" },
+            wrap(a.copro, bold, 8, 200 - 12, 2),
+            wrap(a.libelle, font, 8, cols[2].w - 12, 3),
+          ],
+        }))
+    );
+  }
 
   numeroterPages(doc, font);
   return doc.save();

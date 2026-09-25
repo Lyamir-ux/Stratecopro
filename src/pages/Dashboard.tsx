@@ -43,7 +43,7 @@ function CoproCard({ c, showProgress }: { c: CoproWithStats; showProgress: boole
   const s = c.stats;
   return (
     <article className="copro-card fade">
-      <ThumbSlot photoUrl={photoUrl} placeholder={c.name} />
+      <ThumbSlot photoUrl={photoUrl} placeholder={c.name} cadrage={c.photo_cadrage} />
       <div style={{ position: "relative" }}>
         <div className="cc-body" style={{ cursor: "pointer" }} onClick={() => navigate(`/copros/${c.id}`)}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>

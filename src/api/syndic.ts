@@ -160,13 +160,12 @@ export function useEnqueteSyndic(coproId: string | undefined) {
 
 export interface ReponseSyndic {
   coproprietaire_id: string;
-  nb_personnes: number | null;
   statut_occupation: string | null;
   profil_mpr: string | null;
   updated_at: string;
 }
 
-/** Réponses d'enquête vues syndic - SANS le RFR (RPC dédiée). */
+/** Réponses d'enquête vues syndic - SANS le RFR ni la composition du foyer (RPC dédiée, 0099). */
 export function useReponsesSyndic(coproId: string | undefined) {
   return useQuery({
     queryKey: ["syndic", "reponses", coproId],

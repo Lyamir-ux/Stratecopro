@@ -7,6 +7,9 @@
 //     src/pages/SyndicPpt/. Accent bleu (#2E6FA8) via data-branche="ppt".
 // Le gestionnaire choisit sa branche à l'arrivée ; son choix est mémorisé et
 // un bouton du header permet de basculer à tout moment.
+// La direction de l'enseigne a en plus l'onglet « Mon organisation » dans les
+// deux branches (équipe, comptes, copropriétés rattachées - feedback syndic du
+// 24/09/2026, page ./Organisation.tsx).
 import { useState, type ReactNode } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Icon, type IconName } from "@/components/Icon";
@@ -21,6 +24,7 @@ import { Portefeuille, cleGestionnaire } from "./Portefeuille";
 import { TachesSyndic } from "./Taches";
 import { MessagesSyndic } from "./Messages";
 import { DemandeAmo } from "./DemandeAmo";
+import { OrganisationSyndic } from "./Organisation";
 
 export type Branche = "reno" | "ppt";
 // « demande-amo » n'est pas un onglet : la page s'ouvre par le bouton du
@@ -32,7 +36,8 @@ export type SectionId =
   | "tableau"
   | "echeancier"
   | "copros"
-  | "demande-amo";
+  | "demande-amo"
+  | "organisation";
 
 const SECTIONS: Record<Branche, { id: SectionId; label: string; icon: IconName }[]> = {
   reno: [
@@ -171,7 +176,13 @@ export function SyndicShell({
   // Bascule entre branches : syndic dont l'enseigne a le module, ou aperçu AMO.
   const deuxBranches = profile.role === "amo" || !!orgPpt?.module_ppt;
   const autre: Branche = branche === "ppt" ? "reno" : "ppt";
-  const sections = SECTIONS[branche];
+  // « Mon organisation » : direction de l'enseigne seulement (l'aperçu AMO gère les enseignes dans Paramètres)
+  const sections = [
+    ...SECTIONS[branche],
+    ...(profile.role === "syndic" && org?.role === "directeur"
+      ? [{ id: "organisation" as SectionId, label: "Mon organisation", icon: "users" as IconName }]
+      : []),
+  ];
   const home = branche === "ppt" ? "/syndic/ppt" : "/syndic";
 
   return (
@@ -344,7 +355,9 @@ export default function Syndic() {
         ? "messages"
         : sectionParam === "demande-amo"
           ? "demande-amo"
-          : "portefeuille";
+          : sectionParam === "organisation"
+            ? "organisation"
+            : "portefeuille";
   const { profile, session } = useAuth();
   const { data: copros, isLoading } = useCoprosSyndic();
   const { data: monOrg } = useMonOrganisation();
@@ -381,6 +394,14 @@ export default function Syndic() {
     return (
       <SyndicShell active={null}>
         <DemandeAmo />
+      </SyndicShell>
+    );
+  }
+  // L'équipe se gère même sans dossier de rénovation globale au portefeuille.
+  if (section === "organisation") {
+    return (
+      <SyndicShell active="organisation">
+        <OrganisationSyndic />
       </SyndicShell>
     );
   }

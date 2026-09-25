@@ -28,6 +28,7 @@ import { SyndicShell, Loader, OrgRail, lireVue, ecrireVue, type SectionId } from
 import { PortefeuillePptVue } from "./Portefeuille";
 import { EcheancierPpt } from "./Echeancier";
 import { CoprosPpt } from "./Copros";
+import { OrganisationSyndic } from "@/pages/Syndic/Organisation";
 
 export interface PortefeuillePpt {
   apercuAmo: boolean;
@@ -83,7 +84,8 @@ export function usePortefeuillePpt(orgFiltre: string | null): PortefeuillePpt {
 
 export default function SyndicPpt() {
   const { section: sectionParam } = useParams();
-  const section: SectionId = sectionParam === "echeancier" ? "echeancier" : sectionParam === "copros" ? "copros" : "tableau";
+  const section: SectionId =
+    sectionParam === "echeancier" ? "echeancier" : sectionParam === "copros" ? "copros" : sectionParam === "organisation" ? "organisation" : "tableau";
   const { profile } = useAuth();
   const apercuAmo = profile?.role === "amo";
   const [orgId, setOrgIdBrut] = useState<string | null>(() => lireVue<string>("syndic-apercu-org"));
@@ -105,6 +107,7 @@ export default function SyndicPpt() {
       {section === "tableau" && <PortefeuillePptVue pf={pf} />}
       {section === "echeancier" && <EcheancierPpt pf={pf} />}
       {section === "copros" && <CoprosPpt pf={pf} />}
+      {section === "organisation" && <OrganisationSyndic />}
     </SyndicShell>
   );
 }

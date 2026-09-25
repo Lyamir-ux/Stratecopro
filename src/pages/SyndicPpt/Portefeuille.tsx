@@ -11,6 +11,9 @@
 // AG (gestionnaire), alertes.
 // Direction et aperçu AMO voient toute l'enseigne ; un gestionnaire ne voit
 // que ses dossiers - aucun chiffre d'un collègue, aucun classement.
+// Export « PDF » (feedback syndic 24/09/2026 : « exporter le portefeuille
+// complet en pdf ») : tout le tableau de bord sur le périmètre affiché,
+// échéancier à 10 ans compris (genererPortefeuillePptPdf).
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
@@ -18,6 +21,7 @@ import { Badge, DpeChip } from "@/components/ui";
 import type { PptCoproAvecStats } from "@/api/ppt";
 import { PHASES, type DpeClass } from "@/lib/referentiels";
 import { telechargerCsv } from "@/lib/csv";
+import { messageErreur } from "@/lib/erreurs";
 import { fmtEuroCourt } from "@/lib/format";
 import {
   ETATS_PPT,
@@ -25,6 +29,7 @@ import {
   aPreparer,
   alertes,
   cleGestionnaire,
+  echeancier,
   fichesCopros,
   groupesGestionnaires,
   honorairesParAnnee,
@@ -598,6 +603,68 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
   const honorairesAcquis = fiches.reduce((s, f) => s + f.honorairesAcquis, 0);
   const remarquesOuvertes = copros.reduce((s, c) => s + (c.stats?.remarques_ouvertes ?? 0), 0);
 
+  // PDF du portefeuille complet : mêmes lignes que le CSV (recherche et état filtré appliqués)
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfErreur, setPdfErreur] = useState<string | null>(null);
+  const exporterPdf = async () => {
+    setPdfBusy(true);
+    setPdfErreur(null);
+    try {
+      const { genererPortefeuillePptPdf } = await import("@/lib/pdf/echeancierPpt");
+      const { telechargerPdfBytes } = await import("@/lib/pdf/planIndividuel");
+      const { parametresDepuisOrg } = await import("@/lib/ppt/formules");
+      const ids = new Set(filtrees.map((f) => f.copro.id));
+      const postesPerimetre = postes.filter((p) => ids.has(p.ppt_copro_id));
+      const ech = new Map(echeancier(filtrees.map((f) => f.copro), postesPerimetre, pf.params, annee).map((l) => [l.copro.id, l]));
+      const coprosPerimetre = copros.filter((c) => ids.has(c.id));
+      const preparation = pf.direction ? [] : aPreparer(coprosPerimetre.map(coproLite), postesPerimetre, ags);
+      const bytes = await genererPortefeuillePptPdf({
+        nomEnseigne: pf.nomEnseigne ?? null,
+        direction: pf.direction,
+        filtre: [q ? `recherche « ${recherche.trim()} »` : null, etatFiltre ? `état « ${ETAT_PPT_LABEL[etatFiltre].toLowerCase()} »` : null].filter(Boolean).join(" · ") || null,
+        lignes: filtrees.map((f) => ({
+          nom: f.copro.nom,
+          commune: f.copro.commune,
+          gestionnaire: f.copro.gestionnaire_nom,
+          etat: f.etat,
+          etatLibelle: libelleEtat(f),
+          dpe: f.copro.etiquette_energie,
+          logements: f.copro.nb_logements,
+          postes: f.nbPostes,
+          montantTtc: f.montantTtc,
+          honorairesPotentiels: f.honorairesPotentiels,
+          honorairesAcquis: f.honorairesAcquis,
+          prochaineAnnee: f.prochaineAnnee,
+          montantProchaineAnnee: f.montantProchaineAnnee,
+          alertes: f.nbAlertes,
+          alerteHaute: f.alerteHaute,
+          parAnnee: ech.get(f.copro.id)?.parAnnee ?? new Map(),
+          totalEcheancier: ech.get(f.copro.id)?.total ?? 0,
+        })),
+        honoraires: pf.direction ? honorairesParAnnee(postesPerimetre, pf.params, annee) : undefined,
+        tauxHonorairesPct: pf.params.taux_honoraires_pct,
+        aPreparer: pf.direction
+          ? undefined
+          : preparation.map((l) => ({
+              copro: l.copro.nom,
+              prochaineAg: l.prochaineAg,
+              postes: l.postes.map((p) => `${p.libelle} · ${p.annee_prevue ?? "année à fixer"} · ${p.cout_ht_base ? fmtEur(p.cout_ht_base) + " HT" : "non chiffré"} · art. ${articleSuggere(p.priorite as PrioriteCode)} suggéré`),
+              aRepresenter: l.aRepresenter.map((p) => `${p.libelle} (${p.statut === "rejete" ? "rejeté" : "reporté"}, nouvelle présentation ${p.annee_prochaine_presentation ?? "à fixer"})`),
+            })),
+        alertes: listeAlertes.filter((a) => ids.has(a.ppt_copro_id)).map((a) => ({ copro: a.copro, libelle: a.libelle, niveau: a.niveau })),
+        annees: Array.from({ length: 11 }, (_, i) => annee + i),
+        params: parametresDepuisOrg(pf.params, annee),
+        annee,
+      });
+      const enseigne = pf.nomEnseigne ? ` - ${pf.nomEnseigne.replace(/[\\/:*?"<>|]+/g, "-")}` : "";
+      telechargerPdfBytes(bytes, `Portefeuille PPT${enseigne} - ${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (e) {
+      setPdfErreur(messageErreur(e, "La génération du PDF a échoué. Réessayez."));
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   const exporter = () =>
     telechargerCsv(
       `portefeuille-ppt-${annee}.csv`,
@@ -655,6 +722,15 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
           <Icon name="download" size={14} />
           Exporter
         </button>
+        <button
+          className="se-btn se-btn-secondary btn-sm"
+          disabled={pdfBusy}
+          onClick={() => void exporterPdf()}
+          title="Portefeuille complet en PDF : synthèse, gestionnaires, copropriétés, échéancier à 10 ans, honoraires et alertes (recherche et filtre en cours appliqués)"
+        >
+          <Icon name="fileText" size={14} />
+          {pdfBusy ? "PDF en cours…" : "PDF"}
+        </button>
         <div className="search" style={{ margin: 0 }}>
           <Icon name="search" size={16} />
           <input placeholder={pf.direction ? "Rechercher un gestionnaire, une copropriété…" : "Rechercher une copropriété…"} value={recherche} onChange={(e) => setRecherche(e.target.value)} />
@@ -665,6 +741,12 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
           )}
         </div>
       </div>
+
+      {pdfErreur && (
+        <p className="se-small" style={{ color: "var(--color-error-700)", margin: "0 0 10px" }}>
+          {pdfErreur}
+        </p>
+      )}
 
       {/* légende des états - cliquable pour filtrer */}
       <div className="ppt-legende" role="group" aria-label="Filtrer par état de suivi">

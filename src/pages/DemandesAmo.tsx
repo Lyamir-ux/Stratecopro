@@ -10,6 +10,7 @@ import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
 import { useCreateCopro } from "@/api/copros";
+import { useTeamProfiles } from "@/api/profiles";
 import {
   piecesDemande,
   telechargerPieceDemande,
@@ -218,6 +219,9 @@ export default function DemandesAmo() {
   const { data: demandes, isLoading } = useDemandesAmo();
   const [filtre, setFiltre] = useState<DemandeAmo["statut"]>("nouvelle");
   const liste = (demandes ?? []).filter((d) => d.statut === filtre);
+  // destinataires des alertes e-mail (réglage du dirigeant dans Collaborateurs, 0100)
+  const { data: equipe } = useTeamProfiles();
+  const alertes = (equipe ?? []).filter((p) => p.recoit_demandes_amo).map((p) => p.full_name);
 
   return (
     <div className="page fade">
@@ -228,6 +232,14 @@ export default function DemandesAmo() {
             Copropriétés signalées par les gestionnaires depuis leur espace - nom, adresse, lots, chauffage
             et VMC
           </p>
+          {equipe && (
+            <p className="se-small" style={{ margin: "4px 0 0", color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+              <Icon name="mail" size={13} />
+              {alertes.length > 0
+                ? `Alerte e-mail à chaque nouvelle demande : ${alertes.join(", ")} (réglage du dirigeant, page Collaborateurs)`
+                : "Aucun destinataire désigné : l'alerte e-mail part au dirigeant (réglage dans Collaborateurs)"}
+            </p>
+          )}
         </div>
         <span style={{ flex: 1 }}></span>
         <div className="opt-mini">

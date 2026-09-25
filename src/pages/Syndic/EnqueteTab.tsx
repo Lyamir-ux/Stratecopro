@@ -1,6 +1,7 @@
 // Onglet Enquête sociale (syndic) - consultation seule : répartition des profils
-// MPR (comptages uniquement), état des réponses (sans le RFR ni le profil par
-// copropriétaire - données sensibles réservées à l'AMO et à l'intéressé),
+// MPR (comptages uniquement), état des réponses (sans le RFR, le profil ni la
+// composition du foyer de chaque copropriétaire - données sensibles réservées à
+// l'AMO et à l'intéressé, foyer retiré le 24/09/2026 sur feedback syndic),
 // questionnaire et état de la campagne. Aucune action possible : l'enquête est
 // pilotée par l'AMO (pas de bouton d'envoi ni de saisie côté syndic).
 import { useMemo } from "react";
@@ -112,7 +113,6 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
                   <thead>
                     <tr>
                       <th>Copropriétaire</th>
-                      <th>Foyer</th>
                       <th>Occupation</th>
                       <th>Réponse</th>
                     </tr>
@@ -127,7 +127,6 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
                       return (
                         <tr key={cp.id} style={{ cursor: "default" }}>
                           <td style={{ fontWeight: 600 }}>{cp.nom}</td>
-                          <td>{r?.nb_personnes != null ? r.nb_personnes + " pers." : "-"}</td>
                           <td>{occupation ?? "-"}</td>
                           <td>
                             {repondu ? (
@@ -144,8 +143,9 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
               </div>
             )}
             <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
-              Le profil MaPrimeRénov' et le revenu fiscal de référence de chaque copropriétaire ne sont pas
-              communiqués au syndic - seuls l'AMO et le copropriétaire concerné y ont accès. Le panneau
+              Le profil MaPrimeRénov', le revenu fiscal de référence et la composition du foyer de chaque
+              copropriétaire ne sont pas communiqués au syndic - seuls l'AMO et le copropriétaire concerné y
+              ont accès. Le panneau
               ci-dessus n'en donne que les comptages.
             </p>
           </div>

@@ -1,13 +1,18 @@
 // Détail d'un dossier copropriété - porté de detail.jsx (CoproDetail).
 // Hero photo (upload réel vers Storage) + 6 onglets ; l'onglet vit dans l'URL.
-import { useRef } from "react";
+// Photo : cadrage choisi à l'import et modifiable ensuite (bouton « Recadrer »,
+// feedback Amir 24/09/2026), la photo d'origine est conservée.
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Badge, DpePair, PhaseBadge, THUMB_BG } from "@/components/ui";
 import type { DpeClass, PhaseId } from "@/lib/referentiels";
 import { useAuth } from "@/auth/AuthProvider";
-import { avancementAmo, useCopro, useMettreCorbeille, usePhotoUrl, useUploadPhoto } from "@/api/copros";
+import { avancementAmo, useCadrerPhoto, useCopro, useMettreCorbeille, usePhotoUrl, useUploadPhoto } from "@/api/copros";
+import { PhotoCadree, RecadrerPhoto, ratioBandeau } from "@/components/PhotoCadrage";
+import { lireCadrage } from "@/lib/photoCadrage";
+import { messageErreur } from "@/lib/erreurs";
 import { useConsultations } from "@/api/consultations";
 import { compteNonLus, useLectures, useMessagesCopro } from "@/api/messages";
 import { ProjetTab } from "./ProjetTab";
@@ -55,8 +60,16 @@ export default function CoproDetail() {
   const { data: c, isLoading } = useCopro(id);
   const { data: photoUrl } = usePhotoUrl(c?.photo_path ?? null);
   const uploadPhoto = useUploadPhoto(id ?? "");
+  const cadrerPhoto = useCadrerPhoto(id ?? "");
   const corbeille = useMettreCorbeille();
   const photoRef = useRef<HTMLInputElement>(null);
+  // fenêtre de cadrage : photo choisie (pas encore envoyée) ou photo en place
+  const [cadrageOuvert, setCadrageOuvert] = useState<{ file: File | null; src: string; ratio: number } | null>(null);
+  const [erreurPhoto, setErreurPhoto] = useState<string | null>(null);
+  const fichierSrc = cadrageOuvert?.file ? cadrageOuvert.src : null;
+  useEffect(() => () => {
+    if (fichierSrc) URL.revokeObjectURL(fichierSrc);
+  }, [fichierSrc]);
   // pastille de l'onglet Prestataires : questions de candidats sans réponse
   const { data: consultations } = useConsultations();
   const questionsEnAttente = (consultations ?? [])
@@ -78,10 +91,30 @@ export default function CoproDetail() {
 
   return (
     <div className="page">
+      {/* fenêtre rendue hors du bandeau (animé) pour rester centrée à l'écran */}
+      {cadrageOuvert && (
+        <RecadrerPhoto
+          src={cadrageOuvert.src}
+          initial={cadrageOuvert.file ? undefined : lireCadrage(c.photo_cadrage)}
+          ratio={cadrageOuvert.ratio}
+          nouvelle={!!cadrageOuvert.file}
+          enCours={uploadPhoto.isPending || cadrerPhoto.isPending}
+          erreur={erreurPhoto}
+          onClose={() => setCadrageOuvert(null)}
+          onValider={(cadrage) => {
+            const f = cadrageOuvert.file;
+            const envoi = f ? uploadPhoto.mutateAsync({ file: f, cadrage }) : cadrerPhoto.mutateAsync(cadrage);
+            envoi.then(
+              () => setCadrageOuvert(null),
+              (err: unknown) => setErreurPhoto(messageErreur(err, "L'enregistrement de la photo a échoué. Réessayez."))
+            );
+          }}
+        />
+      )}
       <div className="detail-hero fade">
         <div className="dh-banner" style={{ position: "relative" }}>
           {photoUrl ? (
-            <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <PhotoCadree src={photoUrl} cadrage={lireCadrage(c.photo_cadrage)} />
           ) : (
             <div
               style={{
@@ -100,39 +133,58 @@ export default function CoproDetail() {
             </div>
           )}
           <div className="dh-overlay"></div>
-          <button
-            className="se-btn se-btn-secondary btn-sm"
-            style={{ position: "absolute", top: 12, right: 12 }}
-            onClick={() => photoRef.current?.click()}
-            title="Changer la photo du dossier"
-          >
-            <Icon name="image" size={14} />
-            {uploadPhoto.isPending ? "Envoi…" : "Photo"}
-          </button>
-          <button
-            className="se-btn se-btn-secondary btn-sm"
-            style={{ position: "absolute", top: 12, right: 96 }}
-            title="Mettre le dossier à la corbeille"
-            disabled={corbeille.isPending}
-            onClick={() => {
-              if (
-                window.confirm(
-                  `Mettre « ${c.name} » à la corbeille ?\n\nLe dossier disparaîtra des espaces syndic, copropriétaires et prestataires. Vous pourrez le restaurer à tout moment depuis la corbeille du tableau de bord.`
-                )
-              ) {
-                void corbeille.mutateAsync(c.id).then(() => navigate("/"));
-              }
-            }}
-          >
-            <Icon name="trash" size={14} />
-            {corbeille.isPending ? "…" : "Corbeille"}
-          </button>
+          <div style={{ position: "absolute", top: 12, right: 12, display: "flex", gap: 8 }}>
+            <button
+              className="se-btn se-btn-secondary btn-sm"
+              title="Mettre le dossier à la corbeille"
+              disabled={corbeille.isPending}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Mettre « ${c.name} » à la corbeille ?\n\nLe dossier disparaîtra des espaces syndic, copropriétaires et prestataires. Vous pourrez le restaurer à tout moment depuis la corbeille du tableau de bord.`
+                  )
+                ) {
+                  void corbeille.mutateAsync(c.id).then(() => navigate("/"));
+                }
+              }}
+            >
+              <Icon name="trash" size={14} />
+              {corbeille.isPending ? "…" : "Corbeille"}
+            </button>
+            {photoUrl && (
+              <button
+                className="se-btn se-btn-secondary btn-sm"
+                title="Choisir la partie de la photo visible dans le bandeau et sur les cartes"
+                onClick={() => {
+                  setErreurPhoto(null);
+                  setCadrageOuvert({ file: null, src: photoUrl, ratio: ratioBandeau() });
+                }}
+              >
+                <Icon name="crop" size={14} />
+                Recadrer
+              </button>
+            )}
+            <button
+              className="se-btn se-btn-secondary btn-sm"
+              onClick={() => photoRef.current?.click()}
+              title="Changer la photo du dossier"
+            >
+              <Icon name="image" size={14} />
+              {uploadPhoto.isPending ? "Envoi…" : "Photo"}
+            </button>
+          </div>
           <input
             ref={photoRef}
             type="file"
             accept="image/*"
             style={{ display: "none" }}
-            onChange={(e) => e.target.files?.[0] && uploadPhoto.mutate(e.target.files[0])}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (!f) return;
+              setErreurPhoto(null);
+              setCadrageOuvert({ file: f, src: URL.createObjectURL(f), ratio: ratioBandeau() });
+            }}
           />
         </div>
         <div className="dh-body">
