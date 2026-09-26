@@ -154,8 +154,14 @@ describe("genererPortefeuillePptPdf (portefeuille complet, feedback 24/09/2026)"
       nomEnseigne: "SYNDIC 3000 GRAND EST",
       direction: true,
       lignes,
-      honoraires: annees.map((a) => ({ annee: a, nbPostes: a === 2027 ? 3 : 0, montantTtc: a === 2027 ? 235000 : 0, acquis: a === 2027 ? 4600 : 0, potentiel: a === 2027 ? 2400 : 0 })),
+      // cascade et répartition probable (feedback 26/09/2026) : profil d'un portefeuille type
+      honoraires: annees.map((a, i) => {
+        const acquis = [4200, 6800, 2100, 0, 0, 0, 0, 0, 0, 0, 0][i];
+        const potentiel = [9400, 38600, 27900, 21300, 14800, 11200, 16900, 8700, 12400, 9800, 18500][i];
+        return { annee: a, nbPostes: [9, 31, 22, 17, 12, 10, 11, 7, 9, 6, 8][i], montantTtc: (acquis + potentiel) / 0.03, acquis, potentiel };
+      }),
       tauxHonorairesPct: 3,
+      tauxPassage: { taux: 60, constate: 58, presentes: 24, hypothese: false, modifie: true },
       alertes: [
         { copro: "Résidence Les Tilleuls (démo PPT)", libelle: "Poste voté sans date de réalisation", niveau: "haute" },
         { copro: "Le Bayard", libelle: "Aucune AG programmée cette année", niveau: "moyenne" },

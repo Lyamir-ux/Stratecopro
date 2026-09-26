@@ -10,7 +10,8 @@
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb, type RGB } from "pdf-lib";
 import { anneeEffective, cepApres, etiquetteDepuisCep, gainCumule, montantTtcPoste, type ParametresCalcul, type PosteCalcul } from "@/lib/ppt/formules";
 import { plageAnnees, posteDeplacable } from "@/lib/ppt/echeancier";
-import { ETATS_PPT, ETAT_PPT_LABEL, type EtatPpt } from "@/lib/ppt/indicateurs";
+import { ETATS_PPT, ETAT_PPT_LABEL, TAUX_PASSAGE_DEFAUT, repartitionProbable, type EtatPpt } from "@/lib/ppt/indicateurs";
+import { echelleAxe, fmtKEur } from "@/lib/ppt/formats";
 
 /** Poste tel qu'attendu par l'export (sous-ensemble de ppt_postes). */
 export interface PosteEcheancierPdf extends PosteCalcul {
@@ -55,6 +56,9 @@ const LARGEUR = PAGE.w - 2 * MARGE;
 
 const BLEU = rgb(0.18, 0.435, 0.659); // #2E6FA8
 const BLEU_FONCE = rgb(0.118, 0.31, 0.486); // #1E4F7C
+const BLEU_MOYEN = rgb(0.31, 0.533, 0.745); // #4F88BE (bleu PPT 400)
+const BLEU_CLAIR = rgb(0.478, 0.651, 0.831); // #7AA6D4 (bleu PPT 300)
+const GRIS_MOYEN = rgb(0.82, 0.831, 0.796); // #D1D4CB (--color-neutral-300)
 const FOND_BLEU = rgb(0.918, 0.949, 0.98); // #EAF2FA
 const ENCRE = rgb(0.102, 0.102, 0.102);
 const GRIS = rgb(0.42, 0.45, 0.4);
@@ -645,6 +649,16 @@ export interface HonorairesAnneePdf {
   potentiel: number;
 }
 
+export interface TauxPassagePdf {
+  taux: number;
+  constate: number | null;
+  presentes: number;
+  /** hypothèse par défaut, faute d'historique d'AG suffisant */
+  hypothese: boolean;
+  /** taux choisi au curseur */
+  modifie: boolean;
+}
+
 export interface AlertePortefeuillePdf {
   copro: string;
   libelle: string;
@@ -668,6 +682,8 @@ export interface PortefeuillePptPdfInput {
   /** Honoraires de suivi par année (direction). */
   honoraires?: HonorairesAnneePdf[];
   tauxHonorairesPct?: number;
+  /** Taux de passage en AG de la répartition sécurisé / probable / en jeu (curseur de l'écran) ; défaut 50 % en hypothèse. */
+  tauxPassage?: TauxPassagePdf;
   /** Ce qu'il faut préparer pour les prochaines AG (gestionnaire). */
   aPreparer?: APreparerPdf[];
   alertes: AlertePortefeuillePdf[];
@@ -781,6 +797,68 @@ function completer(cols: ColPdf[]): ColPdf[] {
 }
 
 const euroOuTiret = (n: number) => (n ? euroCourt(n) : "-");
+
+interface ColonnePdf {
+  label: string;
+  /** segments flottants [bas, haut] en euros, empilés de bas en haut */
+  segments: { bas: number; haut: number; couleur: RGB }[];
+  etiquette?: string;
+  gras?: boolean;
+}
+
+/** Colonnes de segments sur un axe en euros (cascade des honoraires, répartition probable) ; `connecteurs` relie le sommet de chaque colonne à la suivante. */
+function graphiqueColonnes(f: Flux, colonnes: ColonnePdf[], opts: { hauteur?: number; connecteurs?: boolean; legende?: { label: string; couleur: RGB; trait?: boolean }[] } = {}) {
+  const hLeg = opts.legende ? 16 : 0;
+  const hGraph = opts.hauteur ?? 170;
+  f.besoin(hLeg + hGraph + 8);
+  if (opts.legende) {
+    let x = MARGE;
+    for (const l of opts.legende) {
+      if (l.trait) f.page.drawLine({ start: { x, y: f.y - 6 }, end: { x: x + 12, y: f.y - 6 }, thickness: 1, color: l.couleur });
+      else f.page.drawRectangle({ x, y: f.y - 10, width: 8, height: 8, color: l.couleur });
+      const s = txt(l.label);
+      f.page.drawText(s, { x: x + (l.trait ? 16 : 12), y: f.y - 9, size: 8, font: f.font, color: GRIS });
+      x += (l.trait ? 16 : 12) + f.font.widthOfTextAtSize(s, 8) + 18;
+    }
+    f.y -= hLeg;
+  }
+  const haut0 = f.y - 14;
+  const bas0 = f.y - hGraph + 16;
+  const gauche = MARGE + 50;
+  const droite = MARGE + LARGEUR;
+  const max = Math.max(0, ...colonnes.flatMap((c) => c.segments.map((s) => s.haut)));
+  const { haut, pas } = echelleAxe(max);
+  const y = (v: number) => bas0 + (v / haut) * (haut0 - bas0);
+  for (let v = 0; v <= haut + 1e-6; v += pas) {
+    f.page.drawLine({ start: { x: gauche, y: y(v) }, end: { x: droite, y: y(v) }, thickness: v === 0 ? 0.8 : 0.4, color: v === 0 ? GRIS : GRIS_CLAIR });
+    const s = txt(v === 0 ? "0" : fmtKEur(v));
+    f.page.drawText(s, { x: gauche - 6 - f.font.widthOfTextAtSize(s, 7.5), y: y(v) - 2.5, size: 7.5, font: f.font, color: GRIS });
+  }
+  const slot = (droite - gauche) / Math.max(1, colonnes.length);
+  const bw = Math.min(34, slot * 0.6);
+  colonnes.forEach((c, i) => {
+    const cx = gauche + slot * i + slot / 2;
+    const x = cx - bw / 2;
+    const pleins = c.segments.filter((s) => s.haut - s.bas > 0);
+    pleins.forEach((s, k) => {
+      // un liseré blanc entre deux segments empilés, jamais de trait autour
+      const y1 = y(s.bas) + (k > 0 ? 1.2 : 0);
+      f.page.drawRectangle({ x, y: y1, width: bw, height: Math.max(0.8, y(s.haut) - y1), color: s.couleur });
+    });
+    const sommet = Math.max(0, ...pleins.map((s) => s.haut));
+    if (opts.connecteurs && i < colonnes.length - 1 && sommet > 0)
+      f.page.drawLine({ start: { x: x + bw, y: y(sommet) }, end: { x: cx + slot - bw / 2, y: y(sommet) }, thickness: 0.6, color: GRIS });
+    if (c.etiquette && sommet > 0) {
+      const s = txt(c.etiquette);
+      const fnt = c.gras ? f.bold : f.font;
+      f.page.drawText(s, { x: cx - fnt.widthOfTextAtSize(s, 7.5) / 2, y: y(sommet) + 4, size: 7.5, font: fnt, color: ENCRE });
+    }
+    const lib = txt(c.label);
+    const fl = c.gras ? f.bold : f.font;
+    f.page.drawText(lib, { x: cx - fl.widthOfTextAtSize(lib, 8) / 2, y: bas0 - 12, size: 8, font: fl, color: c.gras ? ENCRE : GRIS });
+  });
+  f.y -= hGraph + 8;
+}
 
 export async function genererPortefeuillePptPdf(input: PortefeuillePptPdfInput): Promise<Uint8Array> {
   const { params, annee, annees } = input;
@@ -932,46 +1010,136 @@ export async function genererPortefeuillePptPdf(input: PortefeuillePptPdfInput):
     f.paragraphe(noteMontantsRetenus(params), { size: 7.5, color: GRIS, interligne: 2.5 });
   }
 
-  // ----- honoraires projetés (direction) -----
+  // ----- honoraires projetés (direction) : cascade cumulée, répartition probable, détail -----
+  // Feedback Amir 26/09/2026 : mêmes lectures que la vue Mosaïque, au taux de passage du curseur.
   if (input.direction && input.honoraires && input.honoraires.length > 0) {
-    f.titreSection("Honoraires de suivi de travaux projetés par année", 50);
     const h = input.honoraires;
-    const cols = completer([
-      { titre: "Année", w: 90 },
-      { titre: "Postes", w: 90, align: "right" },
-      { titre: "Travaux TTC", w: 140, align: "right" },
-      { titre: "Honoraires votés", w: 140, align: "right" },
-      { titre: "Honoraires potentiels", w: 150, align: "right" },
-      { titre: "Total", w: 0, align: "right" },
-    ]);
-    tableau(
-      f,
-      cols,
-      h.map((l, i) => ({
-        cellules: [
-          { texte: String(l.annee) + (i === h.length - 1 ? " et +" : ""), bold: true },
-          { texte: l.nbPostes ? String(l.nbPostes) : "-" },
-          { texte: l.montantTtc ? euro(l.montantTtc) : "-" },
-          { texte: l.acquis ? euro(l.acquis) : "-", couleur: l.acquis ? BLEU_FONCE : undefined },
-          { texte: l.potentiel ? euro(l.potentiel) : "-" },
-          { texte: l.acquis + l.potentiel ? euro(l.acquis + l.potentiel) : "-", bold: l.acquis + l.potentiel > 0 },
+    const fin = h[h.length - 1].annee;
+    const libAnnee = (i: number) => (i === h.length - 1 ? `${h[i].annee}+` : String(h[i].annee));
+    const totalH = h.reduce((s, l) => s + l.acquis + l.potentiel, 0);
+    const acquisH = h.reduce((s, l) => s + l.acquis, 0);
+    const postesH = h.reduce((s, l) => s + l.nbPostes, 0);
+    const pctDe = (v: number) => `${totalH > 0 ? Math.round((v / totalH) * 100) : 0} %`;
+    f.titreSection(`Honoraires de suivi de travaux cumulés, ${annee}-${fin}`, 250);
+    if (totalH <= 0) f.paragraphe("Aucun poste chiffré sur le périmètre affiché.", { size: 9, color: GRIS });
+    else {
+      const pic = h.reduce((m, l) => (l.acquis + l.potentiel > m.acquis + m.potentiel ? l : m), h[0]);
+      f.tuiles([
+        { label: `Total ${annee}-${fin}`, valeur: euroCourt(totalH), pied: `${postesH} poste${postesH > 1 ? "s" : ""} du plan`, accent: true },
+        { label: "Déjà votés en AG", valeur: euroOuTiret(acquisH), pied: `${pctDe(acquisH)} du total` },
+        { label: "À faire voter", valeur: euroCourt(totalH - acquisH), pied: `${pctDe(totalH - acquisH)} du total` },
+        { label: "Année la plus chargée", valeur: String(pic.annee), pied: `${euroCourt(pic.acquis + pic.potentiel)} · ${pic.nbPostes} poste${pic.nbPostes > 1 ? "s" : ""}` },
+      ]);
+      let cum = 0;
+      const cascade: ColonnePdf[] = h.map((l, i) => {
+        const bas = cum;
+        cum += l.acquis + l.potentiel;
+        return {
+          label: libAnnee(i),
+          segments: [
+            { bas, haut: bas + l.acquis, couleur: BLEU_FONCE },
+            { bas: bas + l.acquis, haut: cum, couleur: BLEU_CLAIR },
+          ],
+          etiquette: l.acquis + l.potentiel > 0 ? "+" + fmtKEur(l.acquis + l.potentiel) : undefined,
+        };
+      });
+      cascade.push({
+        label: "Total",
+        gras: true,
+        etiquette: fmtKEur(cum),
+        segments: [
+          { bas: 0, haut: acquisH, couleur: BLEU_FONCE },
+          { bas: acquisH, haut: cum, couleur: BLEU },
         ],
-      })),
-      {
-        total: [
-          "Total",
-          String(h.reduce((s, l) => s + l.nbPostes, 0) || "-"),
-          euro(h.reduce((s, l) => s + l.montantTtc, 0)),
-          euro(h.reduce((s, l) => s + l.acquis, 0)),
-          euro(h.reduce((s, l) => s + l.potentiel, 0)),
-          euro(h.reduce((s, l) => s + l.acquis + l.potentiel, 0)),
+      });
+      graphiqueColonnes(f, cascade, {
+        hauteur: 180,
+        connecteurs: true,
+        legende: [
+          { label: "Votés (acquis)", couleur: BLEU_FONCE },
+          { label: "À faire voter (potentiel)", couleur: BLEU_CLAIR },
+          { label: "Cumul", couleur: GRIS, trait: true },
         ],
-      }
-    );
-    f.paragraphe(
-      `Honoraires de suivi de travaux au taux de l'enseigne${input.tauxHonorairesPct != null ? ` (${txt(input.tauxHonorairesPct.toLocaleString("fr-FR"))} %)` : ""}. Votés : postes adoptés en AG, au montant voté. Potentiels : postes programmés, présentés ou à représenter. Un poste rejeté compte à l'année de sa nouvelle présentation ; la dernière ligne cumule les années suivantes.`,
-      { size: 7.5, color: GRIS, interligne: 2.5 }
-    );
+      });
+      f.paragraphe(
+        `Chaque colonne part du cumul des années précédentes : sa hauteur est ce que l'année ajoute, son sommet le cumul atteint ; la dernière colonne donne le total. Honoraires au taux de l'enseigne${input.tauxHonorairesPct != null ? ` (${txt(input.tauxHonorairesPct.toLocaleString("fr-FR"))} %)` : ""}. Votés : postes adoptés en AG, au montant voté. À faire voter : postes programmés, présentés ou à représenter, actualisés à l'année où ils passeront en AG. ${fin}+ cumule les années suivantes.`,
+        { size: 7.5, color: GRIS, interligne: 2.5 }
+      );
+
+      // répartition sécurisé / probable / en jeu, au taux de passage retenu à l'écran
+      const tp = input.tauxPassage ?? { taux: TAUX_PASSAGE_DEFAUT, constate: null, presentes: 0, hypothese: true, modifie: false };
+      const r = repartitionProbable(h, tp.taux);
+      const prevision = r.securise + r.probable;
+      f.titreSection(`Ce que le PPT devrait rapporter - taux de passage en AG de ${tp.taux} %`, 240);
+      f.tuiles([
+        { label: "Sécurisé (voté)", valeur: euroOuTiret(r.securise), pied: "postes adoptés en AG" },
+        { label: "Prévision réaliste", valeur: euroCourt(prevision), pied: `voté + ${tp.taux} % du potentiel`, accent: true },
+        { label: "Plafond si tout est voté", valeur: euroCourt(totalH), pied: `dont ${euroCourt(r.enJeu)} en jeu` },
+      ]);
+      graphiqueColonnes(
+        f,
+        r.annees.map((a, i) => ({
+          label: libAnnee(i),
+          segments: [
+            { bas: 0, haut: a.securise, couleur: BLEU_FONCE },
+            { bas: a.securise, haut: a.securise + a.probable, couleur: BLEU_MOYEN },
+            { bas: a.securise + a.probable, haut: a.securise + a.probable + a.enJeu, couleur: GRIS_MOYEN },
+          ],
+        })),
+        {
+          hauteur: 170,
+          legende: [
+            { label: "Sécurisé : voté", couleur: BLEU_FONCE },
+            { label: `Probable : potentiel x ${tp.taux} %`, couleur: BLEU_MOYEN },
+            { label: "En jeu : reste du potentiel", couleur: GRIS_MOYEN },
+          ],
+        }
+      );
+      const nb = (n: number) => `${n} poste${n > 1 ? "s" : ""} présenté${n > 1 ? "s" : ""}`;
+      const origine = tp.modifie
+        ? `taux choisi pour cette projection${tp.constate != null ? `, constaté : ${tp.constate} % sur ${nb(tp.presentes)}` : ""}`
+        : tp.hypothese
+          ? `hypothèse par défaut, l'historique des AG étant insuffisant : ${nb(tp.presentes)}`
+          : `taux constaté sur ${nb(tp.presentes)} en AG, votés / présentés`;
+      f.paragraphe(
+        `Avec ${tp.taux} % des postes votés (${origine}), le PPT rapporterait environ ${euro(prevision)} d'honoraires de suivi d'ici ${fin}, soit ${euro(prevision / h.length)} par an en moyenne. Chaque point de taux de passage gagné en AG vaut ${euro((r.probable + r.enJeu) / 100)}.`,
+        { size: 8.5, interligne: 3 }
+      );
+
+      // détail chiffré
+      f.titreSection("Honoraires par année - détail", 50);
+      const cols = completer([
+        { titre: "Année", w: 90 },
+        { titre: "Postes", w: 80, align: "right" },
+        { titre: "Travaux TTC", w: 130, align: "right" },
+        { titre: "Honoraires votés", w: 130, align: "right" },
+        { titre: "Honoraires à faire voter", w: 150, align: "right" },
+        { titre: "Total de l'année", w: 110, align: "right" },
+        { titre: "Cumul", w: 0, align: "right" },
+      ]);
+      let cumul = 0;
+      tableau(
+        f,
+        cols,
+        h.map((l, i) => {
+          cumul += l.acquis + l.potentiel;
+          return {
+            cellules: [
+              { texte: String(l.annee) + (i === h.length - 1 ? " et +" : ""), bold: true },
+              { texte: l.nbPostes ? String(l.nbPostes) : "-" },
+              { texte: l.montantTtc ? euro(l.montantTtc) : "-" },
+              { texte: l.acquis ? euro(l.acquis) : "-", couleur: l.acquis ? BLEU_FONCE : undefined },
+              { texte: l.potentiel ? euro(l.potentiel) : "-" },
+              { texte: l.acquis + l.potentiel ? euro(l.acquis + l.potentiel) : "-", bold: l.acquis + l.potentiel > 0 },
+              { texte: euro(cumul), couleur: GRIS },
+            ],
+          };
+        }),
+        {
+          total: ["Total", String(postesH || "-"), euro(h.reduce((s2, l) => s2 + l.montantTtc, 0)), euro(acquisH), euro(totalH - acquisH), euro(totalH), null],
+        }
+      );
+    }
   }
 
   // ----- à préparer (gestionnaire) -----

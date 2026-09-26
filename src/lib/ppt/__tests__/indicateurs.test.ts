@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { echelleAxe, fmtKEur } from "../formats";
 import { PARAMETRES_ORG_DEFAUT } from "../formules";
 import {
   aPreparer,
@@ -10,8 +11,12 @@ import {
   fichesCopros,
   groupesGestionnaires,
   honorairesParAnnee,
+  honorairesParCopro,
   initiales,
+  pipelineHonoraires,
+  repartitionProbable,
   statsParGestionnaire,
+  tauxPassagePortefeuille,
   totauxPortefeuille,
   type AgLite,
   type CoproLite,
@@ -95,6 +100,62 @@ describe("indicateurs des tableaux de bord PPT", () => {
     expect(isabelle.tauxPassage).toBe(0); // reporté = présenté, jamais voté
     expect(s[2].postes).toBe(0);
     expect(s[2].tauxPassage).toBeNull();
+  });
+
+  it("honoraires par statut : votés, à représenter, programmés (dont attendus d'ici N+1), même total que par année", () => {
+    const pl = pipelineHonoraires(postes, PARAMETRES_ORG_DEFAUT, 2026);
+    const etape = (e: string) => pl.etapes.find((x) => x.etape === e)!;
+    expect(pl.etapes.map((e) => e.etape)).toEqual(["vote", "presente", "a_representer", "programme"]);
+    expect(etape("vote")).toMatchObject({ honoraires: 1200, nbPostes: 1, montantTtc: 40000 });
+    expect(etape("presente").nbPostes).toBe(0);
+    expect(etape("a_representer").nbPostes).toBe(2); // p2 rejeté, p6 reporté
+    expect(etape("programme").nbPostes).toBe(2); // p1, p4 (p5 archivé exclu)
+    // seul p1 (2027) est attendu d'ici N+1 ; p4 est en 2029
+    expect(pl.programmeProche.nbPostes).toBe(1);
+    expect(pl.programmeProche.honoraires).toBeCloseTo(186000 * 1.035 * 1.085 * 0.03, 1);
+    const parAnnee = honorairesParAnnee(postes, PARAMETRES_ORG_DEFAUT, 2026);
+    expect(pl.total).toBeCloseTo(parAnnee.reduce((s, l) => s + l.acquis + l.potentiel, 0), 1);
+    expect(pl.nbPostes).toBe(parAnnee.reduce((s, l) => s + l.nbPostes, 0));
+  });
+
+  it("taux de passage du portefeuille et répartition sécurisé / probable / en jeu", () => {
+    expect(tauxPassagePortefeuille(postes)).toEqual({ presentes: 3, votes: 1, taux: 33 });
+    expect(tauxPassagePortefeuille([]).taux).toBeNull();
+    const lignes = honorairesParAnnee(postes, PARAMETRES_ORG_DEFAUT, 2026);
+    const r = repartitionProbable(lignes, 50);
+    const potentiel = lignes.reduce((s, l) => s + l.potentiel, 0);
+    expect(r.securise).toBe(1200);
+    expect(r.probable).toBeCloseTo(potentiel / 2, 1);
+    expect(r.probable + r.enJeu).toBeCloseTo(potentiel, 1);
+    const a2027 = r.annees.find((a) => a.annee === 2027)!;
+    expect(a2027.securise).toBe(1200);
+    expect(a2027.probable).toBeCloseTo(lignes[1].potentiel / 2, 1);
+    // bornes : 0 % ne garde que le voté, 100 % tout le potentiel
+    expect(repartitionProbable(lignes, 0).probable).toBe(0);
+    expect(repartitionProbable(lignes, 140).enJeu).toBe(0);
+  });
+
+  it("axe des graphiques d'honoraires : graduation ronde en 5 intervalles au plus, étiquettes en k€", () => {
+    expect(echelleAxe(202600)).toEqual({ haut: 250000, pas: 50000 });
+    expect(echelleAxe(45400)).toEqual({ haut: 50000, pas: 10000 });
+    expect(echelleAxe(1200)).toEqual({ haut: 1250, pas: 250 });
+    expect(echelleAxe(0)).toEqual({ haut: 1000, pas: 250 });
+    expect(fmtKEur(45400)).toBe("45,4 k€");
+    expect(fmtKEur(128000)).toBe("128 k€");
+    expect(fmtKEur(1250000)).toBe("1,3 M€");
+  });
+
+  it("honoraires par copropriété et par année : années votées marquées, copropriétés sans honoraires écartées", () => {
+    const m = honorairesParCopro(copros, postes, PARAMETRES_ORG_DEFAUT, 2026);
+    expect(m.map((l) => l.copro.id)).toEqual(["c1", "c2"]); // c3 sans poste, c1 la plus contributive
+    const c1 = m[0];
+    expect(c1.parAnnee).toHaveLength(11);
+    expect(c1.parAnnee[1]).toBeCloseTo(c1.total, 1); // tout en 2027 (p2 rejeté représenté en 2027)
+    expect(c1.nbPostes[1]).toBe(3);
+    expect(c1.vote[1]).toBe(true);
+    expect(m[1].vote.some(Boolean)).toBe(false);
+    expect(m[1].nbPostes[0]).toBe(1); // p6 reporté sans année : à son année prévue 2026
+    expect(m[1].nbPostes[3]).toBe(1); // p4 en 2029
   });
 
   it("alertes de cycle de vie : PPT jamais présenté, reporté sans année, DPE et PPPT périmés, documents en attente", () => {

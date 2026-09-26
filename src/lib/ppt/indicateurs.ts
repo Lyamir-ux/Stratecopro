@@ -73,26 +73,151 @@ export interface HonorairesAnnee {
   nbPostes: number;
 }
 
-/** Honoraires de suivi de travaux projetés par année, de N à N+horizon. */
-export function honorairesParAnnee(postes: PosteLite[], org: ParametresOrg, anneeDebut: number, horizon = 10): HonorairesAnnee[] {
+/** Poste vivant chiffré tel que le comptent les honoraires projetés : index de l'année
+ *  effective ramenée dans l'horizon (0 = N), honoraires et TTC retenus (montant voté s'il existe). */
+interface HonorairePoste {
+  p: PosteLite;
+  idx: number;
+  honoraires: number;
+  ttc: number;
+}
+
+/** Périmètre commun des honoraires projetés (par année, par copropriété, par statut) :
+ *  postes actifs, ni réalisés ni abandonnés, avec une année et un montant. */
+function honorairesPostesVivants(postes: PosteLite[], org: ParametresOrg, anneeDebut: number, horizon: number): HonorairePoste[] {
   const params = parametresDepuisOrg(org, anneeDebut);
-  const lignes: HonorairesAnnee[] = [];
-  for (let a = anneeDebut; a <= anneeDebut + horizon; a++) lignes.push({ annee: a, potentiel: 0, acquis: 0, montantTtc: 0, nbPostes: 0 });
+  const out: HonorairePoste[] = [];
   for (const p of postes) {
     if (!p.actif || p.statut === "abandonne" || p.statut === "realise") continue;
     const annee = anneeEffective(p);
     if (annee == null) continue;
-    const idx = Math.min(Math.max(annee, anneeDebut), anneeDebut + horizon) - anneeDebut;
-    const ligne = lignes[idx];
-    const h = p.statut === "vote" && p.montant_vote != null ? Math.round(p.montant_vote * (org.taux_honoraires_pct / 100) * 100) / 100 : honorairesPoste(p, params, org);
-    const ttc = p.statut === "vote" && p.montant_vote != null ? p.montant_vote : montantTtcPoste(p, params);
+    const vote = p.statut === "vote" && p.montant_vote != null;
+    const h = vote ? arr(p.montant_vote! * (org.taux_honoraires_pct / 100)) : honorairesPoste(p, params, org);
     if (h == null) continue;
-    if (p.statut === "vote") ligne.acquis += h;
-    else ligne.potentiel += h;
-    ligne.montantTtc += ttc ?? 0;
+    const ttc = vote ? p.montant_vote! : montantTtcPoste(p, params);
+    out.push({ p, idx: Math.min(Math.max(annee, anneeDebut), anneeDebut + horizon) - anneeDebut, honoraires: h, ttc: ttc ?? 0 });
+  }
+  return out;
+}
+
+/** Honoraires de suivi de travaux projetés par année, de N à N+horizon. */
+export function honorairesParAnnee(postes: PosteLite[], org: ParametresOrg, anneeDebut: number, horizon = 10): HonorairesAnnee[] {
+  const lignes: HonorairesAnnee[] = [];
+  for (let a = anneeDebut; a <= anneeDebut + horizon; a++) lignes.push({ annee: a, potentiel: 0, acquis: 0, montantTtc: 0, nbPostes: 0 });
+  for (const { p, idx, honoraires, ttc } of honorairesPostesVivants(postes, org, anneeDebut, horizon)) {
+    const ligne = lignes[idx];
+    if (p.statut === "vote") ligne.acquis += honoraires;
+    else ligne.potentiel += honoraires;
+    ligne.montantTtc += ttc;
     ligne.nbPostes++;
   }
   return lignes.map((l) => ({ ...l, potentiel: arr(l.potentiel), acquis: arr(l.acquis), montantTtc: arr(l.montantTtc) }));
+}
+
+/** Taux de passage retenu par défaut quand l'historique des AG est trop mince (moins de 5 postes présentés). */
+export const TAUX_PASSAGE_DEFAUT = 50;
+export const MIN_POSTES_TAUX_CONSTATE = 5;
+
+/** Taux de passage du portefeuille : votés / présentés en AG (même règle que le comparatif par gestionnaire). */
+export function tauxPassagePortefeuille(postes: PosteLite[]): { presentes: number; votes: number; taux: number | null } {
+  let presentes = 0, votes = 0;
+  for (const p of postes) {
+    if (!p.actif) continue;
+    if (["presente", "vote", "rejete", "reporte", "realise"].includes(p.statut)) presentes++;
+    if (p.statut === "vote" || p.statut === "realise") votes++;
+  }
+  return { presentes, votes, taux: presentes ? Math.round((votes / presentes) * 100) : null };
+}
+
+export interface AnneeProbable {
+  annee: number;
+  /** honoraires des postes votés */
+  securise: number;
+  /** potentiel × taux de passage */
+  probable: number;
+  /** reste du potentiel */
+  enJeu: number;
+}
+
+/** Honoraires projetés pondérés par un taux de passage en AG (%) : sécurisé (voté), probable, en jeu. */
+export function repartitionProbable(lignes: HonorairesAnnee[], tauxPct: number): { annees: AnneeProbable[]; securise: number; probable: number; enJeu: number } {
+  const t = Math.min(100, Math.max(0, tauxPct)) / 100;
+  const annees = lignes.map((l) => {
+    const probable = arr(l.potentiel * t);
+    return { annee: l.annee, securise: l.acquis, probable, enJeu: arr(l.potentiel - probable) };
+  });
+  const somme = (k: "securise" | "probable" | "enJeu") => arr(annees.reduce((s, a) => s + a[k], 0));
+  return { annees, securise: somme("securise"), probable: somme("probable"), enJeu: somme("enJeu") };
+}
+
+export type EtapeHonoraires = "vote" | "presente" | "a_representer" | "programme";
+export const ETAPES_HONORAIRES: EtapeHonoraires[] = ["vote", "presente", "a_representer", "programme"];
+
+export interface EtapePipeline {
+  etape: EtapeHonoraires;
+  honoraires: number;
+  nbPostes: number;
+  montantTtc: number;
+}
+
+export interface PipelineHonoraires {
+  etapes: EtapePipeline[];
+  total: number;
+  nbPostes: number;
+  /** Postes programmés jamais présentés, attendus d'ici N+1 : à inscrire aux prochaines AG. */
+  programmeProche: { honoraires: number; nbPostes: number };
+}
+
+/** Honoraires projetés par statut des postes (mêmes postes et mêmes montants que honorairesParAnnee). */
+export function pipelineHonoraires(postes: PosteLite[], org: ParametresOrg, anneeDebut: number, horizon = 10): PipelineHonoraires {
+  const etapes = new Map<EtapeHonoraires, EtapePipeline>(ETAPES_HONORAIRES.map((e) => [e, { etape: e, honoraires: 0, nbPostes: 0, montantTtc: 0 }]));
+  const proche = { honoraires: 0, nbPostes: 0 };
+  for (const { p, idx, honoraires, ttc } of honorairesPostesVivants(postes, org, anneeDebut, horizon)) {
+    const etape: EtapeHonoraires = p.statut === "vote" ? "vote" : p.statut === "presente" ? "presente" : p.statut === "rejete" || p.statut === "reporte" ? "a_representer" : "programme";
+    const e = etapes.get(etape)!;
+    e.honoraires += honoraires;
+    e.montantTtc += ttc;
+    e.nbPostes++;
+    if (etape === "programme" && idx <= 1) {
+      proche.honoraires += honoraires;
+      proche.nbPostes++;
+    }
+  }
+  const liste = [...etapes.values()].map((e) => ({ ...e, honoraires: arr(e.honoraires), montantTtc: arr(e.montantTtc) }));
+  return {
+    etapes: liste,
+    total: arr(liste.reduce((s, e) => s + e.honoraires, 0)),
+    nbPostes: liste.reduce((s, e) => s + e.nbPostes, 0),
+    programmeProche: { honoraires: arr(proche.honoraires), nbPostes: proche.nbPostes },
+  };
+}
+
+export interface HonorairesCopro {
+  copro: CoproLite;
+  /** honoraires par année, index 0 = N, dernier = N+horizon et au-delà */
+  parAnnee: number[];
+  nbPostes: number[];
+  /** l'année compte au moins un poste voté */
+  vote: boolean[];
+  total: number;
+}
+
+/** Matrice copropriété × année des honoraires projetés (carte de chaleur) : copropriétés sans honoraires écartées, de la plus contributive à la moins. */
+export function honorairesParCopro(copros: CoproLite[], postes: PosteLite[], org: ParametresOrg, anneeDebut: number, horizon = 10): HonorairesCopro[] {
+  const n = horizon + 1;
+  const parCopro = new Map<string, HonorairesCopro>(copros.map((c) => [c.id, { copro: c, parAnnee: Array(n).fill(0), nbPostes: Array(n).fill(0), vote: Array(n).fill(false), total: 0 }]));
+  for (const { p, idx, honoraires } of honorairesPostesVivants(postes, org, anneeDebut, horizon)) {
+    const l = parCopro.get(p.ppt_copro_id);
+    if (!l) continue;
+    l.parAnnee[idx] += honoraires;
+    l.nbPostes[idx]++;
+    if (p.statut === "vote") l.vote[idx] = true;
+    l.total += honoraires;
+  }
+  return [...parCopro.values()]
+    .filter((l) => l.total > 0)
+    .map((l) => ({ ...l, parAnnee: l.parAnnee.map(arr), total: arr(l.total) }))
+    .sort((a, b) => b.total - a.total || a.copro.nom.localeCompare(b.copro.nom, "fr"));
 }
 
 const arr = (n: number) => Math.round(n * 100) / 100;

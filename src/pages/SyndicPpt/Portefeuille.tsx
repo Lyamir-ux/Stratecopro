@@ -6,9 +6,11 @@
 // carte par gestionnaire (jauge des états, honoraires) contenant une tuile
 // compacte par copropriété, colorée par état de suivi. Kanban : une colonne
 // par état. Tableau : comparatif par gestionnaire (direction) et copropriétés
-// triables. Sous les vues : honoraires projetés (direction, sauf en mosaïque où
-// chaque carte de gestionnaire les porte déjà), ce qu'il faut préparer pour les
-// AG (gestionnaire), alertes.
+// triables. Sous les vues : honoraires de suivi projetés (direction, une lecture
+// par vue - feedback Amir 26/09/2026, voir GraphiquesHonoraires : cascade et
+// répartition probable en mosaïque, pipeline par statut en kanban, carte de
+// chaleur par copropriété en tableau), ce qu'il faut préparer pour les AG
+// (gestionnaire), alertes.
 // Direction et aperçu AMO voient toute l'enseigne ; un gestionnaire ne voit
 // que ses dossiers - aucun chiffre d'un collègue, aucun classement.
 // Export « PDF » (feedback syndic 24/09/2026 : « exporter le portefeuille
@@ -33,7 +35,12 @@ import {
   fichesCopros,
   groupesGestionnaires,
   honorairesParAnnee,
+  honorairesParCopro,
+  MIN_POSTES_TAUX_CONSTATE,
+  pipelineHonoraires,
   statsParGestionnaire,
+  TAUX_PASSAGE_DEFAUT,
+  tauxPassagePortefeuille,
   type Alerte,
   type CoproEtatInput,
   type EtatPpt,
@@ -41,6 +48,7 @@ import {
 } from "@/lib/ppt/indicateurs";
 import { articleSuggere } from "@/lib/ppt/referentiels";
 import { agLite, anneeCourante, coproLite, fmtDateCourte, fmtEur, posteLite, rapportLite, type PrioriteCode } from "./commun";
+import { PanneauCarteHonoraires, PanneauCumulHonoraires, PanneauPipelineHonoraires, PanneauProbable, type TauxPassageInfo } from "./GraphiquesHonoraires";
 import type { PortefeuillePpt } from "./index";
 
 type Vue = "mosaique" | "kanban" | "tableau";
@@ -98,57 +106,6 @@ function ListeAlertes({ liste, titre }: { liste: Alerte[]; titre: string }) {
             et {liste.length - 12} autre{liste.length - 12 > 1 ? "s" : ""}…
           </p>
         )}
-      </div>
-    </div>
-  );
-}
-
-/** Barres horizontales des honoraires de suivi par année (votés / potentiel) - direction. */
-function BarresHonoraires({ pf }: { pf: PortefeuillePpt }) {
-  const annee = anneeCourante();
-  const lignes = useMemo(() => honorairesParAnnee(pf.postes.map(posteLite), pf.params, annee), [pf.postes, pf.params, annee]);
-  const max = Math.max(1, ...lignes.map((l) => l.potentiel + l.acquis));
-  const total = lignes.reduce((s, l) => s + l.potentiel + l.acquis, 0);
-  return (
-    <div className="panel" style={{ marginTop: 20 }}>
-      <div className="p-head">
-        <Icon name="trendingUp" size={18} />
-        <h3>Honoraires de suivi de travaux projetés par année</h3>
-        <span style={{ flex: 1 }}></span>
-        <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
-          {pf.params.taux_honoraires_pct.toLocaleString("fr-FR")} % du montant {pf.params.base_honoraires.toUpperCase()} · {fmtEur(total)} sur {lignes.length} ans
-        </span>
-        <button
-          className="se-btn se-btn-ghost btn-sm"
-          onClick={() =>
-            telechargerCsv(
-              `honoraires-ppt-${annee}.csv`,
-              ["Année", "Postes", "Montant TTC", "Honoraires potentiels", "Honoraires acquis (votés)"],
-              lignes.map((l) => [l.annee, l.nbPostes, l.montantTtc, l.potentiel, l.acquis])
-            )
-          }
-        >
-          <Icon name="download" size={13} />
-          CSV
-        </button>
-      </div>
-      <div className="p-body" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {lignes.map((l) => (
-          <div key={l.annee} style={{ display: "grid", gridTemplateColumns: "54px 1fr 130px", alignItems: "center", gap: 10, fontSize: 13 }}>
-            <span style={{ fontWeight: 600 }}>{l.annee}</span>
-            <div style={{ display: "flex", height: 16, borderRadius: 4, overflow: "hidden", background: "var(--bg-soft)" }}>
-              <div style={{ width: `${(l.acquis / max) * 100}%`, background: "var(--color-primary-700)" }} title={`Votés : ${fmtEur(l.acquis)}`}></div>
-              <div style={{ width: `${(l.potentiel / max) * 100}%`, background: "var(--color-primary-500)", opacity: 0.55 }} title={`Potentiel : ${fmtEur(l.potentiel)}`}></div>
-            </div>
-            <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-              {l.potentiel + l.acquis ? fmtEur(l.potentiel + l.acquis) : "-"}
-              {l.nbPostes ? <span style={{ color: "var(--fg-muted)" }}> · {l.nbPostes} poste{l.nbPostes > 1 ? "s" : ""}</span> : null}
-            </span>
-          </div>
-        ))}
-        <p className="se-small" style={{ color: "var(--fg-muted)", margin: "8px 0 0" }}>
-          Barre foncée : postes votés (au montant voté). Barre claire : postes programmés, présentés ou à représenter, actualisés à {pf.params.inflation_pct.toLocaleString("fr-FR")} % par an depuis {annee}. Un poste rejeté compte à l'année de sa nouvelle présentation.
-        </p>
       </div>
     </div>
   );
@@ -557,6 +514,7 @@ function VueTableau({ pf, fiches, acces, multiGest }: { pf: PortefeuillePpt; fic
 // ========== Page ==========
 
 export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
+  const navigate = useNavigate();
   const annee = anneeCourante();
   const [recherche, setRecherche] = useState("");
   const [etatFiltre, setEtatFiltre] = useState<EtatPpt | null>(null);
@@ -589,10 +547,40 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
   const acces = (id: string) => copros.find((c) => c.id === id)?.acces ?? false;
 
   const q = normaliser(recherche.trim());
-  const filtrees = fiches.filter(
-    (f) =>
-      (!etatFiltre || f.etat === etatFiltre) &&
-      (!q || normaliser(f.copro.nom).includes(q) || normaliser(f.copro.commune ?? "").includes(q) || normaliser(f.copro.gestionnaire_nom ?? "").includes(q))
+  const filtrees = useMemo(
+    () =>
+      fiches.filter(
+        (f) =>
+          (!etatFiltre || f.etat === etatFiltre) &&
+          (!q || normaliser(f.copro.nom).includes(q) || normaliser(f.copro.commune ?? "").includes(q) || normaliser(f.copro.gestionnaire_nom ?? "").includes(q))
+      ),
+    [fiches, etatFiltre, q]
+  );
+
+  // Honoraires de suivi (direction) : sur le périmètre affiché, comme le PDF.
+  const postesFiltres = useMemo(() => {
+    const ids = new Set(filtrees.map((f) => f.copro.id));
+    return postes.filter((p) => ids.has(p.ppt_copro_id));
+  }, [postes, filtrees]);
+  const honoParAnnee = useMemo(() => (pf.direction ? honorairesParAnnee(postesFiltres, pf.params, annee) : []), [pf.direction, postesFiltres, pf.params, annee]);
+  // Taux de passage de la répartition probable : constaté dès 5 postes présentés, sinon hypothèse
+  // de 50 % ; le curseur le remplace pour la séance (et pour le PDF).
+  const [tauxChoisi, setTauxChoisi] = useState<number | null>(null);
+  const passage = useMemo<TauxPassageInfo>(() => {
+    const t = tauxPassagePortefeuille(postesFiltres);
+    const fiable = t.taux != null && t.presentes >= MIN_POSTES_TAUX_CONSTATE;
+    return {
+      taux: tauxChoisi ?? (fiable ? t.taux! : TAUX_PASSAGE_DEFAUT),
+      constate: t.taux,
+      presentes: t.presentes,
+      hypothese: tauxChoisi == null && !fiable,
+      modifie: tauxChoisi != null,
+    };
+  }, [postesFiltres, tauxChoisi]);
+  const pipeline = useMemo(() => pipelineHonoraires(pf.direction && vue === "kanban" ? postesFiltres : [], pf.params, annee), [pf.direction, vue, postesFiltres, pf.params, annee]);
+  const carteHonoraires = useMemo(
+    () => (pf.direction && vue === "tableau" ? honorairesParCopro(filtrees.map((f) => f.copro), postesFiltres, pf.params, annee) : []),
+    [pf.direction, vue, filtrees, postesFiltres, pf.params, annee]
   );
 
   const parEtat = ETATS_PPT.map((e) => ({ etat: e, n: fiches.filter((f) => f.etat === e).length }));
@@ -641,8 +629,9 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
           parAnnee: ech.get(f.copro.id)?.parAnnee ?? new Map(),
           totalEcheancier: ech.get(f.copro.id)?.total ?? 0,
         })),
-        honoraires: pf.direction ? honorairesParAnnee(postesPerimetre, pf.params, annee) : undefined,
+        honoraires: pf.direction ? honoParAnnee : undefined,
         tauxHonorairesPct: pf.params.taux_honoraires_pct,
+        tauxPassage: pf.direction ? { taux: passage.taux, constate: passage.constate, presentes: passage.presentes, hypothese: passage.hypothese, modifie: passage.modifie } : undefined,
         aPreparer: pf.direction
           ? undefined
           : preparation.map((l) => ({
@@ -779,10 +768,20 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
         <VueMosaique fiches={filtrees} acces={acces} direction={pf.direction} />
       )}
 
-      {/* Honoraires projetés : pas en mosaïque, où chaque carte de gestionnaire porte déjà
-          son total d'honoraires de suivi (feedback Amir 20/09 : le tableau était repris
-          à l'identique dans les trois vues). */}
-      {pf.direction ? vue !== "mosaique" && <BarresHonoraires pf={pf} /> : <PanneauAPreparer pf={pf} copros={copros} />}
+      {/* Honoraires de suivi projetés : une lecture différente par vue (feedback Amir 26/09 ;
+          le 20/09, le même tableau repris dans les trois vues avait été retiré de la mosaïque). */}
+      {!pf.direction ? (
+        <PanneauAPreparer pf={pf} copros={copros} />
+      ) : vue === "mosaique" ? (
+        <>
+          <PanneauCumulHonoraires lignes={honoParAnnee} params={pf.params} annee={annee} />
+          <PanneauProbable lignes={honoParAnnee} passage={passage} onTaux={setTauxChoisi} annee={annee} />
+        </>
+      ) : vue === "kanban" ? (
+        <PanneauPipelineHonoraires pipeline={pipeline} annee={annee} />
+      ) : (
+        <PanneauCarteHonoraires lignes={carteHonoraires} annees={honoParAnnee.map((l) => l.annee)} annee={annee} acces={acces} onOuvrir={(id) => navigate(`/syndic/ppt/copros/${id}`)} />
+      )}
 
       {!pf.direction && remarquesOuvertes > 0 && (
         <div className="panel" style={{ marginTop: 20, display: "flex", alignItems: "center", gap: 12, padding: "12px 18px" }}>

@@ -1685,3 +1685,70 @@ table.dossiers tfoot tr.recap-total td.num { text-align: right; }
 
 .kanban.ppt .kcol { min-width: 205px; }
 .kanban.ppt .kcol-head .ktitle { font-size: 16px; }
+
+/* ===== Honoraires de suivi du tableau de bord PPT (direction, feedback 26/09) =====
+   Cascade et répartition probable (mosaïque), pipeline par statut (kanban),
+   carte de chaleur copropriété × année (tableau). */
+.hono-tuiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.hono-tuiles.trois { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.hono-tuile { background: var(--bg-soft); border-radius: var(--radius-md); padding: 10px 14px; min-width: 0; }
+.hono-tuile .ht-label { font-size: 12px; color: var(--fg-muted); display: flex; align-items: center; gap: 6px; }
+.hono-tuile .ht-past { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+.hono-tuile .ht-val { font-family: var(--font-display); font-weight: 800; font-size: 22px; line-height: 1.15; margin-top: 4px; font-variant-numeric: tabular-nums; color: var(--fg1); }
+.hono-tuile .ht-pied { font-size: 11.5px; color: var(--fg-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hono-legende { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--fg2); margin-bottom: 4px; }
+.hono-legende span { display: inline-flex; align-items: center; gap: 6px; }
+.hono-legende i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.hono-graph { position: relative; }
+.hono-bulle {
+  position: absolute; top: 8px; z-index: 5; pointer-events: none; min-width: 190px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+  padding: 8px 11px; font-size: 12.5px; display: flex; flex-direction: column; gap: 2px; font-variant-numeric: tabular-nums;
+}
+.hono-bulle b { font-size: 13px; color: var(--fg1); margin-bottom: 2px; }
+.hono-bulle .mu, .hono-curseur .mu, .hono-pipe-tete .mu { color: var(--fg-muted); }
+.hono-note { color: var(--fg-muted); margin: 10px 0 0; }
+.hono-phrase { font-size: 13.5px; color: var(--fg2); margin: 10px 0 0; line-height: 1.55; }
+.hono-curseur { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; font-size: 13px; color: var(--fg2); margin-bottom: 14px; }
+.hono-curseur input[type="range"] { flex: 1 1 180px; max-width: 320px; accent-color: var(--color-primary-600); }
+.hono-curseur b { font-variant-numeric: tabular-nums; min-width: 42px; color: var(--fg1); font-size: 15px; }
+.hono-curseur .mu { font-size: 12px; }
+.hono-pipe-tete { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; font-size: 13px; }
+.hono-pipe-tete b { font-family: var(--font-display); font-weight: 800; font-size: 22px; color: var(--fg1); font-variant-numeric: tabular-nums; }
+.hono-pipe-barre { display: flex; gap: 2px; height: 26px; margin-bottom: 12px; }
+.hono-pipe-barre i { display: block; flex-basis: 0; min-width: 4px; }
+.hono-pipe-barre i:first-child { border-radius: 4px 0 0 4px; }
+.hono-pipe-barre i:last-child { border-radius: 0 4px 4px 0; }
+.hono-pipe-barre i:only-child { border-radius: 4px; }
+.hono-pipe-ligne { display: grid; grid-template-columns: 12px minmax(0, 1fr) 110px 80px 44px; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--border); font-size: 13.5px; }
+.hono-pipe-ligne.vide { opacity: 0.55; }
+.hono-pipe-ligne .past { width: 10px; height: 10px; border-radius: 2px; }
+.hono-pipe-ligne .lib { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--fg1); }
+.hono-pipe-ligne .lib svg { color: var(--fg-muted); flex: none; }
+.hono-pipe-ligne .act { font-size: 12px; color: var(--fg-muted); margin-top: 1px; }
+.hono-pipe-ligne .mt { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hono-pipe-ligne .nb { text-align: right; color: var(--fg2); font-variant-numeric: tabular-nums; }
+.hono-pipe-ligne .pc { text-align: right; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.hono-carte { width: 100%; min-width: 760px; border-collapse: separate; border-spacing: 3px; table-layout: fixed; font-size: 12px; font-variant-numeric: tabular-nums; }
+.hono-carte th { font-weight: 600; color: var(--fg-muted); padding: 4px 0; text-align: center; font-size: 11.5px; }
+.hono-carte th.cur { color: var(--color-primary-700); }
+.hono-carte td { height: 28px; text-align: center; border-radius: 4px; }
+.hono-carte td.vide { color: var(--fg-muted); }
+.hono-carte td.vote { box-shadow: 0 0 0 1.5px var(--bg), 0 0 0 3px var(--color-primary-900); }
+.hono-carte .nom { text-align: left; padding: 0 6px; color: var(--fg1); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hono-carte th.nom { font-weight: 600; color: var(--fg-muted); }
+.hono-carte .tot { text-align: right; padding-right: 6px; font-weight: 700; color: var(--fg1); }
+.hono-carte tr.ouvrable { cursor: pointer; }
+.hono-carte tr.ouvrable:hover td.nom { color: var(--color-primary-700); text-decoration: underline; }
+.hono-carte tr.autres td.nom { font-weight: 400; color: var(--fg2); font-style: italic; }
+.hono-carte tfoot td { border-top: 1px solid var(--border); border-radius: 0; font-weight: 700; color: var(--fg1); }
+.hono-carte-leg { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; font-size: 11.5px; color: var(--fg-muted); }
+.hono-carte-leg .echelle { display: inline-flex; gap: 2px; }
+.hono-carte-leg .echelle i { display: block; width: 16px; height: 10px; border-radius: 2px; }
+.hono-carte-leg .vote-leg { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; }
+.hono-carte-leg .vote-leg i { display: block; width: 10px; height: 10px; border-radius: 2px; background: var(--color-primary-100); box-shadow: 0 0 0 1.5px var(--bg), 0 0 0 3px var(--color-primary-900); }
+@media (max-width: 900px) {
+  .hono-tuiles, .hono-tuiles.trois { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hono-pipe-ligne { grid-template-columns: 12px minmax(0, 1fr) 96px; }
+  .hono-pipe-ligne .nb, .hono-pipe-ligne .pc { display: none; }
+}
