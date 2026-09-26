@@ -1602,6 +1602,23 @@ table.dossiers tfoot tr.recap-total td.num { text-align: right; }
   border: 6px solid transparent; border-top-color: var(--color-neutral-800);
 }
 
+/* ===== En-têtes de tableau figés (TableauFige, feedback Amir 26/09) =====
+   « fige-page » : le tableau tient dans la largeur, overflow: clip (garde le cadre
+   arrondi sans créer de conteneur défilant) et les en-têtes se collent sous les
+   bandeaux du portail (--fige-haut, mesuré). « fige-interne » : le tableau déborde,
+   il défile dans son cadre, borné à la hauteur de l'écran, en-tête collé en haut.
+   Filet du bas en ombre : une bordure fusionnée (border-collapse) ne suit pas une
+   cellule collée. overflow: visible d'abord pour les navigateurs sans « clip ». */
+.fige.fige-page { overflow: visible; overflow: clip; }
+.fige.fige-interne { overflow: auto; max-height: calc(100vh - var(--fige-haut, 0px) - 12px); }
+.fige table thead th {
+  position: sticky; top: 0; z-index: 2; background: var(--bg);
+  border-bottom: 0; box-shadow: inset 0 -1px 0 var(--border);
+}
+.fige.fige-page table thead th { top: var(--fige-haut, 0px); }
+/* coin du suivi de l'échéancier : collé en haut et à gauche, au-dessus des deux */
+.fige table.dossiers.ech-table thead th.ech-poste { z-index: 3; }
+
 /* ===== Portefeuille PPT (tableau de bord de la branche, façon rénovation globale) =====
    La vue « Bulles » de la rénovation globale ne tient pas avec des dizaines de
    copropriétés par gestionnaire : mosaïque à la place - une carte par

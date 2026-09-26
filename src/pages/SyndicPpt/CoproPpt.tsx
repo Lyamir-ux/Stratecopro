@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
+import { TableauFige } from "@/components/TableauFige";
 import { Badge, DpeChip } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
 import type { DpeClass } from "@/lib/referentiels";
@@ -198,7 +199,7 @@ function EcheancierTab({ c, postes }: { c: PptCoproAvecStats; postes: PptPoste[]
           <BoutonPdfEcheancier c={c} postes={postes} />
         </div>
         <div className="p-body" style={{ paddingTop: 0 }}>
-          <div className="tablewrap">
+          <TableauFige className="tablewrap">
             <table className="dossiers" style={{ fontSize: 13 }}>
               <thead>
                 <tr>
@@ -267,7 +268,7 @@ function EcheancierTab({ c, postes }: { c: PptCoproAvecStats; postes: PptPoste[]
                 </tr>
               </tfoot>
             </table>
-          </div>
+          </TableauFige>
           {anneesGain.length > 0 && c.cep_kwhep_m2_an != null && (
             <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
               Gain cumulé par année (gains composés) : {anneesGain.map((a) => `${a} : ${fmtPct(gainCumule(lites, a))} (Cep ${cepApres(c.cep_kwhep_m2_an, gainCumule(lites, a))}, ${etiquetteDepuisCep(cepApres(c.cep_kwhep_m2_an, gainCumule(lites, a)))})`).join(" · ")}. Montants indicatifs à confirmer par devis.
@@ -355,7 +356,7 @@ function SuiviEcheancier({ copro, postes, retirees, params, annee }: { copro: Pp
       </div>
       <div className="p-body" style={{ paddingTop: 0 }}>
         {erreur && <p style={{ padding: "8px 12px", borderRadius: "var(--radius-md)", background: "var(--color-error-50)", color: "var(--color-error-700)", fontSize: 13 }}>{erreur}</p>}
-        <div className="sf-wrap">
+        <TableauFige className="sf-wrap">
           <table className="dossiers sf-table ech-table" style={{ minWidth: 0 }}>
             <thead>
               <tr>
@@ -456,7 +457,7 @@ function SuiviEcheancier({ copro, postes, retirees, params, annee }: { copro: Pp
               </tr>
             </tfoot>
           </table>
-        </div>
+        </TableauFige>
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
           Les flèches vertes repoussent (→) ou avancent (←) le poste d'un an ; un clic sur toute autre année le décale à cette année, jamais avant {annee}. Puis Enregistrer : le récap ci-dessus et le tableau de bord suivent. Le montant est recalculé pour l'année choisie (inflation, TVA, honoraires). Un clic sur un montant permet de le saisir à la main et d'y joindre un commentaire (point bleu sur la pastille), visible au survol, ou de retirer la ligne du plan avec un motif obligatoire ; « Lignes retirées » les liste et permet de les rétablir. Les postes votés, réalisés ou abandonnés sont figés. Tout est tracé dans l'historique.
         </p>
