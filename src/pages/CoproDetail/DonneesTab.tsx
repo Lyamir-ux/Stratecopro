@@ -12,7 +12,7 @@ import {
   type DpeClass,
 } from "@/lib/referentiels";
 import { useDonnees, useMutationsLots, useSetNbBatiments, useSetUsageLot, type LotFull } from "@/api/donnees";
-import { notifierPassation, useUpdateCopro, type CoproWithStats, type PassationMailStatut } from "@/api/copros";
+import { notifierPassation, useCopros, useUpdateCopro, type CoproWithStats, type PassationMailStatut } from "@/api/copros";
 import { useTeamProfiles } from "@/api/profiles";
 import { organisationIdPourSyndic, useOrganisations } from "@/api/organisations";
 import { normaliserNomOrganisation, trouverOrganisationParNom, type OrganisationNommee } from "@/lib/organisations";
@@ -26,6 +26,12 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
   const { data: mutations } = useMutationsLots(c.id);
   const { data: team } = useTeamProfiles();
   const { data: organisations } = useOrganisations();
+  // Maîtres d'œuvre déjà saisis sur les autres dossiers : suggestions de saisie
+  // (même graphie partout, les listes se trient et se lisent mieux).
+  const { data: tousDossiers } = useCopros();
+  const moesConnus = Array.from(
+    new Set((tousDossiers ?? []).map((d) => d.maitre_oeuvre?.trim()).filter((v): v is string => !!v))
+  ).sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
   const update = useUpdateCopro(c.id);
   const [showImport, setShowImport] = useState(false);
   // vente ou succession : même clic que côté syndic (feedback Amir 22/09/2026)
@@ -40,6 +46,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
     gestionnaireNom: "",
     gestionnaireEmail: "",
     chefProjet: "",
+    maitreOeuvre: "",
     nbLogements: 0,
     nbBatiments: 0,
     denomination: "batiment",
@@ -96,6 +103,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
       gestionnaireNom: c.gestionnaire_nom ?? "",
       gestionnaireEmail: c.gestionnaire_email ?? "",
       chefProjet: c.chef_projet ?? "",
+      maitreOeuvre: c.maitre_oeuvre ?? "",
       nbLogements: c.nb_logements ?? 0,
       nbBatiments: batiments.length,
       denomination: c.denomination_batiments ?? "batiment",
@@ -145,6 +153,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
       gestionnaire_nom: synth.gestionnaireNom || null,
       gestionnaire_email: synth.gestionnaireEmail || null,
       chef_projet: synth.chefProjet || null,
+      maitre_oeuvre: synth.maitreOeuvre.trim() || null,
       nb_logements: synth.nbLogements > 0 ? synth.nbLogements : null,
       denomination_batiments: synth.denomination,
       energy_before: synth.energyBefore || null,
@@ -511,6 +520,28 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
               </>
             ) : (
               <span className="v">{c.chef_projet ?? "-"}</span>
+            )}
+          </div>
+          <div className="kv">
+            <span className="k">Maître d'œuvre</span>
+            {editingSynth ? (
+              <>
+                {/* Suggestions = maîtres d'œuvre déjà saisis sur les autres dossiers */}
+                <input
+                  className="edit-inp"
+                  list="moe-suggestions"
+                  value={synth.maitreOeuvre}
+                  onChange={(e) => setSynth((s) => ({ ...s, maitreOeuvre: e.target.value }))}
+                  title="Société de maîtrise d'œuvre du dossier - affichée dans les listes de copropriétés (AMO et syndic)"
+                />
+                <datalist id="moe-suggestions">
+                  {moesConnus.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+              </>
+            ) : (
+              <span className="v">{c.maitre_oeuvre ?? "-"}</span>
             )}
           </div>
           <div className="kv">

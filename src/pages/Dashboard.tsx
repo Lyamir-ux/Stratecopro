@@ -158,7 +158,7 @@ function KanbanView({ copros, showProgress }: { copros: CoproWithStats[]; showPr
   );
 }
 
-type ColTri = "name" | "phase" | "logements" | "montant" | "progress";
+type ColTri = "name" | "phase" | "logements" | "montant" | "progress" | "moe";
 
 const PHASE_RANK: Record<PhaseId, number> = { diagnostic: 0, etudes: 1, travaux: 2 };
 
@@ -181,11 +181,15 @@ export function trierCopros(copros: CoproWithStats[], tri: Tri): CoproWithStats[
         return c.stats?.montant_ttc ?? 0;
       case "progress":
         return avancementAmo(c);
+      case "moe":
+        return c.maitre_oeuvre?.trim() ?? "";
     }
   };
   return [...copros].sort((a, b) => {
     const va = valeur(a);
     const vb = valeur(b);
+    // Maître d'œuvre non renseigné : en fin de liste dans les deux sens de tri
+    if (tri.col === "moe" && (!va || !vb)) return va ? -1 : vb ? 1 : 0;
     const cmp = typeof va === "string" ? va.localeCompare(String(vb), "fr") : Number(va) - Number(vb);
     return tri.desc ? -cmp : cmp;
   });
@@ -194,7 +198,8 @@ export function trierCopros(copros: CoproWithStats[], tri: Tri): CoproWithStats[
 /** Vue liste : colonnes triables, exportable en CSV depuis l'en-tête de page
  *  (feedback Amir 22/09 - remplace la vue galerie, sans usage). Le nombre de
  *  copropriétaires n'est plus affiché (feedback Amir 23/09, inutile à l'écran) :
- *  il reste dans l'export et dans les KPI. */
+ *  il reste dans l'export et dans les KPI. Maître d'œuvre du dossier depuis le
+ *  26/09 (texte libre de l'onglet Données). */
 function ListeView({ copros, tri, setTri }: { copros: CoproWithStats[]; tri: Tri; setTri: (t: Tri) => void }) {
   const navigate = useNavigate();
   const cliquerTri = (col: ColTri) => setTri({ col, desc: tri.col === col ? !tri.desc : col !== "name" });
@@ -221,6 +226,7 @@ function ListeView({ copros, tri, setTri }: { copros: CoproWithStats[]; tri: Tri
             <Th col="logements" label="Logements" />
             <Th col="montant" label="Montant TTC" />
             <Th col="progress" label="Avancement" />
+            <Th col="moe" label="Maître d'œuvre" />
             <th>Équipe</th>
             <th></th>
           </tr>
@@ -254,6 +260,9 @@ function ListeView({ copros, tri, setTri }: { copros: CoproWithStats[]; tri: Tri
                     <Progress value={avancementAmo(c)} blue={c.phase === "etudes"} />
                   </div>
                 </div>
+              </td>
+              <td style={{ fontSize: 13 }}>
+                {c.maitre_oeuvre?.trim() || <span style={{ color: "var(--fg-muted)" }}>-</span>}
               </td>
               <td>
                 {/* Chef de projet (vert) et syndic (bleu) - deux couleurs distinctes sur tous les projets */}
@@ -762,6 +771,7 @@ function exportCsv(copros: CoproWithStats[]) {
       "Chef de projet",
       "Syndic",
       "Gestionnaire",
+      "Maître d'œuvre",
       "Fragile",
       "Prochaine étape",
     ],
@@ -783,6 +793,7 @@ function exportCsv(copros: CoproWithStats[]) {
       c.chef_projet ?? "",
       c.syndic_name ?? "",
       c.gestionnaire_nom ?? "",
+      c.maitre_oeuvre ?? "",
       c.fragile ? "Oui" : "",
       c.stats?.next_task ?? "",
     ])

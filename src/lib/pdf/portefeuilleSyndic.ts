@@ -3,7 +3,8 @@
 // de zéro avec pdf-lib, en paysage, accent vert Strat Eco de la branche
 // rénovations globales, signé Strat Eco pro. Trois parties : synthèse du
 // portefeuille, comparatif par gestionnaire (si plusieurs), tableau des
-// copropriétés (mêmes colonnes que l'export CSV, même ordre alphabétique).
+// copropriétés (mêmes colonnes que l'export CSV, même ordre alphabétique ;
+// maître d'œuvre du dossier depuis le 26/09/2026).
 // Les lignes reçues sont celles affichées à l'écran : la recherche en cours et
 // le périmètre (direction, gestionnaire, aperçu AMO) s'appliquent tels quels.
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb, type RGB } from "pdf-lib";
@@ -13,6 +14,8 @@ export interface LignePortefeuillePdf {
   nom: string;
   ville?: string | null;
   gestionnaire?: string | null;
+  /** Maître d'œuvre du dossier (texte libre de la fiche). */
+  maitreOeuvre?: string | null;
   /** Phase d'avancement affichée (d'après les tâches validées du syndic). */
   phase: PhaseId;
   /** Toutes les tâches du syndic validées : « Terminé » à la place de la phase. */
@@ -401,17 +404,20 @@ export async function genererPortefeuilleSyndicPdf(input: PortefeuillePdfInput):
   // ----- copropriétés du portefeuille -----
   f.titreSection("Copropriétés du portefeuille");
   const multiGest = groupes.length > 1;
-  const wGest = multiGest ? 120 : 0;
+  const wGest = multiGest ? 100 : 0;
+  // Largeurs au plus juste des en-têtes : la colonne du maître d'œuvre (26/09)
+  // tient sur la page paysage sans rogner les montants.
   const colsC: Col[] = [
-    { titre: "Copropriété", w: multiGest ? 200 : 260 },
+    { titre: "Copropriété", w: multiGest ? 160 : 260 },
     ...(multiGest ? [{ titre: "Gestionnaire", w: wGest }] : []),
-    { titre: "Phase", w: 74 },
-    { titre: "DPE", w: 56 },
-    { titre: "Logements", w: 62, align: "right" },
-    { titre: "Montant TTC", w: 84, align: "right" },
-    { titre: "Honoraires", w: 78, align: "right" },
-    { titre: "Avancement", w: 66, align: "right" },
-    { titre: "Tâches en retard", w: 0, align: "right" },
+    { titre: "Maître d'œuvre", w: 86 },
+    { titre: "Phase", w: 66 },
+    { titre: "DPE", w: 46 },
+    { titre: "Logements", w: 56, align: "right" },
+    { titre: "Montant TTC", w: 66, align: "right" },
+    { titre: "Honoraires", w: 62, align: "right" },
+    { titre: "Avancement", w: 62, align: "right" },
+    { titre: "En retard", w: 0, align: "right" },
   ];
   colsC[colsC.length - 1].w = LARGEUR - colsC.slice(0, -1).reduce((s, c) => s + c.w, 0);
   tableau(
@@ -424,6 +430,7 @@ export async function genererPortefeuilleSyndicPdf(input: PortefeuillePdfInput):
           ...(l.ville ? wrap(l.ville, font, 7, colsC[0].w - 12, 1) : []),
         ],
         ...(multiGest ? [{ texte: l.gestionnaire?.trim() || "-" }] : []),
+        l.maitreOeuvre?.trim() ? wrap(l.maitreOeuvre, font, 8, 86 - 12, 2) : { texte: "-" },
         l.termine ? { texte: "Terminé", pastille: ARDOISE } : { texte: labelPhase(l.phase), pastille: COULEUR_PHASE[l.phase] },
         { texte: l.dpeAvant || l.dpeApres ? `${l.dpeAvant ?? "?"} -> ${l.dpeApres ?? "?"}` : "-" },
         { texte: l.logements ? nombre(l.logements) : "-" },
@@ -439,6 +446,7 @@ export async function genererPortefeuilleSyndicPdf(input: PortefeuillePdfInput):
         ...(multiGest ? [null] : []),
         null,
         null,
+        null,
         nombre(totalLogements),
         euroCourt(totalMontant),
         euroCourt(totalHonoraires),
@@ -450,7 +458,7 @@ export async function genererPortefeuilleSyndicPdf(input: PortefeuillePdfInput):
   if (lignes.length === 0) f.paragraphe("Aucune copropriété dans le périmètre affiché.", { size: 9, color: GRIS });
   f.y -= 4;
   f.paragraphe(
-    "Phase : état d'avancement du dossier d'après les tâches validées par le syndic (diagnostic, études, travaux ; terminé quand toutes sont validées), comme dans les vues Bulles, Kanban et Tableau. DPE : étiquette avant -> après travaux. Le montant est celui du plan de financement validé (à défaut, du scénario partagé) ; les honoraires du syndic sont la ligne correspondante des frais annexes du PF validé. Avancement : part des tâches du syndic réalisées sur le dossier. Tâches en retard : tâches du syndic dont l'échéance est dépassée (page « Vos tâches »).",
+    "Phase : état d'avancement du dossier d'après les tâches validées par le syndic (diagnostic, études, travaux ; terminé quand toutes sont validées), comme dans les vues Bulles, Kanban et Tableau. DPE : étiquette avant -> après travaux. Le montant est celui du plan de financement validé (à défaut, du scénario partagé) ; les honoraires du syndic sont la ligne correspondante des frais annexes du PF validé. Avancement : part des tâches du syndic réalisées sur le dossier. En retard : tâches du syndic dont l'échéance est dépassée (page « Vos tâches »).",
     { size: 7.5, color: GRIS, interligne: 2.5 }
   );
 

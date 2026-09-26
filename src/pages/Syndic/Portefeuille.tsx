@@ -3,8 +3,9 @@
 //    initiales, total de logements et montant d'opération), autour de laquelle
 //    gravitent ses copropriétés (couleur = phase du dossier, ardoise
 //    « Terminé » quand le syndic a validé toutes ses tâches).
-// 2. « Tableau » : pilotage direction - colonnes triables, comparatif par
-//    gestionnaire (charge, phases, tâches en retard) et export CSV.
+// 2. « Tableau » : pilotage direction - colonnes triables (dont le maître
+//    d'œuvre du dossier, 26/09), comparatif par gestionnaire (charge, phases,
+//    tâches en retard) et export CSV.
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
@@ -276,7 +277,7 @@ function VueKanban({
 
 // ========== Vue tableau (pilotage direction) ==========
 
-type ColTri = "name" | "gestionnaire" | "phase" | "logements" | "montant" | "honoraires" | "progress" | "retard";
+type ColTri = "name" | "gestionnaire" | "moe" | "phase" | "logements" | "montant" | "honoraires" | "progress" | "retard";
 
 const PHASE_RANK: Record<PhaseId, number> = { diagnostic: 0, etudes: 1, travaux: 2 };
 
@@ -299,13 +300,14 @@ function VueTableau({
   const [tri, setTri] = useState<{ col: ColTri; desc: boolean }>({ col: "name", desc: false });
 
   const cliquerTri = (col: ColTri) =>
-    setTri((prev) => ({ col, desc: prev.col === col ? !prev.desc : col !== "name" && col !== "gestionnaire" }));
+    setTri((prev) => ({ col, desc: prev.col === col ? !prev.desc : col !== "name" && col !== "gestionnaire" && col !== "moe" }));
 
   const lignes = useMemo(() => {
     const valeur = (c: SyndicCopro): string | number => {
       switch (tri.col) {
         case "name": return c.name;
         case "gestionnaire": return c.gestionnaire_nom ?? "";
+        case "moe": return c.maitre_oeuvre?.trim() ?? "";
         case "phase": return termineDe(c) ? PHASES.length : PHASE_RANK[phaseDe(c)];
         case "logements": return nbLogements(c);
         case "montant": return c.stats?.montant_ttc ?? 0;
@@ -317,6 +319,8 @@ function VueTableau({
     return [...copros].sort((a, b) => {
       const va = valeur(a);
       const vb = valeur(b);
+      // Maître d'œuvre non renseigné : en fin de liste dans les deux sens de tri
+      if (tri.col === "moe" && (!va || !vb)) return va ? -1 : vb ? 1 : 0;
       const cmp = typeof va === "string" ? va.localeCompare(String(vb), "fr") : Number(va) - Number(vb);
       return tri.desc ? -cmp : cmp;
     });
@@ -438,6 +442,7 @@ function VueTableau({
                 <tr>
                   <Th col="name" label="Copropriété" />
                   {multiGest && <Th col="gestionnaire" label="Gestionnaire" />}
+                  <Th col="moe" label="Maître d'œuvre" />
                   <Th col="phase" label="Phase" />
                   <th>DPE</th>
                   <Th col="logements" label="Logements" num />
@@ -469,6 +474,7 @@ function VueTableau({
                         )}
                       </td>
                       {multiGest && <td>{c.gestionnaire_nom || "-"}</td>}
+                      <td>{c.maitre_oeuvre?.trim() || "-"}</td>
                       <td>
                         <span className="leg-g" style={{ whiteSpace: "nowrap" }}>
                           <span
@@ -603,13 +609,14 @@ export function Portefeuille({
   const exporter = () =>
     telechargerCsv(
       "portefeuille-syndic.csv",
-      ["Copropriété", "Ville", "Gestionnaire", "Phase", "DPE avant", "DPE après", "Gain %", "Logements", "Lots", "Copropriétaires", "Montant TTC", "Honoraires syndic TTC", "Avancement %", "Fragile", "Tâches en retard"],
+      ["Copropriété", "Ville", "Gestionnaire", "Maître d'œuvre", "Phase", "DPE avant", "DPE après", "Gain %", "Logements", "Lots", "Copropriétaires", "Montant TTC", "Honoraires syndic TTC", "Avancement %", "Fragile", "Tâches en retard"],
       [...copros]
         .sort((a, b) => a.name.localeCompare(b.name, "fr"))
         .map((c) => [
           c.name,
           c.city ?? "",
           c.gestionnaire_nom ?? "",
+          c.maitre_oeuvre ?? "",
           termineDe(c) ? "Terminé" : (PHASES.find((p) => p.id === phaseDe(c))?.label ?? phaseDe(c)),
           c.energy_before ?? "",
           c.energy_after ?? "",
@@ -639,6 +646,7 @@ export function Portefeuille({
           nom: c.name,
           ville: c.city,
           gestionnaire: c.gestionnaire_nom,
+          maitreOeuvre: c.maitre_oeuvre,
           phase: phaseDe(c),
           termine: termineDe(c),
           dpeAvant: c.energy_before,

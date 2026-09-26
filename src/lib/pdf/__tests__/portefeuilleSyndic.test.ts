@@ -5,6 +5,7 @@ import { genererPortefeuilleSyndicPdf, regrouperParGestionnaire, type LignePorte
 const ligne = (o: Partial<LignePortefeuillePdf> & { nom: string }): LignePortefeuillePdf => ({
   ville: "Strasbourg",
   gestionnaire: "Claude LOBSTEIN",
+  maitreOeuvre: "Ingedair",
   phase: "etudes",
   dpeAvant: "F",
   dpeApres: "C",
@@ -24,7 +25,7 @@ const lignes: LignePortefeuillePdf[] = [
   ligne({ nom: "LE BAYARD", logements: 46, phase: "travaux", montantTtc: 3_200_000, honoraires: 61_000, avancement: 80 }),
   ligne({ nom: "ANEMONES", ville: "Illkirch-Graffenstaden", logements: 11, phase: "diagnostic", montantTtc: null, honoraires: null, avancement: 10, retard: 2, gestionnaire: "Jean-François ROUSSET" }),
   ligne({ nom: "STOSSWIHR", logements: 24, fragile: true, gestionnaire: "Jean-François ROUSSET", retard: 1 }),
-  ligne({ nom: "Résidence Œillets - Bât. A", logements: 8, gestionnaire: null, montantTtc: 0 }),
+  ligne({ nom: "Résidence Œillets - Bât. A", logements: 8, gestionnaire: null, montantTtc: 0, maitreOeuvre: null }),
 ];
 
 describe("regrouperParGestionnaire", () => {
@@ -55,6 +56,14 @@ describe("genererPortefeuilleSyndicPdf", () => {
     expect(doc.getTitle()).toBe("Portefeuille - SYNDIC HORIZON GRAND EST");
     const { width, height } = doc.getPage(0).getSize();
     expect(width).toBeGreaterThan(height);
+  });
+
+  it("affiche le maître d'œuvre, même long ou absent", async () => {
+    const avecMoe = [...lignes, ligne({ nom: "ANDROMEDE", logements: 17, maitreOeuvre: "Collectivité services d'architecture et d'ingénierie du Bas-Rhin" })];
+    for (const l of [avecMoe, avecMoe.filter((x) => x.gestionnaire === "Claude LOBSTEIN")]) {
+      const bytes = await genererPortefeuilleSyndicPdf({ lignes: l, genereLe: "26 septembre 2026" });
+      expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThanOrEqual(1);
+    }
   });
 
   it("affiche les dossiers terminés", async () => {

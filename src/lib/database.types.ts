@@ -1044,6 +1044,7 @@ export type Database = {
           gestionnaire_email: string | null
           gestionnaire_nom: string | null
           id: string
+          maitre_oeuvre: string | null
           name: string
           nb_logements: number | null
           organisation_id: string | null
@@ -1072,6 +1073,7 @@ export type Database = {
           gestionnaire_email?: string | null
           gestionnaire_nom?: string | null
           id?: string
+          maitre_oeuvre?: string | null
           name: string
           nb_logements?: number | null
           organisation_id?: string | null
@@ -1100,6 +1102,7 @@ export type Database = {
           gestionnaire_email?: string | null
           gestionnaire_nom?: string | null
           id?: string
+          maitre_oeuvre?: string | null
           name?: string
           nb_logements?: number | null
           organisation_id?: string | null
