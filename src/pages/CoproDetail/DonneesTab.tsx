@@ -17,6 +17,7 @@ import { useTeamProfiles } from "@/api/profiles";
 import { organisationIdPourSyndic, useOrganisations } from "@/api/organisations";
 import { normaliserNomOrganisation, trouverOrganisationParNom, type OrganisationNommee } from "@/lib/organisations";
 import type { Enums } from "@/lib/database.types";
+import { trierParNomFamille } from "@/lib/nomFamille";
 import { ImportLotsDialog } from "./ImportLotsDialog";
 import { ChangementProprietaire, JournalMutations } from "@/pages/Syndic/ChangementProprietaire";
 
@@ -51,9 +52,10 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
   if (isLoading || !data) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
   const { lots, batiments, coproprietaires, cles } = data;
-  const sansEmail = [...coproprietaires]
-    .filter((cp) => !cp.email?.trim())
-    .sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  const sansEmail = trierParNomFamille(
+    coproprietaires.filter((cp) => !cp.email?.trim()),
+    (cp) => cp.nom
+  );
   const totalLots = lots.length;
   // Usages présents dans le dossier (l'habitation reste toujours affichée)
   const usageCounts = USAGES_LOTS.map((u) => ({

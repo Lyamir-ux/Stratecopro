@@ -5,6 +5,10 @@
 // Feedbacks syndic du 24/09/2026 : la liste des lots se filtre par bâtiment
 // (tous par défaut, sélecteur en tête de liste ou clic sur un bâtiment du
 // panneau de droite) et se cherche par copropriétaire ou numéro de lot.
+// Feedbacks du 25/09/2026 (Pierrot LEFOU) : le sélecteur nomme les bâtiments
+// (« Bâtiment 01 » et non « 01 », pris pour un numéro de lot), la colonne
+// Bâtiment du tableau disparaît au profit du copropriétaire, et les
+// copropriétaires sont classés par nom de famille (useDonnees).
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
@@ -28,6 +32,10 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
   // bâtiments portant au moins un lot, dans l'ordre du panneau de droite
   const codesBat = batiments.map((b) => b.code).filter((code) => lots.some((l) => l.batiment?.code === code));
   const batActif = bat && codesBat.includes(bat) ? bat : null;
+  const labelBat = (code: string) => {
+    const label = batiments.find((b) => b.code === code)?.label;
+    return label ? ` · ${label}` : "";
+  };
   const q = normaliserRecherche(recherche.trim());
   const lotsBat = batActif ? lots.filter((l) => l.batiment?.code === batActif) : lots;
   const lotsVisibles = q
@@ -61,14 +69,19 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
             {lots.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 14 }}>
                 {codesBat.length > 1 &&
-                  (codesBat.length <= 6 ? (
+                  (codesBat.length <= 4 ? (
                     <div className="seg" role="group" aria-label={`Filtrer les lots par ${lb.singulier.toLowerCase()}`}>
-                      <button className={batActif === null ? "on" : ""} onClick={() => setBat(null)}>
-                        Tous · {lots.length}
+                      <button className={batActif === null ? "on" : ""} onClick={() => setBat(null)} title={`Les ${lots.length} lots`}>
+                        Tous
                       </button>
                       {codesBat.map((code) => (
-                        <button key={code} className={batActif === code ? "on" : ""} onClick={() => setBat(code)} title={`Lots ${lb.court} ${code}`}>
-                          {code} · {lots.filter((l) => l.batiment?.code === code).length}
+                        <button
+                          key={code}
+                          className={batActif === code ? "on" : ""}
+                          onClick={() => setBat(code)}
+                          title={`${lots.filter((l) => l.batiment?.code === code).length} lots ${lb.court} ${code}${labelBat(code)}`}
+                        >
+                          {lb.singulier} {code}
                         </button>
                       ))}
                     </div>
@@ -82,7 +95,7 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
                       ))}
                     </select>
                   ))}
-                <div className="search" style={{ margin: 0, width: 280, maxWidth: "100%" }}>
+                <div className="search" style={{ margin: 0, flex: "1 1 240px", width: "auto", minWidth: 0 }}>
                   <Icon name="search" size={16} />
                   <input
                     placeholder="Rechercher un copropriétaire, un lot…"
@@ -113,7 +126,6 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
                   <thead>
                     <tr>
                       <th>Lot</th>
-                      <th>{lb.singulier}</th>
                       <th>Usage</th>
                       <th>Copropriétaire</th>
                       <th style={{ textAlign: "right" }}>Tantièmes{suffixeCle}</th>
@@ -125,10 +137,9 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
                       <tr
                         key={l.id}
                         onClick={() => setLotEdite(l)}
-                        title={`Changer le propriétaire du lot n°${l.num} (vente, succession…)`}
+                        title={`${l.batiment ? `${lb.singulier} ${l.batiment.code} - ` : ""}changer le propriétaire du lot n°${l.num} (vente, succession…)`}
                       >
                         <td style={{ fontWeight: 600 }}>{l.num}</td>
-                        <td>{l.batiment?.code ?? "-"}</td>
                         <td>{USAGE_LOT_LABEL[l.usage] ?? l.usage}</td>
                         <td>{l.coproprietaire?.nom ?? "-"}</td>
                         <td style={{ textAlign: "right" }}>

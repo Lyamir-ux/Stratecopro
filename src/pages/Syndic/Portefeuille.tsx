@@ -22,6 +22,7 @@ import {
   type SyndicTache,
 } from "@/api/syndicTaches";
 import { useHonorairesSyndic, type SyndicCopro } from "@/api/syndic";
+import { useCoprosAAttribuer } from "./AAttribuer";
 
 /** Comparaison de recherche : minuscules, sans accents. */
 const normaliser = (s: string) =>
@@ -547,6 +548,8 @@ export function Portefeuille({
   // autres sont fermés par la RLS - on ne les interroge pas pour rien)
   const ouvrables = useMemo(() => copros.filter((c) => c.acces), [copros]);
   const verrouilles = copros.length - ouvrables.length;
+  // direction : dossiers arrivés sur son compte ou sans gestionnaire (feedback 25/09)
+  const { liste: aAttribuer } = useCoprosAAttribuer();
   // tâches en retard par copro (sème le gabarit au passage - idempotent)
   const { data: taches } = useSyndicTaches(ouvrables.map((c) => c.id));
   const retards = useMemo(() => {
@@ -716,6 +719,27 @@ export function Portefeuille({
           )}
         </div>
       </div>
+
+      {aAttribuer.length > 0 && (
+        <div
+          className="panel"
+          style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", marginBottom: 14, borderColor: "var(--color-warning-500)", background: "var(--color-warning-50)" }}
+        >
+          <Icon name="bell" size={15} style={{ color: "var(--color-warning-700)", flex: "none" }} />
+          <span style={{ fontSize: 13.5 }}>
+            <b>
+              {aAttribuer.length} copropriété{aAttribuer.length > 1 ? "s" : ""} à attribuer
+            </b>{" "}
+            à un gestionnaire : {aAttribuer.slice(0, 3).map((a) => a.copro.name).join(", ")}
+            {aAttribuer.length > 3 ? "…" : ""}
+          </span>
+          <span style={{ flex: 1 }}></span>
+          <button className="se-btn se-btn-primary btn-sm" onClick={() => navigate("/syndic/taches")}>
+            Attribuer
+            <Icon name="arrowRight" size={14} />
+          </button>
+        </div>
+      )}
 
       {verrouilles > 0 && (
         <div

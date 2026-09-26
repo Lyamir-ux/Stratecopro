@@ -359,10 +359,10 @@ function SuiviEcheancier({ copro, postes, retirees, params, annee }: { copro: Pp
           <table className="dossiers sf-table ech-table" style={{ minWidth: 0 }}>
             <thead>
               <tr>
-                <th>Poste</th>
-                {sansAnnee && <th className="num">À fixer</th>}
+                <th className="ech-poste">Poste</th>
+                {sansAnnee && <th className="num ech-an">À fixer</th>}
                 {annees.map((a) => (
-                  <th key={a} className="num" style={{ color: a === annee ? "var(--color-primary-700)" : undefined }}>{a}</th>
+                  <th key={a} className="num ech-an" style={{ color: a === annee ? "var(--color-primary-700)" : undefined }}>{a}</th>
                 ))}
               </tr>
             </thead>
@@ -377,7 +377,7 @@ function SuiviEcheancier({ copro, postes, retirees, params, annee }: { copro: Pp
                 const bulle = [saisi ? `Montant saisi par le syndic (au lieu de ${fmtEuroCourt(montantTtcPoste({ ...posteLite(p), montant_syndic: null }, params, courante) ?? 0)} calculés)` : "", p.commentaire_syndic ?? ""].filter(Boolean).join(" - ") || undefined;
                 return (
                   <tr key={p.id} style={{ cursor: "default" }}>
-                    <td style={{ fontWeight: 600, whiteSpace: "normal", minWidth: 200 }}>
+                    <td className="ech-poste" style={{ fontWeight: 600, whiteSpace: "normal" }}>
                       {p.libelle}
                       {p.origine === "syndic" && <span title="ligne ajoutée par le syndic" style={{ marginLeft: 6, color: "var(--fg-muted)", fontWeight: 400, fontSize: 11 }}>(ajoutée)</span>}
                       <span style={{ display: "block", fontSize: 11.5, color: "var(--fg-muted)", fontWeight: 400 }}>
@@ -405,7 +405,7 @@ function SuiviEcheancier({ copro, postes, retirees, params, annee }: { copro: Pp
                           {ici ? (
                             <button
                               type="button"
-                              className={"ech-chip" + (modifie ? " modifie" : "") + (!libre ? " fige" : "") + (saisi ? " saisi" : "") + (p.statut === "vote" ? " vote" : p.statut === "rejete" ? " rejete" : "")}
+                              className={"ech-chip" + (modifie ? " modifie" : "") + (!libre ? " fige" : "") + (saisi ? " saisi" : "") + (p.commentaire_syndic ? " commente" : "") + (p.statut === "vote" ? " vote" : p.statut === "rejete" ? " rejete" : "")}
                               title={bulle ? undefined : "Cliquer pour saisir un montant et un commentaire"}
                               onMouseEnter={montrerBulle(bulle)}
                               onMouseLeave={() => setBulleEtat(null)}
@@ -418,7 +418,8 @@ function SuiviEcheancier({ copro, postes, retirees, params, annee }: { copro: Pp
                               {!libre && <Icon name="lock" size={11} />}
                               {saisi && <Icon name="edit" size={11} />}
                               {p.statut === "vote" && p.montant_vote != null ? fmtEuroCourt(p.montant_vote) : montant != null ? fmtEuroCourt(montant) : "non chiffré"}
-                              {p.commentaire_syndic && <Icon name="message" size={11} />}
+                              {/* commentaire : point dans le coin de la pastille (plus étroit qu'une icône, 26/09) */}
+                              {p.commentaire_syndic && <span className="sr-only"> - commentaire : {p.commentaire_syndic}</span>}
                             </button>
                           ) : suivante ? (
                             <span className="ech-suivant" aria-label={`Repousser en ${a}`}>
@@ -442,7 +443,7 @@ function SuiviEcheancier({ copro, postes, retirees, params, annee }: { copro: Pp
             </tbody>
             <tfoot>
               <tr>
-                <td style={{ textAlign: "left" }}>Total TTC actualisé</td>
+                <td>Total TTC actualisé</td>
                 {sansAnnee && <td></td>}
                 {annees.map((a) => {
                   const t = totalAnnee(a);
@@ -457,7 +458,7 @@ function SuiviEcheancier({ copro, postes, retirees, params, annee }: { copro: Pp
           </table>
         </div>
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
-          Les flèches vertes repoussent (→) ou avancent (←) le poste d'un an ; un clic sur toute autre année le décale à cette année, jamais avant {annee}. Puis Enregistrer : le récap ci-dessus et le tableau de bord suivent. Le montant est recalculé pour l'année choisie (inflation, TVA, honoraires). Un clic sur un montant permet de le saisir à la main et d'y joindre un commentaire, visible au survol, ou de retirer la ligne du plan avec un motif obligatoire ; « Lignes retirées » les liste et permet de les rétablir. Les postes votés, réalisés ou abandonnés sont figés. Tout est tracé dans l'historique.
+          Les flèches vertes repoussent (→) ou avancent (←) le poste d'un an ; un clic sur toute autre année le décale à cette année, jamais avant {annee}. Puis Enregistrer : le récap ci-dessus et le tableau de bord suivent. Le montant est recalculé pour l'année choisie (inflation, TVA, honoraires). Un clic sur un montant permet de le saisir à la main et d'y joindre un commentaire (point bleu sur la pastille), visible au survol, ou de retirer la ligne du plan avec un motif obligatoire ; « Lignes retirées » les liste et permet de les rétablir. Les postes votés, réalisés ou abandonnés sont figés. Tout est tracé dans l'historique.
         </p>
       </div>
       {bulleEtat &&
@@ -1235,7 +1236,8 @@ export default function CoproPpt() {
   const ps = postes ?? [];
 
   return (
-    <SyndicShell active={null} branche="ppt">
+    // pleine largeur de l'écran : le suivi de l'échéancier (une colonne par année) y tient (feedback 26/09)
+    <SyndicShell active={null} branche="ppt" large>
       <div className="page fade" style={{ padding: 0 }}>
         <button className="se-btn se-btn-ghost btn-sm" style={{ marginBottom: 14 }} onClick={() => navigate("/syndic/ppt/copros")}>
           <Icon name="chevronLeft" size={15} />

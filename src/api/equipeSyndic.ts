@@ -126,6 +126,18 @@ export function useDesignerGestionnaireDossier() {
   });
 }
 
+/** La direction garde un dossier arrivé sur son compte : il sort des copropriétés à attribuer (0103). */
+export function useGarderDossierDirection() {
+  const refresh = useRefreshEquipe();
+  return useMutation({
+    mutationFn: async (coproId: string) => {
+      const { error } = await supabase.rpc("org_garder_dossier", { p_copro: coproId });
+      if (error) throw error;
+    },
+    onSuccess: refresh,
+  });
+}
+
 /** Gestionnaire d'une copropriété PPT (un seul par copropriété, trigger ppt_sync_affectation). */
 export function useGestionnairePptEquipe() {
   const refresh = useRefreshEquipe();

@@ -19,6 +19,7 @@ import {
   type MotifMutation,
 } from "@/api/donnees";
 import { messageErreur } from "@/lib/erreurs";
+import { trierParNomFamille } from "@/lib/nomFamille";
 
 const champ = (label: string, input: React.ReactNode) => (
   <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--fg2)" }}>
@@ -51,9 +52,10 @@ export function ChangementProprietaire({
 
   // annexes emportées par le lot vendu (cave, garage rattachés)
   const annexes = donnees.lots.filter((l) => l.rattache_a === lot.id);
-  const autres = donnees.coproprietaires
-    .filter((cp) => cp.id !== lot.coproprietaire_id)
-    .sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  const autres = trierParNomFamille(
+    donnees.coproprietaires.filter((cp) => cp.id !== lot.coproprietaire_id),
+    (cp) => cp.nom
+  );
 
   const valide =
     !changer.isPending && (mode === "existant" ? existant !== "" : nom.trim().length > 1);

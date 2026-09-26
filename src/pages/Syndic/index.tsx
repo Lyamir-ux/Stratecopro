@@ -9,7 +9,9 @@
 // un bouton du header permet de basculer à tout moment.
 // La direction de l'enseigne a en plus l'onglet « Mon organisation » dans les
 // deux branches (équipe, comptes, copropriétés rattachées - feedback syndic du
-// 24/09/2026, page ./Organisation.tsx).
+// 24/09/2026, page ./Organisation.tsx) et, en rénovation globale, le tableau
+// des copropriétés à attribuer en tête de « Vos tâches », signalé par une
+// pastille sur l'onglet (feedback du 25/09/2026, ./AAttribuer.tsx).
 import { useState, type ReactNode } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Icon, type IconName } from "@/components/Icon";
@@ -25,6 +27,7 @@ import { TachesSyndic } from "./Taches";
 import { MessagesSyndic } from "./Messages";
 import { DemandeAmo } from "./DemandeAmo";
 import { OrganisationSyndic } from "./Organisation";
+import { useCoprosAAttribuer } from "./AAttribuer";
 
 export type Branche = "reno" | "ppt";
 // « demande-amo » n'est pas un onglet : la page s'ouvre par le bouton du
@@ -148,11 +151,14 @@ export function SyndicShell({
   branche = "reno",
   rail,
   badges,
+  large,
   children,
 }: {
   active: SectionId | null;
   branche?: Branche;
   rail?: ReactNode;
+  /** Page élargie à l'écran (jusqu'à 1 480 px) : fiche PPT et son suivi de l'échéancier. */
+  large?: boolean;
   /** Pastilles du menu (ex. messages non lus). */
   badges?: Partial<Record<SectionId, number>>;
   children: ReactNode;
@@ -161,7 +167,13 @@ export function SyndicShell({
   const { data: org } = useMonOrganisation();
   const { data: orgPpt } = useOrganisationPpt();
   const navigate = useNavigate();
+  // pastille « à attribuer » de Vos tâches, sur toutes les pages de la branche
+  const { liste: aAttribuer } = useCoprosAAttribuer(branche === "reno");
   if (!profile) return <Loader />;
+  const pastilles: Partial<Record<SectionId, number>> = {
+    ...badges,
+    ...(aAttribuer.length > 0 ? { taches: (badges?.taches ?? 0) + aAttribuer.length } : {}),
+  };
 
   // Sous-titre : l'enseigne et le périmètre, à défaut l'intitulé du profil.
   const roleLabel =
@@ -186,7 +198,7 @@ export function SyndicShell({
   const home = branche === "ppt" ? "/syndic/ppt" : "/syndic";
 
   return (
-    <div className="portal" data-branche={branche}>
+    <div className={"portal" + (large ? " portal-large" : "")} data-branche={branche}>
       <header className="portal-header">
         <img className="ph-logo" src="/logo-strateco-pro.png" alt="Strat Eco" />
         {deuxBranches && (
@@ -260,6 +272,7 @@ export function SyndicShell({
           <button
             key={it.id}
             className={"pnav" + (active === it.id ? " on" : "")}
+            title={it.id === "taches" && aAttribuer.length > 0 ? `${aAttribuer.length} copropriété${aAttribuer.length > 1 ? "s" : ""} à attribuer à un gestionnaire` : undefined}
             onClick={() => {
               const premiere = sections[0].id;
               navigate(it.id === premiere ? home : `${home}/${it.id}`);
@@ -268,7 +281,7 @@ export function SyndicShell({
           >
             <Icon name={it.icon} size={17} />
             {it.label}
-            {(badges?.[it.id] ?? 0) > 0 && <Badge kind="warn">{badges![it.id]}</Badge>}
+            {(pastilles[it.id] ?? 0) > 0 && <Badge kind="warn">{pastilles[it.id]}</Badge>}
           </button>
         ))}
       </nav>

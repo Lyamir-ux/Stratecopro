@@ -8,6 +8,7 @@
 // en base (migration 0102) : un gestionnaire ou un administratif n'ouvre que
 // les dossiers qui lui sont rattachés, la direction les ouvre tous.
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import { Avatar, Badge } from "@/components/ui";
@@ -31,6 +32,7 @@ import type { CollaborateurCree } from "@/api/profiles";
 import type { OrgRole } from "@/api/organisations";
 import { fmtDate, normaliserRecherche } from "@/lib/format";
 import { messageErreur } from "@/lib/erreurs";
+import { useCoprosAAttribuer } from "./AAttribuer";
 
 const initialesDe = (nom: string) => {
   const mots = nom.trim().split(/\s+/).filter(Boolean);
@@ -345,6 +347,8 @@ export function OrganisationSyndic() {
   const { data: tousReno } = useCoprosSyndic();
   const { data: tousPpt } = usePptCopros();
   const changerRole = useChangerRoleEquipe();
+  const { liste: aAttribuer } = useCoprosAAttribuer();
+  const navigate = useNavigate();
   const [ajout, setAjout] = useState(false);
   const [ouvert, setOuvert] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -372,7 +376,6 @@ export function OrganisationSyndic() {
   const nbReno = (uid: string) => coprosReno.filter((c) => r.some((x) => x.branche === "reno" && x.user_id === uid && x.copro_id === c.id)).length;
   const nbGest = (uid: string) => coprosReno.filter((c) => r.some((x) => x.branche === "reno" && x.user_id === uid && x.copro_id === c.id && x.gestionnaire)).length;
   const nbPpt = (m: MembreEquipe) => coprosPpt.filter((c) => courriel(c.gestionnaire_email) === courriel(m.email) && courriel(m.email) !== "").length;
-  const sansGestionnaire = coprosReno.filter((c) => !courriel(c.gestionnaire_email)).length;
 
   const modifierRole = async (m: MembreEquipe, role: OrgRole) => {
     setErreur(null);
@@ -393,7 +396,19 @@ export function OrganisationSyndic() {
           <p className="page-sub">
             {(equipe ?? []).length} membre{(equipe ?? []).length > 1 ? "s" : ""} · {coprosReno.length} copropriété{coprosReno.length > 1 ? "s" : ""} en rénovation globale
             {modulePpt && <> · {coprosPpt.length} au suivi des PPT</>}
-            {sansGestionnaire > 0 && <> · {sansGestionnaire} dossier{sansGestionnaire > 1 ? "s" : ""} sans gestionnaire</>}
+            {aAttribuer.length > 0 && (
+              <>
+                {" · "}
+                <button
+                  type="button"
+                  onClick={() => navigate("/syndic/taches")}
+                  title="Attribuer ces copropriétés depuis Vos tâches"
+                  style={{ border: "none", background: "none", padding: 0, font: "inherit", color: "var(--color-warning-700)", cursor: "pointer", textDecoration: "underline" }}
+                >
+                  {aAttribuer.length} copropriété{aAttribuer.length > 1 ? "s" : ""} à attribuer
+                </button>
+              </>
+            )}
           </p>
         </div>
         <span className="spacer"></span>

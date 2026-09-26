@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Enums, Tables, TablesUpdate } from "@/lib/database.types";
 import type { ImportedRow } from "@/lib/importLots";
+import { trierParNomFamille } from "@/lib/nomFamille";
 
 export interface LotFull extends Tables<"lots"> {
   batiment: { code: string } | null;
@@ -46,7 +47,8 @@ export function useDonnees(coproId: string | undefined) {
       }
       return {
         batiments: bats.data ?? [],
-        coproprietaires: coprops.data ?? [],
+        // par nom de famille, pas par prénom (feedback syndic 25/09/2026) : toutes les listes suivent
+        coproprietaires: trierParNomFamille(coprops.data ?? [], (cp) => cp.nom),
         cles: cles.data ?? [],
         lots: (lots.data ?? []).map((l) => {
           const { batiments: b, coproprietaires: cp, ...rest } = l as typeof l & {

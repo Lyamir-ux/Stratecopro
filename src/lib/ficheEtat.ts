@@ -8,6 +8,7 @@
 // d'enquête, la page publique du président du conseil syndical et le PDF
 // partagent ces définitions et ces calculs.
 import type { DpeClass } from "./referentiels";
+import { trierParNomFamille } from "./nomFamille";
 
 export const ETIQUETTES: DpeClass[] = ["A", "B", "C", "D", "E", "F", "G"];
 
@@ -662,7 +663,8 @@ export function calculerOccupation(copro: Pick<CoproFiche, "adresse" | "code_pos
 
   const occupants = detail.filter((x) => x.statut === "PO" || x.statut === "mixte");
   const bailleurs = detail.filter((x) => x.statut === "PB" || x.statut === "mixte");
-  detail.sort((a, b) => a.nom.localeCompare(b.nom, "fr", { numeric: true }));
+  // par nom de famille, comme les listes et exports du dossier (feedback syndic 25/09/2026)
+  const tries = trierParNomFamille(detail, (x) => x.nom);
   return {
     nbProprietaires: detail.length,
     nbPO: occupants.length,
@@ -672,9 +674,9 @@ export function calculerOccupation(copro: Pick<CoproFiche, "adresse" | "code_pos
     nbModestes: occupants.filter((x) => x.profil === "Jaune").length,
     nbTresModestes: occupants.filter((x) => x.profil === "Bleu").length,
     sources,
-    inconnus: detail.filter((x) => x.statut === "inconnu").map((x) => x.nom),
-    mixtes: detail.filter((x) => x.statut === "mixte").map((x) => x.nom),
-    detail,
+    inconnus: tries.filter((x) => x.statut === "inconnu").map((x) => x.nom),
+    mixtes: tries.filter((x) => x.statut === "mixte").map((x) => x.nom),
+    detail: tries,
     parLot,
   };
 }

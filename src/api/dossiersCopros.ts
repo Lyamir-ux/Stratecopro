@@ -23,6 +23,7 @@ import { usePlansDefinitifs, type PlanDefinitif } from "./planDefinitif";
 import { useAdhesions, useFinancementConfigAmo, type AdhesionAvecNom } from "./financement";
 import { useBulletinsCopro, type BulletinAvecSignataires } from "./signature";
 import type { CoproWithStats } from "./copros";
+import { trierParNomFamille } from "@/lib/nomFamille";
 
 export type TypePiece = Enums<"type_piece">;
 export type PieceJustificative = Tables<"pieces_justificatives">;
@@ -340,8 +341,8 @@ export function assemblerDossiers(input: {
     };
   });
 
-  dossiers.sort((a, b) => a.nom.localeCompare(b.nom, "fr", { numeric: true }));
-  return { dossiers, cleRef };
+  // par nom de famille (feedback syndic 25/09/2026) : onglet et 3 exports dans le même ordre
+  return { dossiers: trierParNomFamille(dossiers, (d) => d.nom), cleRef };
 }
 
 /** Toutes les données individuelles d'un dossier copropriété, assemblées une fois. */

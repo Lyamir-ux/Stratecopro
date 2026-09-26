@@ -2,6 +2,8 @@
 // par copropriété et phase. Persistées en base (migration 0047) : le
 // gestionnaire coche ce qui est fait et fixe une échéance ; les tâches dont
 // l'échéance est dépassée remontent en tête et alimentent le rapport mensuel.
+// La direction y trouve en tête les copropriétés à attribuer à un gestionnaire
+// (feedback syndic du 25/09/2026, ./AAttribuer.tsx).
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
@@ -19,6 +21,7 @@ import {
   type SyndicTache,
 } from "@/api/syndicTaches";
 import type { SyndicCopro } from "@/api/syndic";
+import { CoprosAAttribuer } from "./AAttribuer";
 
 /** Ligne de tâche : pastille à trois états (clic = à faire → en cours → fait,
  *  comme côté AMO), libellé, échéance modifiable. */
@@ -156,6 +159,9 @@ export function TachesSyndic({ copros }: { copros: SyndicCopro[] }) {
           </button>
         </div>
       </div>
+
+      {/* direction : copropriétés arrivées sur son compte ou sans gestionnaire (feedback 25/09) */}
+      <CoprosAAttribuer />
 
       {isLoading && <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>}
 

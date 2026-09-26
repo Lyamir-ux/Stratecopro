@@ -74,10 +74,12 @@ export function useMonOrganisation() {
 }
 
 /** Le portefeuille de l'enseigne du syndic connecté (RLS), avec pour chaque
- *  dossier le droit de l'ouvrir ou non (`acces`). */
-export function useCoprosSyndic() {
+ *  dossier le droit de l'ouvrir ou non (`acces`). `enabled` : false pour ne
+ *  pas le charger là où il ne sert pas (branche PPT). */
+export function useCoprosSyndic(enabled = true) {
   return useQuery({
     queryKey: ["syndic", "copros"],
+    enabled,
     queryFn: async (): Promise<SyndicCopro[]> => {
       const [{ data: copros, error: e1 }, { data: stats, error: e2 }, acces] = await Promise.all([
         supabase.from("coproprietes").select("*").order("name"),

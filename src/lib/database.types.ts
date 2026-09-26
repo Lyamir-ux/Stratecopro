@@ -1030,6 +1030,7 @@ export type Database = {
       coproprietes: {
         Row: {
           adresse: string | null
+          attribution_gardee_le: string | null
           chef_projet: string | null
           city: string | null
           code_postal: string | null
@@ -1057,6 +1058,7 @@ export type Database = {
         }
         Insert: {
           adresse?: string | null
+          attribution_gardee_le?: string | null
           chef_projet?: string | null
           city?: string | null
           code_postal?: string | null
@@ -1084,6 +1086,7 @@ export type Database = {
         }
         Update: {
           adresse?: string | null
+          attribution_gardee_le?: string | null
           chef_projet?: string | null
           city?: string | null
           code_postal?: string | null
@@ -4080,6 +4083,10 @@ export type Database = {
       }
       org_designer_gestionnaire: {
         Args: { p_copro: string; p_user: string | null }
+        Returns: undefined
+      }
+      org_garder_dossier: {
+        Args: { p_copro: string }
         Returns: undefined
       }
       org_equipe: {
