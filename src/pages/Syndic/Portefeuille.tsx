@@ -68,6 +68,8 @@ interface Satellite {
   /** Dossier ouvrable par l'utilisateur (sinon grisé : suivi par un collègue). */
   acces: boolean;
   logements: number;
+  montant: number | null;
+  maitreOeuvre: string | null;
   r: number;
   x: number;
   y: number;
@@ -144,6 +146,8 @@ function construireSystemes(
               fragile: c.fragile,
               acces: c.acces,
               logements,
+              montant: c.stats?.montant_ttc ?? null,
+              maitreOeuvre: c.maitre_oeuvre?.trim() || null,
               r,
               x: centre + orbite * Math.cos(angle) - r,
               y: centre + orbite * Math.sin(angle) - r,
@@ -224,6 +228,26 @@ function VueKanban({
                     <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginBottom: 6 }}>
                       {[c.city, `${nbLogements(c)} logements`].filter(Boolean).join(" · ")}
                     </div>
+                    {/* Montant et maître d'œuvre toujours affichés, avec leur libellé
+                        (feedback Amir 27/09) - « Non chiffré » / « - » à défaut. */}
+                    <div
+                      style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: "2px 10px", fontSize: 12.5, marginBottom: 8 }}
+                    >
+                      <span style={{ color: "var(--fg-muted)" }}>Montant TTC</span>
+                      <span
+                        style={{ fontWeight: 700, color: c.stats?.montant_ttc ? "var(--color-primary-700)" : "var(--fg-muted)" }}
+                        title="Montant de l'opération TTC : plan de financement validé, à défaut scénario partagé"
+                      >
+                        {c.stats?.montant_ttc ? fmtEuroCourt(c.stats.montant_ttc) : "Non chiffré"}
+                      </span>
+                      <span style={{ color: "var(--fg-muted)" }}>Maître d'œuvre</span>
+                      <span
+                        style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                        title={c.maitre_oeuvre?.trim() || undefined}
+                      >
+                        {c.maitre_oeuvre?.trim() || <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>-</span>}
+                      </span>
+                    </div>
                     {/* Le gestionnaire n'est pas répété sur la carte (colonne déjà
                         contextualisée) : petite barre d'avancement à la place (feedback 29/08). */}
                     <div
@@ -250,11 +274,6 @@ function VueKanban({
                         <Badge kind="warn" dot>
                           {retard} en retard
                         </Badge>
-                      )}
-                      {c.stats?.montant_ttc != null && (
-                        <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--color-primary-700)" }}>
-                          {fmtEuroCourt(c.stats.montant_ttc)}
-                        </span>
                       )}
                     </div>
                   </article>
@@ -816,7 +835,9 @@ export function Portefeuille({
                       title={
                         `${sat.name} · ${sat.logements} logements · ` +
                         (sat.termine ? "Terminé : toutes vos tâches sont validées" : (ph?.label ?? "")) +
-                        (sat.acces ? "" : " · accès réservé à la direction et au gestionnaire en charge")
+                        (sat.acces ? "" : " · accès réservé à la direction et au gestionnaire en charge") +
+                        `\nMontant TTC : ${sat.montant ? fmtEuroCourt(sat.montant) : "non chiffré"}` +
+                        `\nMaître d'œuvre : ${sat.maitreOeuvre ?? "-"}`
                       }
                       onMouseEnter={() => setHoverId(sat.id)}
                       onMouseLeave={() => setHoverId(null)}

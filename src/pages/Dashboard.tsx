@@ -160,6 +160,9 @@ function KanbanView({ copros, showProgress }: { copros: CoproWithStats[]; showPr
 
 type ColTri = "name" | "phase" | "logements" | "montant" | "progress" | "moe";
 
+/** Valeur du filtre « Sans maître d'œuvre » (hors des noms possibles). */
+const SANS_MOE = "__sans__";
+
 const PHASE_RANK: Record<PhaseId, number> = { diagnostic: 0, etudes: 1, travaux: 2 };
 
 export interface Tri {
@@ -807,6 +810,7 @@ export default function Dashboard() {
   const [phaseFilter, setPhaseFilter] = useState<PhaseId | "">("");
   const [cityFilter, setCityFilter] = useState<string>("");
   const [gestionnaireFilter, setGestionnaireFilter] = useState<string>("");
+  const [moeFilter, setMoeFilter] = useState<string>("");
   const [tri, setTri] = useState<Tri>({ col: "name", desc: false });
   const [showNew, setShowNew] = useState(false);
   const [showCorbeille, setShowCorbeille] = useState(false);
@@ -832,19 +836,29 @@ export default function Dashboard() {
       ).sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" })),
     [copros]
   );
+  // Maîtres d'œuvre saisis sur les dossiers (feedback Amir 27/09) - « Sans
+  // maître d'œuvre » isole les dossiers encore à renseigner.
+  const maitresOeuvre = useMemo(
+    () =>
+      Array.from(
+        new Set((copros ?? []).map((c) => c.maitre_oeuvre?.trim()).filter((v): v is string => !!v))
+      ).sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" })),
+    [copros]
+  );
   const filtered = (copros ?? []).filter(
     (c) =>
       (!phaseFilter || c.phase === phaseFilter) &&
       (!cityFilter || c.city === cityFilter) &&
       (!chefProjetFilter || c.chef_projet === chefProjetFilter) &&
-      (!gestionnaireFilter || c.gestionnaire_nom?.trim() === gestionnaireFilter)
+      (!gestionnaireFilter || c.gestionnaire_nom?.trim() === gestionnaireFilter) &&
+      (!moeFilter || (c.maitre_oeuvre?.trim() || SANS_MOE) === moeFilter)
   );
   // Ce que montre la liste est aussi ce que produit l'export : mêmes filtres,
   // même tri.
   const lignes = useMemo(
     () => trierCopros(filtered, tri),
     // `filtered` est reconstruit à chaque rendu : on dépend de ce qui le détermine.
-    [copros, phaseFilter, cityFilter, chefProjetFilter, gestionnaireFilter, tri] // eslint-disable-line react-hooks/exhaustive-deps
+    [copros, phaseFilter, cityFilter, chefProjetFilter, gestionnaireFilter, moeFilter, tri] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Deux vues seulement : le Kanban pour le pilotage par phase, la liste pour
@@ -962,6 +976,21 @@ export default function Dashboard() {
               {v}
             </option>
           ))}
+        </select>
+        <select
+          className="chip-filter"
+          value={moeFilter}
+          onChange={(e) => setMoeFilter(e.target.value)}
+          style={{ cursor: "pointer" }}
+          title="Maître d'œuvre du dossier (saisi dans l'onglet Données)"
+        >
+          <option value="">Maître d'œuvre : tous</option>
+          {maitresOeuvre.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+          <option value={SANS_MOE}>Sans maître d'œuvre</option>
         </select>
         <span style={{ flex: 1 }}></span>
         <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>

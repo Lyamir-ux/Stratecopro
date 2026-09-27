@@ -149,8 +149,10 @@ export function Financement({
                 </>
               ) : (
                 <>
-                  Vous avez choisi le <b>prêt collectif {config?.banque ?? "CEGEE"}</b> pour <b>{fmtEuro(montant)}</b>{" "}
-                  sur <b>{choix.duree_annees ?? dureeCollectif} ans</b> ({fmtEuro(montant / (Math.max(1, choix.duree_annees ?? dureeCollectif) * 12))}/mois, 0 %).
+                  Vous avez choisi le <b>prêt collectif {config?.banque ?? "CEGEE"}</b> sur{" "}
+                  <b>{choix.duree_annees ?? dureeCollectif} ans</b>, pour tout ou partie de votre quote-part : jusqu'à{" "}
+                  <b>{fmtEuro(montant)}</b> ({fmtEuro(montant / (Math.max(1, choix.duree_annees ?? dureeCollectif) * 12))}/mois
+                  pour la totalité, 0 %).
                 </>
               )}
             </p>
@@ -170,7 +172,8 @@ export function Financement({
               <div className="cx-body">
                 <p className="se-body" style={{ marginTop: 0 }}>
                   Votre dossier de prêt se remplit directement chez {banqueNom} : c'est elle qui vous demande
-                  votre identité, votre RIB et les pièces du prêt, et qui vous fait signer. Vous pouvez revenir
+                  votre identité, votre RIB et les pièces du prêt, et qui vous fait signer. C'est aussi là que
+                  vous indiquez le montant emprunté : la totalité de votre quote-part ou une partie. Vous pouvez revenir
                   sur ce lien autant de fois que nécessaire pour reprendre ou terminer votre souscription.
                 </p>
                 <button className="se-btn se-btn-primary" onClick={() => ouvrirBanque(lienBanque)}>
@@ -224,6 +227,9 @@ export function Financement({
             Éco-PTZ souscrit par la copropriété auprès de {banqueNom}. Vous adhérez pour votre seule
             quote-part, directement en ligne sur le site de la banque.
           </p>
+          <p style={{ marginTop: 6 }}>
+            Vous pouvez emprunter <b>la totalité de votre quote-part ou une partie seulement</b>.
+          </p>
           <div className="loan-terms"><span className="term">Recommandé</span><span className="term">Durée votée en AG</span></div>
         </div>
         <div className={"loan-opt" + (type === "individuel" ? " sel" : "")} onClick={() => setType("individuel")}>
@@ -249,14 +255,19 @@ export function Financement({
                 <div className="kv"><span className="k">Banque</span><span className="v">{config ? BANQUE_LABEL[config.banque] : "À confirmer par votre AMO"}</span></div>
                 <div className="kv"><span className="k">Souscription</span><span className="v">{lienBanque ? "En ligne, sur le site de la banque" : "Ouverture à venir"}</span></div>
                 <div className="kv"><span className="k">Durée (votée en AG)</span><span className="v">{dureeCollectif} ans</span></div>
-                <div className="kv"><span className="k">Montant financé</span><span className="v">{fmtEuro(montant)}</span></div>
+                <div className="kv"><span className="k">Montant finançable</span><span className="v">jusqu'à {fmtEuro(montant)}</span></div>
                 <div className="kv"><span className="k">Taux d'intérêt</span><span className="v">0 % (éco-PTZ)</span></div>
                 <div className="casc-reste" style={{ marginTop: 12 }}>
                   <span className="l">Mensualité estimée</span>
                   <span className="v">{fmtEuro(mensualiteCollectif)}</span>
                 </div>
+                {/* Feedback Amir 26/09 : l'adhésion n'engage pas forcément toute la
+                    quote-part - le montant emprunté se fixe sur le site de la banque. */}
                 <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10 }}>
-                  Hors frais de garantie, ajoutés par la banque selon la tarification en vigueur.
+                  Vous pouvez emprunter la totalité de votre quote-part ou une partie seulement : le montant
+                  se précise lors de votre demande sur le site de la banque. La mensualité ci-dessus correspond
+                  à la totalité ; elle est hors frais de garantie, ajoutés par la banque selon la tarification en
+                  vigueur.
                 </p>
               </div>
             </div>
