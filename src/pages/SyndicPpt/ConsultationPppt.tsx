@@ -6,6 +6,12 @@
 // reçoit par e-mail et dans « Demandes des syndics ». Une demande en cours
 // s'affiche à la place de la question (pas de doublon). La fiche reste
 // accessible depuis la fenêtre (déposer un PPPT existant, compléter la fiche).
+// Texte présenté au syndic (feedback Amir 27/09/2026 18:13) : la demande part
+// directement à des bureaux d'études référencés locaux ; le syndic récupère
+// les documents sur la plateforme et une analyse des offres à présenter en AG.
+// Le circuit en base est inchangé : l'équipe publie la consultation depuis
+// « Demandes des syndics » (métier PPPT + DPE collectif).
+const PROMESSE = "Vous récupérerez les documents directement sur la plateforme, ainsi qu'une analyse des offres à présenter en assemblée générale.";
 import { useState } from "react";
 import { Modal } from "@/components/Modal";
 import { Icon } from "@/components/Icon";
@@ -82,7 +88,7 @@ export function ConsultationPppt({
             <div style={{ padding: "12px 14px", borderRadius: "var(--radius-md)", background: "var(--color-success-50)", display: "flex", gap: 10, alignItems: "flex-start" }}>
               <Icon name="checkCircle" size={18} style={{ color: "var(--color-success-700)", flex: "none", marginTop: 1 }} />
               <span style={{ fontSize: 13.5 }}>
-                Demande envoyée à Strat Eco. L'équipe lance la consultation pour la réalisation du PPPT et du DPE collectif et revient vers vous.
+                Demande envoyée : elle part directement à des bureaux d'études référencés locaux pour la réalisation du PPPT et du DPE collectif. {PROMESSE}
               </span>
             </div>
           ) : (
@@ -103,7 +109,7 @@ export function ConsultationPppt({
               )}
               {!priseEnCharge && (
                 <p className="se-small" style={{ margin: 0, color: "var(--fg-muted)" }}>
-                  La consultation pour la réalisation du PPPT et du DPE collectif a déjà été demandée pour cette copropriété : l'équipe Strat Eco revient vers vous.
+                  La consultation pour la réalisation du PPPT et du DPE collectif a déjà été demandée pour cette copropriété. {PROMESSE}
                 </p>
               )}
             </>
@@ -125,7 +131,7 @@ export function ConsultationPppt({
           Voulez-vous une consultation pour la réalisation du PPPT et du DPE collectif ?
         </p>
         <p className="se-small" style={{ margin: 0, color: "var(--fg-muted)", lineHeight: 1.55 }}>
-          La demande part à l'équipe Strat Eco avec les informations de la fiche (adresse, nombre de lots, chauffage) : elle lance la consultation et revient vers vous.
+          La demande part directement à des bureaux d'études référencés locaux. {PROMESSE}
           {copro.plus_de_15_ans === true ? " Copropriété de plus de 15 ans : le projet de plan pluriannuel de travaux est obligatoire." : ""}
         </p>
         <div className="se-small" style={{ color: "var(--fg-muted)", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", padding: "8px 12px", borderRadius: "var(--radius-md)", background: "var(--bg)" }}>
