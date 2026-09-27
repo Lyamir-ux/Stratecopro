@@ -343,6 +343,8 @@ export type Database = {
           decision_at: string | null
           decision_email_statut: string | null
           decision_vue_at: string | null
+          delai_dpe_semaines: number | null
+          delai_pppt_semaines: number | null
           engagement_at: string | null
           fichier_name: string | null
           fichier_path: string | null
@@ -359,9 +361,11 @@ export type Database = {
           tarif_chantier_mode: string
           tarif_conception: number | null
           tarif_diag_avp: number | null
+          tarif_dpe: number | null
           tarif_etancheite_apres: number | null
           tarif_etancheite_avant: number | null
           tarif_options: Json | null
+          tarif_pppt: number | null
           tarif_pro_dce: number | null
           tarif_pro_dce_mode: string
           tarif_realisation: number | null
@@ -371,6 +375,8 @@ export type Database = {
           decision_at?: string | null
           decision_email_statut?: string | null
           decision_vue_at?: string | null
+          delai_dpe_semaines?: number | null
+          delai_pppt_semaines?: number | null
           engagement_at?: string | null
           fichier_name?: string | null
           fichier_path?: string | null
@@ -387,9 +393,11 @@ export type Database = {
           tarif_chantier_mode?: string
           tarif_conception?: number | null
           tarif_diag_avp?: number | null
+          tarif_dpe?: number | null
           tarif_etancheite_apres?: number | null
           tarif_etancheite_avant?: number | null
           tarif_options?: Json | null
+          tarif_pppt?: number | null
           tarif_pro_dce?: number | null
           tarif_pro_dce_mode?: string
           tarif_realisation?: number | null
@@ -399,6 +407,8 @@ export type Database = {
           decision_at?: string | null
           decision_email_statut?: string | null
           decision_vue_at?: string | null
+          delai_dpe_semaines?: number | null
+          delai_pppt_semaines?: number | null
           engagement_at?: string | null
           fichier_name?: string | null
           fichier_path?: string | null
@@ -415,9 +425,11 @@ export type Database = {
           tarif_chantier_mode?: string
           tarif_conception?: number | null
           tarif_diag_avp?: number | null
+          tarif_dpe?: number | null
           tarif_etancheite_apres?: number | null
           tarif_etancheite_avant?: number | null
           tarif_options?: Json | null
+          tarif_pppt?: number | null
           tarif_pro_dce?: number | null
           tarif_pro_dce_mode?: string
           tarif_realisation?: number | null
@@ -814,6 +826,10 @@ export type Database = {
       }
       consultations: {
         Row: {
+          analyse_avis: string | null
+          analyse_candidature_id: string | null
+          analyse_publiee_le: string | null
+          analyse_publiee_par: string | null
           budget: number | null
           copro_externe_adresse: string | null
           copro_externe_lots: number | null
@@ -826,12 +842,17 @@ export type Database = {
           nb_batiments: number | null
           nb_logements: number | null
           options: string[]
+          ppt_copro_id: string | null
           published_at: string
           sous_type: string | null
           statut: Database["public"]["Enums"]["statut_consultation"]
           type: Database["public"]["Enums"]["type_consultation"]
         }
         Insert: {
+          analyse_avis?: string | null
+          analyse_candidature_id?: string | null
+          analyse_publiee_le?: string | null
+          analyse_publiee_par?: string | null
           budget?: number | null
           copro_externe_adresse?: string | null
           copro_externe_lots?: number | null
@@ -844,12 +865,17 @@ export type Database = {
           nb_batiments?: number | null
           nb_logements?: number | null
           options?: string[]
+          ppt_copro_id?: string | null
           published_at?: string
           sous_type?: string | null
           statut?: Database["public"]["Enums"]["statut_consultation"]
           type: Database["public"]["Enums"]["type_consultation"]
         }
         Update: {
+          analyse_avis?: string | null
+          analyse_candidature_id?: string | null
+          analyse_publiee_le?: string | null
+          analyse_publiee_par?: string | null
           budget?: number | null
           copro_externe_adresse?: string | null
           copro_externe_lots?: number | null
@@ -862,12 +888,27 @@ export type Database = {
           nb_batiments?: number | null
           nb_logements?: number | null
           options?: string[]
+          ppt_copro_id?: string | null
           published_at?: string
           sous_type?: string | null
           statut?: Database["public"]["Enums"]["statut_consultation"]
           type?: Database["public"]["Enums"]["type_consultation"]
         }
         Relationships: [
+          {
+            foreignKeyName: "consultations_analyse_candidature_id_fkey"
+            columns: ["analyse_candidature_id"]
+            isOneToOne: false
+            referencedRelation: "candidatures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultations_ppt_copro_id_fkey"
+            columns: ["ppt_copro_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_coproprietes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "consultations_copro_id_fkey"
             columns: ["copro_id"]
@@ -1130,6 +1171,7 @@ export type Database = {
           adresse: string
           chauffage: string | null
           commentaire_amo: string | null
+          consultation_id: string | null
           copro_id: string | null
           copro_nom: string
           created_at: string
@@ -1152,6 +1194,7 @@ export type Database = {
           adresse?: string
           chauffage?: string | null
           commentaire_amo?: string | null
+          consultation_id?: string | null
           copro_id?: string | null
           copro_nom: string
           created_at?: string
@@ -1174,6 +1217,7 @@ export type Database = {
           adresse?: string
           chauffage?: string | null
           commentaire_amo?: string | null
+          consultation_id?: string | null
           copro_id?: string | null
           copro_nom?: string
           created_at?: string
@@ -1205,6 +1249,13 @@ export type Database = {
             columns: ["organisation_id"]
             isOneToOne: false
             referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demandes_amo_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "consultations"
             referencedColumns: ["id"]
           },
           {
@@ -4208,6 +4259,22 @@ export type Database = {
       }
       ppt_supprimer_analyse: {
         Args: { p_motif?: string; p_rapport_id: string }
+        Returns: undefined
+      }
+      ppt_demander_consultation_pppt: {
+        Args: { p_ppt_copro: string }
+        Returns: Json
+      }
+      ppt_consultations_suivi: {
+        Args: { p_ppt_copro: string }
+        Returns: Json
+      }
+      ppt_publier_analyse: {
+        Args: { p_avis: string; p_candidature: string | null; p_consultation: string }
+        Returns: undefined
+      }
+      ppt_retirer_analyse: {
+        Args: { p_consultation: string }
         Returns: undefined
       }
       ppt_decaler_postes: {

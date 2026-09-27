@@ -7,7 +7,9 @@
 // de partir à toute l'équipe.
 // Depuis le 27/09/2026 (feedback Amir, migration 0107), la même alerte part
 // pour une demande de consultation PPPT + DPE collectif déposée depuis la
-// colonne « Sans PPPT » du suivi des PPT (objet consultation_pppt_dpe).
+// colonne « Sans PPPT » du suivi des PPT (objet consultation_pppt_dpe). Depuis
+// 0109, cette consultation est déjà publiée aux bureaux d'études référencés
+// (demande.consultation_id) : l'e-mail le dit et renvoie vers l'analyse à publier.
 // Envoi réel via Resend si RESEND_API_KEY est configuré, sinon 'simule'.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -99,19 +101,32 @@ Deno.serve(async (req: Request) => {
   ].filter(Boolean).join("<br/>");
 
   const consultation = demande.objet === "consultation_pppt_dpe";
+  const publiee = consultation && !!demande.consultation_id;
+  let dateLimite: string | null = null;
+  if (publiee) {
+    const { data: cs } = await admin.from("consultations").select("date_limite").eq("id", demande.consultation_id).maybeSingle();
+    dateLimite = cs?.date_limite
+      ? new Date(cs.date_limite + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
+      : null;
+  }
   const contenu = (nom: string) => ({
-    sujet: consultation
-      ? `Consultation PPPT + DPE collectif - ${demande.copro_nom}`
-      : `Demande d'AMO - ${demande.copro_nom}`,
+    sujet: publiee
+      ? `Consultation PPPT + DPE collectif publiée - ${demande.copro_nom}`
+      : consultation
+        ? `Consultation PPPT + DPE collectif - ${demande.copro_nom}`
+        : `Demande d'AMO - ${demande.copro_nom}`,
     html: `
       <div style="font-family:Arial,Helvetica,sans-serif;font-size:14.5px;line-height:1.55;color:#1a1a1a;max-width:620px">
         <p>Bonjour${nom ? " " + nom : ""},</p>
         <p><strong>${demande.demandeur_nom || "Un gestionnaire"}</strong>${demande.syndic_name ? ` (${demande.syndic_name})` : ""}
-        ${consultation
-          ? `souhaite une consultation pour la réalisation du PPPT et du DPE collectif de la copropriété <strong>${demande.copro_nom}</strong> (copropriété sans PPPT de son suivi des PPT).`
-          : `souhaite l'accompagnement de Strat Eco sur la copropriété <strong>${demande.copro_nom}</strong>.`}</p>
+        ${publiee
+          ? `a lancé depuis son suivi des PPT une consultation pour la réalisation du PPPT et du DPE collectif de la copropriété <strong>${demande.copro_nom}</strong>. Elle est publiée directement aux bureaux d'études référencés du métier${dateLimite ? `, réponses attendues avant le <strong>${dateLimite}</strong>` : ""}.`
+          : consultation
+            ? `souhaite une consultation pour la réalisation du PPPT et du DPE collectif de la copropriété <strong>${demande.copro_nom}</strong> (copropriété sans PPPT de son suivi des PPT).`
+            : `souhaite l'accompagnement de Strat Eco sur la copropriété <strong>${demande.copro_nom}</strong>.`}</p>
         ${details ? `<p>${details}</p>` : ""}
-        ${BOUTON(`${appUrl}/demandes`, "Voir la demande")}
+        ${publiee ? `<p>À faire : suivre les offres, puis publier l'analyse pour le syndic (Consulter un intervenant, « Analyse pour le syndic »). Le syndic retrouve alors les offres et l'analyse sur sa fiche PPT.</p>` : ""}
+        ${publiee ? BOUTON(`${appUrl}/consultations`, "Voir la consultation") : BOUTON(`${appUrl}/demandes`, "Voir la demande")}
         <p>Bien cordialement,<br/><strong>Strat Eco pro</strong></p>
       </div>`,
   });

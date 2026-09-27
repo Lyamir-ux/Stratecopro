@@ -1,13 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  OBJET_CONSULTATION_PPPT,
-  adresseComplete,
-  chauffageEnClair,
-  demandeDepuisCopro,
-  demandeEnCours,
-  preremplissageConsultation,
-  type DemandeConsultationLite,
-} from "../consultationPppt";
+import { demandeEnCours, preremplissageConsultation, type DemandeConsultationLite } from "../consultationPppt";
 
 const demande = (id: string, statut: string, created_at: string, ppt_copro_id = "c1"): DemandeConsultationLite => ({
   id,
@@ -20,37 +12,6 @@ const demande = (id: string, statut: string, created_at: string, ppt_copro_id = 
 });
 
 describe("consultation PPPT + DPE collectif (feedback Amir 27/09/2026)", () => {
-  it("la demande reprend la fiche PPT : nom, adresse complète, lots (à défaut logements), chauffage", () => {
-    const d = demandeDepuisCopro({
-      id: "c1",
-      nom: " Les Tilleuls ",
-      adresse: "12 rue des Vosges",
-      code_postal: "67000",
-      commune: "Strasbourg",
-      nb_lots: null,
-      nb_logements: 24,
-      chauffage: "collectif",
-      energie_chauffage: "gaz",
-    });
-    expect(d).toEqual({
-      objet: OBJET_CONSULTATION_PPPT,
-      ppt_copro_id: "c1",
-      copro_nom: "Les Tilleuls",
-      adresse: "12 rue des Vosges, 67000 Strasbourg",
-      nb_lots: 24,
-      chauffage: "Collectif gaz",
-      vmc: null,
-    });
-  });
-
-  it("adresse et chauffage incomplets", () => {
-    expect(adresseComplete({ adresse: null, code_postal: null, commune: "Colmar" })).toBe("Colmar");
-    expect(adresseComplete({ adresse: "3 place Kléber", code_postal: null, commune: null })).toBe("3 place Kléber");
-    expect(adresseComplete({ adresse: null, code_postal: null, commune: null })).toBe("");
-    expect(chauffageEnClair({ chauffage: null, energie_chauffage: null })).toBeNull();
-    expect(chauffageEnClair({ chauffage: "individuel", energie_chauffage: null })).toBe("Individuel");
-  });
-
   it("demande en cours : la plus récente de la copropriété, sauf si elle a été classée sans suite", () => {
     const liste = [
       demande("a", "classee", "2026-09-01T10:00:00Z"),

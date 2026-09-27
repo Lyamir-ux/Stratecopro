@@ -245,6 +245,17 @@ function PostulerModal({
         : null;
   const sansMontant = cs.type === "diag" && cs.sous_type === "amiante_plomb";
   const duoTotal = (duo ?? []).reduce((s, d) => s + (num(tarifs[d.key]) ?? 0), 0);
+  // PPPT + DPE collectif (0110, demande d'Amir 27/09/2026) : prix et délai de chaque prestation
+  const ppptDpe = cs.type === "pppt_dpe";
+  const PRESTATIONS_PPPT_DPE = [
+    { key: "pppt", delai: "delai_pppt", label: "Projet de plan pluriannuel de travaux (PPPT)" },
+    { key: "dpe", delai: "delai_dpe", label: "DPE collectif" },
+  ] as const;
+  const ppptDpeTotal = PRESTATIONS_PPPT_DPE.reduce((s, d) => s + (num(tarifs[d.key]) ?? 0), 0);
+  const semaines = (v: string | undefined): number | null => {
+    const n = num(v);
+    return n == null ? null : Math.round(n);
+  };
   // total en euros : les lignes en % du montant des travaux ne peuvent pas
   // s'additionner aux forfaits - elles se cumulent entre elles (même assiette)
   // et s'affichent à part
@@ -259,6 +270,13 @@ function PostulerModal({
 
   const submit = async () => {
     setError(null);
+    if (ppptDpe) {
+      const d = PRESTATIONS_PPPT_DPE.map((p) => semaines(tarifs[p.delai])).filter((v): v is number => v != null);
+      if (d.some((v) => v < 1 || v > 104)) {
+        setError("Délai de réalisation : un nombre de semaines entre 1 et 104.");
+        return;
+      }
+    }
     try {
       const tarifsMoe: TarifsMoe | null = moe
         ? {
@@ -274,9 +292,16 @@ function PostulerModal({
             }, {}),
           }
         : null;
-      const tarifsSimples: TarifsSimples | null = duo
-        ? (Object.fromEntries(duo.map((d) => [d.key, num(tarifs[d.key])])) as TarifsSimples)
-        : null;
+      const tarifsSimples: TarifsSimples | null = ppptDpe
+        ? {
+            pppt: num(tarifs.pppt),
+            dpe: num(tarifs.dpe),
+            delai_pppt_semaines: semaines(tarifs.delai_pppt),
+            delai_dpe_semaines: semaines(tarifs.delai_dpe),
+          }
+        : duo
+          ? (Object.fromEntries(duo.map((d) => [d.key, num(tarifs[d.key])])) as TarifsSimples)
+          : null;
       await postuler.mutateAsync({
         consultation: cs,
         prestataire: presta,
@@ -284,6 +309,10 @@ function PostulerModal({
           ? total > 0
             ? total
             : null
+          : ppptDpe
+            ? ppptDpeTotal > 0
+              ? ppptDpeTotal
+              : null
           : duo
             ? duoTotal > 0
               ? duoTotal
@@ -455,6 +484,36 @@ function PostulerModal({
                   )}
                 </span>
               </div>
+            </div>
+          </div>
+        ) : ppptDpe ? (
+          <div className="cs-field">
+            <label>
+              Votre offre <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· € HT et délai de réalisation</span>
+            </label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {PRESTATIONS_PPPT_DPE.map((d) => (
+                <div key={d.key} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ flex: 1, minWidth: 150, fontSize: 13.5 }}>{d.label}</span>
+                  <input className="edit-inp" type="number" min={0} value={tarifs[d.key] ?? ""} placeholder="0"
+                    style={{ maxWidth: 120, textAlign: "right" }} aria-label={`Prix - ${d.label}`} onChange={(e) => setTarif(d.key, e.target.value)} />
+                  <span style={{ color: "var(--fg-muted)", fontSize: 12.5, width: 34 }}>€ HT</span>
+                  <input className="edit-inp" type="number" min={1} max={104} step={1} value={tarifs[d.delai] ?? ""} placeholder="-"
+                    style={{ maxWidth: 64, textAlign: "right" }} aria-label={`Délai - ${d.label}`} title="Délai de réalisation, en semaines à compter de la commande"
+                    onChange={(e) => setTarif(d.delai, e.target.value)} />
+                  <span style={{ color: "var(--fg-muted)", fontSize: 12.5, width: 30 }}>sem.</span>
+                </div>
+              ))}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+                <span style={{ flex: 1, fontWeight: 700, fontSize: 13.5 }}>Total de l'offre</span>
+                <span style={{ fontWeight: 800, fontFamily: "var(--font-display)", fontSize: 15 }}>
+                  {fmtEuro(ppptDpeTotal)}
+                </span>
+                <span style={{ color: "var(--fg-muted)", fontSize: 12.5, width: 34 }}>HT</span>
+              </div>
+              <span style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>
+                Délais de réalisation en semaines, à compter de la commande. Laissez une ligne vide si vous ne réalisez pas cette prestation.
+              </span>
             </div>
           </div>
         ) : duo ? (

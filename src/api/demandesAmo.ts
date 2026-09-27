@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthProvider";
 import { nomFichierSansAccents } from "@/lib/nommage";
 import type { Tables } from "@/lib/database.types";
-import { OBJET_CONSULTATION_PPPT, demandeDepuisCopro, type CoproPourConsultation } from "@/lib/ppt/consultationPppt";
+import { OBJET_CONSULTATION_PPPT } from "@/lib/ppt/consultationPppt";
 
 export type DemandeAmo = Tables<"demandes_amo">;
 
@@ -225,7 +225,9 @@ export function useStatutDemandeAmo() {
 // Feedback Amir 27/09/2026 : depuis la colonne « Sans PPPT » du suivi des PPT,
 // le syndic demande une consultation pour la réalisation du PPPT et du DPE
 // collectif. Même table, même boîte de réception, même alerte e-mail que la
-// demande d'AMO ; la demande pointe vers la copropriété du suivi PPT.
+// demande d'AMO ; la demande pointe vers la copropriété du suivi PPT. Depuis
+// 0109, le dépôt passe par la RPC ppt_demander_consultation_pppt, qui publie
+// la consultation dans la foulée (src/api/consultationPpt.ts).
 
 /** Demandes de consultation visibles : les siennes et celles des dossiers PPT que l'on ouvre (RLS 0107). */
 export function useDemandesConsultationPpt(actif = true) {
@@ -241,52 +243,5 @@ export function useDemandesConsultationPpt(actif = true) {
       if (error) throw error;
       return data ?? [];
     },
-  });
-}
-
-/** « Oui » à la question de la colonne « Sans PPPT » : la demande part avec ce que la fiche PPT sait déjà. */
-export function useDemanderConsultationPpt() {
-  const qc = useQueryClient();
-  const { profile } = useAuth();
-  return useMutation({
-    mutationFn: async ({
-      copro,
-      organisationId,
-      syndicName,
-    }: {
-      copro: CoproPourConsultation;
-      organisationId: string | null;
-      syndicName: string | null;
-    }): Promise<DemandeAmo> => {
-      const { data: session } = await supabase.auth.getSession();
-      const uid = session.session?.user.id;
-      if (!uid) throw new Error("Session expirée - reconnectez-vous pour envoyer votre demande.");
-      const { data, error } = await supabase
-        .from("demandes_amo")
-        .insert({
-          ...demandeDepuisCopro(copro),
-          demandeur_user_id: uid,
-          demandeur_nom: profile?.full_name ?? "",
-          demandeur_email: session.session?.user.email ?? null,
-          organisation_id: organisationId,
-          syndic_name: syndicName,
-        })
-        .select()
-        .single();
-      if (error) {
-        // index unique 0107 : un collègue (ou un double clic) l'a déjà demandée
-        if ((error as { code?: string }).code === "23505") {
-          throw new Error("Une demande de consultation est déjà en attente pour cette copropriété.");
-        }
-        throw error;
-      }
-      try {
-        await supabase.functions.invoke("notifier-demande-amo", { body: { demande_id: data.id } });
-      } catch {
-        /* l'alerte e-mail est facultative */
-      }
-      return data;
-    },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["demandes-amo"] }),
   });
 }

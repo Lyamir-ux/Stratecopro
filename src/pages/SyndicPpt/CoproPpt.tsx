@@ -2,7 +2,8 @@
 // Onglets : Échéancier (récap des postes du plan validé + suivi de l'échéancier
 // où le syndic décale les travaux d'une année à l'autre, RPC 0073), Assemblées générales (saisie
 // des passages et votes), Fonds travaux, Remarques (celles du rapport,
-// visibles syndic), Documents (PPPT, DPE, PV, tableau PPT), Fiche, Historique.
+// visibles syndic), Documents (PPPT, DPE, PV, tableau PPT), Consultation
+// (consultation PPPT + DPE collectif, offres et analyse de Strat Eco, 0109), Fiche, Historique.
 import { useMemo, useState, type FormEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
@@ -54,6 +55,7 @@ import { ApercuDocument } from "@/components/ApercuDocument";
 import { CorrigerDocument, RenommerFichiers, type DocumentACorriger } from "./CorrigerDocument";
 import { SelectGestionnaire } from "./ChoixGestionnaire";
 import { SupprimerDocument, peutSupprimer, peutSupprimerJson, type DocumentASupprimer } from "./SupprimerDocument";
+import { ConsultationTab } from "./ConsultationTab";
 import { messageTransfert } from "@/lib/ppt/gestionnaires";
 import { PrioriteBadge, RenoBadge, SeveriteBadge, StatutPosteBadge, StatutRapportBadge, VerdictBadge, anneeCourante, fmtDateCourte, fmtEur, fmtPct, fmtPoints, issueLabel, posteLite, type PrioriteCode } from "./commun";
 import { messageErreur } from "@/lib/erreurs";
@@ -64,6 +66,7 @@ const TABS = [
   { id: "fonds", label: "Fonds travaux" },
   { id: "remarques", label: "Remarques" },
   { id: "documents", label: "Documents" },
+  { id: "consultation", label: "Consultation" },
   { id: "fiche", label: "Fiche" },
   { id: "historique", label: "Historique" },
 ] as const;
@@ -1255,7 +1258,7 @@ export default function CoproPpt() {
               <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
                 {s?.statut_rapport ? <StatutRapportBadge statut={s.statut_rapport} /> : <Badge kind="neutral">Aucun PPPT</Badge>}
                 {s?.reno_phase && <RenoBadge phase={s.reno_phase} />}
-                {!s?.reno_phase && c.plus_de_15_ans === true && c.pppt_presente === false && <Badge kind="warn" dot>PPPT à présenter</Badge>}
+                {!s?.reno_phase && s?.statut_rapport && c.plus_de_15_ans === true && c.pppt_presente === false && <Badge kind="warn" dot>PPPT à présenter</Badge>}
                 {c.gestionnaire_nom && <Badge kind="neutral"><Icon name="user" size={12} />{c.gestionnaire_nom}</Badge>}
                 {c.nb_logements != null && <Badge kind="neutral">{c.nb_logements} logements</Badge>}
                 {c.annee_construction && <Badge kind="neutral">{c.annee_construction}</Badge>}
@@ -1295,6 +1298,7 @@ export default function CoproPpt() {
         {tab === "fonds" && <FondsTab key={c.updated_at} c={c} postes={ps} />}
         {tab === "remarques" && <RemarquesTab c={c} postes={ps} />}
         {tab === "documents" && <DocumentsTab c={c} />}
+        {tab === "consultation" && <ConsultationTab c={c} />}
         {tab === "fiche" && <FicheTab key={c.updated_at} c={c} />}
         {tab === "historique" && <HistoriqueTab c={c} />}
       </div>

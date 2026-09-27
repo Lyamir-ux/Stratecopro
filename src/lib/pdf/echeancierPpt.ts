@@ -50,34 +50,34 @@ export interface EcheancierPdfInput {
 
 // ---------- constantes ----------
 
-const PAGE = { w: 841.89, h: 595.28 }; // A4 paysage
-const MARGE = 40;
-const LARGEUR = PAGE.w - 2 * MARGE;
+export const PAGE = { w: 841.89, h: 595.28 }; // A4 paysage
+export const MARGE = 40;
+export const LARGEUR = PAGE.w - 2 * MARGE;
 
-const BLEU = rgb(0.18, 0.435, 0.659); // #2E6FA8
-const BLEU_FONCE = rgb(0.118, 0.31, 0.486); // #1E4F7C
+export const BLEU = rgb(0.18, 0.435, 0.659); // #2E6FA8
+export const BLEU_FONCE = rgb(0.118, 0.31, 0.486); // #1E4F7C
 const BLEU_MOYEN = rgb(0.31, 0.533, 0.745); // #4F88BE (bleu PPT 400)
 const BLEU_CLAIR = rgb(0.478, 0.651, 0.831); // #7AA6D4 (bleu PPT 300)
 const GRIS_MOYEN = rgb(0.82, 0.831, 0.796); // #D1D4CB (--color-neutral-300)
-const FOND_BLEU = rgb(0.918, 0.949, 0.98); // #EAF2FA
-const ENCRE = rgb(0.102, 0.102, 0.102);
-const GRIS = rgb(0.42, 0.45, 0.4);
-const GRIS_CLAIR = rgb(0.898, 0.906, 0.882);
-const FOND_DOUX = rgb(0.973, 0.976, 0.965);
+export const FOND_BLEU = rgb(0.918, 0.949, 0.98); // #EAF2FA
+export const ENCRE = rgb(0.102, 0.102, 0.102);
+export const GRIS = rgb(0.42, 0.45, 0.4);
+export const GRIS_CLAIR = rgb(0.898, 0.906, 0.882);
+export const FOND_DOUX = rgb(0.973, 0.976, 0.965);
 const ORANGE = rgb(0.72, 0.43, 0);
 const VERT = rgb(0.298, 0.686, 0.314); // --color-success-500
-const VERT_FONCE = rgb(0.18, 0.49, 0.196); // --color-success-700
-const VERT_CLAIR = rgb(0.91, 0.961, 0.914); // --color-success-50
+export const VERT_FONCE = rgb(0.18, 0.49, 0.196); // --color-success-700
+export const VERT_CLAIR = rgb(0.91, 0.961, 0.914); // --color-success-50
 const ROUGE = rgb(0.863, 0.149, 0.149); // --color-error-500
 const ROUGE_FONCE = rgb(0.6, 0.106, 0.106); // --color-error-700
 const ROUGE_CLAIR = rgb(0.992, 0.925, 0.925); // --color-error-50
-const BLANC = rgb(1, 1, 1);
+export const BLANC = rgb(1, 1, 1);
 
 const PRIORITE: Record<string, string> = { preservation: "Préservation", energetique: "Énergétique", amelioration: "Amélioration", securite: "Sécurité", sante: "Santé" };
 const STATUT: Record<string, string> = { programme: "Programmé", presente: "Présenté", vote: "Voté", rejete: "Rejeté", reporte: "Reporté", realise: "Réalisé", abandonne: "Abandonné" };
 
 /** WinAnsi (Helvetica) : caractères hors plage remplacés. */
-const txt = (s: string): string =>
+export const txt = (s: string): string =>
   s
     .replace(/[   ]/g, " ")
     .replace(/[‘’]/g, "'")
@@ -89,7 +89,7 @@ const txt = (s: string): string =>
     .replace(/Œ/g, "OE")
     .replace(/[^\x20-\xFF€]/g, "?");
 
-const euro = (n: number | null | undefined): string => (n == null ? "-" : txt(Math.round(n).toLocaleString("fr-FR") + " €"));
+export const euro = (n: number | null | undefined): string => (n == null ? "-" : txt(Math.round(n).toLocaleString("fr-FR") + " €"));
 const euroCourt = (n: number): string => {
   if (Math.abs(n) >= 1_000_000) return txt((n / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " M€");
   if (Math.abs(n) >= 1_000) return txt(Math.round(n / 1_000).toLocaleString("fr-FR") + " k€");
@@ -120,7 +120,7 @@ export function blocsAnnees(annees: number[], parBloc = 12): number[][] {
   return out;
 }
 
-function wrap(s: string, font: PDFFont, size: number, maxW: number, maxLignes = 99): string[] {
+export function wrap(s: string, font: PDFFont, size: number, maxW: number, maxLignes = 99): string[] {
   const mots = txt(s).split(/\s+/).filter(Boolean);
   const lignes: string[] = [];
   let ligne = "";
@@ -144,7 +144,7 @@ function wrap(s: string, font: PDFFont, size: number, maxW: number, maxLignes = 
 
 // ---------- flux de mise en page ----------
 
-class Flux {
+export class Flux {
   doc: PDFDocument;
   page!: PDFPage;
   y = 0;
@@ -451,7 +451,7 @@ export interface EcheancierPortefeuillePdfInput {
 }
 
 /** Logo Strat Eco pro blanc : fourni (tests) ou chargé depuis /logo-strateco-pro-white.png dans le navigateur. */
-async function chargerLogo(doc: PDFDocument, logoPng?: Uint8Array | ArrayBuffer): Promise<PDFImage | null> {
+export async function chargerLogo(doc: PDFDocument, logoPng?: Uint8Array | ArrayBuffer): Promise<PDFImage | null> {
   try {
     if (logoPng) return await doc.embedPng(logoPng);
     if (typeof fetch === "function" && typeof window !== "undefined") {
@@ -465,7 +465,7 @@ async function chargerLogo(doc: PDFDocument, logoPng?: Uint8Array | ArrayBuffer)
 }
 
 /** Bandeau bleu de première page : logo, titre, sous-titre à gauche, mention à droite. */
-function bandeau(f: Flux, titre: string, sousTitre: string, droite: string) {
+export function bandeau(f: Flux, titre: string, sousTitre: string, droite: string) {
   const bandeauH = 78;
   f.page.drawRectangle({ x: 0, y: PAGE.h - bandeauH, width: PAGE.w, height: bandeauH, color: BLEU });
   if (f.logo) {
@@ -724,15 +724,15 @@ export function regrouperGestionnairesPpt(lignes: LignePortefeuillePptPdf[]): Gr
   );
 }
 
-interface ColPdf {
+export interface ColPdf {
   titre: string;
   w: number;
   align?: "right";
 }
-type CellulePdf = string[] | { texte: string; couleur?: RGB; bold?: boolean; pastille?: RGB };
+export type CellulePdf = string[] | { texte: string; couleur?: RGB; bold?: boolean; pastille?: RGB };
 
 /** Tableau générique : en-tête bleu clair, lignes à hauteur variable, en-tête répété en haut de page, ligne de total facultative. */
-function tableau(f: Flux, cols: ColPdf[], lignes: { cellules: CellulePdf[]; fond?: RGB }[], opts: { size?: number; total?: (string | null)[] } = {}) {
+export function tableau(f: Flux, cols: ColPdf[], lignes: { cellules: CellulePdf[]; fond?: RGB }[], opts: { size?: number; total?: (string | null)[] } = {}) {
   const size = opts.size ?? 8;
   const xs: number[] = [];
   cols.reduce((x, c) => {
@@ -792,7 +792,7 @@ function tableau(f: Flux, cols: ColPdf[], lignes: { cellules: CellulePdf[]; fond
 }
 
 /** Colonne élastique : la dernière prend la largeur restante. */
-function completer(cols: ColPdf[]): ColPdf[] {
+export function completer(cols: ColPdf[]): ColPdf[] {
   cols[cols.length - 1].w = LARGEUR - cols.slice(0, -1).reduce((s, c) => s + c.w, 0);
   return cols;
 }

@@ -141,7 +141,9 @@ function Carte({ d }: { d: DemandeAmo }) {
         )}
         {consultation && (
           <p className="se-small" style={{ margin: 0 }}>
-            Le gestionnaire souhaite une consultation pour la réalisation du PPPT et du DPE collectif (copropriété sans PPPT de son suivi des PPT).
+            {d.consultation_id
+              ? "Consultation PPPT + DPE collectif publiée directement aux bureaux d'études référencés depuis le suivi des PPT du syndic. À faire : suivre les offres, puis publier l'analyse pour le syndic (Consulter un intervenant, « Analyse pour le syndic ») - la demande passe alors en « prise en charge »."
+              : "Le gestionnaire souhaite une consultation pour la réalisation du PPPT et du DPE collectif (copropriété sans PPPT de son suivi des PPT)."}
           </p>
         )}
         <p className="se-small" style={{ margin: 0, color: "var(--fg-muted)" }}>
@@ -179,16 +181,23 @@ function Carte({ d }: { d: DemandeAmo }) {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {consultation ? (
             <>
-              <button
-                className="se-btn se-btn-primary btn-sm"
-                title="Ouvre « Consulter un intervenant » pré-rempli : copropriété hors plateforme, métier PPPT + DPE collectif, mission PPPT + DPE collectif"
-                onClick={() => navigate("/consultations", { state: { consultationDepuisDemande: preremplissageConsultation(d) } })}
-              >
-                <Icon name="megaphone" size={15} />
-                Préparer la consultation
-              </button>
+              {d.consultation_id ? (
+                <button className="se-btn se-btn-primary btn-sm" title="Consulter un intervenant : offres reçues et analyse pour le syndic" onClick={() => navigate("/consultations")}>
+                  <Icon name="megaphone" size={15} />
+                  Voir la consultation
+                </button>
+              ) : (
+                <button
+                  className="se-btn se-btn-primary btn-sm"
+                  title="Ouvre « Consulter un intervenant » pré-rempli : copropriété hors plateforme, métier PPPT + DPE collectif, mission PPPT + DPE collectif"
+                  onClick={() => navigate("/consultations", { state: { consultationDepuisDemande: preremplissageConsultation(d) } })}
+                >
+                  <Icon name="megaphone" size={15} />
+                  Préparer la consultation
+                </button>
+              )}
               {d.ppt_copro_id && (
-                <button className="se-btn se-btn-secondary btn-sm" onClick={() => navigate(`/syndic/ppt/copros/${d.ppt_copro_id}`)}>
+                <button className="se-btn se-btn-secondary btn-sm" onClick={() => navigate(`/syndic/ppt/copros/${d.ppt_copro_id}${d.consultation_id ? "/consultation" : ""}`)}>
                   <Icon name="arrowRight" size={15} />
                   Fiche du suivi PPT
                 </button>

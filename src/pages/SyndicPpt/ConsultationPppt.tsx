@@ -1,47 +1,47 @@
 // Fenêtre de la colonne « Sans PPPT » du tableau de bord PPT (feedback Amir
 // 27/09/2026, page /syndic/ppt) : un clic sur une copropriété qui n'a aucun
 // PPPT demande « Voulez-vous une consultation pour la réalisation du PPPT et
-// du DPE collectif ? ». Oui = demande à Strat Eco (demandes_amo, objet
-// consultation_pppt_dpe, 0107), avec ce que la fiche sait déjà ; l'équipe la
-// reçoit par e-mail et dans « Demandes des syndics ». Une demande en cours
-// s'affiche à la place de la question (pas de doublon). La fiche reste
-// accessible depuis la fenêtre (déposer un PPPT existant, compléter la fiche).
-// Texte présenté au syndic (feedback Amir 27/09/2026 18:13) : la demande part
-// directement à des bureaux d'études référencés locaux ; le syndic récupère
-// les documents sur la plateforme et une analyse des offres à présenter en AG.
-// Le circuit en base est inchangé : l'équipe publie la consultation depuis
-// « Demandes des syndics » (métier PPPT + DPE collectif).
-const PROMESSE = "Vous récupérerez les documents directement sur la plateforme, ainsi qu'une analyse des offres à présenter en assemblée générale.";
+// du DPE collectif ? ». Une demande en cours s'affiche à la place de la
+// question (pas de doublon). La fiche reste accessible depuis la fenêtre
+// (déposer un PPPT existant, compléter la fiche).
+// Depuis l'idée d'Amir du 27/09/2026 (18:13, migration 0109), « Oui » publie
+// directement la consultation aux bureaux d'études référencés du métier
+// « PPPT + DPE collectif » (ppt_demander_consultation_pppt, alerte
+// notifier-consultation) ; l'équipe est prévenue et publie ensuite son
+// analyse des offres, que le syndic retrouve dans l'onglet Consultation.
 import { useState } from "react";
 import { Modal } from "@/components/Modal";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
-import { useDemanderConsultationPpt, type DemandeAmo } from "@/api/demandesAmo";
+import type { DemandeAmo } from "@/api/demandesAmo";
+import { useDemanderConsultationPppt, type ResultatDemandeConsultation } from "@/api/consultationPpt";
 import type { PptCoproAvecStats } from "@/api/ppt";
+import { libelleDemandeConsultation } from "@/lib/ppt/analyseOffres";
 import { messageErreur } from "@/lib/erreurs";
 import { fmtDateCourte } from "./commun";
+
+const PROMESSE = "Vous récupérerez les documents directement sur la plateforme, ainsi qu'une analyse des offres à présenter en assemblée générale.";
 
 export function ConsultationPppt({
   copro,
   demande,
   apercuAmo,
-  organisationId,
-  syndicName,
   onOuvrirFiche,
+  onVoirConsultation,
   onClose,
 }: {
   copro: PptCoproAvecStats;
-  /** Demande à traiter ou prise en charge (demandeEnCours), sinon null. */
+  /** Demande en cours (demandeEnCours), sinon null. */
   demande: DemandeAmo | null;
   apercuAmo: boolean;
-  organisationId: string | null;
-  syndicName: string | null;
   onOuvrirFiche: () => void;
+  /** Onglet Consultation de la fiche. */
+  onVoirConsultation: () => void;
   onClose: () => void;
 }) {
-  const demander = useDemanderConsultationPpt();
+  const demander = useDemanderConsultationPppt();
   const [erreur, setErreur] = useState<string | null>(null);
-  const [envoyee, setEnvoyee] = useState(false);
+  const [resultat, setResultat] = useState<ResultatDemandeConsultation | null>(null);
 
   const sub = [
     copro.nb_lots ? `${copro.nb_lots} lots` : copro.nb_logements ? `${copro.nb_logements} logements` : null,
@@ -53,8 +53,7 @@ export function ConsultationPppt({
   const envoyer = async () => {
     setErreur(null);
     try {
-      await demander.mutateAsync({ copro, organisationId, syndicName });
-      setEnvoyee(true);
+      setResultat(await demander.mutateAsync(copro.id));
     } catch (err) {
       setErreur(messageErreur(err, "L'envoi de la demande a échoué."));
     }
@@ -77,46 +76,51 @@ export function ConsultationPppt({
     </button>
   );
 
-  // demande envoyée ou déjà en cours : on dit où elle en est, sans reposer la question
-  if (envoyee || demande) {
-    const priseEnCharge = !envoyee && demande?.statut === "traitee";
+  // consultation publiée à l'instant, ou demande déjà en cours : on dit où elle en est, sans reposer la question
+  if (resultat || demande) {
+    const etat = demande ? libelleDemandeConsultation(demande) : null;
+    const alertes = resultat?.alertes ? resultat.alertes.envoyes + resultat.alertes.simules : null;
     return (
       <Modal title="Consultation PPPT + DPE collectif" onClose={onClose} width={540}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {enTete}
-          {envoyee ? (
+          {resultat ? (
             <div style={{ padding: "12px 14px", borderRadius: "var(--radius-md)", background: "var(--color-success-50)", display: "flex", gap: 10, alignItems: "flex-start" }}>
               <Icon name="checkCircle" size={18} style={{ color: "var(--color-success-700)", flex: "none", marginTop: 1 }} />
-              <span style={{ fontSize: 13.5 }}>
-                Demande envoyée : elle part directement à des bureaux d'études référencés locaux pour la réalisation du PPPT et du DPE collectif. {PROMESSE}
+              <span style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+                Consultation publiée : elle part directement à des bureaux d'études référencés locaux
+                {alertes != null && alertes > 0 ? ` (${alertes} alerté${alertes > 1 ? "s" : ""} par e-mail)` : ""}, réponses attendues avant le {fmtDateCourte(resultat.date_limite)}. {PROMESSE}
               </span>
             </div>
           ) : (
             <>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                {priseEnCharge ? <Badge kind="success">Prise en charge par Strat Eco</Badge> : <Badge kind="blue" dot>Demande en attente</Badge>}
+                <Badge kind={etat!.kind} dot>{etat!.court}</Badge>
                 <span className="se-small" style={{ color: "var(--fg-muted)" }}>
                   Demandée le {fmtDateCourte(demande!.created_at)}
                   {demande!.demandeur_nom ? ` par ${demande!.demandeur_nom}` : ""}
-                  {priseEnCharge && demande!.traite_le ? ` · prise en charge le ${fmtDateCourte(demande!.traite_le)}` : ""}
+                  {demande!.statut === "traitee" && demande!.traite_le ? ` · publiée le ${fmtDateCourte(demande!.traite_le)}` : ""}
                 </span>
               </div>
-              {demande!.commentaire_amo && (
+              {demande!.commentaire_amo && demande!.statut === "traitee" && (
                 <div style={{ padding: "10px 12px", borderRadius: "var(--radius-md)", background: "var(--bg)", fontSize: 13.5 }}>
                   <strong style={{ fontSize: 12.5, color: "var(--fg2)" }}>Suite donnée par Strat Eco</strong>
                   <div style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{demande!.commentaire_amo}</div>
                 </div>
               )}
-              {!priseEnCharge && (
-                <p className="se-small" style={{ margin: 0, color: "var(--fg-muted)" }}>
-                  La consultation pour la réalisation du PPPT et du DPE collectif a déjà été demandée pour cette copropriété. {PROMESSE}
-                </p>
-              )}
+              <p className="se-small" style={{ margin: 0, color: "var(--fg-muted)" }}>
+                {demande!.statut === "traitee"
+                  ? "Les offres, leurs pièces et l'analyse de Strat Eco sont dans l'onglet Consultation de la fiche."
+                  : `La consultation pour la réalisation du PPPT et du DPE collectif a déjà été demandée pour cette copropriété. ${PROMESSE}`}
+              </p>
             </>
           )}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
             {boutonFiche}
-            <button type="button" className="se-btn se-btn-primary btn-sm" onClick={onClose}>Fermer</button>
+            <button type="button" className="se-btn se-btn-primary btn-sm" onClick={onVoirConsultation}>
+              <Icon name="clipboard" size={14} />
+              Voir la consultation
+            </button>
           </div>
         </div>
       </Modal>
@@ -159,7 +163,7 @@ export function ConsultationPppt({
             title={apercuAmo ? "Aperçu AMO : la demande se fait depuis le compte du syndic" : undefined}
           >
             <Icon name="send" size={14} />
-            {demander.isPending ? "Envoi…" : "Oui, demander la consultation"}
+            {demander.isPending ? "Publication…" : "Oui, demander la consultation"}
           </button>
         </div>
       </div>

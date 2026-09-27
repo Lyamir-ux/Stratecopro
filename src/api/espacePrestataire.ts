@@ -155,12 +155,18 @@ export interface TarifsMoe {
 }
 
 /** Détail tarifaire des autres missions : test d'étanchéité à l'air
- *  (avant / après travaux) et CT / SPS (conception / réalisation), € HT. */
+ *  (avant / après travaux), CT / SPS (conception / réalisation) et, depuis
+ *  0110, PPPT + DPE collectif (prix de chaque prestation et délai de
+ *  réalisation en semaines à compter de la commande), € HT. */
 export interface TarifsSimples {
   etancheite_avant?: number | null;
   etancheite_apres?: number | null;
   conception?: number | null;
   realisation?: number | null;
+  pppt?: number | null;
+  dpe?: number | null;
+  delai_pppt_semaines?: number | null;
+  delai_dpe_semaines?: number | null;
 }
 
 /** Dépôt d'offre : pièce jointe optionnelle (bucket privé) + candidature. */
@@ -212,6 +218,10 @@ export function usePostuler() {
         tarif_etancheite_apres: tarifsSimples?.etancheite_apres ?? null,
         tarif_conception: tarifsSimples?.conception ?? null,
         tarif_realisation: tarifsSimples?.realisation ?? null,
+        tarif_pppt: tarifsSimples?.pppt ?? null,
+        tarif_dpe: tarifsSimples?.dpe ?? null,
+        delai_pppt_semaines: tarifsSimples?.delai_pppt_semaines ?? null,
+        delai_dpe_semaines: tarifsSimples?.delai_dpe_semaines ?? null,
       });
       if (error) throw error;
     },

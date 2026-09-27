@@ -37,6 +37,7 @@ import {
 import { CandidatureActions } from "@/components/CandidatureActions";
 import { useDemandesAmo, useStatutDemandeAmo } from "@/api/demandesAmo";
 import type { PreremplissageConsultation } from "@/lib/ppt/consultationPppt";
+import { AnalysePourSyndic } from "@/pages/SyndicPpt/AnalyseOffres";
 
 function joursRestants(iso: string | null): number | null {
   if (!iso) return null;
@@ -197,6 +198,9 @@ function Card({ cs }: { cs: Consultation }) {
   const [open, setOpen] = useState(false);
   const [etat, setEtat] = useState(false);
   const [qa, setQa] = useState(false);
+  // consultation publiée par un syndic depuis son suivi PPT (0109) : analyse à publier pour lui
+  const ppt = !!cs.ppt_copro_id;
+  const [analyse, setAnalyse] = useState(ppt && !cs.analyse_publiee_le && cs.candidatures.length > 0);
   const [newOrg, setNewOrg] = useState("");
   const close = useCloseConsultation();
   const reopen = useReopenConsultation();
@@ -227,6 +231,11 @@ function Card({ cs }: { cs: Consultation }) {
       <div className="cs-card-head">
         <TypeTag type={cs.type} />
         {cs.sous_type && <Badge kind="primary">{sousTypeLabel(cs.sous_type)}</Badge>}
+        {ppt && (
+          <Badge kind="blue" dot>
+            Demande du syndic (suivi PPT){cs.analyse_publiee_le ? " · analyse publiée" : ""}
+          </Badge>
+        )}
         <span className="spacer" style={{ flex: 1 }}></span>
         {enLigne ? (
           <Badge kind={jr != null && jr <= 5 ? "warn" : "success"} dot>
@@ -288,6 +297,7 @@ function Card({ cs }: { cs: Consultation }) {
             setOpen((o) => !o);
             setEtat(false);
             setQa(false);
+            setAnalyse(false);
           }}
         >
           <Icon name="users" size={15} />
@@ -300,6 +310,7 @@ function Card({ cs }: { cs: Consultation }) {
             setEtat((e) => !e);
             setOpen(false);
             setQa(false);
+            setAnalyse(false);
           }}
         >
           <Icon name="barChart" size={15} />
@@ -312,6 +323,7 @@ function Card({ cs }: { cs: Consultation }) {
             setQa((v) => !v);
             setOpen(false);
             setEtat(false);
+            setAnalyse(false);
           }}
         >
           <Icon name="message" size={15} />
@@ -319,6 +331,22 @@ function Card({ cs }: { cs: Consultation }) {
           {enAttente > 0 && <Badge kind="warn">{enAttente} sans réponse</Badge>}
           <Icon name={qa ? "chevronDown" : "chevronRight"} size={14} />
         </button>
+        {ppt && (
+          <button
+            className="cs-cand-toggle"
+            onClick={() => {
+              setAnalyse((v) => !v);
+              setOpen(false);
+              setEtat(false);
+              setQa(false);
+            }}
+          >
+            <Icon name="clipboard" size={15} />
+            Analyse pour le syndic
+            {!cs.analyse_publiee_le && cs.candidatures.length > 0 && <Badge kind="warn">à publier</Badge>}
+            <Icon name={analyse ? "chevronDown" : "chevronRight"} size={14} />
+          </button>
+        )}
         <span className="spacer" style={{ flex: 1 }}></span>
         {enLigne ? (
           <>
@@ -348,6 +376,7 @@ function Card({ cs }: { cs: Consultation }) {
         )}
       </div>
       {etat && <EtatConsultation cs={cs} />}
+      {analyse && ppt && <AnalysePourSyndic cs={cs} />}
       {qa && <QuestionsPanel cs={cs} />}
       {open && (
         <div className="cs-cand-list">
@@ -391,7 +420,11 @@ function Card({ cs }: { cs: Consultation }) {
                 cand.tarif_etancheite_avant != null ||
                 cand.tarif_etancheite_apres != null ||
                 cand.tarif_conception != null ||
-                cand.tarif_realisation != null) && (
+                cand.tarif_realisation != null ||
+                cand.tarif_pppt != null ||
+                cand.tarif_dpe != null ||
+                cand.delai_pppt_semaines != null ||
+                cand.delai_dpe_semaines != null) && (
                 <div style={{ flexBasis: "100%", fontSize: 12.5, color: "var(--fg2)", paddingLeft: 34 }}>
                   {[
                     cand.tarif_diag_avp != null ? `DIAG-AVP ${fmtEuro(cand.tarif_diag_avp)}` : null,
@@ -409,6 +442,13 @@ function Card({ cs }: { cs: Consultation }) {
                     cand.tarif_etancheite_apres != null ? `Étanchéité après travaux ${fmtEuro(cand.tarif_etancheite_apres)}` : null,
                     cand.tarif_conception != null ? `Phase conception ${fmtEuro(cand.tarif_conception)}` : null,
                     cand.tarif_realisation != null ? `Phase réalisation ${fmtEuro(cand.tarif_realisation)}` : null,
+                    // PPPT + DPE collectif (0110) : prix et délai de chaque prestation
+                    cand.tarif_pppt != null || cand.delai_pppt_semaines != null
+                      ? `PPPT ${cand.tarif_pppt != null ? fmtEuro(cand.tarif_pppt) : "non chiffré"}${cand.delai_pppt_semaines != null ? ` en ${cand.delai_pppt_semaines} sem.` : ""}`
+                      : null,
+                    cand.tarif_dpe != null || cand.delai_dpe_semaines != null
+                      ? `DPE collectif ${cand.tarif_dpe != null ? fmtEuro(cand.tarif_dpe) : "non chiffré"}${cand.delai_dpe_semaines != null ? ` en ${cand.delai_dpe_semaines} sem.` : ""}`
+                      : null,
                     ...Object.entries((cand.tarif_options as Record<string, number> | null) ?? {}).map(
                       ([k, v]) => `${optionLabel(k)} ${fmtEuro(v)}`
                     ),

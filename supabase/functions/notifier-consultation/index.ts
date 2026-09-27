@@ -1,5 +1,7 @@
 // Edge function « notifier-consultation » - appelée par l'AMO juste après la
-// publication d'une consultation. Cherche dans la base les prestataires
+// publication d'une consultation, ou par le syndic auteur d'une demande de
+// consultation PPPT + DPE collectif publiée depuis son suivi des PPT (0109 :
+// seulement pour la consultation de sa propre demande). Cherche dans la base les prestataires
 // référencés ACTIFS dont les métiers (types) couvrent la prestation consultée,
 // leur envoie un e-mail d'alerte (adresse principale + adresses en copie,
 // 0106) et journalise chaque envoi dans consultation_notifications.
@@ -53,7 +55,7 @@ Deno.serve(async (req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  // --- L'appelant doit être un AMO actif (le JWT est déjà vérifié par la gateway) ---
+  // --- L'appelant : AMO actif, ou syndic auteur de la demande PPT liée (le JWT est déjà vérifié par la gateway) ---
   const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
   const { data: userData, error: userErr } = await admin.auth.getUser(jwt);
   if (userErr || !userData.user) return json(401, { error: "Session invalide" });
@@ -63,12 +65,23 @@ Deno.serve(async (req: Request) => {
     .select("role, active")
     .eq("user_id", userData.user.id)
     .maybeSingle();
-  if (!profile || !profile.active || profile.role !== "amo") {
-    return json(403, { error: "Réservé à l'équipe AMO" });
-  }
+  if (!profile || !profile.active) return json(403, { error: "Profil inactif" });
 
   const { consultation_id } = await req.json().catch(() => ({}));
   if (!consultation_id) return json(400, { error: "consultation_id manquant" });
+
+  // Demande PPT à l'origine de la consultation (0109) : autorise son auteur et nomme le syndic dans l'e-mail
+  const { data: demandePpt } = await admin
+    .from("demandes_amo")
+    .select("demandeur_user_id, syndic_name")
+    .eq("consultation_id", consultation_id)
+    .eq("objet", "consultation_pppt_dpe")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (profile.role !== "amo" && demandePpt?.demandeur_user_id !== userData.user.id) {
+    return json(403, { error: "Réservé à l'équipe AMO" });
+  }
 
   const { data: cs, error: csErr } = await admin
     .from("consultations")
@@ -130,7 +143,7 @@ Deno.serve(async (req: Request) => {
       const html = `
         <div style="font-family:Arial,Helvetica,sans-serif;font-size:14.5px;line-height:1.55;color:#1a1a1a;max-width:620px">
           <p>Bonjour${p.contact_nom ? " " + p.contact_nom : ""},</p>
-          <p><strong>Strat Eco</strong>, assistant à maîtrise d'ouvrage, lance une consultation
+          <p><strong>Strat Eco</strong>, assistant à maîtrise d'ouvrage, lance une consultation${demandePpt?.syndic_name ? ` pour le compte du syndic <strong>${demandePpt.syndic_name}</strong>` : ""}
           pour laquelle votre entreprise est référencée :</p>
           <table style="border-collapse:collapse;margin:14px 0;font-size:14.5px">
             ${ligne("Copropriété", `<strong>${coproNom}</strong>${coproLieu ? " - " + coproLieu : ""}`)}

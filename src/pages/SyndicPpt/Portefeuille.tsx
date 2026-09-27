@@ -31,6 +31,7 @@ import { messageErreur } from "@/lib/erreurs";
 import { fmtEuroCourt } from "@/lib/format";
 import { useDemandesConsultationPpt, type DemandeAmo } from "@/api/demandesAmo";
 import { demandeEnCours } from "@/lib/ppt/consultationPppt";
+import { libelleDemandeConsultation } from "@/lib/ppt/analyseOffres";
 import {
   ETATS_PPT,
   ETAT_PPT_LABEL,
@@ -76,7 +77,7 @@ type DemandeDe = (id: string) => DemandeAmo | null;
 function libelleEtat(f: FicheCopro, demandeDe?: DemandeDe): string {
   if (f.etat === "sans_pppt") {
     const d = demandeDe?.(f.copro.id);
-    return d ? `${ETAT_PPT_LABEL.sans_pppt} · consultation ${d.statut === "traitee" ? "prise en charge" : "demandée"}` : ETAT_PPT_LABEL.sans_pppt;
+    return d ? `${ETAT_PPT_LABEL.sans_pppt} · ${libelleDemandeConsultation(d).court.toLowerCase()}` : ETAT_PPT_LABEL.sans_pppt;
   }
   if (f.etat === "reno") {
     const ph = PHASES.find((p) => p.id === f.copro.reno_phase)?.label;
@@ -330,7 +331,7 @@ function VueKanban({ fiches, acces, multiGest, onOuvrir, demandeDe }: { fiches: 
                         {demande ? (
                           <>
                             <span className="dot" style={{ width: 7, height: 7, borderRadius: 999, flex: "none", background: demande.statut === "traitee" ? "var(--color-success-700)" : "var(--color-primary-500)" }}></span>
-                            {demande.statut === "traitee" ? "Consultation prise en charge" : "Consultation demandée"}
+                            {libelleDemandeConsultation(demande).court}
                           </>
                         ) : (
                           <>
@@ -821,9 +822,8 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
           copro={consultation}
           demande={demandeDe(consultation.id)}
           apercuAmo={pf.apercuAmo}
-          organisationId={consultation.organisation_id}
-          syndicName={pf.nomEnseigne ?? null}
           onOuvrirFiche={() => navigate(`/syndic/ppt/copros/${consultation.id}`)}
+          onVoirConsultation={() => navigate(`/syndic/ppt/copros/${consultation.id}/consultation`)}
           onClose={() => setConsultation(null)}
         />
       )}
