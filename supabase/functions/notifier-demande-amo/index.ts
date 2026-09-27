@@ -5,6 +5,9 @@
 // (profiles.recoit_demandes_amo, migration 0100 : Louis, Cyrielle, Ryan et
 // Amir) ; si personne n'est désigné, l'alerte revient au dirigeant plutôt que
 // de partir à toute l'équipe.
+// Depuis le 27/09/2026 (feedback Amir, migration 0107), la même alerte part
+// pour une demande de consultation PPPT + DPE collectif déposée depuis la
+// colonne « Sans PPPT » du suivi des PPT (objet consultation_pppt_dpe).
 // Envoi réel via Resend si RESEND_API_KEY est configuré, sinon 'simule'.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -95,13 +98,18 @@ Deno.serve(async (req: Request) => {
       : null,
   ].filter(Boolean).join("<br/>");
 
+  const consultation = demande.objet === "consultation_pppt_dpe";
   const contenu = (nom: string) => ({
-    sujet: `Demande d'AMO - ${demande.copro_nom}`,
+    sujet: consultation
+      ? `Consultation PPPT + DPE collectif - ${demande.copro_nom}`
+      : `Demande d'AMO - ${demande.copro_nom}`,
     html: `
       <div style="font-family:Arial,Helvetica,sans-serif;font-size:14.5px;line-height:1.55;color:#1a1a1a;max-width:620px">
         <p>Bonjour${nom ? " " + nom : ""},</p>
         <p><strong>${demande.demandeur_nom || "Un gestionnaire"}</strong>${demande.syndic_name ? ` (${demande.syndic_name})` : ""}
-        souhaite l'accompagnement de Strat Eco sur la copropriété <strong>${demande.copro_nom}</strong>.</p>
+        ${consultation
+          ? `souhaite une consultation pour la réalisation du PPPT et du DPE collectif de la copropriété <strong>${demande.copro_nom}</strong> (copropriété sans PPPT de son suivi des PPT).`
+          : `souhaite l'accompagnement de Strat Eco sur la copropriété <strong>${demande.copro_nom}</strong>.`}</p>
         ${details ? `<p>${details}</p>` : ""}
         ${BOUTON(`${appUrl}/demandes`, "Voir la demande")}
         <p>Bien cordialement,<br/><strong>Strat Eco pro</strong></p>

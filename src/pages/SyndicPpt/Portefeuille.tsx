@@ -16,6 +16,10 @@
 // Export « PDF » (feedback syndic 24/09/2026 : « exporter le portefeuille
 // complet en pdf ») : tout le tableau de bord sur le périmètre affiché,
 // échéancier à 10 ans compris (genererPortefeuillePptPdf).
+// Colonne « Sans PPPT » en amont de l'analyse (feedback Amir 27/09/2026) : un
+// clic sur une de ces copropriétés, dans les trois vues, ouvre la fenêtre
+// « Voulez-vous une consultation pour la réalisation du PPPT et du DPE
+// collectif ? » (ConsultationPppt) au lieu de la fiche.
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
@@ -25,6 +29,8 @@ import { PHASES, type DpeClass } from "@/lib/referentiels";
 import { telechargerCsv } from "@/lib/csv";
 import { messageErreur } from "@/lib/erreurs";
 import { fmtEuroCourt } from "@/lib/format";
+import { useDemandesConsultationPpt, type DemandeAmo } from "@/api/demandesAmo";
+import { demandeEnCours } from "@/lib/ppt/consultationPppt";
 import {
   ETATS_PPT,
   ETAT_PPT_LABEL,
@@ -49,6 +55,7 @@ import {
 import { articleSuggere } from "@/lib/ppt/referentiels";
 import { agLite, anneeCourante, coproLite, fmtDateCourte, fmtEur, posteLite, rapportLite, type PrioriteCode } from "./commun";
 import { PanneauCarteHonoraires, PanneauCumulHonoraires, PanneauPipelineHonoraires, PanneauProbable, type TauxPassageInfo } from "./GraphiquesHonoraires";
+import { ConsultationPppt } from "./ConsultationPppt";
 import type { PortefeuillePpt } from "./index";
 
 type Vue = "mosaique" | "kanban" | "tableau";
@@ -62,8 +69,15 @@ function coproEtat(c: PptCoproAvecStats): CoproEtatInput {
   return { ...coproLite(c), commune: c.commune, plus_de_15_ans: c.plus_de_15_ans, pppt_presente: c.pppt_presente, reno_phase: c.stats?.reno_phase ?? null };
 }
 
-/** Libellé d'état, précisé par la phase du dossier de rénovation quand il y en a une. */
-function libelleEtat(f: FicheCopro): string {
+/** Demande de consultation PPPT + DPE collectif en cours pour une copropriété (0107). */
+type DemandeDe = (id: string) => DemandeAmo | null;
+
+/** Libellé d'état, précisé par la phase du dossier de rénovation, ou par la consultation demandée pour une copropriété sans PPPT. */
+function libelleEtat(f: FicheCopro, demandeDe?: DemandeDe): string {
+  if (f.etat === "sans_pppt") {
+    const d = demandeDe?.(f.copro.id);
+    return d ? `${ETAT_PPT_LABEL.sans_pppt} · consultation ${d.statut === "traitee" ? "prise en charge" : "demandée"}` : ETAT_PPT_LABEL.sans_pppt;
+  }
   if (f.etat === "reno") {
     const ph = PHASES.find((p) => p.id === f.copro.reno_phase)?.label;
     return ph ? `En rénovation · ${ph}` : ETAT_PPT_LABEL.reno;
@@ -166,7 +180,7 @@ function PanneauAPreparer({ pf, copros }: { pf: PortefeuillePpt; copros: PptCopr
 
 // ========== Vue mosaïque (une carte par gestionnaire, une tuile par copropriété) ==========
 
-function TuileCopro({ f, onOuvrir }: { f: FicheCopro; onOuvrir?: () => void }) {
+function TuileCopro({ f, onOuvrir, demandeDe }: { f: FicheCopro; onOuvrir?: () => void; demandeDe: DemandeDe }) {
   const c = f.copro;
   const sub = [c.nb_logements ? `${c.nb_logements} lgts` : null, c.etiquette_energie ? `DPE ${c.etiquette_energie}` : null, c.commune || null].filter(Boolean).join(" · ");
   return (
@@ -174,14 +188,14 @@ function TuileCopro({ f, onOuvrir }: { f: FicheCopro; onOuvrir?: () => void }) {
       type="button"
       className={"ppt-carte" + (onOuvrir ? "" : " verrou")}
       data-etat={f.etat}
-      title={`${c.nom} · ${libelleEtat(f)}${f.prochaineAnnee != null ? ` · à voter en ${f.prochaineAnnee} : ${fmtEuroCourt(f.montantProchaineAnnee)}` : ""}${f.montantTtc ? ` · travaux à venir : ${fmtEuroCourt(f.montantTtc)}` : ""}${f.nbAlertes ? ` · ${f.nbAlertes} alerte${f.nbAlertes > 1 ? "s" : ""}` : ""}${onOuvrir ? "" : " · accès réservé à la direction et au gestionnaire en charge"}`}
+      title={`${c.nom} · ${libelleEtat(f, demandeDe)}${f.prochaineAnnee != null ? ` · à voter en ${f.prochaineAnnee} : ${fmtEuroCourt(f.montantProchaineAnnee)}` : ""}${f.montantTtc ? ` · travaux à venir : ${fmtEuroCourt(f.montantTtc)}` : ""}${f.nbAlertes ? ` · ${f.nbAlertes} alerte${f.nbAlertes > 1 ? "s" : ""}` : ""}${onOuvrir ? (f.etat === "sans_pppt" && !demandeDe(c.id) ? " · cliquez pour demander une consultation PPPT + DPE collectif" : "") : " · accès réservé à la direction et au gestionnaire en charge"}`}
       onClick={onOuvrir}
     >
       <span className="pc-nom">{c.nom}</span>
       {sub && <span className="pc-sub">{sub}</span>}
       <span className="pc-foot">
         <span className="dot"></span>
-        <span className="pc-etat">{libelleEtat(f)}</span>
+        <span className="pc-etat">{libelleEtat(f, demandeDe)}</span>
         {f.prochaineAnnee != null ? <span className="pc-annee">{f.prochaineAnnee}</span> : f.montantTtc ? <span className="pc-annee">{fmtEuroCourt(f.montantTtc)}</span> : null}
       </span>
       {f.nbAlertes > 0 && <span className={"pc-alerte" + (f.alerteHaute ? " haute" : "")}></span>}
@@ -189,8 +203,7 @@ function TuileCopro({ f, onOuvrir }: { f: FicheCopro; onOuvrir?: () => void }) {
   );
 }
 
-function VueMosaique({ fiches, acces, direction }: { fiches: FicheCopro[]; acces: (id: string) => boolean; direction: boolean }) {
-  const navigate = useNavigate();
+function VueMosaique({ fiches, acces, direction, onOuvrir, demandeDe }: { fiches: FicheCopro[]; acces: (id: string) => boolean; direction: boolean; onOuvrir: (f: FicheCopro) => void; demandeDe: DemandeDe }) {
   const groupes = useMemo(() => groupesGestionnaires(fiches), [fiches]);
   if (groupes.length === 0) {
     return (
@@ -230,7 +243,7 @@ function VueMosaique({ fiches, acces, direction }: { fiches: FicheCopro[]; acces
             </div>
             <div className="ppt-mosaique">
               {g.fiches.map((f) => (
-                <TuileCopro key={f.copro.id} f={f} onOuvrir={acces(f.copro.id) ? () => navigate(`/syndic/ppt/copros/${f.copro.id}`) : undefined} />
+                <TuileCopro key={f.copro.id} f={f} demandeDe={demandeDe} onOuvrir={acces(f.copro.id) ? () => onOuvrir(f) : undefined} />
               ))}
             </div>
           </section>
@@ -242,8 +255,7 @@ function VueMosaique({ fiches, acces, direction }: { fiches: FicheCopro[]; acces
 
 // ========== Vue kanban (une colonne par état de suivi) ==========
 
-function VueKanban({ fiches, acces, multiGest }: { fiches: FicheCopro[]; acces: (id: string) => boolean; multiGest: boolean }) {
-  const navigate = useNavigate();
+function VueKanban({ fiches, acces, multiGest, onOuvrir, demandeDe }: { fiches: FicheCopro[]; acces: (id: string) => boolean; multiGest: boolean; onOuvrir: (f: FicheCopro) => void; demandeDe: DemandeDe }) {
   const colonnes = ETATS_PPT.filter((e) => e !== "inconnu" || fiches.some((f) => f.etat === "inconnu"));
   return (
     <div className="kanban fluide ppt">
@@ -260,13 +272,20 @@ function VueKanban({ fiches, acces, multiGest }: { fiches: FicheCopro[]; acces: 
               {list.map((f) => {
                 const c = f.copro;
                 const ouvrable = acces(c.id);
+                const demande = etat === "sans_pppt" ? demandeDe(c.id) : null;
                 return (
                   <article
                     key={c.id}
                     className="panel"
                     style={{ padding: "12px 14px", marginBottom: 10, cursor: ouvrable ? "pointer" : "default", opacity: ouvrable ? 1 : 0.55 }}
-                    title={ouvrable ? `Ouvrir ${c.nom}` : `${c.nom} - accès réservé à la direction et au gestionnaire en charge`}
-                    onClick={ouvrable ? () => navigate(`/syndic/ppt/copros/${c.id}`) : undefined}
+                    title={
+                      !ouvrable
+                        ? `${c.nom} - accès réservé à la direction et au gestionnaire en charge`
+                        : etat === "sans_pppt" && !demande
+                          ? `${c.nom} - demander une consultation pour la réalisation du PPPT et du DPE collectif`
+                          : `Ouvrir ${c.nom}`
+                    }
+                    onClick={ouvrable ? () => onOuvrir(f) : undefined}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                       <span style={{ fontWeight: 700, fontSize: 14, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nom}</span>
@@ -302,6 +321,25 @@ function VueKanban({ fiches, acces, multiGest }: { fiches: FicheCopro[]; acces: 
                         )
                       )}
                     </div>
+                    {/* colonne « Sans PPPT » : où en est la consultation, ou l'invitation à la demander */}
+                    {etat === "sans_pppt" && (demande || ouvrable) && (
+                      <div
+                        style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)", fontSize: 12.5, display: "flex", alignItems: "center", gap: 6, color: demande ? "var(--fg2)" : "var(--color-primary-700)", fontWeight: 600 }}
+                        title={demande ? `Consultation PPPT + DPE collectif demandée le ${fmtDateCourte(demande.created_at)}${demande.demandeur_nom ? ` par ${demande.demandeur_nom}` : ""}` : "Consultation pour la réalisation du PPPT et du DPE collectif"}
+                      >
+                        {demande ? (
+                          <>
+                            <span className="dot" style={{ width: 7, height: 7, borderRadius: 999, flex: "none", background: demande.statut === "traitee" ? "var(--color-success-700)" : "var(--color-primary-500)" }}></span>
+                            {demande.statut === "traitee" ? "Consultation prise en charge" : "Consultation demandée"}
+                          </>
+                        ) : (
+                          <>
+                            <Icon name="send" size={12} />
+                            Demander une consultation
+                          </>
+                        )}
+                      </div>
+                    )}
                   </article>
                 );
               })}
@@ -318,7 +356,7 @@ function VueKanban({ fiches, acces, multiGest }: { fiches: FicheCopro[]; acces: 
 
 type ColTri = "nom" | "gestionnaire" | "etat" | "logements" | "montant" | "honoraires" | "jalon" | "alertes";
 
-function VueTableau({ pf, fiches, acces, multiGest }: { pf: PortefeuillePpt; fiches: FicheCopro[]; acces: (id: string) => boolean; multiGest: boolean }) {
+function VueTableau({ pf, fiches, acces, multiGest, onOuvrir, demandeDe }: { pf: PortefeuillePpt; fiches: FicheCopro[]; acces: (id: string) => boolean; multiGest: boolean; onOuvrir: (f: FicheCopro) => void; demandeDe: DemandeDe }) {
   const navigate = useNavigate();
   const annee = anneeCourante();
   const [tri, setTri] = useState<{ col: ColTri; desc: boolean }>({ col: "nom", desc: false });
@@ -464,7 +502,7 @@ function VueTableau({ pf, fiches, acces, multiGest }: { pf: PortefeuillePpt; fic
                   const c = f.copro;
                   const ouvrable = acces(c.id);
                   return (
-                    <tr key={c.id} onClick={ouvrable ? () => navigate(`/syndic/ppt/copros/${c.id}`) : undefined} style={{ cursor: ouvrable ? "pointer" : "default", opacity: ouvrable ? 1 : 0.55 }}>
+                    <tr key={c.id} onClick={ouvrable ? () => onOuvrir(f) : undefined} style={{ cursor: ouvrable ? "pointer" : "default", opacity: ouvrable ? 1 : 0.55 }}>
                       <td style={{ fontWeight: 600 }}>
                         {c.nom}
                         {c.commune && <span style={{ display: "block", fontSize: 11.5, color: "var(--fg-muted)", fontWeight: 400 }}>{c.commune}</span>}
@@ -473,7 +511,7 @@ function VueTableau({ pf, fiches, acces, multiGest }: { pf: PortefeuillePpt; fic
                       <td>
                         <span className="leg-g" data-etat={f.etat} style={{ whiteSpace: "nowrap" }}>
                           <span className="dot" style={{ background: "var(--etat)" }}></span>
-                          {libelleEtat(f)}
+                          {libelleEtat(f, demandeDe)}
                         </span>
                       </td>
                       <td>{c.etiquette_energie ? <DpeChip cls={c.etiquette_energie as DpeClass} /> : "-"}</td>
@@ -546,6 +584,16 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
   const fiches = useMemo(() => fichesCopros(entrees, postes, rapports, listeAlertes, pf.params, annee), [entrees, postes, rapports, listeAlertes, pf.params, annee]);
   const acces = (id: string) => copros.find((c) => c.id === id)?.acces ?? false;
 
+  // Copropriétés sans PPPT : le clic propose la consultation PPPT + DPE collectif (0107), les autres ouvrent la fiche.
+  const { data: demandesConsultation } = useDemandesConsultationPpt();
+  const demandeDe: DemandeDe = (id) => demandeEnCours(demandesConsultation ?? [], id);
+  const [consultation, setConsultation] = useState<PptCoproAvecStats | null>(null);
+  const ouvrir = (f: FicheCopro) => {
+    const c = copros.find((x) => x.id === f.copro.id);
+    if (f.etat === "sans_pppt" && c) setConsultation(c);
+    else navigate(`/syndic/ppt/copros/${f.copro.id}`);
+  };
+
   const q = normaliser(recherche.trim());
   const filtrees = useMemo(
     () =>
@@ -615,7 +663,7 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
           commune: f.copro.commune,
           gestionnaire: f.copro.gestionnaire_nom,
           etat: f.etat,
-          etatLibelle: libelleEtat(f),
+          etatLibelle: libelleEtat(f, demandeDe),
           dpe: f.copro.etiquette_energie,
           logements: f.copro.nb_logements,
           postes: f.nbPostes,
@@ -664,7 +712,7 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
           f.copro.nom,
           f.copro.commune ?? "",
           f.copro.gestionnaire_nom ?? "",
-          libelleEtat(f),
+          libelleEtat(f, demandeDe),
           f.copro.etiquette_energie ?? "",
           f.copro.nb_logements ?? "",
           f.nbPostes,
@@ -700,7 +748,7 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
           <button className={vue === "mosaique" ? "on" : ""} onClick={() => setVue("mosaique")} title="Une carte par gestionnaire, une tuile par copropriété">
             <Icon name="grid" size={14} /> Mosaïque
           </button>
-          <button className={vue === "kanban" ? "on" : ""} onClick={() => setVue("kanban")} title="Une colonne par état : à qualifier, en analyse, à présenter, présenté, voté, en rénovation">
+          <button className={vue === "kanban" ? "on" : ""} onClick={() => setVue("kanban")} title="Une colonne par état : à qualifier, sans PPPT, en analyse, à présenter, présenté, voté, en rénovation">
             <Icon name="columns" size={14} /> Kanban
           </button>
           <button className={vue === "tableau" ? "on" : ""} onClick={() => setVue("tableau")} title="Vue de pilotage : tri, comparatif, export">
@@ -761,11 +809,23 @@ export function PortefeuillePptVue({ pf }: { pf: PortefeuillePpt }) {
       </div>
 
       {vue === "tableau" ? (
-        <VueTableau pf={pf} fiches={filtrees} acces={acces} multiGest={multiGest} />
+        <VueTableau pf={pf} fiches={filtrees} acces={acces} multiGest={multiGest} onOuvrir={ouvrir} demandeDe={demandeDe} />
       ) : vue === "kanban" ? (
-        <VueKanban fiches={filtrees} acces={acces} multiGest={multiGest} />
+        <VueKanban fiches={filtrees} acces={acces} multiGest={multiGest} onOuvrir={ouvrir} demandeDe={demandeDe} />
       ) : (
-        <VueMosaique fiches={filtrees} acces={acces} direction={pf.direction} />
+        <VueMosaique fiches={filtrees} acces={acces} direction={pf.direction} onOuvrir={ouvrir} demandeDe={demandeDe} />
+      )}
+
+      {consultation && (
+        <ConsultationPppt
+          copro={consultation}
+          demande={demandeDe(consultation.id)}
+          apercuAmo={pf.apercuAmo}
+          organisationId={consultation.organisation_id}
+          syndicName={pf.nomEnseigne ?? null}
+          onOuvrirFiche={() => navigate(`/syndic/ppt/copros/${consultation.id}`)}
+          onClose={() => setConsultation(null)}
+        />
       )}
 
       {/* Honoraires de suivi projetés : une lecture différente par vue (feedback Amir 26/09 ;

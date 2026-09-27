@@ -108,7 +108,8 @@ export function DemandeAmo({ syndicNom }: { syndicNom?: string }) {
     }
   };
 
-  const mesDemandes = demandes ?? [];
+  // les demandes de consultation PPPT + DPE collectif (0107) se suivent depuis le tableau de bord PPT
+  const mesDemandes = (demandes ?? []).filter((d) => d.objet === "amo");
 
   return (
     <div className="page fade" style={{ padding: 0 }}>

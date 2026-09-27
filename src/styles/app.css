@@ -1627,6 +1627,7 @@ table.dossiers tfoot tr.recap-total td.num { text-align: right; }
    --etat (data-etat sur l'élément) pour la légende, la jauge, les tuiles et
    le kanban. */
 [data-etat="inconnu"]     { --etat: var(--color-neutral-400); }
+[data-etat="sans_pppt"]   { --etat: var(--color-error-500); } /* aucun PPPT : consultation PPPT + DPE collectif proposée au clic */
 [data-etat="analyse"]     { --etat: var(--color-neutral-600); }
 [data-etat="a_presenter"] { --etat: var(--color-warning-500); }
 [data-etat="presente"]    { --etat: var(--color-primary-400); }

@@ -4,7 +4,11 @@
 // prestataires référencés du métier sont alertés par e-mail ; ils déposent
 // leur offre depuis leur espace (les candidatures hors plateforme restent
 // saisissables à la main).
-import { useRef, useState, type CSSProperties } from "react";
+// Une demande de consultation PPPT + DPE collectif d'un syndic (0107, page
+// « Demandes des syndics ») ouvre ce formulaire pré-rempli ; la publication
+// passe la demande en « prise en charge ».
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
@@ -31,6 +35,8 @@ import {
   type PublishResult,
 } from "@/api/consultations";
 import { CandidatureActions } from "@/components/CandidatureActions";
+import { useDemandesAmo, useStatutDemandeAmo } from "@/api/demandesAmo";
+import type { PreremplissageConsultation } from "@/lib/ppt/consultationPppt";
 
 function joursRestants(iso: string | null): number | null {
   if (!iso) return null;
@@ -451,23 +457,39 @@ export default function Consultations() {
   const { data: copros } = useCopros();
   const publish = usePublishConsultation();
 
-  const [form, setForm] = useState(false);
+  // Demande de consultation d'un syndic (Demandes des syndics → « Préparer la consultation »)
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [depuisDemande] = useState<PreremplissageConsultation | null>(
+    () => (location.state as { consultationDepuisDemande?: PreremplissageConsultation } | null)?.consultationDepuisDemande ?? null
+  );
+  useEffect(() => {
+    // l'état de navigation ne sert qu'une fois : un rechargement ne rouvre pas le brouillon
+    if (depuisDemande) navigate(location.pathname, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const { data: demandes } = useDemandesAmo();
+  const statutDemande = useStatutDemandeAmo();
+  const demandeSource = depuisDemande ? (demandes ?? []).find((d) => d.id === depuisDemande.demandeId) : undefined;
+
+  const [form, setForm] = useState(!!depuisDemande);
   const [notice, setNotice] = useState<string | null>(null);
   const [draft, setDraft] = useState({
-    type: "moe" as Consultation["type"],
+    type: (CONSULT_TYPES.find((t) => t.id === depuisDemande?.type)?.id ?? "moe") as Consultation["type"],
     sous_type: "",
-    cible: "existante" as "existante" | "externe",
+    cible: (depuisDemande ? "externe" : "existante") as "existante" | "externe",
     copro_id: "",
-    ext_nom: "",
-    ext_adresse: "",
-    ext_ville: "",
-    ext_lots: "",
-    ext_batiments: "",
-    mission: "",
+    ext_nom: depuisDemande?.ext_nom ?? "",
+    ext_adresse: depuisDemande?.ext_adresse ?? "",
+    ext_ville: depuisDemande?.ext_ville ?? "",
+    ext_lots: depuisDemande?.ext_lots ?? "",
+    ext_batiments: depuisDemande?.ext_batiments ?? "",
+    mission: depuisDemande?.mission ?? "",
     date_limite: "",
     budget: "",
     options: [] as string[],
   });
+  const [demandeLiee, setDemandeLiee] = useState<string | null>(depuisDemande?.demandeId ?? null);
   const [files, setFiles] = useState<File[]>([]);
   // Fichiers en attente de renommage assisté avant d'être joints
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
@@ -555,6 +577,20 @@ export default function Consultations() {
     if (res.docErrors.length > 0) {
       setNotice((prev) => (prev ? prev + " " : "") + `Attention : pièce(s) non jointe(s) - ${res.docErrors.join(", ")}.`);
     }
+    if (demandeLiee) {
+      // la demande du syndic est prise en charge ; la suite déjà écrite par l'équipe n'est pas écrasée
+      try {
+        await statutDemande.mutateAsync({
+          id: demandeLiee,
+          statut: "traitee",
+          commentaire: demandeSource?.commentaire_amo ? undefined : `Consultation publiée le ${new Date().toLocaleDateString("fr-FR")}.`,
+        });
+        setNotice((prev) => (prev ? prev + " " : "") + "La demande du syndic passe en « prise en charge ».");
+      } catch {
+        setNotice((prev) => (prev ? prev + " " : "") + "La demande du syndic n'a pas pu passer en « prise en charge » : faites-le depuis Demandes des syndics.");
+      }
+      setDemandeLiee(null);
+    }
     setDraft({ type: "moe", sous_type: "", cible: "existante", copro_id: "", ext_nom: "", ext_adresse: "", ext_ville: "", ext_lots: "", ext_batiments: "", mission: "", date_limite: "", budget: "", options: [] });
     setFiles([]);
     setForm(false);
@@ -607,12 +643,22 @@ export default function Consultations() {
               onClick={() => {
                 setForm(false);
                 setFormError(null);
+                setDemandeLiee(null);
               }}
             >
               Annuler
             </button>
           </div>
           <div className="p-body">
+            {demandeLiee && (
+              <p className="se-small" style={{ margin: "0 0 14px", padding: "8px 12px", borderRadius: "var(--radius-md)", background: "var(--bg)", color: "var(--fg2)", display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <Icon name="inbox" size={14} style={{ flex: "none", marginTop: 2 }} />
+                <span>
+                  Pré-remplie depuis la demande de consultation PPPT + DPE collectif
+                  {demandeSource ? ` de ${demandeSource.demandeur_nom || "un gestionnaire"}${demandeSource.syndic_name ? ` (${demandeSource.syndic_name})` : ""}` : ""} : vérifiez le métier et la mission. À la publication, la demande passe en « prise en charge ».
+                </span>
+              </p>
+            )}
             <div className="cs-form-grid">
               <div className="cs-field cs-field-full">
                 <label>Type d'intervenant</label>

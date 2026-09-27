@@ -4,6 +4,10 @@
 // sur la copropriété, le gestionnaire qui la signale et son enseigne. L'équipe
 // ouvre le dossier d'un clic (la fiche est pré-remplie avec ce que le syndic a
 // saisi), marque la demande prise en charge ou la classe sans suite.
+// Depuis le 27/09/2026 (feedback Amir, 0107), la boîte reçoit aussi les
+// demandes de consultation PPPT + DPE collectif parties de la colonne « Sans
+// PPPT » du suivi des PPT : « Préparer la consultation » ouvre « Consulter un
+// intervenant » pré-rempli (copropriété hors plateforme, métier « PPPT + DPE collectif »).
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
@@ -19,6 +23,7 @@ import {
   type DemandeAmo,
 } from "@/api/demandesAmo";
 import { messageErreur } from "@/lib/erreurs";
+import { LIBELLE_CONSULTATION_PPPT, OBJET_CONSULTATION_PPPT, preremplissageConsultation } from "@/lib/ppt/consultationPppt";
 
 const STATUTS: { id: DemandeAmo["statut"]; label: string }[] = [
   { id: "nouvelle", label: "À traiter" },
@@ -49,6 +54,7 @@ function Carte({ d }: { d: DemandeAmo }) {
   const creer = useCreateCopro();
   const [commentaire, setCommentaire] = useState(d.commentaire_amo ?? "");
   const [erreur, setErreur] = useState<string | null>(null);
+  const consultation = d.objet === OBJET_CONSULTATION_PPPT;
 
   const ouvrirDossier = async () => {
     setErreur(null);
@@ -94,14 +100,16 @@ function Carte({ d }: { d: DemandeAmo }) {
   const infos = [
     d.nb_lots ? `${d.nb_lots} lots` : null,
     d.chauffage,
-    d.vmc == null ? "VMC non précisée" : d.vmc ? "avec VMC" : "sans VMC",
+    // sans objet pour une consultation PPPT + DPE collectif (rien n'a été demandé au syndic)
+    consultation ? null : d.vmc == null ? "VMC non précisée" : d.vmc ? "avec VMC" : "sans VMC",
   ].filter(Boolean);
 
   return (
     <div className="panel">
       <div className="p-head" style={{ flexWrap: "wrap", gap: 8 }}>
-        <Icon name="building" size={18} />
+        <Icon name={consultation ? "search" : "building"} size={18} />
         <h3>{d.copro_nom}</h3>
+        {consultation && <Badge kind="blue">{LIBELLE_CONSULTATION_PPPT}</Badge>}
         <BadgeStatut statut={d.statut} />
         <span style={{ flex: 1 }}></span>
         <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Reçue le {fmtDate(d.created_at)}</span>
@@ -130,6 +138,11 @@ function Carte({ d }: { d: DemandeAmo }) {
               </button>
             ))}
           </div>
+        )}
+        {consultation && (
+          <p className="se-small" style={{ margin: 0 }}>
+            Le gestionnaire souhaite une consultation pour la réalisation du PPPT et du DPE collectif (copropriété sans PPPT de son suivi des PPT).
+          </p>
         )}
         <p className="se-small" style={{ margin: 0, color: "var(--fg-muted)" }}>
           Demandée par <b>{d.demandeur_nom || "un gestionnaire"}</b>
@@ -164,7 +177,24 @@ function Carte({ d }: { d: DemandeAmo }) {
         )}
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {d.copro_id ? (
+          {consultation ? (
+            <>
+              <button
+                className="se-btn se-btn-primary btn-sm"
+                title="Ouvre « Consulter un intervenant » pré-rempli : copropriété hors plateforme, métier PPPT + DPE collectif, mission PPPT + DPE collectif"
+                onClick={() => navigate("/consultations", { state: { consultationDepuisDemande: preremplissageConsultation(d) } })}
+              >
+                <Icon name="megaphone" size={15} />
+                Préparer la consultation
+              </button>
+              {d.ppt_copro_id && (
+                <button className="se-btn se-btn-secondary btn-sm" onClick={() => navigate(`/syndic/ppt/copros/${d.ppt_copro_id}`)}>
+                  <Icon name="arrowRight" size={15} />
+                  Fiche du suivi PPT
+                </button>
+              )}
+            </>
+          ) : d.copro_id ? (
             <button className="se-btn se-btn-primary btn-sm" onClick={() => navigate(`/copros/${d.copro_id}`)}>
               <Icon name="arrowRight" size={15} />
               Ouvrir le dossier
@@ -230,7 +260,7 @@ export default function DemandesAmo() {
           <h1 className="page-title">Demandes des syndics</h1>
           <p className="page-sub">
             Copropriétés signalées par les gestionnaires depuis leur espace - nom, adresse, lots, chauffage
-            et VMC
+            et VMC - et consultations PPPT + DPE collectif demandées depuis le suivi des PPT
           </p>
           {equipe && (
             <p className="se-small" style={{ margin: "4px 0 0", color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 6 }}>
@@ -263,7 +293,8 @@ export default function DemandesAmo() {
           <h2>Aucune demande {filtre === "nouvelle" ? "à traiter" : filtre === "traitee" ? "prise en charge" : "classée"}</h2>
           <p>
             Les gestionnaires déposent leurs demandes depuis l'espace syndic, bouton « Demande d'AMO » ou
-            colonne « Futur projet » du portefeuille.
+            colonne « Futur projet » du portefeuille, et les consultations PPPT + DPE collectif depuis la
+            colonne « Sans PPPT » du suivi des PPT.
           </p>
         </div>
       ) : (

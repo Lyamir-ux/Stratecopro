@@ -1139,7 +1139,9 @@ export type Database = {
           fichiers: Json
           id: string
           nb_lots: number | null
+          objet: string
           organisation_id: string | null
+          ppt_copro_id: string | null
           statut: string
           syndic_name: string | null
           traite_le: string | null
@@ -1159,7 +1161,9 @@ export type Database = {
           fichiers?: Json
           id?: string
           nb_lots?: number | null
+          objet?: string
           organisation_id?: string | null
+          ppt_copro_id?: string | null
           statut?: string
           syndic_name?: string | null
           traite_le?: string | null
@@ -1179,7 +1183,9 @@ export type Database = {
           fichiers?: Json
           id?: string
           nb_lots?: number | null
+          objet?: string
           organisation_id?: string | null
+          ppt_copro_id?: string | null
           statut?: string
           syndic_name?: string | null
           traite_le?: string | null
@@ -1199,6 +1205,13 @@ export type Database = {
             columns: ["organisation_id"]
             isOneToOne: false
             referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demandes_amo_ppt_copro_id_fkey"
+            columns: ["ppt_copro_id"]
+            isOneToOne: false
+            referencedRelation: "ppt_coproprietes"
             referencedColumns: ["id"]
           },
           {

@@ -215,7 +215,7 @@ describe("indicateurs des tableaux de bord PPT", () => {
 });
 
 describe("portefeuille PPT : état de suivi, fiches, groupes par gestionnaire", () => {
-  it("état de suivi : postes votés > présentés > déclaré présenté > PPT validé à présenter > en analyse > + 15 ans sans PPPT > à qualifier", () => {
+  it("état de suivi : postes votés > présentés > déclaré présenté > PPT validé à présenter > en analyse > sans PPPT > à qualifier", () => {
     expect(etatCopro(copros[0], postes, rapports)).toBe("vote"); // c1 : un poste voté
     expect(etatCopro(copros[1], postes, rapports)).toBe("presente"); // c2 : un poste reporté
     expect(etatCopro(copros[2], postes, rapports)).toBe("analyse"); // c3 : rapport déposé
@@ -224,9 +224,27 @@ describe("portefeuille PPT : état de suivi, fiches, groupes par gestionnaire", 
     expect(etatCopro({ ...copros[1], id: "c8" }, [poste({ id: "p9", ppt_copro_id: "c8", libelle: "Toiture" })], [{ ...rapports[1], id: "r8", ppt_copro_id: "c8" }])).toBe("a_presenter");
     // portefeuille importé sans document (0077)
     expect(etatCopro({ ...copros[2], id: "c9", pppt_presente: true }, [], [])).toBe("presente");
-    expect(etatCopro({ ...copros[2], id: "c9", plus_de_15_ans: true, pppt_presente: false }, [], [])).toBe("a_presenter");
-    expect(etatCopro({ ...copros[2], id: "c9", plus_de_15_ans: false, pppt_presente: false }, [], [])).toBe("inconnu");
+    expect(etatCopro({ ...copros[2], id: "c9", plus_de_15_ans: true, pppt_presente: false }, [], [])).toBe("sans_pppt");
+    expect(etatCopro({ ...copros[2], id: "c9", plus_de_15_ans: false, pppt_presente: false }, [], [])).toBe("sans_pppt");
     expect(etatCopro({ ...copros[2], id: "c9" }, [], [])).toBe("inconnu");
+  });
+
+  it("sans PPPT (feedback Amir 27/09/2026) : PPPT déclaré non présenté et aucun plan sur la plateforme", () => {
+    const c9 = { ...copros[2], id: "c9", plus_de_15_ans: true, pppt_presente: false };
+    const rapport = (type: string, statut: string) => ({ ...rapports[1], id: `r-${type}-${statut}`, ppt_copro_id: "c9", type, statut });
+    // un document refusé ou en échec ne compte pas, un DPE collectif seul non plus
+    expect(etatCopro(c9, [], [rapport("pppt", "rejete")])).toBe("sans_pppt");
+    expect(etatCopro(c9, [], [rapport("pppt", "echec")])).toBe("sans_pppt");
+    expect(etatCopro(c9, [], [rapport("dpe_collectif", "valide")])).toBe("sans_pppt");
+    // un document à l'analyse l'emporte (colonne suivante)
+    expect(etatCopro(c9, [], [rapport("pppt", "depose")])).toBe("analyse");
+    expect(etatCopro(c9, [], [rapport("dpe_collectif", "en_analyse")])).toBe("analyse");
+    // un plan existe : PPT adopté validé, ou lignes ajoutées par le syndic - plus « sans PPPT »
+    expect(etatCopro(c9, [], [rapport("ppt_adopte", "valide")])).toBe("a_presenter");
+    expect(etatCopro(c9, [poste({ id: "p10", ppt_copro_id: "c9", libelle: "Ravalement" })], [])).toBe("a_presenter");
+    expect(etatCopro({ ...c9, plus_de_15_ans: false }, [poste({ id: "p10", ppt_copro_id: "c9", libelle: "Ravalement" })], [])).toBe("inconnu");
+    // déclaré présenté : jamais « sans PPPT »
+    expect(etatCopro({ ...c9, pppt_presente: true }, [], [])).toBe("presente");
   });
 
   it("fiches : montant TTC à venir, honoraires, prochain jalon, alertes", () => {

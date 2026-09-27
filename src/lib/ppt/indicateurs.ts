@@ -422,10 +422,11 @@ export function totauxPortefeuille(copros: CoproLite[], postes: PosteLite[], rap
  * mosaïque) ; « reno » l'emporte : le dossier est en rénovation globale avec
  * Strat Eco, le PPT passe au second plan.
  */
-export type EtatPpt = "inconnu" | "analyse" | "a_presenter" | "presente" | "vote" | "reno";
-export const ETATS_PPT: EtatPpt[] = ["inconnu", "analyse", "a_presenter", "presente", "vote", "reno"];
+export type EtatPpt = "inconnu" | "sans_pppt" | "analyse" | "a_presenter" | "presente" | "vote" | "reno";
+export const ETATS_PPT: EtatPpt[] = ["inconnu", "sans_pppt", "analyse", "a_presenter", "presente", "vote", "reno"];
 export const ETAT_PPT_LABEL: Record<EtatPpt, string> = {
   inconnu: "À qualifier",
+  sans_pppt: "Sans PPPT",
   analyse: "En analyse",
   a_presenter: "PPPT à présenter",
   presente: "Présenté en AG",
@@ -441,7 +442,10 @@ export interface CoproEtatInput extends CoproLite {
   reno_phase?: string | null;
 }
 
-/** État d'une copropriété : postes votés > présentés > PPPT déclaré présenté > PPT validé à présenter > document en analyse > + 15 ans sans PPPT > à qualifier. */
+/** État d'une copropriété : postes votés > présentés > PPPT déclaré présenté > PPT validé à présenter > document en analyse
+ *  > sans PPPT > à qualifier. « Sans PPPT » (feedback Amir 27/09/2026, colonne en amont de l'analyse) : le syndic a déclaré
+ *  le PPPT non présenté et la plateforme n'en a aucun - ni plan (postes), ni PPPT ou PPT adopté validé ou à l'analyse. Un
+ *  document refusé ou en échec ne compte pas, un DPE collectif seul non plus. PPPT non déclaré (vide) = à qualifier. */
 export function etatCopro(c: CoproEtatInput, postes: PosteLite[], rapports: RapportLite[]): EtatPpt {
   if (c.reno_phase) return "reno";
   const ps = postes.filter((p) => p.ppt_copro_id === c.id && p.actif && p.statut !== "abandonne");
@@ -451,7 +455,11 @@ export function etatCopro(c: CoproEtatInput, postes: PosteLite[], rapports: Rapp
   const rs = rapports.filter((r) => r.ppt_copro_id === c.id);
   if (rs.some((r) => r.type === "pppt" && r.statut === "valide")) return "a_presenter";
   if (rs.some((r) => ["depose", "en_analyse", "a_relire"].includes(r.statut))) return "analyse";
-  if (c.plus_de_15_ans === true && c.pppt_presente === false) return "a_presenter";
+  if (c.pppt_presente === false) {
+    const plan = ps.length > 0 || rs.some((r) => (r.type === "pppt" || r.type === "ppt_adopte") && r.statut === "valide");
+    if (!plan) return "sans_pppt";
+    if (c.plus_de_15_ans === true) return "a_presenter";
+  }
   return "inconnu";
 }
 
@@ -548,7 +556,7 @@ export function groupesGestionnaires(fiches: FicheCopro[]): GroupeGestionnaire[]
       logements: 0,
       montantTtc: 0,
       honoraires: 0,
-      parEtat: { inconnu: 0, analyse: 0, a_presenter: 0, presente: 0, vote: 0, reno: 0 },
+      parEtat: { inconnu: 0, sans_pppt: 0, analyse: 0, a_presenter: 0, presente: 0, vote: 0, reno: 0 },
       fiches: [],
     };
     g.logements += f.copro.nb_logements ?? 0;

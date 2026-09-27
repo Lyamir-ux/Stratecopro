@@ -605,6 +605,7 @@ export async function genererEcheancierPortefeuillePdf(input: EcheancierPortefeu
 
 const COULEUR_ETAT: Record<EtatPpt, RGB> = {
   inconnu: rgb(0.659, 0.678, 0.627), // --color-neutral-400 #A8ADA0
+  sans_pppt: rgb(0.863, 0.149, 0.149), // --color-error-500 #DC2626
   analyse: rgb(0.361, 0.392, 0.439), // --color-neutral-600 #5C6470
   a_presenter: rgb(0.961, 0.62, 0.043), // --color-warning-500 #F59E0B
   presente: rgb(0.31, 0.533, 0.745), // bleu PPT 400 #4F88BE
@@ -612,7 +613,7 @@ const COULEUR_ETAT: Record<EtatPpt, RGB> = {
   reno: rgb(0.478, 0.71, 0.173), // vert Strat Eco #7AB52C (dossier en rénovation globale)
 };
 /** En-têtes courts du comparatif (une colonne par état). */
-const ETAT_COURT: Record<EtatPpt, string> = { inconnu: "À qualifier", analyse: "Analyse", a_presenter: "À présenter", presente: "Présenté", vote: "Voté", reno: "Rénovation" };
+const ETAT_COURT: Record<EtatPpt, string> = { inconnu: "À qualifier", sans_pppt: "Sans PPPT", analyse: "Analyse", a_presenter: "À présenter", presente: "Présenté", vote: "Voté", reno: "Rénovation" };
 const COULEUR_NIVEAU: Record<"haute" | "moyenne" | "basse", RGB> = { haute: ROUGE, moyenne: rgb(0.961, 0.62, 0.043), basse: GRIS };
 const NIVEAU_LABEL: Record<"haute" | "moyenne" | "basse", string> = { haute: "Haute", moyenne: "Moyenne", basse: "Basse" };
 const NON_ATTRIBUE = "Non attribué";
@@ -709,7 +710,7 @@ export function regrouperGestionnairesPpt(lignes: LignePortefeuillePptPdf[]): Gr
   const groupes = new Map<string, GroupeGestionnairePptPdf>();
   for (const l of lignes) {
     const nom = l.gestionnaire?.trim() || NON_ATTRIBUE;
-    const g = groupes.get(nom) ?? { nom, copros: 0, logements: 0, montantTtc: 0, honoraires: 0, parEtat: { inconnu: 0, analyse: 0, a_presenter: 0, presente: 0, vote: 0, reno: 0 }, alertes: 0 };
+    const g = groupes.get(nom) ?? { nom, copros: 0, logements: 0, montantTtc: 0, honoraires: 0, parEtat: { inconnu: 0, sans_pppt: 0, analyse: 0, a_presenter: 0, presente: 0, vote: 0, reno: 0 }, alertes: 0 };
     g.copros += 1;
     g.logements += l.logements ?? 0;
     g.montantTtc += l.montantTtc;
@@ -922,7 +923,7 @@ export async function genererPortefeuillePptPdf(input: PortefeuillePptPdfInput):
       { titre: "Gestionnaire", w: 150 },
       { titre: "Copros", w: 44, align: "right" },
       { titre: "Logements", w: 58, align: "right" },
-      ...ETATS_PPT.map((e) => ({ titre: ETAT_COURT[e], w: 54, align: "right" as const })),
+      ...ETATS_PPT.map((e) => ({ titre: ETAT_COURT[e], w: 50, align: "right" as const })),
       { titre: "Travaux TTC", w: 78, align: "right" },
       { titre: "Honoraires", w: 0, align: "right" },
     ]);
