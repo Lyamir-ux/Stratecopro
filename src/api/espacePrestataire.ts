@@ -296,7 +296,7 @@ export function useMajMonPrestataire() {
         Pick<
           Tables<"prestataires">,
           | "email"
-          | "email_secondaire"
+          | "emails_secondaires"
           | "telephone"
           | "adresse"
           | "ville"

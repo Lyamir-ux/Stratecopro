@@ -51,7 +51,7 @@ Deno.serve(async (req: Request) => {
   const horizon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
   const { data: docs, error: docsErr } = await admin
     .from("prestataire_docs")
-    .select("id, name, expire_le, prestataires(id, raison_sociale, contact_nom, email, email_secondaire, actif)")
+    .select("id, name, expire_le, prestataires(id, raison_sociale, contact_nom, email, emails_secondaires, actif)")
     .not("expire_le", "is", null)
     .lte("expire_le", horizon)
     .is("rappel_envoye_at", null);
@@ -62,7 +62,7 @@ Deno.serve(async (req: Request) => {
     raison_sociale: string;
     contact_nom: string | null;
     email: string;
-    email_secondaire: string | null;
+    emails_secondaires: string[] | null;
     actif: boolean;
   };
   const parPresta = new Map<string, { presta: Presta; docs: { id: string; name: string; expire_le: string }[] }>();
@@ -111,7 +111,8 @@ Deno.serve(async (req: Request) => {
         <p>Bien cordialement,<br/><strong>L'équipe Strat Eco</strong></p>
       </div>`;
     try {
-      const to = [presta.email, ...(presta.email_secondaire ? [presta.email_secondaire] : [])];
+      // adresse principale + adresses en copie (0106)
+      const to = [presta.email, ...(presta.emails_secondaires ?? [])];
       const r = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },

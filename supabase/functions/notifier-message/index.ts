@@ -3,7 +3,8 @@
 // Envoie une simple alerte « vous avez un message en attente » SANS le contenu
 // du message (exigence : le message se lit dans l'espace prestataire).
 // Destinataires : l'entreprise visée si le message est privé, sinon toutes les
-// entreprises retenues sur une consultation de la copro.
+// entreprises retenues sur une consultation de la copro ; chaque entreprise à
+// son adresse principale et à ses adresses en copie (0106).
 // Envoi réel via Resend si RESEND_API_KEY est configuré, sinon 'simule'.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -52,26 +53,41 @@ Deno.serve(async (req: Request) => {
     .maybeSingle();
 
   // --- Destinataires : entreprise visée, ou toutes les retenues du projet ---
-  let cibles: { id: string; raison_sociale: string; contact_nom: string | null; email: string }[] = [];
+  let cibles: {
+    id: string;
+    raison_sociale: string;
+    contact_nom: string | null;
+    email: string;
+    emails_secondaires: string[] | null;
+  }[] = [];
   if (prestataire_id) {
     const { data } = await admin
       .from("prestataires")
-      .select("id, raison_sociale, contact_nom, email")
+      .select("id, raison_sociale, contact_nom, email, emails_secondaires")
       .eq("id", prestataire_id)
-      .eq("actif", true);
+      .eq("actif", true)
+      .not("email", "is", null);
     cibles = data ?? [];
   } else {
     const { data } = await admin
       .from("candidatures")
-      .select("prestataires(id, raison_sociale, contact_nom, email, actif), consultations!inner(copro_id)")
+      .select("prestataires(id, raison_sociale, contact_nom, email, emails_secondaires, actif), consultations!inner(copro_id)")
       .eq("statut", "retenue")
       .eq("consultations.copro_id", copro_id);
     const vus = new Set<string>();
     for (const row of data ?? []) {
       const p = row.prestataires as unknown as
-        | { id: string; raison_sociale: string; contact_nom: string | null; email: string; actif: boolean }
+        | {
+            id: string;
+            raison_sociale: string;
+            contact_nom: string | null;
+            email: string;
+            emails_secondaires: string[] | null;
+            actif: boolean;
+          }
         | null;
-      if (p && p.actif && !vus.has(p.id)) {
+      // fiche sans e-mail (facultatif depuis 0105) : rien à envoyer
+      if (p && p.actif && p.email && !vus.has(p.id)) {
         vus.add(p.id);
         cibles.push(p);
       }
@@ -111,7 +127,7 @@ Deno.serve(async (req: Request) => {
         headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           from,
-          to: [p.email],
+          to: [p.email, ...(p.emails_secondaires ?? [])],
           subject: `Nouveau message Strat Eco - ${copro?.name ?? "votre projet"}`,
           html,
         }),

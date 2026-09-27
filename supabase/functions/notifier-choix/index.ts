@@ -8,6 +8,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const TYPE_LABELS: Record<string, string> = {
   moe: "Maîtrise d'œuvre",
+  be: "Bureau d'études",
+  pppt_dpe: "PPPT + DPE collectif",
   diag: "Diagnostiqueur",
   ct: "Contrôleur technique",
   sps: "Coordonnateur SPS",
@@ -54,7 +56,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: cand, error: candErr } = await admin
     .from("candidatures")
-    .select("*, consultations(*, coproprietes(name, adresse, city)), prestataires(raison_sociale, contact_nom, email)")
+    .select("*, consultations(*, coproprietes(name, adresse, city)), prestataires(raison_sociale, contact_nom, email, emails_secondaires)")
     .eq("id", candidature_id)
     .maybeSingle();
   if (candErr || !cand) return json(404, { error: "Candidature introuvable" });
@@ -83,6 +85,8 @@ Deno.serve(async (req: Request) => {
   const typeLabel = TYPE_LABELS[cs?.type ?? ""] ?? cs?.type ?? "";
   const lienEspace = `${appUrl}/prestataire/candidatures`;
   const estMoe = cs?.type === "moe";
+  // adresse principale + adresses en copie (0106)
+  const destinataires: string[] = [presta.email, ...(presta.emails_secondaires ?? [])];
 
   let statut: "envoye" | "simule" | "erreur" = "simule";
   let erreur: string | null = null;
@@ -120,7 +124,7 @@ Deno.serve(async (req: Request) => {
         headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           from,
-          to: [presta.email],
+          to: destinataires,
           subject: retenue
             ? `Candidature retenue - ${coproNom}`
             : `Consultation ${typeLabel} - ${coproNom} : réponse`,
@@ -143,5 +147,5 @@ Deno.serve(async (req: Request) => {
     .update({ decision_at: new Date().toISOString(), decision_email_statut: statut })
     .eq("id", candidature_id);
 
-  return json(200, { statut, erreur, retenue, email: presta.email });
+  return json(200, { statut, erreur, retenue, email: destinataires.join(", ") });
 });

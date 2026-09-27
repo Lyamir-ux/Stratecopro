@@ -1,13 +1,16 @@
-// Mon entreprise - le prestataire gère lui-même sa fiche : logo, e-mails de
-// contact principal et secondaire, téléphone, adresse, documents de
+// Mon entreprise - le prestataire gère lui-même sa fiche : logo, e-mail de
+// contact principal et autant d'e-mails en copie des alertes que voulu (0106),
+// téléphone, adresse, documents de
 // certification (RGE, qualifications, assurances…) et contacts de l'entreprise
 // avec leur rôle. Les métiers couverts et le référencement restent pilotés
 // par l'équipe Strat Eco (verrouillé côté base).
 import { useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
+import { EmailsSecondaires } from "@/components/EmailsSecondaires";
 import { fmtDate } from "@/lib/format";
 import { CONSULT_TYPES } from "@/api/consultations";
+import { emailValide, normaliserEmails } from "@/api/prestataires";
 import {
   ouvrirDocPresta,
   useAddContactPresta,
@@ -33,8 +36,7 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
   const logoRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState({
     contact_nom: presta.contact_nom ?? "",
-    email: presta.email,
-    email_secondaire: presta.email_secondaire ?? "",
+    email: presta.email ?? "",
     telephone: presta.telephone ?? "",
     adresse: presta.adresse ?? "",
     code_postal: presta.code_postal ?? "",
@@ -42,6 +44,7 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
     site_web: presta.site_web ?? "",
     siret: presta.siret ?? "",
   });
+  const [emailsSecondaires, setEmailsSecondaires] = useState<string[]>(presta.emails_secondaires);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = <K extends keyof typeof draft>(k: K, v: string) => {
@@ -49,8 +52,10 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
     setDirty(true);
   };
 
-  const champ = (label: string, key: keyof typeof draft, placeholder = "", type = "text") => (
-    <div className="cs-field">
+  const emailsOk = [draft.email, ...emailsSecondaires].every((e) => !e.trim() || emailValide(e));
+
+  const champ = (label: string, key: keyof typeof draft, placeholder = "", type = "text", plein = false) => (
+    <div className={"cs-field" + (plein ? " cs-field-full" : "")}>
       <label>{label}</label>
       <input
         className="edit-inp"
@@ -123,8 +128,19 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
         <div className="cs-form-grid">
           {champ("Contact principal (nom)", "contact_nom", "Prénom Nom")}
           {champ("Téléphone", "telephone", "03 88 …", "tel")}
-          {champ("E-mail de contact principal", "email", "contact@entreprise.fr", "email")}
-          {champ("E-mail de contact secondaire", "email_secondaire", "secretariat@entreprise.fr", "email")}
+          {champ("E-mail de contact principal", "email", "contact@entreprise.fr", "email", true)}
+          <div className="cs-field cs-field-full">
+            <label>
+              Autres e-mails <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· reçoivent les mêmes alertes, en copie</span>
+            </label>
+            <EmailsSecondaires
+              valeurs={emailsSecondaires}
+              onChange={(v) => {
+                setEmailsSecondaires(v);
+                setDirty(true);
+              }}
+            />
+          </div>
           {champ("Adresse", "adresse", "12 rue …")}
           {champ("Code postal", "code_postal", "67000")}
           {champ("Ville", "ville", "Strasbourg")}
@@ -146,7 +162,7 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
         <button
           className="se-btn se-btn-primary btn-sm"
           style={{ marginTop: 10 }}
-          disabled={!dirty || !draft.email.trim() || maj.isPending}
+          disabled={!dirty || !draft.email.trim() || !emailsOk || maj.isPending}
           onClick={() => {
             setError(null);
             void maj
@@ -154,8 +170,7 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
                 id: presta.id,
                 patch: {
                   contact_nom: draft.contact_nom.trim() || null,
-                  email: draft.email.trim(),
-                  email_secondaire: draft.email_secondaire.trim() || null,
+                  ...normaliserEmails(draft.email, emailsSecondaires),
                   telephone: draft.telephone.trim() || null,
                   adresse: draft.adresse.trim() || null,
                   code_postal: draft.code_postal.trim() || null,

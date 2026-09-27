@@ -10,6 +10,8 @@ import type { IconName } from "@/components/Icon";
 
 export const CONSULT_TYPES: { id: Tables<"consultations">["type"]; label: string; icon: IconName }[] = [
   { id: "moe", label: "Maîtrise d'œuvre", icon: "hammer" },
+  { id: "be", label: "Bureau d'études", icon: "layers" },
+  { id: "pppt_dpe", label: "PPPT + DPE collectif", icon: "calendar" },
   { id: "diag", label: "Diagnostiqueur", icon: "fileCheck" },
   { id: "ct", label: "Contrôleur technique", icon: "clipboard" },
   { id: "sps", label: "Coordonnateur SPS", icon: "users" },

@@ -3378,8 +3378,8 @@ export type Database = {
           code_postal: string | null
           contact_nom: string | null
           created_at: string
-          email: string
-          email_secondaire: string | null
+          email: string | null
+          emails_secondaires: string[]
           id: string
           logo_path: string | null
           notes: string | null
@@ -3398,8 +3398,8 @@ export type Database = {
           code_postal?: string | null
           contact_nom?: string | null
           created_at?: string
-          email: string
-          email_secondaire?: string | null
+          email?: string | null
+          emails_secondaires?: string[]
           id?: string
           logo_path?: string | null
           notes?: string | null
@@ -3418,8 +3418,8 @@ export type Database = {
           code_postal?: string | null
           contact_nom?: string | null
           created_at?: string
-          email?: string
-          email_secondaire?: string | null
+          email?: string | null
+          emails_secondaires?: string[]
           id?: string
           logo_path?: string | null
           notes?: string | null
@@ -4262,7 +4262,7 @@ export type Database = {
       statut_notification: "simule" | "envoye" | "erreur"
       statut_scenario: "brouillon" | "partage" | "importe"
       statut_tache: "todo" | "doing" | "done"
-      type_consultation: "moe" | "diag" | "ct" | "sps" | "autre"
+      type_consultation: "moe" | "be" | "pppt_dpe" | "diag" | "ct" | "sps" | "autre"
       type_financement: "collectif" | "individuel" | "fonds"
       type_piece:
         | "avis_imposition"
@@ -4425,7 +4425,7 @@ export const Constants = {
       statut_notification: ["simule", "envoye", "erreur"],
       statut_scenario: ["brouillon", "partage", "importe"],
       statut_tache: ["todo", "doing", "done"],
-      type_consultation: ["moe", "diag", "ct", "sps", "autre"],
+      type_consultation: ["moe", "be", "pppt_dpe", "diag", "ct", "sps", "autre"],
       type_financement: ["collectif", "individuel", "fonds"],
       type_piece: [
         "avis_imposition",

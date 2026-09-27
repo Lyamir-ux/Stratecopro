@@ -1,8 +1,8 @@
 // Edge function « notifier-consultation » - appelée par l'AMO juste après la
 // publication d'une consultation. Cherche dans la base les prestataires
 // référencés ACTIFS dont les métiers (types) couvrent la prestation consultée,
-// leur envoie un e-mail d'alerte et journalise chaque envoi dans
-// consultation_notifications.
+// leur envoie un e-mail d'alerte (adresse principale + adresses en copie,
+// 0106) et journalise chaque envoi dans consultation_notifications.
 //
 // Envoi réel via Resend si le secret RESEND_API_KEY est configuré
 // (supabase secrets set RESEND_API_KEY=re_xxx [RESEND_FROM="Strat Eco <consultations@strateco.fr>"] [APP_URL=https://...]).
@@ -12,6 +12,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const TYPE_LABELS: Record<string, string> = {
   moe: "Maîtrise d'œuvre",
+  be: "Bureau d'études",
+  pppt_dpe: "PPPT + DPE collectif",
   diag: "Diagnostiqueur",
   ct: "Contrôleur technique",
   sps: "Coordonnateur SPS",
@@ -76,10 +78,12 @@ Deno.serve(async (req: Request) => {
   if (csErr || !cs) return json(404, { error: "Consultation introuvable" });
 
   // --- Prestataires référencés actifs couvrant ce métier, pas encore alertés ---
+  // (fiches sans e-mail exclues : e-mail facultatif depuis 0105)
   const { data: prestas, error: pErr } = await admin
     .from("prestataires")
-    .select("id, raison_sociale, contact_nom, email")
+    .select("id, raison_sociale, contact_nom, email, emails_secondaires")
     .eq("actif", true)
+    .not("email", "is", null)
     .contains("types", [cs.type]);
   if (pErr) return json(500, { error: pErr.message });
 
@@ -116,6 +120,7 @@ Deno.serve(async (req: Request) => {
   for (const p of cibles) {
     let statut: "simule" | "envoye" | "erreur" = "simule";
     let erreur: string | null = null;
+    const destinataires: string[] = [p.email, ...(p.emails_secondaires ?? [])];
 
     if (resendKey) {
       // lien profond : ouvre l'espace prestataire directement sur la consultation
@@ -169,7 +174,7 @@ Deno.serve(async (req: Request) => {
           headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({
             from,
-            to: [p.email],
+            to: destinataires,
             subject: `Nouvelle consultation ${typeLabel} - ${coproNom}`,
             html,
           }),
@@ -188,7 +193,7 @@ Deno.serve(async (req: Request) => {
     await admin.from("consultation_notifications").insert({
       consultation_id,
       prestataire_id: p.id,
-      email: p.email,
+      email: destinataires.join(", "),
       statut,
       erreur,
     });

@@ -8,6 +8,22 @@ import type { Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 export type Prestataire = Tables<"prestataires">;
 
+/** Format d'adresse accepté dans les fiches (même contrôle que le formulaire). */
+export const emailValide = (e: string): boolean => /^\S+@\S+\.\S+$/.test(e.trim());
+
+/** Adresses d'une entreprise telles qu'enregistrées (0106) : la principale
+ *  (compte et alertes) et celles en copie. Adresses nettoyées (espaces, casse),
+ *  vides et doublons retirés ; sans principale, la première adresse en copie
+ *  prend sa place - la base refuse une copie sans principale. */
+export function normaliserEmails(
+  principal: string | null | undefined,
+  secondaires: readonly string[]
+): { email: string | null; emails_secondaires: string[] } {
+  const toutes = [principal ?? "", ...secondaires].map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const uniques = [...new Set(toutes)];
+  return { email: uniques[0] ?? null, emails_secondaires: uniques.slice(1) };
+}
+
 /** Déclenche le rappel e-mail des agréments en fin de validité (edge function
  *  `rappel-agrements`) - appelé une fois par jour au chargement de l'app AMO.
  *  Meilleur effort : un échec est silencieux, le rappel repartira demain. */

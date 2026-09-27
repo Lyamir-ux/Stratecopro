@@ -3,13 +3,21 @@
 // cette base que la publication d'une consultation va chercher les adresses
 // e-mail à alerter. Le rattachement d'un compte de connexion (user_id) se
 // fait pour l'instant en SQL, comme pour les copropriétaires.
+// E-mail facultatif depuis le 27/09/2026 (0105) : les maîtres d'œuvre du
+// portefeuille ont été référencés sur leur seul nom - sans adresse, la fiche
+// n'est alertée de rien et ne peut pas recevoir de compte.
+// Plusieurs e-mails par entreprise depuis le 27/09/2026 (0106) : la principale
+// et autant d'adresses en copie des alertes que voulu.
 import { useMemo, useState } from "react";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
 import { Modal } from "@/components/Modal";
+import { EmailsSecondaires } from "@/components/EmailsSecondaires";
 import { CONSULT_TYPES } from "@/api/consultations";
 import {
+  emailValide,
+  normaliserEmails,
   useAddPrestataire,
   useDeletePrestataire,
   usePrestataires,
@@ -24,6 +32,7 @@ const EMPTY = {
   raison_sociale: "",
   contact_nom: "",
   email: "",
+  emails_secondaires: [] as string[],
   telephone: "",
   ville: "",
   siret: "",
@@ -63,7 +72,8 @@ function PrestaForm({
   const set = <K extends keyof typeof EMPTY>(k: K, v: (typeof EMPTY)[K]) => setDraft((p) => ({ ...p, [k]: v }));
   const toggleType = (t: TypeConsult) =>
     set("types", draft.types.includes(t) ? draft.types.filter((x) => x !== t) : [...draft.types, t]);
-  const valid = draft.raison_sociale.trim() && /\S+@\S+\.\S+/.test(draft.email) && draft.types.length > 0;
+  const emailOk = [draft.email, ...draft.emails_secondaires].every((e) => !e.trim() || emailValide(e));
+  const valid = draft.raison_sociale.trim() && emailOk && draft.types.length > 0;
 
   return (
     <Modal title={title} onClose={onClose} width={620}>
@@ -78,10 +88,14 @@ function PrestaForm({
           <input className="edit-inp" style={{ maxWidth: "none" }} value={draft.contact_nom}
             onChange={(e) => set("contact_nom", e.target.value)} placeholder="Prénom Nom" />
         </div>
-        <div className="cs-field">
-          <label>E-mail * <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· destinataire des alertes</span></label>
+        <div className="cs-field cs-field-full">
+          <label>E-mail principal <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· compte et alertes, sans e-mail aucune alerte</span></label>
           <input className="edit-inp" style={{ maxWidth: "none" }} type="email" value={draft.email}
             onChange={(e) => set("email", e.target.value)} placeholder="contact@entreprise.fr" />
+        </div>
+        <div className="cs-field cs-field-full">
+          <label>Autres e-mails <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· reçoivent les mêmes alertes, en copie</span></label>
+          <EmailsSecondaires valeurs={draft.emails_secondaires} onChange={(v) => set("emails_secondaires", v)} />
         </div>
         <div className="cs-field">
           <label>Téléphone</label>
@@ -141,7 +155,7 @@ export default function Prestataires() {
     const payload = {
       raison_sociale: draft.raison_sociale.trim(),
       contact_nom: draft.contact_nom.trim() || null,
-      email: draft.email.trim().toLowerCase(),
+      ...normaliserEmails(draft.email, draft.emails_secondaires),
       telephone: draft.telephone.trim() || null,
       ville: draft.ville.trim() || null,
       siret: draft.siret.trim() || null,
@@ -201,12 +215,31 @@ export default function Prestataires() {
                 </span>
                 <TypeChips types={p.types} />
                 <span className="spacer" style={{ flex: 1 }}></span>
-                <span style={{ fontSize: 12.5, color: "var(--fg3)" }}>{p.email}</span>
-                {p.user_id ? (
-                  <Badge kind="success" dot>Compte actif</Badge>
+                {p.email ? (
+                  <span
+                    style={{ fontSize: 12.5, color: "var(--fg3)", whiteSpace: "nowrap" }}
+                    title={[p.email, ...p.emails_secondaires].join(", ")}
+                  >
+                    {p.email}
+                    {p.emails_secondaires.length > 0 && (
+                      <b style={{ marginLeft: 6, color: "var(--fg2)" }}>+{p.emails_secondaires.length}</b>
+                    )}
+                  </span>
                 ) : (
-                  <Badge kind="neutral">Sans compte</Badge>
+                  <span
+                    style={{ flex: "none", whiteSpace: "nowrap" }}
+                    title="Sans e-mail, l'entreprise ne reçoit aucune alerte et ne peut pas recevoir de compte"
+                  >
+                    <Badge kind="warn">E-mail à renseigner</Badge>
+                  </span>
                 )}
+                <span style={{ flex: "none", whiteSpace: "nowrap" }}>
+                  {p.user_id ? (
+                    <Badge kind="success" dot>Compte actif</Badge>
+                  ) : (
+                    <Badge kind="neutral">Sans compte</Badge>
+                  )}
+                </span>
                 <button
                   className="se-btn se-btn-ghost btn-sm"
                   title={p.actif ? "Suspendre (ne recevra plus d'alertes)" : "Réactiver"}
@@ -247,7 +280,8 @@ export default function Prestataires() {
           initial={{
             raison_sociale: editing.raison_sociale,
             contact_nom: editing.contact_nom ?? "",
-            email: editing.email,
+            email: editing.email ?? "",
+            emails_secondaires: editing.emails_secondaires,
             telephone: editing.telephone ?? "",
             ville: editing.ville ?? "",
             siret: editing.siret ?? "",
