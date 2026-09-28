@@ -8,11 +8,20 @@
 //   - « Honoraires CEE » : volume en kWh cumac, FCEE 1 = FCEE 2 =
 //     kWh cumac / 1 000 000 × 250 € HT.
 // Le calcul qui fait foi est côté serveur ; la fenêtre en montre l'aperçu.
+// Retour d'Amir 28/09/2026 (16:04, 0113) : « Annuler » rétablit les montants
+// d'avant la dernière revalorisation de la P2 ou la dernière saisie CEE.
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
-import { useHonoraires, useRevaloriserP2, useSaisirCee } from "@/api/honoraires";
+import {
+  useAnnulerSaisie,
+  useHonoraires,
+  useRevaloriserP2,
+  useSaisiesHonoraires,
+  useSaisirCee,
+  type SaisieHonoraires,
+} from "@/api/honoraires";
 import { useTeamProfiles } from "@/api/profiles";
 import { messageErreur } from "@/lib/erreurs";
 import { fmtEuro, fmtEuroFull } from "@/lib/format";
@@ -52,8 +61,9 @@ const jalon = (d: DossierHonoraires, code: CodeJalon) => d.jalons.find((j) => j.
 
 export function HonorairesBloc({ c }: { c: CoproWithStats }) {
   const { data: honoraires, isLoading } = useHonoraires();
+  const { data: saisies } = useSaisiesHonoraires(c.id);
   const { data: equipe } = useTeamProfiles();
-  const [fenetre, setFenetre] = useState<"p2" | "cee" | null>(null);
+  const [fenetre, setFenetre] = useState<"p2" | "cee" | "annuler-p2" | "annuler-cee" | null>(null);
   if (isLoading) return null;
 
   const d: DossierHonoraires = honoraires?.get(c.id) ?? { coproId: c.id, jalons: jalonsOrdonnes([]), derniereFacture: null, source: null };
@@ -62,6 +72,9 @@ export function HonorairesBloc({ c }: { c: CoproWithStats }) {
   const suivant = prochainJalon(d);
   const nom = (uid: string | null) => (uid && equipe?.find((p) => p.user_id === uid)?.full_name) || "l'équipe";
   const sa = d.saisies;
+  // dernière saisie active de chaque type : c'est elle que « Annuler » défait
+  const derniereP2 = saisies?.find((x) => x.type === "p2") ?? null;
+  const derniereCee = saisies?.find((x) => x.type === "cee") ?? null;
 
   return (
     <section className="panel fact-bloc fade">
@@ -134,17 +147,42 @@ export function HonorairesBloc({ c }: { c: CoproWithStats }) {
           </>
         )}
         {sa && (sa.p2SaisiLe || sa.ceeSaisiLe) && (
-          <p className="fact-note" style={{ marginTop: 6 }}>
-            {sa.p2SaisiLe &&
-              `P2 revalorisée le ${dateCourte(sa.p2SaisiLe.slice(0, 10))} par ${nom(sa.p2SaisiPar)} sur ${fmtEuroFull(sa.p2MontantHt)} HT.`}
-            {sa.p2SaisiLe && sa.ceeSaisiLe && " "}
-            {sa.ceeSaisiLe &&
-              `CEE : ${ecrireNombre(sa.ceeKwhc, 0)} kWh cumac saisis le ${dateCourte(sa.ceeSaisiLe.slice(0, 10))} par ${nom(sa.ceeSaisiPar)}.`}
-          </p>
+          <div className="fact-saisies">
+            {sa.p2SaisiLe && (
+              <div className="fs-ligne">
+                <span>
+                  P2 revalorisée le {dateCourte(sa.p2SaisiLe.slice(0, 10))} par {nom(sa.p2SaisiPar)} sur {fmtEuroFull(sa.p2MontantHt)} HT.
+                </span>
+                {derniereP2 && (
+                  <button className="se-btn se-btn-ghost btn-sm" onClick={() => setFenetre("annuler-p2")} title="Annuler la dernière revalorisation de la P2">
+                    <Icon name="undo" size={14} /> Annuler
+                  </button>
+                )}
+              </div>
+            )}
+            {sa.ceeSaisiLe && (
+              <div className="fs-ligne">
+                <span>
+                  CEE : {ecrireNombre(sa.ceeKwhc, 0)} kWh cumac saisis le {dateCourte(sa.ceeSaisiLe.slice(0, 10))} par {nom(sa.ceeSaisiPar)}.
+                </span>
+                {derniereCee && (
+                  <button className="se-btn se-btn-ghost btn-sm" onClick={() => setFenetre("annuler-cee")} title="Annuler la dernière saisie des honoraires CEE">
+                    <Icon name="undo" size={14} /> Annuler
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
       {fenetre === "p2" && <FenetreP2 d={d} onClose={() => setFenetre(null)} />}
       {fenetre === "cee" && <FenetreCee d={d} onClose={() => setFenetre(null)} />}
+      {fenetre === "annuler-p2" && derniereP2 && (
+        <FenetreAnnulation d={d} s={derniereP2} auteur={nom(derniereP2.saisiPar)} onClose={() => setFenetre(null)} />
+      )}
+      {fenetre === "annuler-cee" && derniereCee && (
+        <FenetreAnnulation d={d} s={derniereCee} auteur={nom(derniereCee.saisiPar)} onClose={() => setFenetre(null)} />
+      )}
     </section>
   );
 }
@@ -300,6 +338,70 @@ function FenetreCee({ d, onClose }: { d: DossierHonoraires; onClose: () => void 
           </button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+/** Confirmation avant d'annuler la dernière saisie : montants actuels → montants rétablis. */
+function FenetreAnnulation({ d, s, auteur, onClose }: { d: DossierHonoraires; s: SaisieHonoraires; auteur: string; onClose: () => void }) {
+  const annuler = useAnnulerSaisie();
+  const [erreur, setErreur] = useState<string | null>(null);
+  const p2 = s.type === "p2";
+  const codes = Object.keys(s.avant).sort() as CodeJalon[];
+  const retabli = (code: string) => {
+    const a = s.avant[code];
+    if (!a || !a.existe) return "Retiré";
+    return a.montant ? fmtEuroFull(a.montant) : "Sans montant";
+  };
+
+  const confirmer = async () => {
+    setErreur(null);
+    try {
+      await annuler.mutateAsync({ coproId: d.coproId, type: s.type });
+      onClose();
+    } catch (err) {
+      setErreur(messageErreur(err, "L'annulation n'a pas pu être enregistrée."));
+    }
+  };
+
+  return (
+    <Modal title={p2 ? "Annuler la dernière revalorisation de la P2" : "Annuler la dernière saisie CEE"} onClose={onClose} width={560} closeOnBackdrop={false}>
+      <p className="se-small" style={{ margin: 0 }}>
+        {p2
+          ? `Revalorisation du ${dateCourte(s.saisiLe.slice(0, 10))} par ${auteur} : ${fmtEuroFull(s.valeur)} HT pour la phase travaux.`
+          : `Saisie du ${dateCourte(s.saisiLe.slice(0, 10))} par ${auteur} : ${ecrireNombre(s.valeur, 0)} kWh cumac.`}{" "}
+        Les montants d'avant cette saisie sont rétablis ; l'état des jalons ne change pas.
+      </p>
+      <table className="fact-apercu">
+        <thead>
+          <tr>
+            <th>Jalon</th>
+            <th className="r">Actuel</th>
+            <th className="r">Rétabli</th>
+            <th>État</th>
+          </tr>
+        </thead>
+        <tbody>
+          {codes.map((code) => {
+            const j = jalon(d, code);
+            return (
+              <tr key={code}>
+                <td className="c">{libelleJalon(code)}</td>
+                <td className="r">{j.montant ? fmtEuroFull(j.montant) : "-"}</td>
+                <td className="r fort">{retabli(code)}</td>
+                <td>{j.montant ? LIBELLE_ETAT[j.etat] : "Sans montant"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {erreur && <p className="fact-erreur">{erreur}</p>}
+      <div className="fact-modal-actions">
+        <button type="button" className="se-btn se-btn-ghost btn-sm" onClick={onClose}>Garder les montants</button>
+        <button type="button" className="se-btn se-btn-primary btn-sm" onClick={confirmer} disabled={annuler.isPending}>
+          <Icon name="undo" size={14} /> {annuler.isPending ? "Annulation…" : p2 ? "Annuler la revalorisation" : "Annuler la saisie CEE"}
+        </button>
+      </div>
     </Modal>
   );
 }

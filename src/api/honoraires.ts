@@ -52,6 +52,11 @@ export function useHonoraires() {
   });
 }
 
+const invaliderHonoraires = (qc: ReturnType<typeof useQueryClient>, coproId: string) => {
+  void qc.invalidateQueries({ queryKey: ["honoraires"] });
+  void qc.invalidateQueries({ queryKey: ["honoraires-saisies", coproId] });
+};
+
 /** « Revaloriser la P2 » : honoraires HT de la phase travaux, répartis 50 / 30 / 20 côté serveur. */
 export function useRevaloriserP2() {
   const qc = useQueryClient();
@@ -60,7 +65,7 @@ export function useRevaloriserP2() {
       const { error } = await supabase.rpc("honoraires_revaloriser_p2", { p_copro_id: coproId, p_montant_ht: montantHt });
       if (error) throw error;
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["honoraires"] }),
+    onSuccess: (_d, v) => invaliderHonoraires(qc, v.coproId),
   });
 }
 
@@ -72,7 +77,73 @@ export function useSaisirCee() {
       const { error } = await supabase.rpc("honoraires_saisir_cee", { p_copro_id: coproId, p_kwhc: kwhc });
       if (error) throw error;
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["honoraires"] }),
+    onSuccess: (_d, v) => invaliderHonoraires(qc, v.coproId),
+  });
+}
+
+// ---------- journal des saisies et annulation (0113) ----------
+// Retour d'Amir 28/09/2026 (16:04) : annuler la dernière revalorisation de la
+// P2 ou la dernière saisie CEE. Chaque saisie garde les montants qu'elle a
+// remplacés ; l'annulation les rétablit (fonction SQL honoraires_annuler_saisie).
+
+export type TypeSaisie = "p2" | "cee";
+
+export interface JalonAvant {
+  existe: boolean;
+  montant?: number | null;
+}
+
+export interface SaisieHonoraires {
+  id: string;
+  type: TypeSaisie;
+  valeur: number;
+  /** Montants des jalons avant la saisie, rétablis par l'annulation. */
+  avant: Record<string, JalonAvant>;
+  /** Montants écrits par la saisie. */
+  apres: Record<string, number>;
+  saisiLe: string;
+  saisiPar: string | null;
+}
+
+/** Saisies encore actives (non annulées) du dossier, la plus récente d'abord. */
+export function useSaisiesHonoraires(coproId: string) {
+  return useQuery({
+    queryKey: ["honoraires-saisies", coproId],
+    queryFn: async (): Promise<SaisieHonoraires[]> => {
+      const { data, error } = await supabase
+        .from("honoraires_saisies")
+        .select("id, type, valeur, avant, apres, saisi_le, saisi_par")
+        .eq("copro_id", coproId)
+        .is("annule_le", null)
+        .order("ordre", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((s) => {
+        const avant = ((s.avant as { jalons?: Record<string, JalonAvant> } | null)?.jalons ?? {}) as Record<string, JalonAvant>;
+        return {
+          id: s.id,
+          type: s.type as TypeSaisie,
+          valeur: Number(s.valeur),
+          avant: Object.fromEntries(
+            Object.entries(avant).map(([k, v]) => [k, { existe: !!v.existe, montant: v.montant == null ? null : Number(v.montant) }])
+          ),
+          apres: Object.fromEntries(Object.entries((s.apres ?? {}) as Record<string, number | string>).map(([k, v]) => [k, Number(v)])),
+          saisiLe: s.saisi_le,
+          saisiPar: s.saisi_par,
+        };
+      });
+    },
+  });
+}
+
+/** Annule la dernière saisie active du type demandé et rétablit les montants d'avant. */
+export function useAnnulerSaisie() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ coproId, type }: { coproId: string; type: TypeSaisie }) => {
+      const { error } = await supabase.rpc("honoraires_annuler_saisie", { p_copro_id: coproId, p_type: type });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => invaliderHonoraires(qc, v.coproId),
   });
 }
 

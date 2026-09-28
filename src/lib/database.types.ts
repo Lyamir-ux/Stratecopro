@@ -1710,6 +1710,77 @@ export type Database = {
           },
         ]
       }
+      honoraires_saisies: {
+        Row: {
+          annule_le: string | null
+          annule_par: string | null
+          apres: Json
+          avant: Json
+          copro_id: string
+          id: string
+          ordre: number
+          saisi_le: string
+          saisi_par: string | null
+          type: string
+          valeur: number
+        }
+        Insert: {
+          annule_le?: string | null
+          annule_par?: string | null
+          apres: Json
+          avant: Json
+          copro_id: string
+          id?: string
+          ordre?: never
+          saisi_le?: string
+          saisi_par?: string | null
+          type: string
+          valeur: number
+        }
+        Update: {
+          annule_le?: string | null
+          annule_par?: string | null
+          apres?: Json
+          avant?: Json
+          copro_id?: string
+          id?: string
+          ordre?: never
+          saisi_le?: string
+          saisi_par?: string | null
+          type?: string
+          valeur?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "honoraires_saisies_annule_par_fkey"
+            columns: ["annule_par"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "honoraires_saisies_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "honoraires_saisies_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "honoraires_saisies_saisi_par_fkey"
+            columns: ["saisi_par"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       lot_tantiemes: {
         Row: {
           cle_id: string
@@ -4226,6 +4297,10 @@ export type Database = {
           statut_occupation: string
           updated_at: string
         }[]
+      }
+      honoraires_annuler_saisie: {
+        Args: { p_copro_id: string; p_type: string }
+        Returns: undefined
       }
       honoraires_revaloriser_p2: {
         Args: { p_copro_id: string; p_montant_ht: number }
