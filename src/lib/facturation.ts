@@ -57,6 +57,17 @@ export interface DossierHonoraires {
   /** Dernière date de facture connue (AAAA-MM-JJ). */
   derniereFacture: string | null;
   source: string | null;
+  /** Bases saisies dans le bloc Honoraires (0112) : qui, quand, sur quel montant ou volume. */
+  saisies?: SaisiesHonoraires;
+}
+
+export interface SaisiesHonoraires {
+  p2MontantHt: number | null;
+  p2SaisiLe: string | null;
+  p2SaisiPar: string | null;
+  ceeKwhc: number | null;
+  ceeSaisiLe: string | null;
+  ceeSaisiPar: string | null;
 }
 
 export interface SommesHonoraires {
@@ -111,6 +122,31 @@ export const prochainJalon = (d: Pick<DossierHonoraires, "jalons">): JalonHonora
 
 /** Jalon coché facturé ou encaissé dans Notion alors que le contrat n'y prévoit aucun montant. */
 export const cocheSansMontant = (j: JalonHonoraires): boolean => montant(j) === 0 && j.etat !== "a_facturer";
+
+// ---------- revalorisation de la P2 et honoraires CEE (0112) ----------
+// Idée d'Amir 28/09/2026 : mêmes règles que les fonctions SQL
+// honoraires_revaloriser_p2 / honoraires_saisir_cee, qui font foi ; ici
+// elles servent à l'aperçu de la fenêtre de saisie.
+
+const arrondi2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
+
+/** Règlement de la phase travaux du contrat AMO : 50 % P2a, 30 % P2b, 20 % P2c. */
+export const PARTS_P2 = { P2a: 0.5, P2b: 0.3, P2c: 0.2 } as const;
+
+/** Répartit les honoraires HT de la phase travaux ; P2c prend le reste pour que la somme tombe juste. */
+export function repartitionP2(totalHt: number): { P2a: number; P2b: number; P2c: number } {
+  const total = arrondi2(totalHt);
+  const P2a = arrondi2(total * PARTS_P2.P2a);
+  const P2b = arrondi2(total * PARTS_P2.P2b);
+  return { P2a, P2b, P2c: arrondi2(total - P2a - P2b) };
+}
+
+/** Honoraires CEE : 250 € HT par GWh cumac, pour FCEE 1 et pour FCEE 2. */
+export const EUROS_HT_PAR_GWH_CUMAC = 250;
+
+export function honorairesCee(kwhCumac: number): number {
+  return arrondi2((Math.round(kwhCumac) / 1_000_000) * EUROS_HT_PAR_GWH_CUMAC);
+}
 
 // ---------- ancienneté ----------
 

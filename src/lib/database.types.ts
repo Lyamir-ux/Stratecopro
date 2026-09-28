@@ -1589,24 +1589,56 @@ export type Database = {
       }
       honoraires_dossiers: {
         Row: {
+          cee_kwhc: number | null
+          cee_saisi_le: string | null
+          cee_saisi_par: string | null
           copro_id: string
           derniere_facture: string | null
-          importe_le: string
+          importe_le: string | null
+          p2_montant_ht: number | null
+          p2_saisi_le: string | null
+          p2_saisi_par: string | null
           source: string | null
         }
         Insert: {
+          cee_kwhc?: number | null
+          cee_saisi_le?: string | null
+          cee_saisi_par?: string | null
           copro_id: string
           derniere_facture?: string | null
-          importe_le?: string
+          importe_le?: string | null
+          p2_montant_ht?: number | null
+          p2_saisi_le?: string | null
+          p2_saisi_par?: string | null
           source?: string | null
         }
         Update: {
+          cee_kwhc?: number | null
+          cee_saisi_le?: string | null
+          cee_saisi_par?: string | null
           copro_id?: string
           derniere_facture?: string | null
-          importe_le?: string
+          importe_le?: string | null
+          p2_montant_ht?: number | null
+          p2_saisi_le?: string | null
+          p2_saisi_par?: string | null
           source?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "honoraires_dossiers_cee_saisi_par_fkey"
+            columns: ["cee_saisi_par"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "honoraires_dossiers_p2_saisi_par_fkey"
+            columns: ["p2_saisi_par"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "honoraires_dossiers_copro_id_fkey"
             columns: ["copro_id"]
@@ -1632,6 +1664,7 @@ export type Database = {
           jalon: string
           montant_ht: number | null
           updated_at: string
+          updated_by: string | null
         }
         Insert: {
           copro_id: string
@@ -1641,6 +1674,7 @@ export type Database = {
           jalon: string
           montant_ht?: number | null
           updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           copro_id?: string
@@ -1650,8 +1684,16 @@ export type Database = {
           jalon?: string
           montant_ht?: number | null
           updated_at?: string
+          updated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "honoraires_jalons_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "honoraires_jalons_copro_id_fkey"
             columns: ["copro_id"]
@@ -4184,6 +4226,14 @@ export type Database = {
           statut_occupation: string
           updated_at: string
         }[]
+      }
+      honoraires_revaloriser_p2: {
+        Args: { p_copro_id: string; p_montant_ht: number }
+        Returns: undefined
+      }
+      honoraires_saisir_cee: {
+        Args: { p_copro_id: string; p_kwhc: number }
+        Returns: undefined
       }
       is_amo: { Args: never; Returns: boolean }
       is_amo_niveau1: { Args: never; Returns: boolean }

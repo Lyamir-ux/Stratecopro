@@ -3,12 +3,14 @@ import {
   cocheSansMontant,
   enSommeil,
   graduations,
+  honorairesCee,
   jalonsEnAttente,
   jalonsOrdonnes,
   joursDepuis,
   libelleAnciennete,
   pasAxeEuros,
   prochainJalon,
+  repartitionP2,
   sommesDossier,
   sommesPortefeuille,
   trancheAnciennete,
@@ -95,6 +97,20 @@ describe("facturation des jalons", () => {
     expect(enSommeil(tassigny, auj)).toBe(false);
     expect(enSommeil({ ...tassigny, derniereFacture: "2024-12-06" }, auj)).toBe(true);
     expect(enSommeil({ ...tassigny, derniereFacture: null }, auj)).toBe(false);
+  });
+
+  it("répartit la P2 à 50 / 30 / 20 sans perdre de centime", () => {
+    expect(repartitionP2(15000)).toEqual({ P2a: 7500, P2b: 4500, P2c: 3000 });
+    // mêmes montants que la fonction SQL honoraires_revaloriser_p2 (testée le 28/09/2026)
+    expect(repartitionP2(12345.67)).toEqual({ P2a: 6172.84, P2b: 3703.7, P2c: 2469.13 });
+    const r = repartitionP2(1000.01);
+    expect(r.P2a + r.P2b + r.P2c).toBeCloseTo(1000.01, 6);
+  });
+
+  it("calcule FCEE 1 et FCEE 2 à 250 € HT par GWh cumac", () => {
+    expect(honorairesCee(20_061_000)).toBe(5015.25);
+    expect(honorairesCee(1_314_000)).toBe(328.5);
+    expect(honorairesCee(0)).toBe(0);
   });
 
   it("gradue les axes en euros", () => {
