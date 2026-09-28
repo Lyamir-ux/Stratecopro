@@ -9,6 +9,7 @@ import { useQuestionsEnAttenteCount } from "@/api/consultations";
 import { usePptRapportsRevue } from "@/api/ppt";
 import { usePiecesAVerifierCount } from "@/api/portail";
 import { compteNouvelles, useDemandesAmo } from "@/api/demandesAmo";
+import { compteEnAttente, useHonoraires } from "@/api/honoraires";
 import { declencherRappelAgrements } from "@/api/prestataires";
 import { declencherRapportSyndic } from "@/api/rapportSyndic";
 import { declencherSignatureCron } from "@/api/signature";
@@ -57,6 +58,9 @@ export function Layout() {
   // alerte du menu « Demandes des syndics » : demandes d'AMO encore à traiter
   const { data: demandes } = useDemandesAmo();
   const demandesCount = compteNouvelles(demandes);
+  // alerte du menu « Facturation » : dossiers dont une facture attend son paiement
+  const { data: honoraires } = useHonoraires();
+  const facturationCount = compteEnAttente(honoraires, new Set((copros ?? []).map((c) => c.id)));
 
   const user = {
     initials: profile?.initials ?? "–",
@@ -73,6 +77,7 @@ export function Layout() {
         questionsCount={questionsCount || null}
         pptCount={pptCount || null}
         demandesCount={demandesCount || null}
+        facturationCount={facturationCount || null}
         user={user}
         onLogout={() => void signOut()}
       />

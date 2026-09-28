@@ -1753,3 +1753,130 @@ table.dossiers tfoot tr.recap-total td.num { text-align: right; }
   .hono-pipe-ligne { grid-template-columns: 12px minmax(0, 1fr) 96px; }
   .hono-pipe-ligne .nb, .hono-pipe-ligne .pc { display: none; }
 }
+
+/* ==========================================================================
+   FACTURATION DES HONORAIRES AMO PAR JALON (0111) - page /facturation et bloc
+   « Honoraires AMO » de l'onglet Projet
+   ========================================================================== */
+.fact-page { display: flex; flex-direction: column; gap: 22px; }
+.fact-legende { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--fg2); }
+.fact-legende span { display: inline-flex; align-items: center; gap: 6px; }
+.fact-sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; flex: none; }
+.fact-sw.vide { background: transparent; border: 1.5px dashed var(--color-neutral-400); }
+
+/* A - synthèse */
+.fact-tuiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.fact-tuile { background: var(--bg-soft); border-radius: var(--radius-md); padding: 12px 14px; min-width: 0; }
+.fact-tuile .ft-label { font-size: 12.5px; font-weight: 600; color: var(--fg3); display: flex; align-items: center; gap: 7px; }
+.fact-tuile .ft-val { font-family: var(--font-display); font-weight: 800; font-size: 27px; line-height: 1.1; margin-top: 6px; color: var(--fg1); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fact-tuile .ft-pied { font-size: 12px; color: var(--fg-muted); margin-top: 2px; }
+.fact-jauge { display: flex; border-radius: 6px; overflow: hidden; background: var(--color-neutral-300); }
+.fact-jauge span { display: block; height: 100%; }
+.fact-jauge span + span { box-shadow: inset 2px 0 0 var(--bg); }
+.fact-axe { position: relative; height: 24px; margin-top: 6px; font-size: 11.5px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.fact-axe span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.fact-axe span::before { content: ""; display: block; width: 1px; height: 5px; background: var(--color-neutral-400); margin: 0 auto 3px; }
+.fact-axe span.premier { transform: none; }
+.fact-axe span.premier::before { margin-left: 0; }
+.fact-axe span.dernier { transform: translateX(-100%); }
+.fact-axe span.dernier::before { margin-right: 0; }
+
+/* C - frise des jalons */
+.fact-toolbar { flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.fact-toolbar .search { width: 240px; max-width: 100%; }
+.fact-toolbar .seg { max-width: 100%; overflow-x: auto; }
+.fact-tablewrap { max-height: 640px; overflow: auto; box-shadow: none; border-radius: var(--radius-md); }
+table.dossiers.fact-table { font-size: 13px; min-width: 900px; }
+table.dossiers.fact-table thead th { position: sticky; top: 0; z-index: 2; background: var(--bg-soft); padding: 10px 12px; }
+table.dossiers.fact-table tbody td { padding: 9px 12px; }
+table.dossiers.fact-table .r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.dossiers.fact-table tfoot td { position: sticky; bottom: 0; z-index: 2; background: var(--bg-soft); border-top: 1px solid var(--border); padding: 10px 12px; font-weight: 700; color: var(--fg1); font-size: 12.5px; }
+.fact-nom { display: block; color: var(--fg1); font-weight: 600; font-size: 13px; line-height: 1.3; max-width: 280px; }
+.fact-meta { display: block; color: var(--fg-muted); font-size: 11.5px; margin-top: 1px; }
+.fact-pc { display: block; font-size: 11px; color: var(--fg-muted); }
+.fact-attente { color: var(--color-warning-700); font-weight: 600; }
+.fact-nul { color: var(--color-neutral-400); }
+.fact-fort { color: var(--fg1); font-weight: 700; }
+.fact-solde { color: var(--color-primary-700); font-weight: 600; }
+.fact-ancien { color: var(--color-error-700); font-weight: 600; }
+.fact-frise, .fact-frise-tete { display: inline-flex; gap: 9px; }
+.fact-frise .g { display: inline-flex; gap: 3px; }
+.fact-frise-tete span { display: inline-block; text-align: center; }
+.fact-pas { width: 22px; height: 16px; border-radius: 4px; display: inline-block; }
+.fact-pas.encaisse { background: var(--color-primary-600); }
+.fact-pas.facture { background: var(--color-warning-500); }
+.fact-pas.a_facturer { background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--color-neutral-400); }
+.fact-pas.vide { border: 1.5px dashed var(--color-neutral-300); }
+
+/* D - paiements à relancer */
+.fact-relances { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 28px; align-items: start; }
+.fact-sous-titre { font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--fg1); margin-bottom: 12px; }
+.fact-ages { display: flex; flex-direction: column; gap: 12px; }
+.fact-age { display: flex; flex-direction: column; gap: 5px; }
+.fact-age .fa-haut { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.fact-age .fa-haut b { color: var(--fg1); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fact-age .fa-barre { height: 12px; border-radius: 4px; background: var(--bg-soft); overflow: hidden; }
+.fact-age .fa-barre i { display: block; height: 100%; border-radius: 4px; }
+.fact-age-total { display: flex; justify-content: space-between; align-items: baseline; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 13px; }
+.fact-age-total b { font-family: var(--font-display); font-size: 22px; color: var(--fg1); font-variant-numeric: tabular-nums; }
+.fact-rl-liste { display: flex; flex-direction: column; max-height: 460px; overflow-y: auto; }
+.fact-rl { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 6px 10px 0; border: none; border-bottom: 1px solid var(--border); background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; border-radius: 0; }
+.fact-rl:last-child { border-bottom: none; }
+.fact-rl:hover { background: var(--bg-soft); }
+.fact-rl:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.fact-rl .sev { align-self: stretch; border-radius: 2px; }
+.fact-rl .rl-main { min-width: 0; display: block; }
+.fact-rl .rl-montant { text-align: right; font-weight: 700; color: var(--fg1); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fact-rl .rl-montant small { display: block; font-weight: 500; font-size: 11.5px; color: var(--fg-muted); }
+.fact-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.fact-chip { font-size: 11px; background: var(--color-warning-50); color: var(--color-warning-700); border-radius: 5px; padding: 1px 7px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fact-chip b { font-family: var(--font-mono); font-weight: 500; }
+.fact-note { font-size: 12px; color: var(--fg-muted); margin: 14px 0 0; }
+
+/* F - par chef de projet (dirigeant) */
+.fact-reserve { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; color: var(--fg3); background: var(--bg-soft); border-radius: 99px; padding: 2px 9px; }
+.fact-cpj { display: flex; flex-direction: column; gap: 12px; }
+.fact-cpj-ligne { display: grid; grid-template-columns: 150px minmax(0, 1fr) 150px; gap: 16px; align-items: center; }
+.fact-cpj-ligne .cpj-qui { color: var(--fg1); font-weight: 600; font-size: 13px; line-height: 1.25; }
+.fact-cpj-ligne .cpj-qui small { display: block; color: var(--fg-muted); font-weight: 500; font-size: 11.5px; }
+.fact-cpj-ligne .cpj-piste { position: relative; }
+.fact-cpj-ligne .cpj-piste .grille { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--color-neutral-200); }
+.fact-cpj-ligne .cpj-tot { text-align: right; font-size: 12.5px; color: var(--fg2); font-variant-numeric: tabular-nums; line-height: 1.3; }
+.fact-cpj-ligne .cpj-tot b { color: var(--fg1); }
+
+/* G - bloc de la fiche du dossier */
+.fact-bloc { margin-bottom: 18px; }
+.fact-lien { font-size: 12.5px; font-weight: 600; color: var(--color-primary-700); text-decoration: none; }
+.fact-lien:hover { text-decoration: underline; }
+.fact-bloc-sommes { display: flex; flex-wrap: wrap; gap: 10px 28px; }
+.fact-bloc-sommes div { font-size: 12px; color: var(--fg3); }
+.fact-bloc-sommes b { display: block; font-family: var(--font-display); font-size: 21px; color: var(--fg1); font-variant-numeric: tabular-nums; line-height: 1.15; }
+.fact-etapes { display: grid; grid-template-columns: 3fr 3fr 2fr; gap: 16px; margin-top: 18px; }
+.fact-etapes .fe-groupe { font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg-muted); margin-bottom: 8px; }
+.fact-etapes .fe-ligne { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.fact-etape { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 9px 11px; background: var(--bg); min-width: 0; }
+.fact-etape .fe-code { font-family: var(--font-mono); font-size: 12px; color: var(--fg3); }
+.fact-etape .fe-montant { font-family: var(--font-display); font-weight: 700; font-size: 18px; color: var(--fg1); font-variant-numeric: tabular-nums; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fact-etape .fe-etat { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; margin-top: 3px; color: var(--fg3); }
+.fact-etape .fe-etat i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.fact-etape.encaisse { background: var(--color-primary-50); border-color: var(--color-primary-200); }
+.fact-etape.encaisse .fe-etat { color: var(--color-primary-700); }
+.fact-etape.facture { background: var(--color-warning-50); border-color: #F7D9A6; }
+.fact-etape.facture .fe-etat { color: var(--color-warning-700); }
+.fact-etape.a_facturer .fe-etat i { background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--color-neutral-400); }
+.fact-etape.vide { background: transparent; border-style: dashed; }
+.fact-etape.vide .fe-montant { color: var(--fg-muted); }
+.fact-etape.suivant { border: 1.5px dashed var(--color-primary-500); }
+
+@media (max-width: 1000px) {
+  .fact-tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fact-relances { grid-template-columns: 1fr; }
+  .fact-etapes { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .fact-tuiles { grid-template-columns: 1fr; }
+  .fact-cpj-ligne { grid-template-columns: 92px minmax(0, 1fr); }
+  .fact-cpj-ligne .cpj-tot { grid-column: 2; text-align: left; margin-top: -8px; }
+  .fact-cpj-ligne.axe > div:first-child, .fact-cpj-ligne.axe > div:last-child { display: none; }
+  .fact-cpj-ligne.axe .fact-axe { grid-column: 2; }
+}

@@ -11,6 +11,7 @@ import { useTeamProfiles } from "@/api/profiles";
 import { downloadFichier, useFichiers, type Fichier } from "@/api/fichiers";
 import { DOSSIERS_PAR_PHASE, usePhaseNotes, useSavePhaseNote } from "@/api/phaseNotes";
 import type { CoproWithStats } from "@/api/copros";
+import { HonorairesBloc } from "./HonorairesBloc";
 
 const NEXT_STATUS = { todo: "doing", doing: "done", done: "todo" } as const;
 
@@ -176,37 +177,40 @@ export function ProjetTab({ c }: { c: CoproWithStats }) {
   const { data: phaseNotes } = usePhaseNotes(c.id);
   if (isLoading) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
   return (
-    <div className="tkanban fade">
-      {PHASES.map((ph, i) => {
-        const list = (taches ?? []).filter((t) => t.phase === ph.id);
-        const cur = c.phase === ph.id;
-        const doneN = list.filter((t) => t.status === "done").length;
-        const docs = (fichiers ?? []).filter((f) => DOSSIERS_PAR_PHASE[ph.id].includes(f.dossier));
-        const note = (phaseNotes ?? []).find((n) => n.phase === ph.id)?.body ?? "";
-        return (
-          <section key={ph.id}>
-            <div className={"tcol-head" + (cur ? " cur" : "")}>
-              <span className="num">{String(i + 1).padStart(2, "0")}</span>
-              <span className="lbl">{ph.label}</span>
-              {cur && (
-                <Badge kind="primary" dot>
-                  En cours
-                </Badge>
-              )}
-              <span className="spacer" style={{ flex: 1 }}></span>
-              <span style={{ fontSize: 12, color: "var(--fg-muted)", fontWeight: 600 }}>
-                {doneN}/{list.length}
-              </span>
-            </div>
-            <PhaseExtras coproId={c.id} phase={ph.id} fichiers={docs} note={note} />
-            <div className="tcol-body">
-              {list.map((t) => (
-                <TaskCard key={t.id} task={t} coproId={c.id} />
-              ))}
-            </div>
-          </section>
-        );
-      })}
-    </div>
+    <>
+      <HonorairesBloc c={c} />
+      <div className="tkanban fade">
+        {PHASES.map((ph, i) => {
+          const list = (taches ?? []).filter((t) => t.phase === ph.id);
+          const cur = c.phase === ph.id;
+          const doneN = list.filter((t) => t.status === "done").length;
+          const docs = (fichiers ?? []).filter((f) => DOSSIERS_PAR_PHASE[ph.id].includes(f.dossier));
+          const note = (phaseNotes ?? []).find((n) => n.phase === ph.id)?.body ?? "";
+          return (
+            <section key={ph.id}>
+              <div className={"tcol-head" + (cur ? " cur" : "")}>
+                <span className="num">{String(i + 1).padStart(2, "0")}</span>
+                <span className="lbl">{ph.label}</span>
+                {cur && (
+                  <Badge kind="primary" dot>
+                    En cours
+                  </Badge>
+                )}
+                <span className="spacer" style={{ flex: 1 }}></span>
+                <span style={{ fontSize: 12, color: "var(--fg-muted)", fontWeight: 600 }}>
+                  {doneN}/{list.length}
+                </span>
+              </div>
+              <PhaseExtras coproId={c.id} phase={ph.id} fichiers={docs} note={note} />
+              <div className="tcol-body">
+                {list.map((t) => (
+                  <TaskCard key={t.id} task={t} coproId={c.id} />
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </>
   );
 }

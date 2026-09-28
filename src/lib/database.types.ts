@@ -1587,6 +1587,87 @@ export type Database = {
           },
         ]
       }
+      honoraires_dossiers: {
+        Row: {
+          copro_id: string
+          derniere_facture: string | null
+          importe_le: string
+          source: string | null
+        }
+        Insert: {
+          copro_id: string
+          derniere_facture?: string | null
+          importe_le?: string
+          source?: string | null
+        }
+        Update: {
+          copro_id?: string
+          derniere_facture?: string | null
+          importe_le?: string
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "honoraires_dossiers_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: true
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "honoraires_dossiers_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: true
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      honoraires_jalons: {
+        Row: {
+          copro_id: string
+          date_facture: string | null
+          date_paiement: string | null
+          etat: string
+          jalon: string
+          montant_ht: number | null
+          updated_at: string
+        }
+        Insert: {
+          copro_id: string
+          date_facture?: string | null
+          date_paiement?: string | null
+          etat?: string
+          jalon: string
+          montant_ht?: number | null
+          updated_at?: string
+        }
+        Update: {
+          copro_id?: string
+          date_facture?: string | null
+          date_paiement?: string | null
+          etat?: string
+          jalon?: string
+          montant_ht?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "honoraires_jalons_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "copro_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "honoraires_jalons_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lot_tantiemes: {
         Row: {
           cle_id: string

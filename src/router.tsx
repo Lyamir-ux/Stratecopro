@@ -13,6 +13,7 @@ import PlanEstimatifPage from "./pages/PlanEstimatif";
 import MesTaches from "./pages/MesTaches";
 import Consultations from "./pages/Consultations";
 import DemandesAmo from "./pages/DemandesAmo";
+import Facturation from "./pages/Facturation";
 import Prestataires from "./pages/Prestataires";
 import Collaborateurs from "./pages/Collaborateurs";
 import BaseConnaissances from "./pages/BaseConnaissances";
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
               { path: "/taches", element: <MesTaches /> },
               { path: "/consultations", element: <Consultations /> },
               { path: "/demandes", element: <DemandesAmo /> },
+              { path: "/facturation", element: <Facturation /> },
               { path: "/prestataires", element: <Prestataires /> },
               { path: "/collaborateurs", element: <Collaborateurs /> },
               { path: "/base-connaissances", element: <BaseConnaissances /> },

@@ -71,6 +71,9 @@ suite("Intrusion externe (clé anon) - la base ne fuit pas", () => {
     "ppt_remarques",
     "ppt_corrections",
     "ppt_copro_stats",
+    // honoraires AMO par jalon (0111) : lecture réservée à l'équipe AMO
+    "honoraires_jalons",
+    "honoraires_dossiers",
   ];
   it.each(tablesSensibles)("anon ne lit aucune ligne de %s", async (t) => {
     const { status, body } = await rest(`${t}?select=*&limit=5`);
