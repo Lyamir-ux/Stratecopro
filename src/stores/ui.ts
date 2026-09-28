@@ -12,8 +12,6 @@ export type Accent = (typeof ACCENTS)[number];
 interface UiState {
   collapsed: boolean;
   sidebarTheme: "clair" | "sombre";
-  dashLayout: "kanban" | "liste";
-  showProgress: boolean;
   accent: Accent;
   crumbs: Crumb[];
   /** Filtre « chef de projet » du tableau de bord - persisté : une fois choisi
@@ -21,8 +19,6 @@ interface UiState {
   chefProjetFilter: string;
   toggleCollapsed: () => void;
   setSidebarTheme: (t: "clair" | "sombre") => void;
-  setDashLayout: (v: "kanban" | "liste") => void;
-  setShowProgress: (v: boolean) => void;
   setAccent: (a: Accent) => void;
   setCrumbs: (c: Crumb[]) => void;
   setChefProjetFilter: (v: string) => void;
@@ -33,35 +29,30 @@ export const useUi = create<UiState>()(
     (set) => ({
       collapsed: false,
       sidebarTheme: "clair",
-      dashLayout: "kanban",
-      showProgress: true,
       accent: "#7AB52C",
       crumbs: [],
       chefProjetFilter: "",
       toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed })),
       setSidebarTheme: (sidebarTheme) => set({ sidebarTheme }),
-      setDashLayout: (dashLayout) => set({ dashLayout }),
-      setShowProgress: (showProgress) => set({ showProgress }),
       setAccent: (accent) => set({ accent }),
       setCrumbs: (crumbs) => set({ crumbs }),
       setChefProjetFilter: (chefProjetFilter) => set({ chefProjetFilter }),
     }),
     {
       name: "se_amo_ui_v1",
-      // v2 : la vue « galerie » a été retirée et « tableau » est devenue
-      // « liste » (feedback Amir 22/09) - les réglages déjà enregistrés dans le
-      // navigateur des utilisateurs sont ramenés sur la liste.
-      version: 2,
+      // v2 : la vue « galerie » a été retirée (feedback Amir 22/09).
+      // v3 : le Kanban aussi (feedback Amir 28/09) - le tableau de bord n'a plus
+      // qu'une vue liste, les réglages de vue déjà enregistrés sont oubliés.
+      version: 3,
       migrate: (persisted) => {
-        const s = (persisted ?? {}) as Partial<UiState>;
-        if (s.dashLayout !== "kanban") s.dashLayout = "liste";
-        return s as UiState;
+        const s = { ...((persisted ?? {}) as Record<string, unknown>) };
+        delete s.dashLayout;
+        delete s.showProgress;
+        return s as unknown as UiState;
       },
       partialize: (s) => ({
         collapsed: s.collapsed,
         sidebarTheme: s.sidebarTheme,
-        dashLayout: s.dashLayout,
-        showProgress: s.showProgress,
         accent: s.accent,
         chefProjetFilter: s.chefProjetFilter,
       }),

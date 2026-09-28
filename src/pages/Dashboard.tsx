@@ -1,11 +1,12 @@
 // Tableau de bord AMO - porté de design-reference/project/dashboard.jsx
-// Vues Kanban / Liste (triable et exportable), KPI, filtres phase & secteur fonctionnels.
+// Vue liste seule (triable et exportable), KPI, filtres phase & secteur fonctionnels.
+// Le Kanban par phase a été retiré (feedback Amir 28/09, sans intérêt pour l'AMO).
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
-import { Avatar, Badge, DpePair, PhaseBadge, Progress, ThumbSlot } from "@/components/ui";
+import { Badge, DpePair, PhaseBadge, Progress } from "@/components/ui";
 import { PHASES, type DpeClass, type PhaseId } from "@/lib/referentiels";
 import { fmtEuro } from "@/lib/format";
 import { telechargerCsv } from "@/lib/csv";
@@ -17,7 +18,6 @@ import {
   useCopros,
   useCoprosCorbeille,
   useCreateCopro,
-  usePhotoUrl,
   useRestaurerCopro,
   useSupprimerDefinitivement,
   type CoproWithStats,
@@ -26,137 +26,6 @@ import { useTeamProfiles } from "@/api/profiles";
 import { useOrganisations } from "@/api/organisations";
 import { fmtDate } from "@/lib/format";
 import { uploadFichierDirect } from "@/api/fichiers";
-
-function TeamStack({ team }: { team: CoproWithStats["team"] }) {
-  return (
-    <span className="avatar-stack">
-      {team.map((m) => (
-        <Avatar key={m.user_id} who={m.initials} name={m.full_name} sm />
-      ))}
-    </span>
-  );
-}
-
-function CoproCard({ c, showProgress }: { c: CoproWithStats; showProgress: boolean }) {
-  const navigate = useNavigate();
-  const { data: photoUrl } = usePhotoUrl(c.photo_path);
-  const s = c.stats;
-  return (
-    <article className="copro-card fade">
-      <ThumbSlot photoUrl={photoUrl} placeholder={c.name} cadrage={c.photo_cadrage} />
-      <div style={{ position: "relative" }}>
-        <div className="cc-body" style={{ cursor: "pointer" }} onClick={() => navigate(`/copros/${c.id}`)}>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h3 className="cc-name">{c.name}</h3>
-              <div className="cc-loc">
-                <Icon name="mapPin" size={14} />
-                {c.adresse || [c.code_postal, c.city].filter(Boolean).join(" ") || "Adresse à renseigner"}
-              </div>
-            </div>
-            <DpePair before={c.energy_before as DpeClass | null} after={c.energy_after as DpeClass | null} />
-          </div>
-
-          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-            {c.fragile && (
-              <Badge kind="warn">
-                <Icon name="alert" size={12} />
-                Fragile
-              </Badge>
-            )}
-            {c.gain_pct != null && (
-              <Badge kind="primary">
-                <Icon name="trendingUp" size={12} />+{c.gain_pct}%
-              </Badge>
-            )}
-            {s?.scenario && <Badge kind="neutral">{s.scenario}</Badge>}
-          </div>
-
-          <div className="cc-meta">
-            <div className="m">
-              <span className="v">{nbLogements(c)}</span>
-              <span className="l">logement{nbLogements(c) > 1 ? "s" : ""}</span>
-            </div>
-            <div className="m">
-              <span className="v">{s?.coproprietaires ?? 0}</span>
-              <span className="l">copropriétaires</span>
-            </div>
-            <div className="m">
-              <span className="v">{s?.batiments ?? 0}</span>
-              <span className="l">
-                {c.denomination_batiments === "entree" ? "entrée" : "bâtiment"}
-                {(s?.batiments ?? 0) > 1 ? "s" : ""}
-              </span>
-            </div>
-          </div>
-
-          {showProgress && (
-            <div className="cc-prog-row">
-              <div className="lab">
-                <span>Avancement</span>
-                <span>{avancementAmo(c)}%</span>
-              </div>
-              <Progress value={avancementAmo(c)} blue={c.phase === "etudes"} />
-            </div>
-          )}
-
-          {s?.next_task && (
-            <div className="cc-next">
-              <Icon name="checkCircle" size={15} className="ico" />
-              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                Prochaine étape · {s.next_task}
-              </span>
-            </div>
-          )}
-
-          <div className="cc-foot">
-            <TeamStack team={c.team} />
-            <span className="spacer"></span>
-            {s?.montant_ttc != null ? (
-              <span className="montant">{fmtEuro(s.montant_ttc)}</span>
-            ) : (
-              <span className="updated">Non chiffré</span>
-            )}
-          </div>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function KanbanView({ copros, showProgress }: { copros: CoproWithStats[]; showProgress: boolean }) {
-  const dotColor: Record<PhaseId, string> = {
-    diagnostic: "var(--color-neutral-400)",
-    etudes: "var(--color-secondary-500)",
-    travaux: "var(--color-primary-500)",
-  };
-  return (
-    <div className="kanban">
-      {PHASES.map((ph) => {
-        const list = copros.filter((c) => c.phase === ph.id);
-        return (
-          <section className="kcol" key={ph.id}>
-            <div className="kcol-head">
-              <span className="kdot" style={{ background: dotColor[ph.id] }}></span>
-              <span className="ktitle">{ph.label}</span>
-              <span className="kcount">{list.length}</span>
-            </div>
-            <div className="kcol-body">
-              {list.map((c) => (
-                <CoproCard key={c.id} c={c} showProgress={showProgress} />
-              ))}
-              {list.length === 0 && (
-                <div style={{ padding: 18, textAlign: "center", color: "var(--fg-muted)", fontSize: 13 }}>
-                  Aucun dossier
-                </div>
-              )}
-            </div>
-          </section>
-        );
-      })}
-    </div>
-  );
-}
 
 type ColTri = "name" | "phase" | "logements" | "montant" | "progress" | "moe";
 
@@ -806,7 +675,7 @@ function exportCsv(copros: CoproWithStats[]) {
 export default function Dashboard() {
   useCrumbs([{ label: "Vos copropriétés" }]);
   const { data: copros, isLoading, error } = useCopros();
-  const { dashLayout, setDashLayout, showProgress, chefProjetFilter, setChefProjetFilter } = useUi();
+  const { chefProjetFilter, setChefProjetFilter } = useUi();
   const [phaseFilter, setPhaseFilter] = useState<PhaseId | "">("");
   const [cityFilter, setCityFilter] = useState<string>("");
   const [gestionnaireFilter, setGestionnaireFilter] = useState<string>("");
@@ -861,14 +730,6 @@ export default function Dashboard() {
     [copros, phaseFilter, cityFilter, chefProjetFilter, gestionnaireFilter, moeFilter, tri] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  // Deux vues seulement : le Kanban pour le pilotage par phase, la liste pour
-  // le reporting (triable et exportable) - feedback Amir 22/09, la galerie ne
-  // servait à rien.
-  const views = [
-    { id: "kanban" as const, label: "Kanban", icon: "columns" as const },
-    { id: "liste" as const, label: "Liste", icon: "table" as const },
-  ];
-
   if (error)
     return (
       <div className="placeholder-screen">
@@ -911,14 +772,6 @@ export default function Dashboard() {
       <KpiStrip copros={filtered} />
 
       <div className="toolbar">
-        <div className="seg">
-          {views.map((v) => (
-            <button key={v.id} className={dashLayout === v.id ? "on" : ""} onClick={() => setDashLayout(v.id)}>
-              <Icon name={v.icon} size={15} />
-              {v.label}
-            </button>
-          ))}
-        </div>
         <select
           className="chip-filter"
           value={phaseFilter}
@@ -998,11 +851,7 @@ export default function Dashboard() {
         </span>
       </div>
 
-      {dashLayout === "kanban" ? (
-        <KanbanView copros={filtered} showProgress={showProgress} />
-      ) : (
-        <ListeView copros={lignes} tri={tri} setTri={setTri} />
-      )}
+      <ListeView copros={lignes} tri={tri} setTri={setTri} />
 
       {!isLoading && filtered.length === 0 && (
         <div style={{ padding: 40, textAlign: "center", color: "var(--fg-muted)" }}>
