@@ -115,7 +115,11 @@ button { font-family: inherit; }
 /* ---------- Main column ---------- */
 .main { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 
+/* backdrop-filter crée un contexte d'empilement : sans z-index, la liste de la
+   recherche globale passait sous le contenu de la page (feedback Amir 28/09).
+   50 : au-dessus des menus des pages (41 au plus), sous les modales (90). */
 .topbar {
+  position: relative; z-index: 50;
   height: var(--header-h); flex: none;
   background: rgba(255,255,255,0.85); backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
