@@ -4277,6 +4277,14 @@ export type Database = {
         Returns: number
       }
       copro_visible_presta: { Args: { p_copro_id: string }; Returns: boolean }
+      devis_amo_chef_projet: {
+        Args: { p_copro_id: string }
+        Returns: {
+          email: string
+          full_name: string
+          initials: string
+        }[]
+      }
       documents_dossier: {
         Args: { p_copro_id: string }
         Returns: {

@@ -1868,6 +1868,11 @@ table.dossiers.fact-table tfoot td { position: sticky; bottom: 0; z-index: 2; ba
 .fact-etape.vide .fe-montant { color: var(--fg-muted); }
 .fact-etape.suivant { border: 1.5px dashed var(--color-primary-500); }
 
+/* « Devis revalorisé (PDF) » sous « Revaloriser la P2 » (0114) */
+.fact-revalo { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.fact-revalo .se-btn { justify-content: center; }
+.fact-revalo .fact-erreur { margin: 0; max-width: 240px; font-size: 12px; }
+
 /* fenêtres « Revaloriser la P2 » et « Honoraires CEE » (0112) */
 .fact-apercu { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
 .fact-apercu th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-muted); padding: 6px 8px; border-bottom: 1px solid var(--border); }

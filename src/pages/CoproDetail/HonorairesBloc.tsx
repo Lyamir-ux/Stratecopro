@@ -10,11 +10,15 @@
 // Le calcul qui fait foi est côté serveur ; la fenêtre en montre l'aperçu.
 // Retour d'Amir 28/09/2026 (16:04, 0113) : « Annuler » rétablit les montants
 // d'avant la dernière revalorisation de la P2 ou la dernière saisie CEE.
+// Demande d'Amir 28/09/2026 (0114) : une fois la P2 revalorisée, un bouton
+// sous « Revaloriser la P2 » télécharge le nouveau devis (contrat AMO du skill
+// devis-amo, P1 + P2) en PDF.
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import {
+  chargerChefProjetDevis,
   useAnnulerSaisie,
   useHonoraires,
   useRevaloriserP2,
@@ -45,7 +49,7 @@ import {
   type JalonHonoraires,
 } from "@/lib/facturation";
 import { COULEUR_ETAT, JaugeHonoraires, dateCourte } from "@/components/HonorairesVisuels";
-import type { CoproWithStats } from "@/api/copros";
+import { nbLogements, type CoproWithStats } from "@/api/copros";
 
 /** « 12 345,67 » → 12345.67 ; null si la saisie n'est pas un nombre. */
 function lireNombre(saisie: string): number | null {
@@ -87,9 +91,20 @@ export function HonorairesBloc({ c }: { c: CoproWithStats }) {
           </span>
         )}
         <span style={{ flex: 1 }}></span>
-        <button className="se-btn se-btn-secondary btn-sm" onClick={() => setFenetre("p2")}>
-          <Icon name="edit" size={14} /> Revaloriser la P2
-        </button>
+        <div className="fact-revalo">
+          <button className="se-btn se-btn-secondary btn-sm" onClick={() => setFenetre("p2")}>
+            <Icon name="edit" size={14} /> Revaloriser la P2
+          </button>
+          {sa?.p2SaisiLe && sa.p2MontantHt != null && (
+            <BoutonDevisRevalorise
+              c={c}
+              d={d}
+              p2Ht={sa.p2MontantHt}
+              revaloriseLe={sa.p2SaisiLe}
+              nbRevalorisations={saisies?.filter((x) => x.type === "p2").length ?? 0}
+            />
+          )}
+        </div>
         <button className="se-btn se-btn-secondary btn-sm" onClick={() => setFenetre("cee")}>
           <Icon name="zap" size={14} /> Honoraires CEE
         </button>
@@ -184,6 +199,56 @@ export function HonorairesBloc({ c }: { c: CoproWithStats }) {
         <FenetreAnnulation d={d} s={derniereCee} auteur={nom(derniereCee.saisiPar)} onClose={() => setFenetre(null)} />
       )}
     </section>
+  );
+}
+
+/** Devis revalorisé : les 10 questions du skill devis-amo remplies depuis le dossier, PDF généré côté client. */
+function BoutonDevisRevalorise({
+  c,
+  d,
+  p2Ht,
+  revaloriseLe,
+  nbRevalorisations,
+}: {
+  c: CoproWithStats;
+  d: DossierHonoraires;
+  p2Ht: number;
+  revaloriseLe: string;
+  nbRevalorisations: number;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const generer = async () => {
+    setBusy(true);
+    setErreur(null);
+    try {
+      const [{ entreeDevisRevalorise, genererDevisAmoPdf, nomFichierDevis }, { telechargerPdfBytes }, chef] = await Promise.all([
+        import("@/lib/pdf/devisAmo"),
+        import("@/lib/pdf/planIndividuel"),
+        chargerChefProjetDevis(c.id),
+      ]);
+      // P1a, P1b, P1c : montants et état (déjà facturés = encadré sur le devis)
+      const jalonsP1 = (["P1a", "P1b", "P1c"] as const).map((code) => jalon(d, code));
+      const input = entreeDevisRevalorise({ copro: c, nbLots: nbLogements(c), jalonsP1, p2Ht, revaloriseLe, nbRevalorisations, chef });
+      telechargerPdfBytes(await genererDevisAmoPdf(input), nomFichierDevis(c.name, input.refContrat));
+    } catch (e) {
+      setErreur(messageErreur(e, "La génération du devis a échoué."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button
+        className="se-btn se-btn-ghost btn-sm"
+        onClick={() => void generer()}
+        disabled={busy}
+        title="Contrat AMO revalorisé (phases études et travaux), au format PDF"
+      >
+        <Icon name="download" size={14} /> {busy ? "PDF en cours…" : "Devis revalorisé (PDF)"}
+      </button>
+      {erreur && <span className="fact-erreur">{erreur}</span>}
+    </>
   );
 }
 

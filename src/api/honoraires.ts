@@ -154,3 +154,21 @@ export function compteEnAttente(honoraires: Map<string, DossierHonoraires> | und
   for (const d of honoraires.values()) if (coproIds.has(d.coproId) && jalonsEnAttente(d).length > 0) n++;
   return n;
 }
+
+// ---------- devis revalorisé (0114) ----------
+// Demande d'Amir 28/09/2026 : le contrat AMO en PDF après « Revaloriser la P2 ».
+// Le chargé d'affaire est le chef de projet du dossier ; son e-mail de
+// connexion n'est lisible que côté serveur (devis_amo_chef_projet).
+
+export interface ChefProjetDevis {
+  full_name: string;
+  initials: string;
+  email: string;
+}
+
+/** Compte AMO du chef de projet du dossier, null si son nom ne correspond à aucun compte. */
+export async function chargerChefProjetDevis(coproId: string): Promise<ChefProjetDevis | null> {
+  const { data, error } = await supabase.rpc("devis_amo_chef_projet", { p_copro_id: coproId });
+  if (error) throw error;
+  return data?.[0] ?? null;
+}
