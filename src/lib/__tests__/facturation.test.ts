@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  caChefProjet,
   cocheSansMontant,
   enSommeil,
   graduations,
@@ -66,6 +67,17 @@ describe("facturation des jalons", () => {
     expect(s.contrat).toBeCloseTo(4365.75, 2);
     expect(cocheSansMontant(baldner.jalons[4])).toBe(true);
     expect(cocheSansMontant(baldner.jalons[5])).toBe(false);
+  });
+
+  it("retire la P1a du chiffre d'affaires du chef de projet", () => {
+    const { ca, horsCa } = caChefProjet(tassigny);
+    expect(horsCa).toBe(6580);
+    expect(ca.contrat).toBeCloseTo(47723.84 - 6580, 2);
+    expect(ca.encaisse).toBe(33820 - 6580);
+    expect(ca.enAttente).toBeCloseTo(7701.92, 2);
+    // sans montant de P1a, rien n'est retiré
+    const sansP1a = caChefProjet({ jalons: jalonsOrdonnes([{ jalon: "P1b", montant_ht: 5000, etat: "encaisse" }]) });
+    expect(sansP1a).toEqual({ ca: { contrat: 5000, encaisse: 5000, enAttente: 0, resteAFacturer: 0 }, horsCa: 0 });
   });
 
   it("additionne le portefeuille", () => {

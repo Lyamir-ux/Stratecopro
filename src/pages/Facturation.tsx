@@ -2,16 +2,16 @@
 //
 // Suivi des honoraires AMO par jalon, repris du classeur Notion « AMO COPRO »
 // pour les copropriétés présentes dans le logiciel (0111). Visuels retenus sur
-// maquette : synthèse du portefeuille, frise des jalons dossier par dossier et
-// paiements à relancer pour tous les AMO ; répartition par chef de projet pour
-// le dirigeant seul. Le bloc « Honoraires » de l'onglet Projet reprend la même
+// maquette : synthèse du portefeuille, frise des jalons dossier par dossier,
+// paiements à relancer et chiffre d'affaires par chef de projet, pour tous les
+// AMO (idée d'Amir 29/09/2026 : d'abord réservé au dirigeant ; la P1a en est
+// retirée, hachurée en tête de barre). Le bloc « Honoraires » de l'onglet Projet reprend la même
 // lecture pour un dossier. Lecture seule : la facturation directe depuis le
 // logiciel viendra ensuite.
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Badge, type BadgeKind } from "@/components/ui";
-import { useAuth } from "@/auth/AuthProvider";
 import { useCopros, type CoproWithStats } from "@/api/copros";
 import { useHonoraires } from "@/api/honoraires";
 import { telechargerCsv } from "@/lib/csv";
@@ -24,6 +24,7 @@ import {
   JALONS_HONORAIRES,
   LIBELLE_ETAT,
   TRANCHES_ANCIENNETE,
+  caChefProjet,
   enSommeil,
   graduations,
   jalonsEnAttente,
@@ -69,7 +70,6 @@ interface Ligne {
 const NON_ATTRIBUE = "Non attribué";
 
 export default function Facturation() {
-  const { profile } = useAuth();
   const { data: copros, isLoading: l1 } = useCopros();
   const { data: honoraires, isLoading: l2, error } = useHonoraires();
 
@@ -124,7 +124,7 @@ export default function Facturation() {
           <Synthese lignes={lignes} />
           <Frise lignes={lignes} />
           <Relances lignes={lignes} />
-          {profile?.dirigeant && <ParChefProjet lignes={lignes} />}
+          <ParChefProjet lignes={lignes} />
         </div>
       )}
     </div>
@@ -416,54 +416,82 @@ function Relances({ lignes }: { lignes: Ligne[] }) {
   );
 }
 
-// ---------- F. Par chef de projet (dirigeant) ----------
+// ---------- F. Chiffre d'affaires par chef de projet ----------
+// Idée d'Amir 29/09/2026 : visible de tous les AMO (réservé au dirigeant
+// jusque-là). La P1a, quand elle a un montant, sort du chiffre d'affaires du
+// chef de projet : elle reste en tête de barre, hachurée, et n'entre ni dans
+// le pourcentage encaissé ni dans le reste à facturer.
 
 function ParChefProjet({ lignes }: { lignes: Ligne[] }) {
   const rows = useMemo(() => {
-    const m = new Map<string, { chef: string; n: number; s: SommesHonoraires }>();
+    const m = new Map<string, { chef: string; n: number; horsCa: number; ca: SommesHonoraires }>();
     for (const l of lignes) {
-      const o = m.get(l.chef) ?? { chef: l.chef, n: 0, s: { contrat: 0, encaisse: 0, enAttente: 0, resteAFacturer: 0 } };
+      const o = m.get(l.chef) ?? { chef: l.chef, n: 0, horsCa: 0, ca: { contrat: 0, encaisse: 0, enAttente: 0, resteAFacturer: 0 } };
+      const x = caChefProjet(l.d);
       o.n++;
-      o.s.contrat += l.s.contrat;
-      o.s.encaisse += l.s.encaisse;
-      o.s.enAttente += l.s.enAttente;
-      o.s.resteAFacturer += l.s.resteAFacturer;
+      o.horsCa += x.horsCa;
+      o.ca.contrat += x.ca.contrat;
+      o.ca.encaisse += x.ca.encaisse;
+      o.ca.enAttente += x.ca.enAttente;
+      o.ca.resteAFacturer += x.ca.resteAFacturer;
       m.set(l.chef, o);
     }
-    return [...m.values()].sort((a, b) => Number(a.chef === NON_ATTRIBUE) - Number(b.chef === NON_ATTRIBUE) || b.s.contrat - a.s.contrat);
+    return [...m.values()].sort((a, b) => Number(a.chef === NON_ATTRIBUE) - Number(b.chef === NON_ATTRIBUE) || b.ca.contrat - a.ca.contrat);
   }, [lignes]);
-  const plusGros = Math.max(0, ...rows.map((r) => r.s.contrat));
+  // la barre porte le contrat entier : P1a hachurée puis chiffre d'affaires
+  const plusGros = Math.max(0, ...rows.map((r) => r.horsCa + r.ca.contrat));
   const { max, ticks } = graduations(plusGros, pasAxeEuros(plusGros));
+  const totalHorsCa = rows.reduce((x, r) => x + r.horsCa, 0);
 
   return (
     <section className="panel">
       <div className="p-head">
-        <h3>Par chef de projet</h3>
-        <span className="fact-reserve"><Icon name="lock" size={12} /> Visible du dirigeant seul</span>
+        <h3>Chiffre d'affaires par chef de projet</h3>
+        <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Montants HT, hors P1a</span>
+        <span style={{ flex: 1 }}></span>
+        <div className="fact-legende">
+          <span><i className="fact-sw hors-ca"></i>P1a, hors chiffre d'affaires</span>
+        </div>
       </div>
       <div className="p-body">
         <div className="fact-cpj">
-          {rows.map((r) => (
-            <div key={r.chef} className="fact-cpj-ligne">
-              <div className="cpj-qui">
-                {r.chef}
-                <small>{plur(r.n, "dossier")} · {fmtKEur(r.s.contrat)}</small>
-              </div>
-              <div className="cpj-piste">
-                {ticks.map((v) => (
-                  <i key={v} className="grille" style={{ left: `${(v / max) * 100}%` }}></i>
-                ))}
-                <div style={{ width: `${(r.s.contrat / max) * 100}%`, position: "relative" }}>
-                  <JaugeHonoraires s={r.s} hauteur={18} />
+          {rows.map((r) => {
+            const total = r.horsCa + r.ca.contrat;
+            return (
+              <div key={r.chef} className="fact-cpj-ligne">
+                <div className="cpj-qui">
+                  {r.chef}
+                  <small>{plur(r.n, "dossier")} · {fmtKEur(r.ca.contrat)}</small>
+                </div>
+                <div className="cpj-piste">
+                  {ticks.map((v) => (
+                    <i key={v} className="grille" style={{ left: `${(v / max) * 100}%` }}></i>
+                  ))}
+                  {total > 0 && (
+                    <div className="cpj-barre" style={{ width: `${(total / max) * 100}%` }}>
+                      {r.horsCa > 0 && (
+                        <span
+                          className="cpj-hors-ca"
+                          style={{ width: `${(r.horsCa / total) * 100}%` }}
+                          title={`P1a : ${fmtEuro(r.horsCa)} HT, hors chiffre d'affaires`}
+                        ></span>
+                      )}
+                      {r.ca.contrat > 0 && (
+                        <div style={{ width: `${(r.ca.contrat / total) * 100}%` }}>
+                          <JaugeHonoraires s={r.ca} hauteur={18} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="cpj-tot">
+                  encaissé <b>{pourcent(r.ca.encaisse, r.ca.contrat)} %</b>
+                  <br />
+                  <b>{fmtKEur(r.ca.resteAFacturer)}</b> à facturer
                 </div>
               </div>
-              <div className="cpj-tot">
-                encaissé <b>{pourcent(r.s.encaisse, r.s.contrat)} %</b>
-                <br />
-                <b>{fmtKEur(r.s.resteAFacturer)}</b> à facturer
-              </div>
-            </div>
-          ))}
+            );
+          })}
           <div className="fact-cpj-ligne axe">
             <div></div>
             <div className="fact-axe" style={{ marginTop: 0 }}>
@@ -476,6 +504,12 @@ function ParChefProjet({ lignes }: { lignes: Ligne[] }) {
             <div></div>
           </div>
         </div>
+        {totalHorsCa > 0 && (
+          <p className="fact-note">
+            En hachuré, la P1a des dossiers ({fmtKEur(totalHorsCa)} HT au total) : retirée du chiffre d'affaires, du
+            pourcentage encaissé et du reste à facturer.
+          </p>
+        )}
       </div>
     </section>
   );

@@ -103,6 +103,18 @@ export function sommesPortefeuille(dossiers: Pick<DossierHonoraires, "jalons">[]
   return s;
 }
 
+// Idée d'Amir 29/09/2026 : la P1a, quand elle a un montant, ne compte pas
+// dans le chiffre d'affaires du chef de projet (hachurée sur la page Facturation).
+export const JALON_HORS_CA_CHEF: CodeJalon = "P1a";
+
+/** Chiffre d'affaires d'un dossier pour son chef de projet (tous les jalons sauf la P1a) et montant de la P1a mise à part. */
+export function caChefProjet(d: Pick<DossierHonoraires, "jalons">): { ca: SommesHonoraires; horsCa: number } {
+  return {
+    ca: sommesDossier({ jalons: d.jalons.filter((j) => j.code !== JALON_HORS_CA_CHEF) }),
+    horsCa: d.jalons.reduce((x, j) => x + (j.code === JALON_HORS_CA_CHEF ? montant(j) : 0), 0),
+  };
+}
+
 /** Complète les lignes lues en base pour toujours présenter les 8 jalons dans l'ordre. */
 export function jalonsOrdonnes(lignes: { jalon: string; montant_ht: number | null; etat: string }[]): JalonHonoraires[] {
   return JALONS_HONORAIRES.map(({ code }) => {
