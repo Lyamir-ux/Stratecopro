@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  batimentsVidesASupprimer,
   buildRows,
   cleBatiment,
   cleCodeFromHeader,
@@ -180,5 +181,32 @@ describe("rapprochement des bâtiments (bug du 29/09, 317 avenue de Colmar)", ()
     expect(r.aCreer.get("3")).toBe("03");
     expect(r.aCreer.get("03")).toBe("03");
     expect(r.parDefaut).toBeNull();
+  });
+});
+
+describe("ménage des bâtiments vides après import (bug du 29/09, Le Churchill)", () => {
+  const b = (id: string, declare_creation: boolean, lots: number, adresse: string | null = null) => ({
+    id,
+    declare_creation,
+    adresse,
+    lots,
+  });
+
+  it("supprime le « 01 » sans adresse resté vide quand les lots sont rangés ailleurs", () => {
+    expect(
+      batimentsVidesASupprimer([b("b01", true, 0), b("b12", false, 43), b("bCom", false, 84), b("b03", false, 44)])
+    ).toEqual(["b01"]);
+  });
+
+  it("garde les bâtiments déclarés avec leur adresse, même vides", () => {
+    expect(batimentsVidesASupprimer([b("b01", true, 0, "1 et 3 rue de Barcelone"), b("bA", false, 12)])).toEqual([]);
+  });
+
+  it("garde les bâtiments déclarés tant qu'aucun lot n'est rangé (fichier sans colonne bâtiment)", () => {
+    expect(batimentsVidesASupprimer([b("b01", true, 0), b("b02", true, 0)])).toEqual([]);
+  });
+
+  it("supprime toujours les bâtiments d'un import précédent restés vides", () => {
+    expect(batimentsVidesASupprimer([b("b01", true, 10), b("b1", false, 0)])).toEqual(["b1"]);
   });
 });

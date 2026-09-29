@@ -242,3 +242,19 @@ export function rapprocherBatiments(
   }
   return { existants, aCreer, parDefaut: null };
 }
+
+/**
+ * Ménage des bâtiments après un import : ceux qui n'ont aucun lot disparaissent.
+ * Un bâtiment déclaré à la création avec son adresse fait foi et reste toujours
+ * (règle du 14/08). Le « 01 » sans adresse posé d'office à la création ne reste
+ * que tant qu'aucun lot n'est rangé ailleurs (bug du 29/09, Le Churchill : fichier
+ * en « 1 et 2 », « Commun » et « 3 », ligne « Bât. 01 » vide).
+ */
+export function batimentsVidesASupprimer(
+  batiments: { id: string; declare_creation: boolean; adresse: string | null; lots: number }[]
+): string[] {
+  const lotsRanges = batiments.some((b) => b.lots > 0);
+  return batiments
+    .filter((b) => b.lots === 0 && (!b.declare_creation || (lotsRanges && !b.adresse?.trim())))
+    .map((b) => b.id);
+}

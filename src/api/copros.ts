@@ -158,8 +158,9 @@ export function useCreateCopro() {
       const { data: copro, error } = await supabase.from("coproprietes").insert(insert).select().single();
       if (error) throw error;
 
-      // Bâtiments déclarés à la création - ils font foi et ne sont pas supprimés
-      // par le ménage de l'import des lots, même si le fichier en référence d'autres.
+      // Bâtiments déclarés à la création - ceux qui ont une adresse font foi et ne
+      // sont jamais supprimés par le ménage de l'import des lots ; un bâtiment sans
+      // adresse resté vide disparaît dès que l'import range les lots ailleurs.
       const nbBats = Math.max(1, Math.floor(input.nb_batiments) || 1);
       const { error: eBats } = await supabase.from("batiments").insert(
         Array.from({ length: nbBats }, (_, i) => ({

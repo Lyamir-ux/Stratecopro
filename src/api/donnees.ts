@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, toutesLesLignes } from "@/lib/supabase";
 import type { Enums, Tables, TablesUpdate } from "@/lib/database.types";
-import { rapprocherBatiments, type ImportedRow } from "@/lib/importLots";
+import { batimentsVidesASupprimer, rapprocherBatiments, type ImportedRow } from "@/lib/importLots";
 import { trierParNomFamille } from "@/lib/nomFamille";
 
 export interface LotFull extends Tables<"lots"> {
@@ -414,23 +414,22 @@ export function useImportLots(coproId: string) {
         }
       }
 
-      // Même ménage pour les bâtiments créés par un import : ceux qui n'ont plus
-      // aucun lot disparaissent (ex. après un import « Remplacer »). Les bâtiments
-      // déclarés à la création du dossier font foi et sont toujours conservés.
+      // Même ménage pour les bâtiments restés sans lot (ex. après un import
+      // « Remplacer ») - sauf les bâtiments déclarés avec leur adresse, qui font foi.
       {
         const { data: batsEtat, error: eBats } = await supabase
           .from("batiments")
-          .select("id, declare_creation, lots(count)")
+          .select("id, declare_creation, adresse, lots(count)")
           .eq("copro_id", coproId);
         if (eBats) throw eBats;
-        const batsVides = (batsEtat ?? []).filter(
-          (b) => !b.declare_creation && ((b.lots as unknown as { count: number }[])[0]?.count ?? 0) === 0
+        const batsVides = batimentsVidesASupprimer(
+          (batsEtat ?? []).map((b) => ({
+            ...b,
+            lots: (b.lots as unknown as { count: number }[])[0]?.count ?? 0,
+          }))
         );
         if (batsVides.length) {
-          const { error } = await supabase
-            .from("batiments")
-            .delete()
-            .in("id", batsVides.map((b) => b.id));
+          const { error } = await supabase.from("batiments").delete().in("id", batsVides);
           if (error) throw error;
         }
       }
