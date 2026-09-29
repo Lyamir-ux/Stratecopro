@@ -1,8 +1,8 @@
 // Données de la copro : bâtiments, copropriétaires, lots, clés & tantièmes.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { supabase, toutesLesLignes } from "@/lib/supabase";
 import type { Enums, Tables, TablesUpdate } from "@/lib/database.types";
-import type { ImportedRow } from "@/lib/importLots";
+import { rapprocherBatiments, type ImportedRow } from "@/lib/importLots";
 import { trierParNomFamille } from "@/lib/nomFamille";
 
 export interface LotFull extends Tables<"lots"> {
@@ -259,22 +259,37 @@ export function useImportLots(coproId: string) {
         if (error) throw error;
       }
 
-      // Bâtiments manquants
-      const batCodes = Array.from(new Set(rows.map((r) => r.batiment).filter((v): v is string => !!v)));
+      // Bâtiments : rapprochés de ceux du dossier (« 1 » = « 01 »), les manquants créés
       const { data: existingBats, error: eB } = await supabase
         .from("batiments")
-        .select("id, code")
+        .select("id, code, position, declare_creation")
         .eq("copro_id", coproId);
       if (eB) throw eB;
-      const batByCode = new Map((existingBats ?? []).map((b) => [b.code, b.id]));
-      const newBats = batCodes.filter((c) => !batByCode.has(c));
+      // Lots déjà rangés que le fichier ne réimporte pas (aucun après « Remplacer »)
+      const numsFichier = new Set(rows.map((r) => r.num));
+      const lotsRestants = replace
+        ? []
+        : await toutesLesLignes((debut, fin) =>
+            supabase.from("lots").select("id, num, batiment_id").eq("copro_id", coproId).order("id").range(debut, fin)
+          );
+      const rapprochement = rapprocherBatiments(
+        rows.map((r) => r.batiment),
+        (existingBats ?? []).map((b) => ({
+          ...b,
+          autresLots: lotsRestants.filter((l) => l.batiment_id === b.id && !numsFichier.has(l.num)).length,
+        }))
+      );
+      const batParValeur = new Map(rapprochement.existants);
+      const newBats = Array.from(new Set(rapprochement.aCreer.values()));
       if (newBats.length) {
+        const position = (existingBats ?? []).reduce((a, b) => Math.max(a, b.position), -1) + 1;
         const { data, error } = await supabase
           .from("batiments")
-          .insert(newBats.map((code, i) => ({ copro_id: coproId, code, position: (existingBats?.length ?? 0) + i })))
+          .insert(newBats.map((code, i) => ({ copro_id: coproId, code, position: position + i })))
           .select("id, code");
         if (error) throw error;
-        for (const b of data ?? []) batByCode.set(b.code, b.id);
+        const idParCode = new Map((data ?? []).map((b) => [b.code, b.id]));
+        for (const [valeur, code] of rapprochement.aCreer) batParValeur.set(valeur, idParCode.get(code)!);
       }
 
       // Copropriétaires manquants (rapprochement par nom exact) + coordonnées du fichier
@@ -347,7 +362,7 @@ export function useImportLots(coproId: string) {
             copro_id: coproId,
             num: r.num,
             usage: r.usage,
-            batiment_id: r.batiment ? batByCode.get(r.batiment) ?? null : null,
+            batiment_id: r.batiment ? batParValeur.get(r.batiment) ?? null : rapprochement.parDefaut,
             coproprietaire_id: r.coproprietaire ? cpByNom.get(r.coproprietaire) ?? null : null,
           })),
           { onConflict: "copro_id,num" }

@@ -160,3 +160,85 @@ export function buildRows(
 
   return { rows, errors };
 }
+
+// ========== Rapprochement des bâtiments du fichier avec ceux du dossier ==========
+// Bug du 29/09 (Amir, 317 avenue de Colmar) : le fichier nommait le bâtiment « 1 »,
+// l'import créait un bâtiment « 1 » à côté du « 01 » déclaré à la création du
+// dossier, qui restait affiché vide.
+
+const PREFIXE_BATIMENT = /^(b[aâ]timent|b[aâ]t|immeuble|entr[ée]e)\b\.?\s*/i;
+
+/** Clé de rapprochement : « 1 », « 01 », « Bât. 1 » et « BAT.01 » désignent le même bâtiment. */
+export function cleBatiment(valeur: string): string {
+  const sansAccents = valeur.normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+  const nu = sansAccents.replace(PREFIXE_BATIMENT, "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const cle = nu || sansAccents.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return /^\d+$/.test(cle) ? String(Number(cle)) : cle;
+}
+
+/** Code d'un bâtiment créé par l'import : « 1 » → « 01 » comme à la création du dossier, sans préfixe « Bât. ». */
+export function codeBatimentImporte(valeur: string): string {
+  const brut = valeur.normalize("NFC").trim();
+  const nu = brut.replace(PREFIXE_BATIMENT, "").trim() || brut;
+  return /^\d+$/.test(nu) ? String(Number(nu)).padStart(2, "0") : nu;
+}
+
+export interface BatimentDossier {
+  id: string;
+  code: string;
+  declare_creation: boolean;
+  /** Lots déjà rangés dans ce bâtiment que le fichier ne réimporte pas. */
+  autresLots: number;
+}
+
+export interface RapprochementBatiments {
+  /** Valeur du fichier → bâtiment du dossier. */
+  existants: Map<string, string>;
+  /** Valeur du fichier → code du bâtiment à créer (plusieurs valeurs peuvent partager un code). */
+  aCreer: Map<string, string>;
+  /** Bâtiment des lignes sans bâtiment dans le fichier, null s'il n'y en a pas d'évident. */
+  parDefaut: string | null;
+}
+
+/**
+ * Range les bâtiments cités par le fichier dans ceux du dossier.
+ * - Rapprochement par clé (« 1 » = « 01 »), un bâtiment déclaré à la création passant
+ *   avant un bâtiment créé par un import précédent.
+ * - Dossier à bâtiment unique (le déclaré, ou le seul existant) qui ne porte pas
+ *   d'autres lots, et fichier citant au plus un bâtiment : c'est le même bâtiment,
+ *   tous les lots y vont, même sans bâtiment ou sous un autre nom (« principal »).
+ */
+export function rapprocherBatiments(
+  valeurs: (string | null)[],
+  batiments: BatimentDossier[]
+): RapprochementBatiments {
+  const distinctes = Array.from(new Set(valeurs.filter((v): v is string => !!v?.trim())));
+  const cles = new Set(distinctes.map(cleBatiment));
+
+  const declares = batiments.filter((b) => b.declare_creation);
+  const unique = declares.length === 1 ? declares[0] : declares.length === 0 && batiments.length === 1 ? batiments[0] : null;
+  if (unique && unique.autresLots === 0 && cles.size <= 1) {
+    return {
+      existants: new Map(distinctes.map((v) => [v, unique.id])),
+      aCreer: new Map(),
+      parDefaut: unique.id,
+    };
+  }
+
+  const existants = new Map<string, string>();
+  const aCreer = new Map<string, string>();
+  const codeParCle = new Map<string, string>();
+  for (const v of distinctes) {
+    const cle = cleBatiment(v);
+    const candidats = batiments.filter((b) => cleBatiment(b.code) === cle);
+    const choisi =
+      candidats.find((b) => b.declare_creation) ?? candidats.find((b) => b.code === v.trim()) ?? candidats[0];
+    if (choisi) {
+      existants.set(v, choisi.id);
+    } else {
+      if (!codeParCle.has(cle)) codeParCle.set(cle, codeBatimentImporte(v));
+      aCreer.set(v, codeParCle.get(cle)!);
+    }
+  }
+  return { existants, aCreer, parDefaut: null };
+}

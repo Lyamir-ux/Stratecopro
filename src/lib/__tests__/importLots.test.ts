@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { buildRows, cleCodeFromHeader, guessMapping, parseFrNumber, parseUsage, tantiemeColumns } from "../importLots";
+import {
+  buildRows,
+  cleBatiment,
+  cleCodeFromHeader,
+  codeBatimentImporte,
+  guessMapping,
+  parseFrNumber,
+  parseUsage,
+  rapprocherBatiments,
+  tantiemeColumns,
+  type BatimentDossier,
+} from "../importLots";
 
 describe("parseFrNumber - formats français", () => {
   it("gère espaces, virgules et points de milliers", () => {
@@ -111,5 +122,63 @@ describe("buildRows", () => {
       telephone: "06 01 02 03 04",
       adresse: "1 rue A, Strasbourg",
     });
+  });
+});
+
+describe("rapprochement des bâtiments (bug du 29/09, 317 avenue de Colmar)", () => {
+  const bat = (id: string, code: string, declare_creation: boolean, autresLots = 0): BatimentDossier => ({
+    id,
+    code,
+    declare_creation,
+    autresLots,
+  });
+
+  it("« 1 », « 01 », « Bât. 1 » et « BAT.01 » désignent le même bâtiment", () => {
+    for (const v of ["1", "01", "001", "Bât. 1", "BAT.01", "bâtiment 1", "Entrée 1"]) expect(cleBatiment(v)).toBe("1");
+    expect(cleBatiment("Bât. A")).toBe("a");
+    expect(cleBatiment("principal")).toBe("principal");
+    expect(cleBatiment("Bâtiment")).toBe("batiment");
+  });
+
+  it("crée les bâtiments au format du dossier, sans préfixe", () => {
+    expect(codeBatimentImporte("1")).toBe("01");
+    expect(codeBatimentImporte("Bât. 3")).toBe("03");
+    expect(codeBatimentImporte("Bâtiment A")).toBe("A");
+    expect(codeBatimentImporte("principal")).toBe("principal");
+  });
+
+  it("range le bâtiment « 1 » du fichier dans le « 01 » déclaré à la création", () => {
+    const r = rapprocherBatiments(["1", "1", null], [bat("b01", "01", true)]);
+    expect(r.existants.get("1")).toBe("b01");
+    expect(r.aCreer.size).toBe(0);
+    expect(r.parDefaut).toBe("b01");
+  });
+
+  it("dossier à bâtiment unique : un autre nom ou pas de colonne bâtiment vont dans ce bâtiment", () => {
+    // Armorial : « principal » ; ANDROMEDE / MEINAU : fichier sans bâtiment
+    expect(rapprocherBatiments(["principal"], [bat("b01", "01", true)]).existants.get("principal")).toBe("b01");
+    expect(rapprocherBatiments([null, null], [bat("b01", "01", true)]).parDefaut).toBe("b01");
+    // réimport après le bug : le « 1 » créé par l'import précédent est délaissé pour le déclaré
+    const r = rapprocherBatiments(["1"], [bat("b01", "01", true), bat("b1", "1", false)]);
+    expect(r.existants.get("1")).toBe("b01");
+  });
+
+  it("ne fusionne pas un nouveau bâtiment dans l'unique bâtiment qui porte déjà d'autres lots", () => {
+    const r = rapprocherBatiments(["B"], [bat("b01", "01", true, 12)]);
+    expect(r.existants.size).toBe(0);
+    expect(r.aCreer.get("B")).toBe("B");
+    expect(r.parDefaut).toBeNull();
+  });
+
+  it("plusieurs bâtiments déclarés : rapprochement par clé, les inconnus sont créés, un code par clé", () => {
+    const r = rapprocherBatiments(
+      ["1", "Bât. 2", "3", "03", null],
+      [bat("b01", "01", true), bat("b02", "02", true)]
+    );
+    expect(r.existants.get("1")).toBe("b01");
+    expect(r.existants.get("Bât. 2")).toBe("b02");
+    expect(r.aCreer.get("3")).toBe("03");
+    expect(r.aCreer.get("03")).toBe("03");
+    expect(r.parDefaut).toBeNull();
   });
 });
