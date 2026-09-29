@@ -3,7 +3,7 @@
 // (RPC seed_syndic_taches, idempotente) ; le syndic coche et fixe une échéance,
 // l'AMO a la main complète. Remplace les repères recalculés de lib/syndicTasks.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { supabase, toutesLesLignes } from "@/lib/supabase";
 import type { Tables } from "@/lib/database.types";
 import { PHASES, type PhaseId } from "@/lib/referentiels";
 
@@ -24,9 +24,6 @@ export const STATUT_SUIVANT: Record<StatutTache, StatutTache> = {
   done: "todo",
 };
 
-/** Plafond de lignes par réponse de l'API Supabase (réglage du projet). */
-const LIGNES_PAR_PAGE = 1000;
-
 /**
  * Tâches syndic d'un ensemble de copropriétés. Le semis du gabarit est fait
  * juste avant la lecture : idempotent (on conflict do nothing sur
@@ -44,20 +41,16 @@ export function useSyndicTaches(coproIds: string[]) {
     queryFn: async (): Promise<SyndicTache[]> => {
       const { error: seedErr } = await supabase.rpc("seed_syndic_taches", { p_copro_ids: coproIds });
       if (seedErr) throw seedErr;
-      const taches: SyndicTache[] = [];
-      for (let debut = 0; ; debut += LIGNES_PAR_PAGE) {
-        const { data, error } = await supabase
+      return toutesLesLignes((debut, fin) =>
+        supabase
           .from("syndic_taches")
           .select("*")
           .in("copro_id", coproIds)
           .order("phase")
           .order("ordre")
           .order("id") // ordre total : aucune ligne sautée ni lue deux fois d'une page à l'autre
-          .range(debut, debut + LIGNES_PAR_PAGE - 1);
-        if (error) throw error;
-        taches.push(...(data ?? []));
-        if ((data?.length ?? 0) < LIGNES_PAR_PAGE) return taches;
-      }
+          .range(debut, fin)
+      );
     },
   });
 }

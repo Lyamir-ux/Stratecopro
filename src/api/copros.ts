@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { supabase, toutesLesLignes } from "@/lib/supabase";
 import type { Cadrage } from "@/lib/photoCadrage";
 import type { Tables, TablesInsert } from "@/lib/database.types";
 import { buildTaskTemplate } from "@/lib/taskTemplate";
@@ -193,14 +193,16 @@ export function useTasksCount() {
   return useQuery({
     queryKey: ["tasks-count"],
     queryFn: async () => {
-      const [{ data: copros, error: e1 }, { data: taches, error: e2 }] = await Promise.all([
+      const [{ data: copros, error: e1 }, taches] = await Promise.all([
         supabase.from("coproprietes").select("id, phase").is("deleted_at", null),
-        supabase.from("taches").select("copro_id, phase, status").neq("status", "done"),
+        // par pages : plus de 2 000 tâches ouvertes tous dossiers (29/09), l'API en renvoie 1 000
+        toutesLesLignes((debut, fin) =>
+          supabase.from("taches").select("copro_id, phase, status").neq("status", "done").order("id").range(debut, fin)
+        ),
       ]);
       if (e1) throw e1;
-      if (e2) throw e2;
       const phaseById = new Map((copros ?? []).map((c) => [c.id, c.phase]));
-      return (taches ?? []).filter((t) => phaseById.get(t.copro_id) === t.phase).length;
+      return taches.filter((t) => phaseById.get(t.copro_id) === t.phase).length;
     },
   });
 }

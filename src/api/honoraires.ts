@@ -3,25 +3,38 @@
 // l'onglet Projet revalorise la P2 et calcule les honoraires CEE (fonctions
 // SQL, seules à écrire). La facturation directe viendra dans un second temps.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { supabase, toutesLesLignes } from "@/lib/supabase";
 import { jalonsOrdonnes, jalonsEnAttente, type DossierHonoraires } from "@/lib/facturation";
 
 const nombre = (v: number | string | null) => (v == null ? null : Number(v));
 
+/**
+ * Lecture par pages (bug Amir 29/09, Armorial) : 8 jalons par dossier passent
+ * les 1 000 lignes d'une réponse (1 580 le 29/09). Une revalorisation réécrit
+ * les lignes P2 en fin de table : tronquées, elles disparaissaient du bloc
+ * Honoraires, et l'annulation, qui les réécrit à nouveau, ne les montrait pas
+ * davantage.
+ */
 export function useHonoraires() {
   return useQuery({
     queryKey: ["honoraires"],
     queryFn: async (): Promise<Map<string, DossierHonoraires>> => {
-      const [{ data: jalons, error: e1 }, { data: dossiers, error: e2 }] = await Promise.all([
-        supabase.from("honoraires_jalons").select("copro_id, jalon, montant_ht, etat"),
+      const [jalons, { data: dossiers, error: e2 }] = await Promise.all([
+        toutesLesLignes((debut, fin) =>
+          supabase
+            .from("honoraires_jalons")
+            .select("copro_id, jalon, montant_ht, etat")
+            .order("copro_id")
+            .order("jalon") // clé primaire : ordre total d'une page à l'autre
+            .range(debut, fin)
+        ),
         supabase
           .from("honoraires_dossiers")
           .select("copro_id, derniere_facture, source, p2_montant_ht, p2_saisi_le, p2_saisi_par, cee_kwhc, cee_saisi_le, cee_saisi_par"),
       ]);
-      if (e1) throw e1;
       if (e2) throw e2;
       const parCopro = new Map<string, { jalon: string; montant_ht: number | null; etat: string }[]>();
-      for (const j of jalons ?? []) {
+      for (const j of jalons) {
         const l = parCopro.get(j.copro_id) ?? [];
         // numeric(12,2) : forcé en nombre, une chaîne ferait concaténer les sommes
         l.push({ ...j, montant_ht: nombre(j.montant_ht) });

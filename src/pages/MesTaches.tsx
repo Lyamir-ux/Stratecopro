@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge, PhaseBadge } from "@/components/ui";
-import { supabase } from "@/lib/supabase";
+import { supabase, toutesLesLignes } from "@/lib/supabase";
 import type { Tables } from "@/lib/database.types";
 import { useCopros } from "@/api/copros";
 import { PIECES, urlSigneePiece, usePiecesAVerifier } from "@/api/portail";
@@ -18,13 +18,17 @@ function useAllOpenTasks() {
   return useQuery({
     queryKey: ["all-open-tasks"],
     queryFn: async (): Promise<TacheRow[]> => {
-      const { data, error } = await supabase
-        .from("taches")
-        .select("*, profiles!taches_assignee_user_id_fkey(initials, full_name)")
-        .neq("status", "done")
-        .order("position");
-      if (error) throw error;
-      return (data ?? []).map((t) => {
+      // par pages : plus de 2 000 tâches ouvertes tous dossiers (29/09), l'API en renvoie 1 000
+      const data = await toutesLesLignes((debut, fin) =>
+        supabase
+          .from("taches")
+          .select("*, profiles!taches_assignee_user_id_fkey(initials, full_name)")
+          .neq("status", "done")
+          .order("position")
+          .order("id")
+          .range(debut, fin)
+      );
+      return data.map((t) => {
         const { profiles, ...rest } = t as typeof t & { profiles: { initials: string; full_name: string } | null };
         return { ...rest, assignee: profiles };
       });
