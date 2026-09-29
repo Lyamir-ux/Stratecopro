@@ -51,23 +51,22 @@ export function useCopros() {
 }
 
 /**
- * Nombre de logements d'un dossier : les lots à usage d'habitation une fois le
- * tableau des lots importé, sinon le nombre déclaré au portefeuille. Les caves,
+ * Nombre de logements d'un dossier : les lots à usage d'habitation dès que le
+ * tableau des lots est importé, sinon le nombre déclaré au portefeuille. Les caves,
  * garages et parkings ne comptent pas - un dossier se raisonne en logements.
- * Quand le nombre déclaré dépasse les lots importés, il fait foi : le tableau
- * des lots peut être partiel (ex. Nouvelle Cité, seuls les 123 lots des
- * adhérents au prêt sont connus sur 284 logements - Amir, 15/09/2026).
+ * Le tableau importé fait foi même s'il compte moins de logements que le nombre
+ * déclaré (Amir, 29/09/2026 - remplace la règle du 15/09 qui gardait le plus grand).
  */
 export function nbLogements(c: {
   nb_logements: number | null;
-  stats: { lots_hab: number | null } | null;
+  stats: { lots: number | null; lots_hab: number | null } | null;
 }): number {
-  return Math.max(c.stats?.lots_hab ?? 0, c.nb_logements ?? 0);
+  return c.stats?.lots ? (c.stats.lots_hab ?? 0) : (c.nb_logements ?? 0);
 }
 
 /** Infobulle du nombre de logements (bandeau et synthèse du dossier). */
 export const TITRE_LOGEMENTS =
-  "Lots d'habitation du tableau des lots - ou nombre de logements déclaré au portefeuille s'il est plus élevé";
+  "Lots d'habitation du tableau des lots importé - à défaut, nombre de logements déclaré au portefeuille";
 
 /**
  * Avancement côté AMO : part des tâches internes faites (plan de tâches du

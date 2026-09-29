@@ -14,7 +14,7 @@ import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
 import { RenommageDialog } from "@/components/RenommageDialog";
 import { fmtEuro, fmtDate } from "@/lib/format";
-import { useCopros } from "@/api/copros";
+import { nbLogements, useCopros } from "@/api/copros";
 import {
   CONSULT_OPTIONS,
   CONSULT_TYPES,
@@ -567,12 +567,13 @@ export default function Consultations() {
     const externe = draft.cible === "externe";
     // nombres de logements et de bâtiments figés sur la consultation (les
     // candidats ne peuvent pas lire les stats des copros de la plateforme)
-    const stats = externe ? null : (copros ?? []).find((c) => c.id === draft.copro_id)?.stats;
-    const nbLogements = externe
+    const copro = externe ? null : (copros ?? []).find((c) => c.id === draft.copro_id);
+    const stats = copro?.stats;
+    const logements = externe
       ? draft.ext_lots
         ? Number(draft.ext_lots)
         : null
-      : stats?.lots_hab || stats?.lots || null;
+      : (copro ? nbLogements(copro) : 0) || null;
     const nbBatiments = externe
       ? draft.ext_batiments
         ? Number(draft.ext_batiments)
@@ -590,7 +591,7 @@ export default function Consultations() {
         copro_externe_adresse: externe ? draft.ext_adresse.trim() || null : null,
         copro_externe_ville: externe ? draft.ext_ville.trim() || null : null,
         copro_externe_lots: externe && draft.ext_lots ? Number(draft.ext_lots) : null,
-        nb_logements: nbLogements,
+        nb_logements: logements,
         nb_batiments: nbBatiments,
         sous_type: draft.type === "diag" && draft.sous_type ? draft.sous_type : null,
         // options réservées à la maîtrise d'œuvre - jamais publiées pour les autres métiers

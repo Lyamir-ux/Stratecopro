@@ -22,6 +22,7 @@ import {
 
 /** Formulaires rendus par l'écran générique (la fiche État ANAH a le sien). */
 export type FormulaireGenerique = Exclude<FormulaireType, "fiche_etat_anah">;
+import { nbLogements } from "@/api/copros";
 import type { SyndicCopro } from "@/api/syndic";
 
 // Coordonnées de l'opérateur - constantes Strat Eco (section AMO des fiches CEGEE)
@@ -381,7 +382,7 @@ function usePrefill(c: SyndicCopro, type: FormulaireGenerique): Record<string, s
         copro_nom: c.name,
         copro_adresse: c.adresse ?? "",
         copro_ville_cp: villeCp,
-        copro_nb_logements: n(c.nb_logements ?? c.stats?.lots_hab),
+        copro_nb_logements: n(nbLogements(c)),
         copro_nb_coproprietaires: n(c.stats?.coproprietaires),
         copro_nature_travaux: "Rénovation énergétique globale",
         amo_nom: AMO.nom,
@@ -429,7 +430,7 @@ function usePrefill(c: SyndicCopro, type: FormulaireGenerique): Record<string, s
       sdc_cp: c.code_postal ?? "",
       sdc_ville: c.city ?? "",
       imm_lots_principaux: n(c.stats?.lots),
-      imm_logements: n(c.nb_logements ?? c.stats?.lots_hab),
+      imm_logements: n(nbLogements(c)),
       imm_nb_coproprietaires: n(c.stats?.coproprietaires),
       imm_usage: "Habitation",
       trav_nature: "Rénovation énergétique globale",
