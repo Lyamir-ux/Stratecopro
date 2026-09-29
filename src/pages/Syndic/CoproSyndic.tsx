@@ -31,6 +31,11 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
+/** « 1-3 rue de l'école, 68000 Colmar » - vide si rien n'est saisi. */
+function adresseComplete(c: SyndicCopro): string {
+  return [c.adresse?.trim(), [c.code_postal, c.city].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+}
+
 /**
  * Dossier du portefeuille de l'enseigne que l'utilisateur ne peut pas ouvrir
  * (feedback Amir 08/09 : la vue portefeuille est commune à toute l'enseigne,
@@ -139,11 +144,38 @@ export default function CoproSyndic() {
                   Syndic
                 </Badge>
               </div>
-              <h1 className="dh-title">{c.name}</h1>
-              <div className="dh-loc">
-                <Icon name="mapPin" size={15} />
-                {[[c.code_postal, c.city].filter(Boolean).join(" "), c.syndic_name].filter(Boolean).join(" · ") || "À compléter"}
+              {/* Idée d'Amir du 29/09 : adresse complète, chargé de projet et maître d'œuvre au-dessus du nom du dossier. */}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: "4px 18px",
+                  marginBottom: 8,
+                  color: "var(--fg3)",
+                  fontSize: 13.5,
+                }}
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <Icon name="mapPin" size={14} />
+                  {adresseComplete(c) || "Adresse à compléter"}
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <Icon name="user" size={14} />
+                  Chargé de projet :<b style={{ color: "var(--fg2)" }}>{c.chef_projet?.trim() || "non attribué"}</b>
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <Icon name="hammer" size={14} />
+                  Maître d'œuvre :<b style={{ color: "var(--fg2)" }}>{c.maitre_oeuvre?.trim() || "non désigné"}</b>
+                </span>
               </div>
+              <h1 className="dh-title">{c.name}</h1>
+              {c.syndic_name && (
+                <div className="dh-loc">
+                  <Icon name="building" size={15} />
+                  {c.syndic_name}
+                </div>
+              )}
             </div>
             <div className="dh-stats">
               <div className="dh-stat">
