@@ -12,7 +12,15 @@ import {
   type DpeClass,
 } from "@/lib/referentiels";
 import { useDonnees, useMutationsLots, useSetNbBatiments, useSetUsageLot, type LotFull } from "@/api/donnees";
-import { notifierPassation, useCopros, useUpdateCopro, type CoproWithStats, type PassationMailStatut } from "@/api/copros";
+import {
+  nbLogements,
+  notifierPassation,
+  TITRE_LOGEMENTS,
+  useCopros,
+  useUpdateCopro,
+  type CoproWithStats,
+  type PassationMailStatut,
+} from "@/api/copros";
 import { useTeamProfiles } from "@/api/profiles";
 import { organisationIdPourSyndic, useOrganisations } from "@/api/organisations";
 import { normaliserNomOrganisation, trouverOrganisationParNom, type OrganisationNommee } from "@/lib/organisations";
@@ -543,6 +551,10 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
             ) : (
               <span className="v">{c.maitre_oeuvre ?? "-"}</span>
             )}
+          </div>
+          <div className="kv" title={TITRE_LOGEMENTS}>
+            <span className="k">Logements</span>
+            <span className="v">{nbLogements(c)}</span>
           </div>
           <div className="kv">
             <span className="k">Lots</span>

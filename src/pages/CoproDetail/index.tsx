@@ -9,7 +9,16 @@ import { Icon } from "@/components/Icon";
 import { Badge, DpePair, PhaseBadge, THUMB_BG } from "@/components/ui";
 import type { DpeClass, PhaseId } from "@/lib/referentiels";
 import { useAuth } from "@/auth/AuthProvider";
-import { avancementAmo, useCadrerPhoto, useCopro, useMettreCorbeille, usePhotoUrl, useUploadPhoto } from "@/api/copros";
+import {
+  avancementAmo,
+  nbLogements,
+  TITRE_LOGEMENTS,
+  useCadrerPhoto,
+  useCopro,
+  useMettreCorbeille,
+  usePhotoUrl,
+  useUploadPhoto,
+} from "@/api/copros";
 import { PhotoCadree, RecadrerPhoto, ratioBandeau } from "@/components/PhotoCadrage";
 import { lireCadrage } from "@/lib/photoCadrage";
 import { messageErreur } from "@/lib/erreurs";
@@ -206,6 +215,11 @@ export default function CoproDetail() {
             </div>
           </div>
           <div className="dh-stats">
+            {/* Logements = lots d'habitation (feedback Amir 29/09), nombre déclaré s'il est plus élevé */}
+            <div className="dh-stat" title={TITRE_LOGEMENTS}>
+              <div className="v">{nbLogements(c)}</div>
+              <div className="l">logements</div>
+            </div>
             <div className="dh-stat">
               <div className="v">{s?.lots ?? 0}</div>
               <div className="l">lots</div>

@@ -65,6 +65,10 @@ export function nbLogements(c: {
   return Math.max(c.stats?.lots_hab ?? 0, c.nb_logements ?? 0);
 }
 
+/** Infobulle du nombre de logements (bandeau et synthèse du dossier). */
+export const TITRE_LOGEMENTS =
+  "Lots d'habitation du tableau des lots - ou nombre de logements déclaré au portefeuille s'il est plus élevé";
+
 /**
  * Avancement côté AMO : part des tâches internes faites (plan de tâches du
  * dossier, onglet Projet). Remplace l'ancien champ manuel coproprietes.progress,
