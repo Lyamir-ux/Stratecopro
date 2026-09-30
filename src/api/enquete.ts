@@ -120,7 +120,12 @@ function invalidateReponses(qc: ReturnType<typeof useQueryClient>, enqueteId: st
   void qc.invalidateQueries({ queryKey: ["portail"] });
 }
 
-/** Marque le profil d'un copropriétaire VÉRIFIÉ (sur l'avis d'imposition) ou le repasse en DÉCLARATIF. */
+/**
+ * Marque le profil d'un copropriétaire VÉRIFIÉ (sur l'avis d'imposition) ou le repasse en DÉCLARATIF.
+ * Le profil se vérifie sur l'avis : le cocher valide aussi l'avis d'imposition
+ * encore « à vérifier » (feedback Théa 30/09/2026 - profil vérifié mais encadré
+ * de l'avis resté orange dans le portail). Décocher ne touche pas à la pièce.
+ */
 export function useVerifierProfil(enqueteId: string, coproId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -141,8 +146,22 @@ export function useVerifierProfil(enqueteId: string, coproId: string) {
         .eq("coproprietaire_id", input.coproprietaireId)
         .not("profil_mpr", "is", null);
       if (error) throw error;
+      if (input.verifie) {
+        const { error: errPiece } = await supabase
+          .from("pieces_justificatives")
+          .update({ statut: "valide", qualification: "conforme", motif_refus: null })
+          .eq("coproprietaire_id", input.coproprietaireId)
+          .eq("type", "avis_imposition")
+          .eq("statut", "a_verifier");
+        if (errPiece) throw errPiece;
+      }
     },
-    onSuccess: () => invalidateReponses(qc, enqueteId, coproId),
+    onSuccess: (_r, v) => {
+      invalidateReponses(qc, enqueteId, coproId);
+      void qc.invalidateQueries({ queryKey: ["pieces-a-verifier"] });
+      void qc.invalidateQueries({ queryKey: ["pieces-copro", coproId] });
+      void qc.invalidateQueries({ queryKey: ["portail", "pieces", v.coproprietaireId] });
+    },
   });
 }
 

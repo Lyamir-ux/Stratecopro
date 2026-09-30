@@ -114,7 +114,7 @@ function ReponseRow({
         {profil ? (
           <label
             style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}
-            title={verifie ? `Vérifié sur l'avis d'imposition le ${fmtDate(existing?.profil_verifie_le)}` : "Déclaré par le copropriétaire (ou saisi) - cochez après contrôle de l'avis d'imposition"}
+            title={verifie ? `Vérifié sur l'avis d'imposition le ${fmtDate(existing?.profil_verifie_le)}` : "Déclaré par le copropriétaire (ou saisi) - cochez après contrôle de l'avis d'imposition : l'avis déposé passe alors « validé »"}
           >
             <input
               type="checkbox"

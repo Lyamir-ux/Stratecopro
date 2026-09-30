@@ -134,7 +134,7 @@ export function Sidebar({ recents, tasksCount, questionsCount, pptCount, demande
             <span className="rl">{user.org}</span>
           </span>
           <span className="spacer" style={{ flex: 1 }}></span>
-          <span className="lo" title="Se déconnecter" style={{ color: "var(--fg-muted)" }}>
+          <span className="lo" title="Se déconnecter" aria-label="Se déconnecter">
             <Icon name="logOut" size={17} />
           </span>
         </div>

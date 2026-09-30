@@ -10,8 +10,15 @@
 // rattachement d'un lot annexe à un lot d'habitation se fait sur « Mes
 // quotes-parts ». L'avis d'imposition, seule pièce encore attendue, se dépose
 // ici même, sous les plafonds de l'Anah (l'onglet « Mes documents » a disparu).
+//
+// Retours du 30/09/2026 : la saisie en cours est recopiée dans l'onglet du
+// navigateur (sessionStorage) jusqu'à son enregistrement, et restaurée si la
+// page se recharge ; la transmission se confirme par une fenêtre et le bouton
+// passe à « Questionnaire transmis » ; les boutons d'enregistrement sont repris
+// en bas de page, avec un bouton pour remonter en haut.
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
+import { Modal } from "@/components/Modal";
 import { Badge } from "@/components/ui";
 import { fmtDate, fmtEuro } from "@/lib/format";
 import { PROFILS_MPR } from "@/lib/referentiels";
@@ -26,6 +33,7 @@ import {
 import {
   useEnquetePortail,
   useMaReponse,
+  useMesPieces,
   useSaveMaReponse,
   type Membership,
   type PortalLot,
@@ -41,6 +49,63 @@ interface ReponsesJson {
   lots: Record<string, Answers>;
   /** true quand toutes les questions posées avaient une réponse au moment de l'enregistrement */
   complet?: boolean;
+  /** date de transmission (questionnaire complet) */
+  transmisLe?: string;
+}
+
+/** Préfixe des copies de secours de l'enquête - effacées à la déconnexion. */
+export const PREFIXE_SECOURS_ENQUETE = "se-enquete:";
+
+interface CopieSecours {
+  rep: ReponsesJson;
+  /** moment de la dernière frappe, comparé à la date d'enregistrement en base */
+  le: string;
+}
+
+function lireSecours(cle: string): CopieSecours | null {
+  try {
+    const brut = sessionStorage.getItem(cle);
+    return brut ? (JSON.parse(brut) as CopieSecours) : null;
+  } catch {
+    return null;
+  }
+}
+
+function ecrireSecours(cle: string, copie: CopieSecours | null) {
+  try {
+    if (copie) sessionStorage.setItem(cle, JSON.stringify(copie));
+    else sessionStorage.removeItem(cle);
+  } catch {
+    // stockage indisponible (navigation privée, quota) : la saisie reste en mémoire
+  }
+}
+
+const fmtDateHeure = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString("fr-FR")} à ${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+};
+
+/** Bouton flottant « Haut de page », affiché une fois la page bien descendue. */
+function RemonterEnHaut() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setVisible(window.scrollY > 700);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  if (!visible) return null;
+  return (
+    <button
+      type="button"
+      className="eq-haut"
+      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      title="Remonter en haut de la page"
+    >
+      <Icon name="chevronUp" size={18} />
+      Haut de page
+    </button>
+  );
 }
 
 /** usage importé par l'AMO (lots.usage) → option du QCM « Usage du lot » */
@@ -255,31 +320,73 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
   const [erreurs, setErreurs] = useState<Record<string, string>>({});
   const [atteste, setAtteste] = useState(false);
   const [erreurAttestation, setErreurAttestation] = useState(false);
+  // Réponses modifiées depuis le dernier enregistrement (copie de secours active).
+  const [modifie, setModifie] = useState(false);
+  // Des réponses non enregistrées ont été retrouvées à l'ouverture.
+  const [restaure, setRestaure] = useState(false);
+  const [confirmation, setConfirmation] = useState<string | null>(null);
+  const { data: pieces } = useMesPieces(membership.coproprietaireId);
+  const avisDepose = (pieces ?? []).some((x) => x.type === "avis_imposition" && x.statut !== "refuse");
 
-  // Initialisation : réponses enregistrées par-dessus les défauts (nom, usage des lots).
+  const cleSecours = enquete ? `${PREFIXE_SECOURS_ENQUETE}${enquete.id}:${membership.coproprietaireId}` : null;
+
+  // Initialisation : réponses enregistrées par-dessus les défauts (nom, usage des lots),
+  // ou la copie de secours si elle est plus récente que l'enregistrement en base.
   useEffect(() => {
-    if (!enquete || !isFetched || rep) return;
+    if (!enquete || !isFetched || rep || !cleSecours) return;
     const stored = (reponse?.reponses ?? null) as ReponsesJson | null;
     const lots: Record<string, Answers> = {};
     for (const l of membership.lots) {
       lots[l.id] = { "usage-lot": USAGE_LABEL[l.usage] ?? "Autre", ...(stored?.lots?.[l.id] ?? {}) };
     }
-    setRep({ copro: { nom: membership.nom, ...(stored?.copro ?? {}) }, lots });
+    const secours = lireSecours(cleSecours);
+    if (secours && (!reponse || Date.parse(secours.le) > Date.parse(reponse.updated_at))) {
+      setRep({ copro: secours.rep.copro ?? {}, lots: { ...lots, ...(secours.rep.lots ?? {}) } });
+      setModifie(true);
+      setRestaure(true);
+    } else {
+      if (secours) ecrireSecours(cleSecours, null);
+      setRep({ copro: { nom: membership.nom, ...(stored?.copro ?? {}) }, lots });
+    }
     setProfilSauve((reponse?.profil_mpr as Profil | null) ?? null);
-  }, [enquete, isFetched, rep, reponse, membership]);
+  }, [enquete, isFetched, rep, reponse, membership, cleSecours]);
+
+  // Copie de secours à chaque modification, jusqu'à l'enregistrement.
+  useEffect(() => {
+    if (!cleSecours || !rep || !modifie) return;
+    ecrireSecours(cleSecours, { rep, le: new Date().toISOString() });
+  }, [cleSecours, rep, modifie]);
+
+  // Fermer l'onglet avec des réponses non enregistrées : le navigateur demande confirmation.
+  useEffect(() => {
+    if (!modifie) return;
+    const avertir = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", avertir);
+    return () => window.removeEventListener("beforeunload", avertir);
+  }, [modifie]);
 
   const effacerErreur = (k: string) =>
     setErreurs((e) => (e[k] ? Object.fromEntries(Object.entries(e).filter(([x]) => x !== k)) : e));
   const setCopro = (qid: string, v: Val | undefined) => {
     setSaved(null);
+    setModifie(true);
     effacerErreur("copro:" + qid);
     setRep((r) => (r ? { ...r, copro: { ...r.copro, [qid]: v } } : r));
   };
   const setLot = (lotId: string) => (qid: string, v: Val | undefined) => {
     setSaved(null);
+    setModifie(true);
     effacerErreur(`lot:${lotId}:${qid}`);
     setRep((r) => (r ? { ...r, lots: { ...r.lots, [lotId]: { ...r.lots[lotId], [qid]: v } } } : r));
   };
+
+  // Dernière transmission enregistrée en base ; « déjà transmis » tant que rien n'a bougé depuis.
+  const repBase = (reponse?.reponses ?? null) as ReponsesJson | null;
+  const transmisLe = repBase?.complet ? (repBase.transmisLe ?? reponse?.updated_at ?? null) : null;
+  const dejaTransmis = !!transmisLe && !modifie;
 
   const coproQs = questions.filter((q) => !q.custom && SECTIONS_COPRO.includes(q.section));
   const customQs = questions.filter((q) => q.custom && q.on);
@@ -414,6 +521,10 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
         onSuccess: (p) => {
           if (p) setProfilSauve(p);
           setSaved(mode);
+          setModifie(false);
+          setRestaure(false);
+          if (cleSecours) ecrireSecours(cleSecours, null);
+          if (transmis) setConfirmation(new Date().toISOString());
         },
       }
     );
@@ -452,6 +563,117 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
   const nbErreurs = Object.keys(erreurs).length;
   const profilStatut = reponse?.profil_statut ?? null;
   const profilVerifieLe = reponse?.profil_verifie_le ?? null;
+
+  /** Attestation, boutons et messages de transmission - repris en haut (colonne
+   *  de droite) et en bas du questionnaire (feedback Théa 30/09/2026). */
+  const blocActions = (
+    <>
+      {dejaTransmis && transmisLe ? (
+        <div className="eq-transmis" role="status">
+          <Icon name="checkCircle" size={18} />
+          <div>
+            <b>Questionnaire transmis</b> le {fmtDateHeure(transmisLe)}.
+            <div className="se-small">
+              Votre AMO a bien reçu vos réponses. Vous pouvez encore les corriger : il faudra alors les
+              transmettre à nouveau.
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <label className={"eq-atteste" + (erreurAttestation ? " ko" : "")}>
+            <input
+              type="checkbox"
+              checked={atteste}
+              onChange={(e) => {
+                setAtteste(e.target.checked);
+                if (e.target.checked) setErreurAttestation(false);
+              }}
+            />
+            <span>
+              J'atteste que ces informations sont exactes et complètes, et j'accepte qu'elles servent au
+              calcul de mes aides. <b>*</b>
+            </span>
+          </label>
+          {erreurAttestation && (
+            <p className="eq-erreur" role="alert">
+              <Icon name="alert" size={13} />
+              Case obligatoire : cochez l'attestation pour transmettre votre questionnaire.
+            </p>
+          )}
+        </>
+      )}
+      <button
+        className={"se-btn se-btn-primary" + (dejaTransmis ? " eq-btn-transmis" : "")}
+        style={{ width: "100%", marginTop: 12, justifyContent: "center" }}
+        onClick={() => doSave("transmis")}
+        disabled={save.isPending || dejaTransmis}
+      >
+        <Icon name={dejaTransmis ? "check" : "checkCircle"} size={17} />
+        {save.isPending
+          ? "Enregistrement…"
+          : dejaTransmis
+            ? "Questionnaire transmis"
+            : transmisLe
+              ? "Transmettre mes modifications"
+              : "Transmettre mon questionnaire"}
+      </button>
+      {!dejaTransmis && (
+        <button
+          className="se-btn se-btn-ghost btn-sm"
+          style={{ width: "100%", marginTop: 8, justifyContent: "center" }}
+          onClick={() => doSave("brouillon")}
+          disabled={save.isPending}
+        >
+          Enregistrer un brouillon et finir plus tard
+        </button>
+      )}
+      {modifie && !save.isPending && (
+        <p className="eq-non-enr">
+          <Icon name="clock" size={13} />
+          Modifications non enregistrées
+        </p>
+      )}
+      {nbErreurs > 0 && (
+        <div className="eq-erreurs" role="alert">
+          <b>
+            {nbErreurs} réponse{nbErreurs > 1 ? "s" : ""} manquante{nbErreurs > 1 ? "s" : ""} ou à corriger
+          </b>{" "}
+          - le questionnaire ne peut pas être transmis en l'état :
+          <ul>
+            {Object.entries(erreurs).slice(0, 6).map(([k, msg]) => (
+              <li key={k}>
+                <a
+                  href={"#" + anchorId(k)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document.getElementById(anchorId(k))?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }}
+                >
+                  {msg}
+                </a>
+              </li>
+            ))}
+            {nbErreurs > 6 && <li>… et {nbErreurs - 6} autre{nbErreurs - 6 > 1 ? "s" : ""}.</li>}
+          </ul>
+        </div>
+      )}
+      {saved === "brouillon" && !modifie && (
+        <p className="eq-brouillon" role="status">
+          <Icon name="check" size={14} />
+          <span>
+            Brouillon enregistré. L'enquête sera considérée comme faite quand vous aurez transmis le
+            questionnaire complet.
+          </span>
+        </p>
+      )}
+      {save.isError && (
+        <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 10, marginBottom: 0 }}>
+          L'enregistrement a échoué. Réessayez ou contactez votre AMO.
+        </p>
+      )}
+    </>
+  );
 
   return (
     <div className="fade">
@@ -498,6 +720,15 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
       {enquete && rep && (
         <div className="split">
           <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+            {restaure && (
+              <div className="cc-next" role="status">
+                <Icon name="refresh" size={15} className="ico" />
+                <span>
+                  Nous avons remis en place les réponses que vous n'aviez pas encore enregistrées. Pensez à
+                  enregistrer un brouillon ou à transmettre le questionnaire.
+                </span>
+              </div>
+            )}
             <div className="card-xl">
               <div className="cx-head">
                 <Icon name="user" size={20} style={{ color: "var(--accent)" }} />
@@ -537,10 +768,34 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                 </div>
               </div>
             ))}
+
+            {/* Bas de page : pas besoin de remonter pour enregistrer (feedback Théa 30/09/2026). */}
+            <div className="card-xl eq-fin">
+              <div className="cx-head">
+                <Icon name={dejaTransmis ? "checkCircle" : "send"} size={20} style={{ color: "var(--accent)" }} />
+                <h2>{dejaTransmis ? "Questionnaire transmis" : "Vous avez terminé ?"}</h2>
+                <span style={{ flex: 1 }}></span>
+                <span className="se-small" style={{ color: "var(--fg-muted)" }}>
+                  {nbRepondu} / {allVisible.length} réponses
+                </span>
+              </div>
+              <div className="cx-body">
+                {blocActions}
+                <button
+                  type="button"
+                  className="se-btn se-btn-ghost btn-sm"
+                  style={{ width: "100%", marginTop: 8, justifyContent: "center" }}
+                  onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                >
+                  <Icon name="chevronUp" size={15} />
+                  Remonter en haut de la page
+                </button>
+              </div>
+            </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            <div className="card-xl">
+            <div className="card-xl eq-actions-cote">
               <div className="cx-body">
                 <div className="kv">
                   <span className="k">Progression</span>
@@ -560,83 +815,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                     </Badge>
                   )}
                 </div>
-                <label className={"eq-atteste" + (erreurAttestation ? " ko" : "")}>
-                  <input
-                    type="checkbox"
-                    checked={atteste}
-                    onChange={(e) => {
-                      setAtteste(e.target.checked);
-                      if (e.target.checked) setErreurAttestation(false);
-                    }}
-                  />
-                  <span>
-                    J'atteste que ces informations sont exactes et complètes, et j'accepte qu'elles servent au
-                    calcul de mes aides. <b>*</b>
-                  </span>
-                </label>
-                {erreurAttestation && (
-                  <p className="eq-erreur" role="alert">
-                    <Icon name="alert" size={13} />
-                    Case obligatoire : cochez l'attestation pour transmettre votre questionnaire.
-                  </p>
-                )}
-                <button
-                  className="se-btn se-btn-primary"
-                  style={{ width: "100%", marginTop: 12, justifyContent: "center" }}
-                  onClick={() => doSave("transmis")}
-                  disabled={save.isPending}
-                >
-                  <Icon name="checkCircle" size={17} />
-                  {save.isPending ? "Enregistrement…" : "Transmettre mon questionnaire"}
-                </button>
-                <button
-                  className="se-btn se-btn-ghost btn-sm"
-                  style={{ width: "100%", marginTop: 8, justifyContent: "center" }}
-                  onClick={() => doSave("brouillon")}
-                  disabled={save.isPending}
-                >
-                  Enregistrer un brouillon et finir plus tard
-                </button>
-                {nbErreurs > 0 && (
-                  <div className="eq-erreurs" role="alert">
-                    <b>
-                      {nbErreurs} réponse{nbErreurs > 1 ? "s" : ""} manquante{nbErreurs > 1 ? "s" : ""} ou à corriger
-                    </b>{" "}
-                    - le questionnaire ne peut pas être transmis en l'état :
-                    <ul>
-                      {Object.entries(erreurs).slice(0, 6).map(([k, msg]) => (
-                        <li key={k}>
-                          <a
-                            href={"#" + anchorId(k)}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              document.getElementById(anchorId(k))?.scrollIntoView({ behavior: "smooth", block: "center" });
-                            }}
-                          >
-                            {msg}
-                          </a>
-                        </li>
-                      ))}
-                      {nbErreurs > 6 && <li>… et {nbErreurs - 6} autre{nbErreurs - 6 > 1 ? "s" : ""}.</li>}
-                    </ul>
-                  </div>
-                )}
-                {saved === "transmis" && (
-                  <p className="se-small" style={{ color: "var(--color-success-700)", marginTop: 10, marginBottom: 0 }}>
-                    Merci ! Votre questionnaire est complet et transmis à votre AMO.
-                  </p>
-                )}
-                {saved === "brouillon" && (
-                  <p className="se-small" style={{ color: "var(--fg2)", marginTop: 10, marginBottom: 0 }}>
-                    Brouillon enregistré - l'enquête sera considérée comme faite quand vous aurez transmis le
-                    questionnaire complet.
-                  </p>
-                )}
-                {save.isError && (
-                  <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 10, marginBottom: 0 }}>
-                    L'enregistrement a échoué. Réessayez ou contactez votre AMO.
-                  </p>
-                )}
+                {blocActions}
               </div>
             </div>
 
@@ -732,7 +911,9 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
 
             {/* Sous les plafonds de l'Anah : le dépôt de l'avis d'imposition, seule
                 pièce encore attendue du copropriétaire (feedback Amir 22/09/2026). */}
-            <DepotAvisImposition membership={membership} />
+            <div id="eq-avis">
+              <DepotAvisImposition membership={membership} />
+            </div>
 
             <div className="cc-next">
               <Icon name="checkCircle" size={15} className="ico" />
@@ -741,6 +922,44 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
           </div>
         </div>
       )}
+
+      {confirmation && (
+        <Modal title="Questionnaire transmis" onClose={() => setConfirmation(null)} width={480}>
+          <div className="eq-confirm">
+            <span className="eq-confirm-ico">
+              <Icon name="check" size={30} />
+            </span>
+            <p className="se-body" style={{ margin: 0 }}>
+              Merci ! Vos réponses ont bien été transmises à l'équipe Strat Eco le {fmtDateHeure(confirmation)}.
+            </p>
+            {!avisDepose && (
+              <p className="se-small" style={{ margin: 0, color: "var(--fg2)" }}>
+                Dernière étape : si vous êtes éligible aux aides, déposez votre avis d'imposition (toutes les
+                pages) sur cette même page.
+              </p>
+            )}
+            <div className="eq-confirm-actions">
+              {!avisDepose && (
+                <button
+                  className="se-btn se-btn-primary"
+                  onClick={() => {
+                    setConfirmation(null);
+                    document.getElementById("eq-avis")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }}
+                >
+                  <Icon name="upload" size={16} />
+                  Déposer mon avis d'imposition
+                </button>
+              )}
+              <button className="se-btn se-btn-secondary" onClick={() => setConfirmation(null)}>
+                Fermer
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {enquete && rep && <RemonterEnHaut />}
     </div>
   );
 }

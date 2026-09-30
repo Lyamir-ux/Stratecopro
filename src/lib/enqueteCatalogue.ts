@@ -73,6 +73,12 @@ const SCI = ["SCI soumise à l'impôt sur le revenu", "SCI soumise à l'impôt s
 const MENAGE: Condition = { qid: "type-coproprietaire", vals: ["Personne physique", "Indivision"], defaut: true };
 const HAB = { qid: "usage-lot", vals: ["Habitation"] };
 const HAB_COM = { qid: "usage-lot", vals: ["Habitation", "Commerce"] };
+/** Logement équipé de radiateurs (posée tant que les émetteurs ne sont pas renseignés). */
+const EMETTEURS_RADIATEURS: Condition = {
+  qid: "emetteurs-chauffage",
+  vals: ["Radiateurs à eau chaude", "Radiateurs ou convecteurs électriques"],
+  defaut: true,
+};
 
 export const CATALOGUE: CatalogueQuestion[] = [
   // ========== Identité & coordonnées ==========
@@ -200,10 +206,23 @@ export const CATALOGUE: CatalogueQuestion[] = [
     options: ["Gaz", "Électricité (ballon / cumulus)", "Fioul", "Solaire", "Même système que le chauffage", "Autre (précisez)", "Je ne sais pas"], precision: ["Autre (précisez)"],
     cond: [HAB_COM], defaultOn: true,
   },
-  { id: "nb-radiateurs", section: "technique", tag: "Radiateurs", q: "Combien y a-t-il de radiateurs ?", type: "nombre", cond: [HAB_COM], defaultOn: true },
+  // Émetteurs (feedback Cyrielle KLEIN 30/09/2026 : pas de plancher chauffant ni
+  // de plafond rayonnant). Les questions sur les radiateurs ne se posent que
+  // s'il y en a - et restent posées tant que les émetteurs ne sont pas renseignés
+  // (réponses enregistrées avant l'ajout de cette question).
+  {
+    id: "emetteurs-chauffage", section: "technique", tag: "Émetteurs de chauffage", q: "Comment votre logement est-il chauffé ?", type: "multi",
+    options: ["Radiateurs à eau chaude", "Radiateurs ou convecteurs électriques", "Plancher chauffant", "Plafond rayonnant", "Poêle ou cheminée", "Autre (précisez)", "Je ne sais pas"], precision: ["Autre (précisez)"],
+    aide: "Plusieurs réponses possibles.",
+    cond: [HAB_COM], defaultOn: true,
+  },
+  {
+    id: "nb-radiateurs", section: "technique", tag: "Radiateurs", q: "Combien y a-t-il de radiateurs ?", type: "nombre",
+    cond: [HAB_COM, EMETTEURS_RADIATEURS], defaultOn: true,
+  },
   {
     id: "regulation-radiateurs", section: "technique", tag: "Régulation des radiateurs", q: "Sont-ils équipés de robinets thermostatiques ou de systèmes de régulation ?", type: "choix",
-    options: ["Oui, sur tous les radiateurs", "Oui, sur une partie seulement", "Non", "Je ne sais pas"], cond: [HAB_COM], defaultOn: true,
+    options: ["Oui, sur tous les radiateurs", "Oui, sur une partie seulement", "Non", "Je ne sais pas"], cond: [HAB_COM, EMETTEURS_RADIATEURS], defaultOn: true,
   },
   {
     id: "pathologies", section: "technique", tag: "Pathologies à signaler", q: "Avez-vous des pathologies à signaler ?", type: "multi",

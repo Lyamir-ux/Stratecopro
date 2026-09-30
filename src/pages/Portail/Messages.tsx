@@ -2,11 +2,12 @@
 // « Envoyez-nous un message ». Un seul fil, privé, entre le copropriétaire et
 // l'équipe Strat Eco de son dossier - ni les autres copropriétaires, ni le
 // syndic, ni les entreprises ne le lisent (RLS 0088). Les annonces que l'AMO
-// adresse à tous les copropriétaires depuis l'onglet Communications s'affichent
-// dans le même fil, signalées comme telles.
+// adresse à tous les copropriétaires depuis l'onglet Communications ont leur
+// propre encadré, au-dessus du fil privé : mêlées au fil, elles faisaient douter
+// de sa confidentialité (feedback Cyrielle KLEIN 30/09/2026).
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
-import { Avatar, Badge } from "@/components/ui";
+import { Avatar } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
 import { useAuth } from "@/auth/AuthProvider";
 import {
@@ -39,8 +40,10 @@ export function Messages({ membership }: { membership: Membership }) {
   const [envoye, setEnvoye] = useState(false);
   const zone = useRef<HTMLTextAreaElement>(null);
 
-  const fil = messages ?? [];
-  const dernierRecu = fil.filter((m) => m.user_id !== session?.user.id).slice(-1)[0]?.created_at ?? null;
+  const tous = messages ?? [];
+  const fil = tous.filter((m) => m.coproprietaire_id != null);
+  const annonces = tous.filter((m) => m.coproprietaire_id == null).reverse(); // la plus récente d'abord
+  const dernierRecu = tous.filter((m) => m.user_id !== session?.user.id).slice(-1)[0]?.created_at ?? null;
   useEffect(() => {
     if (!dernierRecu || isApercu) return;
     const repere = (lectures ?? []).find((l) => l.copro_id === membership.copro.id)?.last_read_at;
@@ -87,14 +90,45 @@ export function Messages({ membership }: { membership: Membership }) {
         </p>
       </div>
 
+      {annonces.length > 0 && (
+        <div className="card-xl">
+          <div className="cx-head">
+            <Icon name="megaphone" size={20} style={{ color: "var(--color-secondary-500)" }} />
+            <h2 style={{ fontSize: 18 }}>Annonces à tous les copropriétaires</h2>
+          </div>
+          <div className="cx-body" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <p className="se-small" style={{ margin: 0, color: "var(--fg-muted)" }}>
+              Informations que l'équipe Strat Eco adresse à l'ensemble des copropriétaires de{" "}
+              {membership.copro.name}. Elles ne font pas partie de votre fil privé.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {annonces.map((m) => (
+                <div className="note" key={m.id}>
+                  <Avatar who="SE" name={m.auteur_nom} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="nbody" style={{ whiteSpace: "pre-wrap" }}>{m.body}</div>
+                    <div className="nmeta">
+                      {m.auteur_nom || "Strat Eco"} · Strat Eco · {fmtDate(m.created_at)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="card-xl">
         <div className="cx-head">
-          <Icon name="message" size={20} style={{ color: "var(--accent)" }} />
-          <h2 style={{ fontSize: 18 }}>Votre fil avec Strat Eco</h2>
+          <Icon name="lock" size={20} style={{ color: "var(--accent)" }} />
+          <h2 style={{ fontSize: 18 }}>Votre fil privé avec Strat Eco</h2>
           <span style={{ flex: 1 }}></span>
           <span className="se-small" style={{ color: "var(--fg-muted)" }}>{membership.copro.name}</span>
         </div>
         <div className="cx-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <p className="se-small" style={{ margin: 0, color: "var(--fg-muted)" }}>
+            Seuls vous et l'équipe Strat Eco lisez ce fil.
+          </p>
           {isLoading ? (
             <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>Chargement…</p>
           ) : fil.length === 0 ? (
@@ -106,19 +140,17 @@ export function Messages({ membership }: { membership: Membership }) {
             <div style={{ display: "flex", flexDirection: "column" }}>
               {fil.map((m) => {
                 const deMoi = m.auteur_role === "copro";
-                const annonce = m.coproprietaire_id == null;
                 return (
                   <div className="note" key={m.id}>
                     <Avatar who={deMoi ? initiales(m.auteur_nom || membership.nom) : "SE"} name={m.auteur_nom} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="nbody" style={{ whiteSpace: "pre-wrap" }}>{m.body}</div>
-                      <div className="nmeta" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <div className="nmeta">
                         {deMoi
                           ? `${m.auteur_nom || membership.nom} · Vous`
                           : `${m.auteur_nom || "Strat Eco"} · Strat Eco`}
                         {" · "}
                         {fmtDate(m.created_at)}
-                        {annonce && <Badge kind="neutral">Annonce à tous les copropriétaires</Badge>}
                       </div>
                     </div>
                   </div>

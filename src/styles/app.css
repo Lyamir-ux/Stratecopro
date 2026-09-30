@@ -107,10 +107,22 @@ button { font-family: inherit; }
   border-radius: var(--radius-md); cursor: pointer;
 }
 .sb-user:hover { background: var(--bg-soft); }
-.sb-user .meta { min-width: 0; }
+.sb-user .meta { min-width: 0; display: flex; flex-direction: column; line-height: 1.3; } /* nom puis enseigne, sur deux lignes */
 .sb-user .nm { font-size: 13px; font-weight: 600; color: var(--fg1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sb-user .rl { font-size: 12px; color: var(--fg-muted); white-space: nowrap; }
+.sb-user .rl { font-size: 12px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .app.collapsed .sb-user .meta, .app.collapsed .sb-user .lo { display: none; }
+/* bouton de déconnexion : contrasté dans les deux thèmes de la barre latérale
+   (feedback Cyrielle MILEKIC 30/09/2026 - icône grise illisible sur le thème sombre) */
+.sb-user .lo {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: var(--radius-md);
+  border: 1px solid var(--border); background: var(--bg); color: var(--fg2);
+  transition: color 120ms, border-color 120ms, background 120ms;
+}
+.sb-user:hover .lo { color: var(--color-error-700); border-color: var(--color-error-500); background: var(--color-error-50); }
+.sidebar.dark .sb-user .rl { color: rgba(255,255,255,0.62); }
+.sidebar.dark .sb-user .lo { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.22); color: #fff; }
+.sidebar.dark .sb-user:hover .lo { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.4); color: #fff; }
 
 /* ---------- Main column ---------- */
 .main { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
@@ -1081,6 +1093,59 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .eq-atteste { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; font-size: 13px; color: var(--fg2); cursor: pointer; line-height: 1.4; }
 .eq-atteste input { margin-top: 2px; flex: none; }
 .eq-atteste.ko { color: var(--color-error-700); }
+
+/* Retours du 30/09/2026 - enquête : état « transmis », confirmation, bas de page,
+   haut de page ; avis d'imposition : état en toutes lettres ; financement :
+   récapitulatif du choix et date limite. */
+.eq-transmis {
+  display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; padding: 12px 14px;
+  border-radius: var(--radius-md); background: var(--color-success-50); color: var(--color-success-700);
+  border: 1px solid var(--color-success-500); font-size: 13.5px; line-height: 1.45;
+}
+.eq-transmis > svg { flex: none; margin-top: 1px; }
+.eq-transmis .se-small { color: var(--fg2); margin-top: 3px; }
+.se-btn.se-btn-primary.eq-btn-transmis,
+.se-btn.se-btn-primary.eq-btn-transmis:disabled {
+  background: var(--color-success-50); color: var(--color-success-700);
+  border-color: var(--color-success-500); opacity: 1; cursor: default;
+}
+.eq-non-enr { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 8px 0 0; font-size: 12px; color: var(--color-warning-700); }
+.eq-brouillon { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0 0; padding: 10px 12px; border-radius: var(--radius-md); background: var(--bg-soft); border: 1px solid var(--border); font-size: 12.5px; color: var(--fg2); }
+.eq-brouillon > svg { flex: none; margin-top: 1px; color: var(--color-primary-700); }
+.eq-confirm { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.eq-confirm-ico {
+  width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--color-success-500); color: #fff;
+}
+.eq-confirm-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 6px; }
+.eq-haut {
+  position: fixed; left: 22px; bottom: 22px; z-index: 110;
+  display: inline-flex; align-items: center; gap: 6px; padding: 10px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius-pill); cursor: pointer;
+  background: var(--bg); color: var(--fg1); font-family: var(--font-body); font-size: 13px; font-weight: 600;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+}
+.eq-haut:hover { border-color: var(--accent); color: var(--accent); }
+.dropzone .dz-etat { display: flex; margin: 5px 0 3px; }
+.dropzone .dz-etat .badge { white-space: nowrap; }
+.badge.b-refus { background: var(--color-error-50); color: var(--color-error-700); }
+.choix-recap { max-width: 440px; margin: 4px auto 20px; text-align: left; }
+.choix-modif {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: 0 0 18px; padding: 12px 14px;
+  border-radius: var(--radius-md); background: var(--accent-soft); border: 1px solid var(--border);
+  font-size: 13.5px; color: var(--fg1);
+}
+.choix-modif > svg { flex: none; color: var(--accent); }
+.loan-terms .term.term-actuel { background: var(--color-success-50); border-color: var(--color-success-500); color: var(--color-success-700); }
+.lien-btn { border: none; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--accent); text-decoration: underline; cursor: pointer; }
+/* téléphone (une colonne) : le bloc du bas de l'enquête remplace la carte de droite */
+@media (max-width: 900px) {
+  .eq-actions-cote { display: none; }
+}
+@media (max-width: 760px) {
+  .eq-haut { left: 14px; bottom: 14px; padding: 9px 12px; font-size: 12.5px; }
+  .choix-recap { margin-bottom: 16px; }
+}
 /* tuiles de l'accueil portail : 4 indicateurs (quote-part, aides collectives, aide individuelle, à financer) */
 .tiles.tiles-4 { grid-template-columns: repeat(4, 1fr); }
 .tile .t-val.indetermine { font-size: 20px; color: var(--fg3); font-weight: 700; padding-top: 6px; }

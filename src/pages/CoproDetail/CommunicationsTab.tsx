@@ -106,6 +106,18 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
     if (!text) return;
     const prestataireId = canal === "prestataires" && dest !== "tous" ? dest : null;
     const coproprietaireId = canal === "coproprietaires" && destCopro !== "tous" ? destCopro : null;
+    // Annonce à tous : confirmation explicite. Le 30/09/2026, une réponse à la
+    // question privée d'une copropriétaire est partie en annonce, le sélecteur
+    // étant resté sur « À tous les copropriétaires ».
+    if (
+      canal === "coproprietaires" &&
+      !coproprietaireId &&
+      !window.confirm(
+        "Publier ce message en annonce dans le portail de TOUS les copropriétaires ?\n\n" +
+          "Pour répondre à un seul copropriétaire, choisissez « Privé - … » dans le sélecteur, ou cliquez « Répondre en privé » sous son message."
+      )
+    )
+      return;
     const res = await envoyer.mutateAsync({ canal, prestataireId, coproprietaireId, body: text });
     setBody("");
     if (canal === "coproprietaires") {
@@ -216,6 +228,17 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
                   ) : (
                     <Badge kind="neutral">À tous</Badge>
                   ))}
+                {m.canal === "coproprietaires" && m.coproprietaire_id && destCopro !== m.coproprietaire_id && (
+                  <button
+                    type="button"
+                    className="se-btn se-btn-ghost btn-sm"
+                    style={{ padding: "2px 8px", fontSize: 12 }}
+                    onClick={() => setDestCopro(m.coproprietaire_id!)}
+                  >
+                    <Icon name="undo" size={12} />
+                    Répondre en privé
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -257,7 +280,13 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
           <input
             className="search"
             style={{ flex: 1, minWidth: 220, margin: 0 }}
-            placeholder="Écrire un message…"
+            placeholder={
+              canal === "coproprietaires"
+                ? destCopro === "tous"
+                  ? "Annonce à tous les copropriétaires…"
+                  : `Réponse privée à ${filsCopro.find((f) => f.id === destCopro)?.nom ?? "ce copropriétaire"}…`
+                : "Écrire un message…"
+            }
             value={body}
             onChange={(e) => setBody(e.target.value)}
             onKeyDown={(e) => {

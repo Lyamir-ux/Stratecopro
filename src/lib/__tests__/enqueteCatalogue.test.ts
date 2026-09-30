@@ -133,3 +133,23 @@ describe("affichage", () => {
     ]);
   });
 });
+
+describe("émetteurs de chauffage (feedback 30/09/2026)", () => {
+  it("propose plancher chauffant et plafond rayonnant", () => {
+    const q = CATALOGUE.find((x) => x.id === "emetteurs-chauffage")!;
+    expect(q.type).toBe("multi");
+    expect(q.options).toEqual(expect.arrayContaining(["Plancher chauffant", "Plafond rayonnant"]));
+    // posée avant les questions sur les radiateurs
+    const ids = CATALOGUE.map((x) => x.id);
+    expect(ids.indexOf("emetteurs-chauffage")).toBeLessThan(ids.indexOf("nb-radiateurs"));
+  });
+
+  it("les questions sur les radiateurs ne se posent qu'en présence de radiateurs, et restent posées sans réponse", () => {
+    for (const id of ["nb-radiateurs", "regulation-radiateurs"]) {
+      const c = CATALOGUE.find((x) => x.id === id)!.cond!.find((k) => k.qid === "emetteurs-chauffage")!;
+      expect(c.defaut).toBe(true);
+      expect(c.vals).not.toContain("Plancher chauffant");
+      expect(c.vals).toContain("Radiateurs à eau chaude");
+    }
+  });
+});

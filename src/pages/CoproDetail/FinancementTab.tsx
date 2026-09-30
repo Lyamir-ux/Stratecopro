@@ -73,12 +73,15 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   // c'est lui seul qui ouvre la campagne depuis le retrait du dossier
   // d'adhésion interne (feedback Amir 22/09/2026).
   const [lien, setLien] = useState("");
+  // Date limite du choix de financement dans le portail (0117, feedback du 30/09/2026).
+  const [dateLimite, setDateLimite] = useState("");
 
   useEffect(() => {
     if (!finConfig) return;
     setBanque(finConfig.banque);
     setDuree(finConfig.duree_annees);
     setLien(finConfig.lien_adhesion ?? "");
+    setDateLimite(finConfig.date_limite_choix ?? "");
   }, [finConfig]);
 
   const lienNettoye = lien.trim();
@@ -88,7 +91,8 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
     !finConfig ||
     finConfig.banque !== banque ||
     finConfig.duree_annees !== duree ||
-    (finConfig.lien_adhesion ?? "") !== lienNettoye;
+    (finConfig.lien_adhesion ?? "") !== lienNettoye ||
+    (finConfig.date_limite_choix ?? "") !== dateLimite;
 
   if (isLoading || !bareme) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
 
@@ -257,6 +261,20 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                   onChange={(e) => setDuree(Number(e.target.value))}
                 />
               </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                <label
+                  style={{ fontSize: 12.5, color: "var(--fg2)" }}
+                  title="Dernier jour où les copropriétaires peuvent choisir ou modifier leur financement depuis leur portail. Vide : sans limite. Après cette date, vous et le syndic pouvez encore saisir un choix pour eux."
+                >
+                  Choix modifiable jusqu'au
+                </label>
+                <input
+                  className="edit-inp"
+                  type="date"
+                  value={dateLimite}
+                  onChange={(e) => setDateLimite(e.target.value)}
+                />
+              </div>
               <button
                 className="se-btn se-btn-secondary btn-sm"
                 style={{ marginBottom: 4 }}
@@ -266,6 +284,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                     banque,
                     dureeAnnees: duree,
                     lienAdhesion: lienNettoye || null,
+                    dateLimiteChoix: dateLimite || null,
                   })
                 }
               >

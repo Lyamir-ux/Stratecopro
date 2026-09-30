@@ -38,19 +38,30 @@ export function useSaveFinancementConfig(coproId: string) {
     // d'adhésion interne (22/09/2026), c'est la présence du lien de la banque
     // qui ouvre la souscription. La colonne reste en base pour les campagnes
     // menées avant le basculement.
-    mutationFn: async (input: { banque: string; dureeAnnees: number; lienAdhesion: string | null }) => {
+    // `dateLimiteChoix` (0117) : dernier jour où le copropriétaire peut choisir ou
+    // modifier son financement depuis le portail ; null = sans limite.
+    mutationFn: async (input: {
+      banque: string;
+      dureeAnnees: number;
+      lienAdhesion: string | null;
+      dateLimiteChoix: string | null;
+    }) => {
       const { error } = await supabase.from("copro_financement_config").upsert(
         {
           copro_id: coproId,
           banque: input.banque,
           duree_annees: input.dureeAnnees,
           lien_adhesion: input.lienAdhesion,
+          date_limite_choix: input.dateLimiteChoix,
         },
         { onConflict: "copro_id" }
       );
       if (error) throw error;
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["fin-config", coproId] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["fin-config", coproId] });
+      void qc.invalidateQueries({ queryKey: ["portail", "fin-config", coproId] });
+    },
   });
 }
 

@@ -8,9 +8,14 @@
 //
 // Le dépôt (bucket privé pieces-copro) exige l'acceptation préalable des CGU du
 // service - tracée par version dans cgu_acceptations.
+//
+// Un dépôt réussi se confirme par une fenêtre, et l'encadré affiche son état
+// en toutes lettres (« Transmis », « Validé », « Refusé ») - feedback du 30/09/2026.
 import { useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
+import { Modal } from "@/components/Modal";
 import { RenommageDialog } from "@/components/RenommageDialog";
+import { Badge } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
 import { downloadFichier } from "@/api/fichiers";
 import {
@@ -40,6 +45,8 @@ export function DepotAvisImposition({ membership }: { membership: Membership }) 
   const inputRef = useRef<HTMLInputElement>(null);
   // Fichier en attente de renommage assisté avant téléversement
   const [depot, setDepot] = useState<File | null>(null);
+  // Nom du fichier qui vient d'être transmis (fenêtre de confirmation)
+  const [transmis, setTransmis] = useState<string | null>(null);
 
   const piece = (pieces ?? []).find((x) => x.type === "avis_imposition");
   // Encadré : vert une fois validé par Strat Eco, orange en attente de
@@ -139,6 +146,17 @@ export function DepotAvisImposition({ membership }: { membership: Membership }) 
               <div>
                 <div className="dz-name">
                   Avis d'imposition (N-1) <span style={{ color: "var(--color-error-500)" }}>*</span>
+                  {piece && !upload.isPending && (
+                    <span className="dz-etat">
+                      {piece.statut === "valide" ? (
+                        <Badge kind="success" dot>Validé</Badge>
+                      ) : piece.statut === "refuse" ? (
+                        <span className="badge b-refus">À redéposer</span>
+                      ) : (
+                        <Badge kind="warn" dot>Transmis - en vérification</Badge>
+                      )}
+                    </span>
+                  )}
                 </div>
                 <div className="dz-hint">{hint}</div>
               </div>
@@ -168,9 +186,34 @@ export function DepotAvisImposition({ membership }: { membership: Membership }) 
           files={[depot]}
           prefixe={membership.nom}
           typeInitial="avis_imposition"
-          onConfirm={(file) => upload.mutateAsync({ type: "avis_imposition", file })}
+          onConfirm={async (file) => {
+            await upload.mutateAsync({ type: "avis_imposition", file });
+            setTransmis(file.name);
+          }}
           onClose={() => setDepot(null)}
         />
+      )}
+
+      {transmis && !depot && (
+        <Modal title="Avis d'imposition transmis" onClose={() => setTransmis(null)} width={480}>
+          <div className="eq-confirm">
+            <span className="eq-confirm-ico">
+              <Icon name="check" size={30} />
+            </span>
+            <p className="se-body" style={{ margin: 0 }}>
+              Votre avis d'imposition a bien été transmis à l'équipe Strat Eco.
+            </p>
+            <p className="se-small" style={{ margin: 0, color: "var(--fg2)", overflowWrap: "anywhere" }}>
+              Fichier : {transmis}. Il va être vérifié : l'encadré passera au vert une fois validé ; en cas de
+              problème, vous recevrez un e-mail qui précise quoi corriger.
+            </p>
+            <div className="eq-confirm-actions">
+              <button className="se-btn se-btn-primary" onClick={() => setTransmis(null)}>
+                Fermer
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

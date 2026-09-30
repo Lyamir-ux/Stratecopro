@@ -930,6 +930,7 @@ export type Database = {
           adhesion_ouverte: boolean
           banque: string
           copro_id: string
+          date_limite_choix: string | null
           duree_annees: number
           lien_adhesion: string | null
           updated_at: string
@@ -938,6 +939,7 @@ export type Database = {
           adhesion_ouverte?: boolean
           banque?: string
           copro_id: string
+          date_limite_choix?: string | null
           duree_annees?: number
           lien_adhesion?: string | null
           updated_at?: string
@@ -946,6 +948,7 @@ export type Database = {
           adhesion_ouverte?: boolean
           banque?: string
           copro_id?: string
+          date_limite_choix?: string | null
           duree_annees?: number
           lien_adhesion?: string | null
           updated_at?: string

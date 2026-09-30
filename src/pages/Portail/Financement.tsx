@@ -9,9 +9,13 @@
 // interne (bulletins pré-remplis + mandat SEPA signés dans le portail) a été
 // retiré. Tant que l'AMO n'a pas saisi le lien, le choix est enregistré et la
 // page annonce que la souscription n'est pas encore ouverte.
+//
+// Choix transmis (feedback PIERRE PIERRE 30/09/2026) : récapitulatif de ce qui a
+// été choisi, et modification possible jusqu'à la date limite fixée par l'AMO
+// (copro_financement_config.date_limite_choix, 0117 - refusée côté serveur au-delà).
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
-import { fmtEuro } from "@/lib/format";
+import { fmtDate, fmtEuro } from "@/lib/format";
 import {
   computeIndiv,
   lotTantiemes,
@@ -33,6 +37,17 @@ const BANQUE_LABEL: Record<string, string> = {
   DOMOFINANCE: "Domofinance",
 };
 
+const LIBELLE_CHOIX: Record<TypeFinancement, string> = {
+  collectif: "Prêt collectif",
+  individuel: "Éco-PTZ individuel",
+  fonds: "Fonds propres",
+};
+
+/** Date du jour à Paris, au format AAAA-MM-JJ (comparable à une colonne date). */
+function aujourdhuiParis(): string {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
+}
+
 /** Ouvre le parcours de la banque dans un nouvel onglet - appelé dans le clic
  *  lui-même (pas après la mutation) pour ne pas être bloqué comme une pop-up. */
 function ouvrirBanque(url: string) {
@@ -46,6 +61,7 @@ export function Financement({
   plan,
   profil,
   choix,
+  go,
 }: {
   membership: Membership;
   scenarios: Scenario[];
@@ -54,6 +70,7 @@ export function Financement({
   plan: Tables<"plans_individuels"> | null;
   profil: Profil | null;
   choix: ChoixFinancement | null;
+  go?: (s: "messages") => void;
 }) {
   const lots = membership.lots;
   const { data: config } = useFinancementConfig(membership.copro.id);
@@ -88,6 +105,9 @@ export function Financement({
   const banqueNom = config ? BANQUE_LABEL[config.banque] : "la banque partenaire";
   const mensualiteCollectif = montant / (dureeCollectif * 12);
   const mensualiteIndiv = montant / (Math.max(1, yearsIndiv) * 12);
+  // Date limite fixée par l'AMO : le jour même est encore ouvert.
+  const dateLimite = config?.date_limite_choix ?? null;
+  const modifiable = !dateLimite || aujourdhuiParis() <= dateLimite;
   const toggleLot = (id: string) =>
     setSelLots((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
@@ -128,15 +148,43 @@ export function Financement({
             >
               <Icon name="check" size={32} />
             </div>
-            <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 24, margin: "0 0 8px" }}>
-              Votre choix est transmis
+            <div className="se-eyebrow" style={{ justifyContent: "center" }}>Votre choix est transmis</div>
+            <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 24, margin: "6px 0 8px" }}>
+              {choix.type === "collectif"
+                ? `Prêt collectif ${config?.banque ?? "CEGEE"}`
+                : LIBELLE_CHOIX[choix.type]}
             </h2>
             {choix.saisi_par !== "copro" && (
               <p className="se-small" style={{ color: "var(--fg-muted)", margin: "0 0 10px" }}>
-                Ce choix a été enregistré pour vous par {choix.saisi_par === "syndic" ? "votre syndic" : "votre AMO"} -
-                vous pouvez le modifier à tout moment ci-dessous.
+                Ce choix a été enregistré pour vous par {choix.saisi_par === "syndic" ? "votre syndic" : "votre AMO"}.
               </p>
             )}
+            <div className="choix-recap">
+              <div className="kv">
+                <span className="k">Mode de financement</span>
+                <span className="v">{LIBELLE_CHOIX[choix.type]}</span>
+              </div>
+              {choix.type !== "fonds" && (
+                <div className="kv">
+                  <span className="k">Durée</span>
+                  <span className="v">{choix.duree_annees ?? (choix.type === "collectif" ? dureeCollectif : yearsIndiv)} ans</span>
+                </div>
+              )}
+              {choix.type === "individuel" && (
+                <div className="kv">
+                  <span className="k">{lotsChoisis.length > 1 ? "Lots" : "Lot"}</span>
+                  <span className="v">{lotsChoisis.map((l) => "n°" + l.num).join(", ") || "-"}</span>
+                </div>
+              )}
+              <div className="kv">
+                <span className="k">Reste à financer avant travaux</span>
+                <span className="v">{fmtEuro(montant)}</span>
+              </div>
+              <div className="kv">
+                <span className="k">Transmis le</span>
+                <span className="v">{fmtDate(choix.transmitted_at)}</span>
+              </div>
+            </div>
             <p className="se-body" style={{ maxWidth: 520, margin: "0 auto 20px" }}>
               {choix.type === "fonds" ? (
                 <>Vous financez votre reste à charge de <b>{fmtEuro(montant)}</b> sur <b>fonds propres</b>, selon l'échéancier d'appels de fonds du syndic.</>
@@ -156,9 +204,39 @@ export function Financement({
                 </>
               )}
             </p>
-            <button className="se-btn se-btn-secondary" onClick={() => setEditing(true)}>
-              Modifier mon choix
-            </button>
+            {modifiable ? (
+              <>
+                <button className="se-btn se-btn-secondary" onClick={() => setEditing(true)}>
+                  <Icon name="edit" size={16} />
+                  Modifier mon choix
+                </button>
+                <p className="se-small" style={{ color: "var(--fg-muted)", margin: "10px 0 0" }}>
+                  {dateLimite ? (
+                    <>
+                      Vous pouvez modifier votre choix jusqu'au <b>{fmtDate(dateLimite)}</b> inclus.
+                    </>
+                  ) : (
+                    "Vous pouvez encore modifier votre choix."
+                  )}
+                </p>
+              </>
+            ) : (
+              <div className="cc-next" style={{ textAlign: "left", maxWidth: 520, margin: "0 auto" }}>
+                <Icon name="lock" size={15} className="ico" />
+                <span>
+                  La date limite pour modifier votre choix était le <b>{dateLimite ? fmtDate(dateLimite) : ""}</b>.
+                  Pour tout changement, écrivez à votre AMO.
+                  {go && (
+                    <>
+                      {" "}
+                      <button type="button" className="lien-btn" onClick={() => go("messages")}>
+                        Nous contacter
+                      </button>
+                    </>
+                  )}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -200,10 +278,57 @@ export function Financement({
     );
   }
 
+  // ---------- Date limite passée, aucun choix transmis ----------
+  if (!modifiable && !choix) {
+    return (
+      <div className="fade">
+        <h1 className="sec-title">Mon financement</h1>
+        <div className="cc-next">
+          <Icon name="lock" size={15} className="ico" />
+          <span>
+            La date limite pour choisir votre financement était le <b>{dateLimite ? fmtDate(dateLimite) : ""}</b>.
+            Écrivez à votre AMO pour lui indiquer votre choix.
+            {go && (
+              <>
+                {" "}
+                <button type="button" className="lien-btn" onClick={() => go("messages")}>
+                  Nous contacter
+                </button>
+              </>
+            )}
+          </span>
+        </div>
+        <MentionsPrudence />
+      </div>
+    );
+  }
+
   // ---------- Sélection ----------
   return (
     <div className="fade">
       <h1 className="sec-title">Mon financement</h1>
+      {choix && editing && (
+        <div className="choix-modif">
+          <Icon name="edit" size={16} />
+          <span style={{ flex: 1, minWidth: 0 }}>
+            Vous modifiez votre choix actuel : <b>{LIBELLE_CHOIX[choix.type]}</b>. Il reste enregistré tant que
+            vous n'en avez pas confirmé un autre
+            {dateLimite ? <> (modifiable jusqu'au {fmtDate(dateLimite)} inclus)</> : null}.
+          </span>
+          <button className="se-btn se-btn-ghost btn-sm" onClick={() => setEditing(false)}>
+            Annuler
+          </button>
+        </div>
+      )}
+      {!choix && dateLimite && (
+        <div className="cc-next" style={{ marginBottom: 18 }}>
+          <Icon name="calendar" size={15} className="ico" />
+          <span>
+            Choix à transmettre au plus tard le <b>{fmtDate(dateLimite)}</b>. Vous pourrez le modifier jusqu'à
+            cette date.
+          </span>
+        </div>
+      )}
       <p className="sec-sub">
         Choisissez comment financer votre reste à charge de <b>{fmtEuro(montant)}</b> : prêt collectif, éco-PTZ
         individuel ou fonds propres.
@@ -230,19 +355,30 @@ export function Financement({
           <p style={{ marginTop: 6 }}>
             Vous pouvez emprunter <b>la totalité de votre quote-part ou une partie seulement</b>.
           </p>
-          <div className="loan-terms"><span className="term">Recommandé</span><span className="term">Durée votée en AG</span></div>
+          <div className="loan-terms">
+            {choix?.type === "collectif" && <span className="term term-actuel">Votre choix actuel</span>}
+            <span className="term">Recommandé</span>
+            <span className="term">Durée votée en AG</span>
+          </div>
         </div>
         <div className={"loan-opt" + (type === "individuel" ? " sel" : "")} onClick={() => setType("individuel")}>
           <div className="lo-ico"><Icon name="user" size={22} /></div>
           <h3>Éco-PTZ individuel</h3>
           <p>Vous contractez l'éco-PTZ directement auprès de votre banque, lot par lot, et choisissez votre durée.</p>
-          <div className="loan-terms"><span className="term">Votre banque</span><span className="term">Durée au choix</span></div>
+          <div className="loan-terms">
+            {choix?.type === "individuel" && <span className="term term-actuel">Votre choix actuel</span>}
+            <span className="term">Votre banque</span>
+            <span className="term">Durée au choix</span>
+          </div>
         </div>
         <div className={"loan-opt" + (type === "fonds" ? " sel" : "")} onClick={() => setType("fonds")}>
           <div className="lo-ico"><Icon name="euro" size={22} /></div>
           <h3>Fonds propres</h3>
           <p>Vous réglez votre reste à charge sans recourir à un prêt, selon l'échéancier d'appels de fonds.</p>
-          <div className="loan-terms"><span className="term">Sans crédit</span></div>
+          <div className="loan-terms">
+            {choix?.type === "fonds" && <span className="term term-actuel">Votre choix actuel</span>}
+            <span className="term">Sans crédit</span>
+          </div>
         </div>
       </div>
 
