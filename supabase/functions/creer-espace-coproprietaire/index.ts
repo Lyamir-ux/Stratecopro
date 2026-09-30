@@ -13,9 +13,12 @@
 //   • adresse d'un compte AMO, syndic ou prestataire : refusée (un compte garde
 //     un seul rôle, arbitrage d'Amir du 30/09) ;
 //   • fiche sortante (0090) ou sans adresse : ignorée.
-// Le lien est généré ici (generateLink) et envoyé par Resend, pas par le
-// service d'e-mails de l'authentification. L'écran appelle la fonction par
-// paquets de quelques fiches : Resend limite le débit, les envois sont espacés.
+// Le jeton est généré ici (generateLink) et envoyé par Resend, pas par le
+// service d'e-mails de l'authentification. Le bouton de l'e-mail mène à la page
+// /activer-espace de l'app, qui ne vérifie le jeton qu'au clic : les messageries
+// qui ouvrent les liens pour les analyser ne le consomment pas. L'écran appelle
+// la fonction par paquets de quelques fiches : Resend limite le débit, les
+// envois sont espacés.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const cors = {
@@ -138,18 +141,15 @@ Deno.serve(async (req: Request) => {
       </a>
     </p>`;
 
-  /** E-mail d'activation : lien pour choisir son mot de passe. */
+  /** E-mail d'activation : lien vers /activer-espace pour choisir son mot de passe. */
   const envoyerActivation = async (email: string, nom: string, copro: string): Promise<Envoi> => {
-    const { data: lien, error } = await admin.auth.admin.generateLink({
-      type: "recovery",
-      email,
-      options: { redirectTo: `${appUrl}/reinitialisation` },
-    });
-    const actionLink = lien?.properties?.action_link;
-    if (error || !actionLink) {
+    const { data: lien, error } = await admin.auth.admin.generateLink({ type: "recovery", email });
+    const jeton = lien?.properties?.hashed_token;
+    if (error || !jeton) {
       console.error("Lien d'activation impossible", error);
       return "echec";
     }
+    const actionLink = `${appUrl}/activer-espace?token_hash=${encodeURIComponent(jeton)}`;
     const html = gabarit(
       nom,
       `<p>Strat Eco accompagne votre copropriété <strong>${esc(copro)}</strong> dans son projet de rénovation

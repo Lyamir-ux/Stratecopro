@@ -5,6 +5,7 @@ import { RequireRole } from "./auth/RequireRole";
 import Login from "./pages/Login";
 import MotDePasseOublie from "./pages/MotDePasseOublie";
 import Reinitialisation from "./pages/Reinitialisation";
+import ActiverEspace from "./pages/ActiverEspace";
 import Dashboard from "./pages/Dashboard";
 import CoproDetail from "./pages/CoproDetail";
 import Ingenierie from "./pages/Ingenierie";
@@ -34,6 +35,8 @@ export const router = createBrowserRouter([
   { path: "/login", element: <Login /> },
   { path: "/mot-de-passe-oublie", element: <MotDePasseOublie /> },
   { path: "/reinitialisation", element: <Reinitialisation /> },
+  // activation de l'espace copropriétaire : le jeton n'est vérifié qu'au clic
+  { path: "/activer-espace", element: <ActiverEspace /> },
   // pages publiques : cosignataires sans compte (lien tokenisé) et CGU
   { path: "/signature/:token", element: <SignaturePublique /> },
   { path: "/signature-fiche/:token", element: <SignatureFichePublique /> },
