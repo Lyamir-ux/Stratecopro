@@ -41,21 +41,11 @@ export default function Login() {
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1.05fr 1fr", height: "100vh" }}>
-      {/* Panneau de marque */}
-      <div
-        style={{
-          position: "relative",
-          overflow: "hidden",
-          background: "linear-gradient(150deg, #213A0E 0%, #355717 55%, #4A7A1F 100%)",
-          color: "#fff",
-          padding: "56px 64px",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <img src="/logo-strateco-pro-white.png" alt="Strat Eco" style={{ height: 44, alignSelf: "flex-start" }} />
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", maxWidth: 460 }}>
+    <div className="login-page">
+      {/* Panneau de marque (bandeau avec le logo sur téléphone) */}
+      <div className="login-brand">
+        <img className="login-logo" src="/logo-strateco-pro-white.png" alt="Strat Eco" />
+        <div className="login-accroche">
           <div className="se-eyebrow" style={{ color: "rgba(255,255,255,0.7)" }}>
             Plateforme collaborative pour la rénovation énergétique des copropriétés
           </div>
@@ -87,16 +77,7 @@ export default function Login() {
       </div>
 
       {/* Panneau de connexion */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          padding: "56px 72px",
-          background: "var(--bg)",
-          overflowY: "auto",
-        }}
-      >
+      <div className="login-panel">
         <form style={{ maxWidth: 420, width: "100%", margin: "0 auto" }} onSubmit={submit}>
           <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 30, margin: "0 0 6px" }}>
             Connexion
@@ -131,7 +112,7 @@ export default function Login() {
           <div className="se-eyebrow" style={{ marginTop: 26, marginBottom: 12, color: "var(--fg-muted)" }}>
             Votre espace
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div className="login-roles">
             {ROLES.map((r) => (
               <button
                 key={r.id}

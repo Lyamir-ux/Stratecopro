@@ -214,7 +214,7 @@ export function Accueil({
         {todos.map((t) => (
           <div key={t.title} className={"todo-card" + (t.done ? " done" : "")} onClick={() => go(t.id)}>
             <span className="tc-ico"><Icon name={(t.done ? "checkCircle" : t.ico) as never} size={22} /></span>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div className="tc-title">{t.title}</div>
               <div className="tc-sub">{t.sub}</div>
             </div>

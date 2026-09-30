@@ -122,7 +122,7 @@ export function RenommageDialog({
         <Icon name="fileText" size={13} /> Fichier d'origine : <b>{file.name}</b>
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="renommage-grille">
         <div className="cs-field">
           <label>Type de document</label>
           <select className="edit-inp" style={{ maxWidth: "none", width: "100%" }} value={champs.type} onChange={(e) => set("type", e.target.value)}>

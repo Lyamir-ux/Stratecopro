@@ -693,32 +693,34 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                       Revenu fiscal de référence maximal du ménage
                       {bareme.zone === "hors_idf" ? " - hors Île-de-France" : " - Île-de-France"} :
                     </p>
-                    <table className="anah-table">
-                      <thead>
-                        <tr>
-                          <th>Ménage</th>
-                          <th>Très modeste</th>
-                          <th>Modeste</th>
-                          <th>Intermédiaire</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {([1, 2, 3, 4, 5] as const).map((n) => (
-                          <tr key={n}>
-                            <td>{n} pers.</td>
-                            {bareme.mprSeuils.seuils[n].map((s, i) => (
-                              <td key={i}>≤ {fmtEuro(s)}</td>
+                    <div className="anah-scroll">
+                      <table className="anah-table">
+                        <thead>
+                          <tr>
+                            <th>Ménage</th>
+                            <th>Très modeste</th>
+                            <th>Modeste</th>
+                            <th>Intermédiaire</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {([1, 2, 3, 4, 5] as const).map((n) => (
+                            <tr key={n}>
+                              <td>{n} pers.</td>
+                              {bareme.mprSeuils.seuils[n].map((s, i) => (
+                                <td key={i}>≤ {fmtEuro(s)}</td>
+                              ))}
+                            </tr>
+                          ))}
+                          <tr>
+                            <td>+ pers. supp.</td>
+                            {bareme.mprSeuils.parPers.map((s, i) => (
+                              <td key={i}>+ {fmtEuro(s)}</td>
                             ))}
                           </tr>
-                        ))}
-                        <tr>
-                          <td>+ pers. supp.</td>
-                          {bareme.mprSeuils.parPers.map((s, i) => (
-                            <td key={i}>+ {fmtEuro(s)}</td>
-                          ))}
-                        </tr>
-                      </tbody>
-                    </table>
+                        </tbody>
+                      </table>
+                    </div>
                     <p className="se-small" style={{ marginTop: 10, marginBottom: 0 }}>
                       Au-delà du plafond « intermédiaire », le ménage relève des revenus supérieurs. Répondez aux
                       questions <b>ménage</b> et <b>revenu fiscal de référence</b> : votre catégorie s'affichera ici.

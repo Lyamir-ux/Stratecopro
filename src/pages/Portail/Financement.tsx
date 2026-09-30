@@ -112,7 +112,7 @@ export function Financement({
       <div className="fade">
         <h1 className="sec-title">Mon financement</h1>
         <div className="card-xl fade" style={{ maxWidth: choix.type === "collectif" ? undefined : 660 }}>
-          <div className="cx-body" style={{ textAlign: "center", padding: "34px 40px 30px" }}>
+          <div className="cx-body choix-transmis">
             <div
               style={{
                 width: 64,

@@ -1,6 +1,6 @@
 // Espace copropriétaire (portail) - port de design-reference/project/copro.jsx.
 // Sélection de copro (si plusieurs rattachements), en-tête, navigation, sections.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Avatar, PhaseBadge, THUMB_BG } from "@/components/ui";
@@ -183,8 +183,8 @@ function CoproSelect({
           </button>
         </div>
       </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
-        <div style={{ maxWidth: 560, width: "100%", textAlign: "center" }}>
+      <div className="portal-choix">
+        <div className="portal-choix-in">
           <div className="se-eyebrow" style={{ justifyContent: "center" }}>Votre espace</div>
           <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 34, margin: "10px 0 8px", letterSpacing: "-0.02em" }}>
             Bonjour {userName.split(" ")[0]}
@@ -194,24 +194,19 @@ function CoproSelect({
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {memberships.map((m) => (
-              <button
-                key={m.coproprietaireId}
-                className="copro-card"
-                onClick={() => onPick(m.coproprietaireId)}
-                style={{ display: "flex", alignItems: "center", gap: 16, padding: 16, textAlign: "left", cursor: "pointer", border: "1px solid var(--border)" }}
-              >
-                <span style={{ width: 64, height: 64, borderRadius: "var(--radius-md)", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: THUMB_BG, color: "var(--color-primary-700)" }}>
+              <button key={m.coproprietaireId} className="copro-card cp-choix" onClick={() => onPick(m.coproprietaireId)}>
+                <span className="cp-ico" style={{ background: THUMB_BG }}>
                   <Icon name="building" size={28} />
                 </span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: "block", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20 }}>{m.copro.name}</span>
-                  <span style={{ display: "block", fontSize: 13, color: "var(--fg3)" }}>
+                <span className="cp-txt">
+                  <span className="cp-nom">{m.copro.name}</span>
+                  <span className="cp-sub">
                     {[m.copro.code_postal, m.copro.city].filter(Boolean).join(" ")}
                     {m.lots.length > 0 && " · " + (m.lots.length > 1 ? m.lots.length + " lots" : "Lot n°" + m.lots[0].num)}
                   </span>
                 </span>
                 <PhaseBadge phase={m.copro.phase} />
-                <Icon name="arrowRight" size={20} style={{ color: "var(--accent)" }} />
+                <Icon name="arrowRight" size={20} className="cp-fleche" style={{ color: "var(--accent)" }} />
               </button>
             ))}
           </div>
@@ -262,6 +257,16 @@ export default function Portail() {
   const { data: pieces } = useMesPieces(membership?.coproprietaireId);
   const { data: messages } = useMessagesPortail(membership?.copro.id, membership?.coproprietaireId);
   const { data: lectures } = useLectures();
+
+  // Sur téléphone, le menu d'onglets défile à l'horizontale : on y ramène
+  // l'onglet actif (ex. « Nous contacter », le dernier, ouvert depuis un lien).
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    const actif = nav?.querySelector<HTMLElement>(".pnav.on");
+    if (!nav || !actif || nav.scrollWidth <= nav.clientWidth) return;
+    nav.scrollTo({ left: actif.offsetLeft - (nav.clientWidth - actif.offsetWidth) / 2, behavior: "smooth" });
+  }, [section, membership]);
 
   if (isLoading || !profile) return <Loader />;
 
@@ -331,7 +336,7 @@ export default function Portail() {
 
   const go = (s: SectionId) => {
     navigate(s === "accueil" ? "/portail" : `/portail/${s}`);
-    document.querySelector(".portal-main")?.scrollTo?.(0, 0);
+    window.scrollTo(0, 0);
   };
 
   const common = { membership, scenarios: scenarios ?? [], scenario, bareme: bareme ?? null, plan: plan ?? null, profil, profilMeta, go };
@@ -382,7 +387,7 @@ export default function Portail() {
         </div>
       </header>
 
-      <nav className="portal-nav">
+      <nav className="portal-nav" ref={navRef}>
         {SECTIONS.map((it) => (
           <button key={it.id} className={"pnav" + (section === it.id ? " on" : "")} onClick={() => go(it.id)}>
             <Icon name={it.icon as never} size={17} />

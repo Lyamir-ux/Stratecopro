@@ -42,26 +42,8 @@ export default function MotDePasseOublie() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        background: "var(--bg-soft)",
-        padding: 24,
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 440,
-          background: "var(--bg)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-lg)",
-          boxShadow: "var(--shadow-md)",
-          padding: "36px 40px",
-        }}
-      >
+    <div className="auth-fond">
+      <div className="auth-carte">
         <img src="/logo-strateco-pro.png" alt="Strat Eco" style={{ height: 36, marginBottom: 24 }} />
 
         {sent ? (

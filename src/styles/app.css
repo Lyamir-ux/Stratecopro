@@ -568,6 +568,44 @@ table.dossiers .edit-inp.sm { width: 74px; }
 }
 .login-input:focus { border-color: var(--accent); box-shadow: var(--shadow-focus); }
 
+/* page de connexion : panneau de marque + formulaire ; sur téléphone (copropriétaires),
+   le panneau de marque se réduit à un bandeau avec le logo */
+.login-page { display: grid; grid-template-columns: 1.05fr 1fr; height: 100vh; }
+.login-brand {
+  position: relative; overflow: hidden; display: flex; flex-direction: column; padding: 56px 64px;
+  background: linear-gradient(150deg, #213A0E 0%, #355717 55%, #4A7A1F 100%); color: #fff;
+}
+.login-brand .login-logo { height: 44px; align-self: flex-start; }
+.login-brand .login-accroche { flex: 1; display: flex; flex-direction: column; justify-content: center; max-width: 460px; }
+.login-panel { display: flex; flex-direction: column; justify-content: center; padding: 56px 72px; background: var(--bg); overflow-y: auto; }
+.login-roles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+/* pages d'accès (activation de l'espace, mot de passe oublié, réinitialisation) */
+.auth-fond { min-height: 100vh; display: grid; place-items: center; background: var(--bg-soft); padding: 24px; }
+.auth-carte {
+  width: 100%; max-width: 440px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-md); padding: 36px 40px;
+}
+@media (max-width: 760px) {
+  .login-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; height: auto; min-height: 100vh; }
+  .login-brand { padding: 16px 20px; }
+  .login-brand .login-logo { height: 32px; }
+  .login-brand .login-accroche { display: none; }
+  .login-panel { justify-content: flex-start; padding: 28px 20px 40px; overflow-y: visible; }
+  .auth-fond { padding: 16px; }
+  .auth-carte { padding: 28px 22px; }
+}
+
+/* fenêtres (composant Modal) ; dvh : la barre d'adresse des navigateurs mobiles ne masque pas le bas */
+.se-modal-fond { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px; background: rgba(26,26,26,0.45); }
+.se-modal { width: 100%; max-height: 90vh; max-height: 90dvh; overflow-y: auto; padding: 26px; }
+/* dépôt d'un fichier : champs du renommage assisté */
+.renommage-grille { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 760px) {
+  .se-modal-fond { padding: 12px; }
+  .se-modal { padding: 18px; }
+  .renommage-grille { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* placeholder screens */
 .placeholder-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 80px 24px; color: var(--fg3); }
 .placeholder-screen .ps-ico { width: 64px; height: 64px; border-radius: var(--radius-lg); background: var(--accent-soft); color: var(--color-primary-700); display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
@@ -1505,6 +1543,125 @@ table.dossiers.sf-table tfoot td:first-child { text-align: left; }
 .dpe-vise .dv-chips .dpe { width: 46px; height: 46px; display: inline-flex; align-items: center; justify-content: center; }
 .dpe-vise .dv-title { font-family: var(--font-display); font-weight: 800; font-size: 18px; margin-bottom: 4px; }
 .dpe-vise .dv-sub { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--fg2); max-width: 640px; }
+
+/* Portail - écran de choix de la copropriété (compte rattaché à plusieurs dossiers) */
+.portal-choix { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px; }
+.portal-choix-in { max-width: 560px; width: 100%; text-align: center; }
+.cp-choix { display: flex; align-items: center; gap: 16px; padding: 16px; text-align: left; border: 1px solid var(--border); }
+.cp-choix .cp-ico {
+  width: 64px; height: 64px; border-radius: var(--radius-md); flex: none;
+  display: flex; align-items: center; justify-content: center; color: var(--color-primary-700);
+}
+.cp-choix .cp-txt { flex: 1; min-width: 0; }
+.cp-choix .cp-nom { display: block; font-family: var(--font-display); font-weight: 700; font-size: 20px; }
+.cp-choix .cp-sub { display: block; font-size: 13px; color: var(--fg3); }
+/* Portail - « Votre choix est transmis » (Mon financement) */
+.card-xl .cx-body.choix-transmis { text-align: center; padding: 34px 40px 30px; }
+/* Portail - plafonds Anah : sur un écran étroit, le tableau défile au lieu de déborder */
+.anah-scroll { overflow-x: auto; }
+
+/* ==========================================================================
+   ESPACE COPROPRIÉTAIRE SUR TÉLÉPHONE (demande d'Amir du 30/09/2026)
+   Une colonne, marges de 16 px, en-tête qui défile avec la page et menu
+   d'onglets qui reste en haut de l'écran (défilement horizontal). Les classes
+   .portal-* sont communes aux espaces syndic et prestataire, qui suivent.
+   ========================================================================== */
+@media (max-width: 900px) {
+  .split { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  /* en-tête : logo et compte sur la 1re ligne, copropriété sur la 2de */
+  .portal-header {
+    position: static; height: auto; min-height: 58px; flex-wrap: wrap;
+    gap: 6px 10px; padding: 10px 16px;
+  }
+  .portal-header .ph-logo { height: 26px; }
+  .portal-header .ph-copro {
+    order: 5; flex: 1 1 100%; min-width: 0; gap: 8px;
+    margin-left: 0; padding: 0; border-left: none;
+  }
+  .portal-header .ph-copro .nm { min-width: 0; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .portal-header .ph-user { gap: 4px; }
+  .portal-header .ph-user > span:not(.avatar) { display: none; } /* nom et lot : l'avatar suffit */
+  .portal-nav { top: 0; padding: 0 6px; gap: 0; scrollbar-width: none; }
+  .portal-nav::-webkit-scrollbar { display: none; }
+  .pnav { padding: 13px 11px; font-size: 13.5px; gap: 6px; }
+  .syndic-preview-bar { flex-wrap: wrap; padding: 8px 16px; font-size: 12px; }
+
+  /* contenu ; bas de page dégagé du bouton flottant */
+  .portal-main { padding: 20px 16px 88px; }
+  .portal-main .sec-title { font-size: 24px; }
+  .portal-main .sec-sub { font-size: 14px; margin-bottom: 18px; }
+  .portal .se-btn { white-space: normal; text-align: center; }
+  .portal .kv { gap: 12px; }
+  .portal .kv .v { min-width: 0; text-align: right; }
+  .portal .search { width: 100%; }
+
+  /* accueil */
+  .greet { padding: 20px 18px; margin-bottom: 20px; border-radius: var(--radius-lg); }
+  .greet h1 { font-size: 25px; }
+  .greet p { font-size: 14.5px; }
+  .timeline { margin-top: 18px; }
+  .tl-node { width: 30px; height: 30px; }
+  .tl-step .bar { top: 14px; }
+  .tl-step .tl-lbl { font-size: 13.5px; margin-top: 8px; }
+  .tl-step .tl-sub { font-size: 11.5px; }
+  .tiles, .tiles.tiles-4 { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .tile { padding: 16px 18px; }
+  .tile .t-val { font-size: 26px; margin-top: 6px; }
+  .portail-source { margin: -6px 0 20px; }
+  .dpe-vise { gap: 14px; padding: 16px 18px; }
+  .todo-card { gap: 12px; padding: 14px; }
+  .todo-card .tc-ico { width: 40px; height: 40px; }
+
+  /* cartes et cascades */
+  .card-xl { border-radius: var(--radius-lg); }
+  .card-xl .cx-head { flex-wrap: wrap; gap: 8px 10px; padding: 16px 18px; }
+  .card-xl .cx-head h2 { font-size: 18px; }
+  .card-xl .cx-body { padding: 18px; }
+  .card-xl .cx-body.choix-transmis { padding: 26px 18px 22px; }
+  .casc-row .cr-top { gap: 12px; }
+  .casc-reste { flex-wrap: wrap; gap: 2px 12px; padding: 14px 16px; }
+  .casc-reste .l { font-size: 15.5px; }
+  .casc-reste .v { font-size: 22px; }
+  .apres-chantier .ac-reste { flex-wrap: wrap; }
+
+  /* sélecteurs de lot et de scénario */
+  .qp-controls { gap: 12px; }
+  .qp-group { flex-wrap: wrap; min-width: 0; max-width: 100%; gap: 6px 10px; }
+  .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .seg::-webkit-scrollbar { display: none; }
+  .qp-total { flex-basis: 100%; margin-left: 0; }
+
+  /* financement, enquête, documents, FAQ */
+  .loan-opt { padding: 18px; }
+  .anah-table { font-size: 11.5px; }
+  .anah-table th, .anah-table td { padding: 5px 3px; }
+  .anah-table th { font-size: 11px; text-transform: none; letter-spacing: 0; }
+  .dropzone { flex-wrap: wrap; gap: 10px 14px; }
+  .dropzone > div { flex: 1; min-width: 0; overflow-wrap: anywhere; } /* nom de fichier sans espace */
+  .dropzone .spacer { display: none; }
+  .dz-action { flex-basis: 100%; padding-left: 52px; }
+  .doc-row { gap: 12px; }
+  .doc-row .d-name { overflow-wrap: anywhere; }
+  .faq-q { padding: 13px 14px; }
+  .faq-a { padding: 2px 14px 14px 39px; }
+
+  /* choix de la copropriété */
+  .portal-choix { justify-content: flex-start; padding: 28px 16px; }
+  .cp-choix { gap: 12px; padding: 12px; }
+  .cp-choix .cp-ico { width: 44px; height: 44px; }
+  .cp-choix .cp-nom { font-size: 17px; }
+  .cp-choix .cp-fleche { display: none; }
+
+  /* iOS agrandit la page au focus d'un champ écrit en moins de 16 px */
+  .login-input, .eq-inp, .edit-inp, .fld input, .fld select, .fb-textarea, .search input { font-size: 16px; }
+
+  /* bouton « Feedback » réduit à son icône, fenêtre sur toute la largeur */
+  .fb-fab { right: 14px; bottom: 14px; padding: 12px; }
+  .fb-fab span { display: none; }
+  .fb-panel { left: 12px; right: 12px; bottom: 72px; width: auto; max-width: none; }
+}
 
 /* ---------- Branche « Suivi des PPT » de l'espace syndic ----------
    Accent bleu énergie (#2E6FA8) pour distinguer d'un coup d'œil le suivi des
