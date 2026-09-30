@@ -5,6 +5,7 @@
 // existants - les montants sont ceux du plan partagé au portail (ou du PF
 // définitif validé), arrondis au centime, donc concordants entre les écrans.
 import { useMemo } from "react";
+import { piecesAttendues, type PieceAttendue, type ReponsesPieces } from "@/lib/piecesSituation";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Enums, Tables } from "@/lib/database.types";
@@ -99,6 +100,8 @@ export interface DossierCoproprietaire {
   adhesion: AdhesionAvecNom | null;
   bulletinsElec: BulletinAvecSignataires[];
   pieces: Partial<Record<TypePiece, PieceJustificative>>;
+  /** Pièces demandées selon les réponses à l'enquête, en plus de l'avis d'imposition (0118). */
+  piecesSituation: PieceAttendue[];
   etat: {
     profil: EtatItem;
     prime: EtatItem;
@@ -307,6 +310,11 @@ export function assemblerDossiers(input: {
     if (etatCni !== "ok") manquants.push("pièce d'identité" + suffixe(pieces.piece_identite));
     const etatAvis: EtatItem = etatPiece(pieces.avis_imposition);
     if (etatAvis !== "ok") manquants.push("avis d'imposition" + suffixe(pieces.avis_imposition));
+    // pièces demandées selon la situation déclarée (feedback Marius MAZZANTE 30/09/2026)
+    const piecesSituation = piecesAttendues(enquete.reponses as ReponsesPieces | null).filter((p) => p.type !== "avis_imposition");
+    for (const ps of piecesSituation) {
+      if (etatPiece(pieces[ps.type]) !== "ok") manquants.push(ps.nom.charAt(0).toLowerCase() + ps.nom.slice(1) + suffixe(pieces[ps.type]));
+    }
 
     const rienCommence = !r && !financement && !adhesion && bulletinsElec.length === 0 && Object.keys(pieces).length === 0;
     const statut: StatutDossier = manquants.length === 0 ? "complet" : rienCommence ? "non_commence" : "incomplet";
@@ -326,6 +334,7 @@ export function assemblerDossiers(input: {
       adhesion,
       bulletinsElec,
       pieces,
+      piecesSituation,
       etat: {
         profil: etatProfil,
         prime: etatPrime,

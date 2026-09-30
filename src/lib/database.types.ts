@@ -4582,6 +4582,13 @@ export type Database = {
         | "rib"
         | "justificatif_domicile"
         | "taxe_fonciere"
+        | "avis_imposition_2"
+        | "justificatif_usufruit"
+        | "pret_usage_notarie"
+        | "kbis_sci"
+        | "statuts_sci"
+        | "avis_associes_sci"
+        | "jugement_protection"
       usage_lot:
         | "habitation"
         | "garage"
@@ -4745,6 +4752,13 @@ export const Constants = {
         "rib",
         "justificatif_domicile",
         "taxe_fonciere",
+        "avis_imposition_2",
+        "justificatif_usufruit",
+        "pret_usage_notarie",
+        "kbis_sci",
+        "statuts_sci",
+        "avis_associes_sci",
+        "jugement_protection",
       ],
       usage_lot: [
         "habitation",

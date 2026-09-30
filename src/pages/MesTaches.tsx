@@ -8,7 +8,7 @@ import { Avatar, Badge, PhaseBadge } from "@/components/ui";
 import { supabase, toutesLesLignes } from "@/lib/supabase";
 import type { Tables } from "@/lib/database.types";
 import { useCopros } from "@/api/copros";
-import { PIECES, urlSigneePiece, usePiecesAVerifier } from "@/api/portail";
+import { nomPiece, urlSigneePiece, usePiecesAVerifier } from "@/api/portail";
 import { VerificationPiece } from "@/components/VerificationPiece";
 import { StatusDot } from "./CoproDetail/ProjetTab";
 
@@ -101,7 +101,7 @@ export default function MesTaches() {
             {piecesAVerifier!.map((p) => (
               <div key={p.id} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 12px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 600 }}>{PIECES.find((x) => x.type === p.type)?.name ?? p.type}</span>
+                  <span style={{ fontWeight: 600 }}>{nomPiece(p.type)}</span>
                   <span style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>{p.name}</span>
                   <span style={{ flex: 1 }}></span>
                   <button

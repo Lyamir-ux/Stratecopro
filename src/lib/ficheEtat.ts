@@ -472,12 +472,16 @@ export interface InfosGenerales {
   cle: string | null;
 }
 
-/** Lot d'habitation principale : habitation, sauf résidence secondaire ou logement vacant déclarés à l'enquête. */
+/** Lot d'habitation principale : habitation, sauf résidence secondaire ou logement vacant déclarés à
+ *  l'enquête - y compris, pour un bailleur, location saisonnière / meublé de tourisme ou vacance
+ *  entre deux locations (question « mode-location », feedback 30/09/2026). */
 function estHabitationPrincipale(l: LotFiche, lotsRep: ReponsesLots): boolean {
   if (l.usage !== "habitation") return false;
   const r = lotsRep[l.id] ?? {};
   if (r["type-residence"] === "Résidence secondaire") return false;
   if (r["type-occupation"] === "Logement vacant") return false;
+  const mode = r["mode-location"];
+  if (mode === "Location saisonnière ou meublé de tourisme" || mode === "Vacant (entre deux locations)") return false;
   return true;
 }
 

@@ -101,6 +101,17 @@ describe("informations générales", () => {
     expect(g.tantiemesHab).toBe(9947 - 2 * 343);
   });
 
+  it("location saisonnière et vacance entre deux locations d'un bailleur sortent de l'habitation principale (30/09/2026)", () => {
+    const d = zorn();
+    const bailleur = "Propriétaire bailleur (logement loué)";
+    const exclus = lotsNonPrincipaux(d, [
+      rep("C1", { reponses: { lots: { L1: { "type-occupation": bailleur, "mode-location": "Location saisonnière ou meublé de tourisme" } } } }),
+      rep("C2", { reponses: { lots: { L2: { "type-occupation": bailleur, "mode-location": "Vacant (entre deux locations)" } } } }),
+      rep("C3", { reponses: { lots: { L3: { "type-occupation": bailleur, "mode-location": "Loué à l'année (résidence principale du locataire)" } } } }),
+    ]);
+    expect(exclus).toEqual(["L1", "L2"]);
+  });
+
   it("les annexes rattachées comptent dans les tantièmes d'habitation", () => {
     const d: DonneesFiche = {
       batiments: [{ code: "01", adresse: null }],

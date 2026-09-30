@@ -1,9 +1,10 @@
 // Espace copropriétaire : données du user connecté (RLS = son périmètre uniquement).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { supabase, toutesLesLignes } from "@/lib/supabase";
 import type { Tables, Enums, Json } from "@/lib/database.types";
 import { determineProfil, type Bareme, type FinanceParams, type Profil } from "@/lib/finance";
 import { readParams } from "./scenarios";
+import { libellePieceSituation } from "@/lib/piecesSituation";
 import { computePlanDefinitif, readPlanDefinitif, type PlanDefinitifData, type PlanDefinitifResult } from "@/lib/finance/planDefinitif";
 
 export type Copro = Tables<"coproprietes">;
@@ -57,18 +58,26 @@ export function useRattacherLot() {
   });
 }
 
-/** Les rattachements du user connecté : fiche copropriétaire + copro + lots. */
+/** Les rattachements du user connecté : fiche copropriétaire + copro + lots.
+ *  En aperçu AMO, la RLS ouvre toutes les fiches (plus de 1 000) : lecture par
+ *  pages, sinon le plafond de l'API tronquait la liste sans prévenir et les
+ *  fiches les plus récentes manquaient (bug Amir 30/09/2026, Parc des Cigognes). */
 export function useMesCopros() {
   return useQuery({
     queryKey: ["portail", "mes-copros"],
     queryFn: async (): Promise<Membership[]> => {
-      const { data, error } = await supabase.from("coproprietaires").select(
-        `id, nom,
-         coproprietes (*),
-         lots ( id, num, usage, rattache_a, batiments ( code ),
-                lot_tantiemes ( tantiemes, cles_repartition ( code ) ) )`
+      const data = await toutesLesLignes((debut, fin) =>
+        supabase
+          .from("coproprietaires")
+          .select(
+            `id, nom,
+             coproprietes (*),
+             lots ( id, num, usage, rattache_a, batiments ( code ),
+                    lot_tantiemes ( tantiemes, cles_repartition ( code ) ) )`
+          )
+          .order("id")
+          .range(debut, fin)
       );
-      if (error) throw error;
       type Row = Tables<"coproprietaires"> & {
         coproprietes: Copro | null;
         lots: (Tables<"lots"> & {
@@ -470,6 +479,11 @@ export const PIECES: { type: TypePiece; name: string; required: boolean; hint: s
   { type: "justificatif_domicile", name: "Justificatif de domicile", required: false, hint: "De moins de 3 mois" },
   { type: "taxe_fonciere", name: "Taxe foncière", required: false, hint: "Facultatif" },
 ];
+
+/** Libellé d'une pièce, qu'elle soit historique (PIECES) ou demandée selon la situation (0118). */
+export function nomPiece(type: string): string {
+  return PIECES.find((x) => x.type === type)?.name ?? libellePieceSituation(type) ?? type;
+}
 
 export function useMesPieces(coproprietaireId: string | undefined) {
   return useQuery({

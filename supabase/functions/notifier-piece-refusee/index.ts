@@ -8,6 +8,10 @@
 // Envoi réel via Resend si le secret RESEND_API_KEY est configuré ; sans clé,
 // l'envoi est simulé et la réponse l'indique (même convention que les autres
 // notifications).
+//
+// v2 (30/09/2026) : libellés des pièces demandées selon la situation (0118), et
+// lien vers l'enquête sociale du portail, où se déposent désormais les pièces
+// (l'onglet « Mes documents » n'existe plus depuis le 22/09).
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const cors = {
@@ -28,6 +32,13 @@ const LIBELLE_PIECE: Record<string, string> = {
   rib: "RIB",
   justificatif_domicile: "Justificatif de domicile",
   taxe_fonciere: "Taxe foncière",
+  avis_imposition_2: "Second avis d'imposition définitif (N-1)",
+  justificatif_usufruit: "Justificatif d'usufruit",
+  pret_usage_notarie: "Contrat de prêt à usage notarié",
+  kbis_sci: "Extrait Kbis de la SCI",
+  statuts_sci: "Statuts de la SCI",
+  avis_associes_sci: "Avis d'imposition de tous les associés",
+  jugement_protection: "Jugement de tutelle ou de curatelle",
 };
 
 const MOTIF_QUALIFICATION: Record<string, string> = {
@@ -125,10 +136,10 @@ Deno.serve(async (req: Request) => {
       <p style="padding:10px 14px;background:#fdecec;border-left:3px solid #DC2626;border-radius:4px">
         <strong>${echap(motif.charAt(0).toUpperCase() + motif.slice(1))}.</strong>
       </p>
-      <p>Merci de déposer une nouvelle version depuis votre portail, rubrique « Mes documents » :
+      <p>Merci de déposer une nouvelle version depuis votre portail, rubrique « Enquête sociale » :
       elle remplacera la précédente et sera vérifiée à son tour.</p>
       <p style="margin:22px 0">
-        <a href="${appUrl}/portail/documents"
+        <a href="${appUrl}/portail/enquete"
            style="background:#355717;color:#fff;padding:12px 22px;border-radius:6px;text-decoration:none;font-weight:bold">
           Déposer une nouvelle version
         </a>

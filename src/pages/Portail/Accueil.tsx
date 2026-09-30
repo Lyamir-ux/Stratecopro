@@ -27,7 +27,8 @@ export function Accueil({
   profil,
   profilMeta,
   userName,
-  avisFourni,
+  piecesManquantes,
+  nbPiecesAttendues,
   choix,
   enqueteComplete,
   go,
@@ -39,7 +40,9 @@ export function Accueil({
   profil: Profil | null;
   profilMeta: ProfilMeta;
   userName: string;
-  avisFourni: boolean;
+  /** pièces justificatives attendues selon l'enquête et pas encore fournies (libellés) */
+  piecesManquantes: string[];
+  nbPiecesAttendues: number;
   choix: ChoixFinancement | null;
   enqueteComplete: boolean;
   go: (s: SectionId) => void;
@@ -80,12 +83,19 @@ export function Accueil({
     },
     {
       id: "enquete",
-      done: avisFourni,
+      done: piecesManquantes.length === 0,
       ico: "folder",
-      title: "Déposer votre avis d'imposition",
-      sub: avisFourni
-        ? "Avis déposé - toutes les pages"
-        : "Toutes les pages, dans l'enquête sociale : c'est lui qui atteste vos ressources",
+      title: nbPiecesAttendues > 1 ? "Déposer vos pièces justificatives" : "Déposer votre avis d'imposition",
+      sub:
+        piecesManquantes.length === 0
+          ? nbPiecesAttendues > 1
+            ? "Toutes vos pièces sont déposées"
+            : nbPiecesAttendues === 1
+              ? "Avis déposé - toutes les pages"
+              : "Aucune pièce demandée selon vos réponses"
+          : nbPiecesAttendues > 1
+            ? `${piecesManquantes.length} pièce${piecesManquantes.length > 1 ? "s" : ""} à déposer dans l'enquête sociale : ${piecesManquantes.join(", ")}`
+            : "Toutes les pages, dans l'enquête sociale : c'est lui qui atteste vos ressources",
     },
     {
       id: "pret",

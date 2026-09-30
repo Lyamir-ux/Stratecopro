@@ -108,6 +108,14 @@ export const TYPES_DOCUMENT: { id: string; label: string; dossier: string }[] = 
   { id: "piece_identite", label: "Pièce d'identité", dossier: "Plans de financement" },
   { id: "justificatif_domicile", label: "Justificatif de domicile", dossier: "Plans de financement" },
   { id: "taxe_fonciere", label: "Taxe foncière", dossier: "Plans de financement" },
+  // pièces demandées selon la situation (enquête sociale, 0118)
+  { id: "avis_imposition_2", label: "Avis d'imposition second déclarant", dossier: "Plans de financement" },
+  { id: "justificatif_usufruit", label: "Justificatif d'usufruit", dossier: "Plans de financement" },
+  { id: "pret_usage_notarie", label: "Contrat de prêt à usage", dossier: "Plans de financement" },
+  { id: "kbis_sci", label: "Extrait Kbis", dossier: "Plans de financement" },
+  { id: "statuts_sci", label: "Statuts de SCI", dossier: "Plans de financement" },
+  { id: "avis_associes_sci", label: "Avis d'imposition des associés", dossier: "Plans de financement" },
+  { id: "jugement_protection", label: "Jugement de tutelle ou curatelle", dossier: "Plans de financement" },
   // Divers
   { id: "doc_passation", label: "Document de passation", dossier: "Passation" },
   { id: "rapport", label: "Rapport", dossier: "Diagnostic & audit" },

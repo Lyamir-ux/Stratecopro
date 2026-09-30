@@ -16,6 +16,10 @@
 // page se recharge ; la transmission se confirme par une fenêtre et le bouton
 // passe à « Questionnaire transmis » ; les boutons d'enregistrement sont repris
 // en bas de page, avec un bouton pour remonter en haut.
+//
+// Retours de Marius MAZZANTE (30/09/2026) : les pièces justificatives à déposer
+// suivent les réponses (src/lib/piecesSituation.ts), et une question
+// « facultative » (RFR N-2) ne bloque plus la transmission.
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
@@ -38,7 +42,8 @@ import {
   type Membership,
   type PortalLot,
 } from "@/api/portail";
-import { DepotAvisImposition } from "./Documents";
+import { PiecesJustificatives } from "./Documents";
+import { piecesAttendues } from "@/lib/piecesSituation";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Json } from "@/lib/database.types";
 
@@ -275,7 +280,11 @@ function QuestionBloc({
     <div className={"eq-q" + (erreur ? " eq-q-erreur" : "")} id={anchor}>
       <label className="eq-label">
         {q.q}
-        <span className="eq-req" title="Réponse obligatoire">*</span>
+        {q.facultatif ? (
+          <span className="eq-facultatif">(facultatif)</span>
+        ) : (
+          <span className="eq-req" title="Réponse obligatoire">*</span>
+        )}
         {q.aide && (
           <span className="qc-help" title={q.aide}>
             <Icon name="help" size={13} />
@@ -326,7 +335,6 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
   const [restaure, setRestaure] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const { data: pieces } = useMesPieces(membership.coproprietaireId);
-  const avisDepose = (pieces ?? []).some((x) => x.type === "avis_imposition" && x.statut !== "refuse");
 
   const cleSecours = enquete ? `${PREFIXE_SECOURS_ENQUETE}${enquete.id}:${membership.coproprietaireId}` : null;
 
@@ -412,8 +420,10 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
     ...customQs.map((q) => ({ q, a: rep?.copro })),
     ...visiblesParLot.flatMap(({ lot, qs }) => qs.map((q) => ({ q, a: rep?.lots[lot.id] }))),
   ];
-  const nbRepondu = allVisible.filter(({ q, a }) => answered(a?.[q.id])).length;
-  const complet = allVisible.length > 0 && nbRepondu === allVisible.length;
+  // les questions facultatives ne comptent ni dans la progression ni dans « complet »
+  const obligatoires = allVisible.filter(({ q }) => !q.facultatif);
+  const nbRepondu = obligatoires.filter(({ q, a }) => answered(a?.[q.id])).length;
+  const complet = obligatoires.length > 0 && nbRepondu === obligatoires.length;
 
   // Profil d'aides : calculé en direct dès que ménage + RFR sont répondus,
   // sinon dernier profil enregistré (saisie AMO ou visite précédente).
@@ -447,14 +457,14 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
     const errs: Record<string, string> = {};
     const lib = (q: ResolvedQuestion) => (q.tag || "cette question").toLowerCase();
     for (const q of visiblesCopro) {
-      if (!answered(rep.copro[q.id])) errs["copro:" + q.id] = `Réponse obligatoire : ${lib(q)}.`;
+      if (!q.facultatif && !answered(rep.copro[q.id])) errs["copro:" + q.id] = `Réponse obligatoire : ${lib(q)}.`;
     }
     for (const q of customQs) {
       if (!answered(rep.copro[q.id])) errs["copro:" + q.id] = "Réponse obligatoire (question de votre AMO).";
     }
     for (const { lot, qs } of visiblesParLot) {
       for (const q of qs) {
-        if (!answered(rep.lots[lot.id]?.[q.id])) errs[`lot:${lot.id}:${q.id}`] = `Réponse obligatoire pour le lot ${lot.num} : ${lib(q)}.`;
+        if (!q.facultatif && !answered(rep.lots[lot.id]?.[q.id])) errs[`lot:${lot.id}:${q.id}`] = `Réponse obligatoire pour le lot ${lot.num} : ${lib(q)}.`;
       }
     }
     const nb = rep.copro["nb-personnes-foyer"];
@@ -531,6 +541,12 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
   };
 
   const info = profil ? PROFILS_MPR[profil] : null;
+
+  // Pièces à fournir selon les réponses en cours (elles apparaissent dès la réponse donnée).
+  const attendues = piecesAttendues(rep);
+  const piecesManquantes = attendues.filter(
+    (a) => !(pieces ?? []).some((x) => x.type === a.type && x.statut !== "refuse")
+  );
 
   /** rend une liste de questions groupées par section (sous-titres) */
   const renderGroupe = (
@@ -712,7 +728,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
           {/* Le dépôt de l'avis reste ouvert même sans questionnaire : c'est la
               seule pièce attendue, et elle n'a plus d'autre page où vivre. */}
           <div style={{ maxWidth: 560 }}>
-            <DepotAvisImposition membership={membership} />
+            <PiecesJustificatives membership={membership} attendues={piecesAttendues(null)} />
           </div>
         </>
       )}
@@ -776,7 +792,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                 <h2>{dejaTransmis ? "Questionnaire transmis" : "Vous avez terminé ?"}</h2>
                 <span style={{ flex: 1 }}></span>
                 <span className="se-small" style={{ color: "var(--fg-muted)" }}>
-                  {nbRepondu} / {allVisible.length} réponses
+                  {nbRepondu} / {obligatoires.length} réponses
                 </span>
               </div>
               <div className="cx-body">
@@ -800,18 +816,18 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                 <div className="kv">
                   <span className="k">Progression</span>
                   <span className="v">
-                    {nbRepondu} / {allVisible.length} réponses
+                    {nbRepondu} / {obligatoires.length} réponses
                   </span>
                 </div>
                 <div className="prog" style={{ marginTop: 8 }}>
-                  <i style={{ width: (allVisible.length ? Math.round((nbRepondu / allVisible.length) * 100) : 0) + "%" }}></i>
+                  <i style={{ width: (obligatoires.length ? Math.round((nbRepondu / obligatoires.length) * 100) : 0) + "%" }}></i>
                 </div>
                 <div style={{ marginTop: 10 }}>
                   {complet ? (
                     <Badge kind="success" dot>Questionnaire complet</Badge>
                   ) : (
                     <Badge kind="warn">
-                      {allVisible.length - nbRepondu} question{allVisible.length - nbRepondu > 1 ? "s" : ""} restante{allVisible.length - nbRepondu > 1 ? "s" : ""}
+                      {obligatoires.length - nbRepondu} question{obligatoires.length - nbRepondu > 1 ? "s" : ""} restante{obligatoires.length - nbRepondu > 1 ? "s" : ""}
                     </Badge>
                   )}
                 </div>
@@ -912,7 +928,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
             {/* Sous les plafonds de l'Anah : le dépôt de l'avis d'imposition, seule
                 pièce encore attendue du copropriétaire (feedback Amir 22/09/2026). */}
             <div id="eq-avis">
-              <DepotAvisImposition membership={membership} />
+              <PiecesJustificatives membership={membership} attendues={attendues} />
             </div>
 
             <div className="cc-next">
@@ -932,14 +948,17 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
             <p className="se-body" style={{ margin: 0 }}>
               Merci ! Vos réponses ont bien été transmises à l'équipe Strat Eco le {fmtDateHeure(confirmation)}.
             </p>
-            {!avisDepose && (
+            {piecesManquantes.length > 0 && (
               <p className="se-small" style={{ margin: 0, color: "var(--fg2)" }}>
-                Dernière étape : si vous êtes éligible aux aides, déposez votre avis d'imposition (toutes les
-                pages) sur cette même page.
+                Dernière étape : si vous êtes éligible aux aides, déposez sur cette même page{" "}
+                {piecesManquantes.length > 1
+                  ? `les ${piecesManquantes.length} pièces encore manquantes (${piecesManquantes.map((p) => p.nom.toLowerCase()).join(", ")})`
+                  : `votre ${piecesManquantes[0].nom.charAt(0).toLowerCase() + piecesManquantes[0].nom.slice(1)}`}
+                , toutes les pages.
               </p>
             )}
             <div className="eq-confirm-actions">
-              {!avisDepose && (
+              {piecesManquantes.length > 0 && (
                 <button
                   className="se-btn se-btn-primary"
                   onClick={() => {
@@ -948,7 +967,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
                   }}
                 >
                   <Icon name="upload" size={16} />
-                  Déposer mon avis d'imposition
+                  {piecesManquantes.length > 1 ? "Déposer mes pièces" : "Déposer la pièce"}
                 </button>
               )}
               <button className="se-btn se-btn-secondary" onClick={() => setConfirmation(null)}>

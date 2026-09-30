@@ -16,7 +16,7 @@ import { PROFILS_MPR, libellesBatiments } from "@/lib/referentiels";
 import type { Profil } from "@/lib/finance";
 import { useEnquete, useSaveReponse, useVerifierProfil } from "@/api/enquete";
 import { downloadAdhesionDoc } from "@/api/financement";
-import { PIECES, urlSigneePiece } from "@/api/portail";
+import { PIECES, nomPiece, urlSigneePiece } from "@/api/portail";
 import {
   useDossiersCoproprietaires,
   type DossierCoproprietaire,
@@ -668,8 +668,16 @@ function FicheCoproprietaire({
 
         {/* ---------- Pièces ---------- */}
         <Bloc titre="Pièces justificatives" icon="folder">
-          {PIECES.map((pc) => {
-            const piece = d.pieces[pc.type];
+          {[
+            ...PIECES.map((pc) => ({ type: pc.type as string, name: pc.name, required: pc.required })),
+            // pièces demandées selon la situation déclarée à l'enquête (0118), puis celles
+            // déposées qui ne sont plus demandées (réponse modifiée depuis)
+            ...d.piecesSituation.map((ps) => ({ type: ps.type as string, name: ps.nom, required: true })),
+            ...Object.keys(d.pieces)
+              .filter((t) => !PIECES.some((pc) => pc.type === t) && !d.piecesSituation.some((ps) => ps.type === t))
+              .map((t) => ({ type: t, name: nomPiece(t), required: false })),
+          ].map((pc) => {
+            const piece = d.pieces[pc.type as keyof typeof d.pieces];
             const e: EtatItem = !piece ? (pc.required ? "manquant" : "na") : piece.statut === "valide" ? "ok" : piece.statut === "refuse" ? "manquant" : "en_cours";
             return (
               <div key={pc.type} style={{ padding: "6px 0", fontSize: 13, borderBottom: "1px dashed var(--border)" }}>

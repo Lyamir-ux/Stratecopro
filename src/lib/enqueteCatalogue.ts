@@ -43,6 +43,8 @@ export interface CatalogueQuestion {
   aide?: string;
   /** Question socle : toujours posée, non désactivable. */
   locked?: boolean;
+  /** Réponse facultative : ne bloque pas la transmission (feedback Marius MAZZANTE 30/09/2026 - RFR N-2). */
+  facultatif?: boolean;
   /** Activée par défaut dans une nouvelle enquête. */
   defaultOn: boolean;
 }
@@ -67,11 +69,24 @@ export const TYPES_COPRO = [
   "Autre personne morale",
 ];
 export const USAGES_LOT = ["Habitation", "Commerce", "Stationnement", "Garage", "Cave", "Box", "Autre"];
+/** Modes de location d'un logement de bailleur : seule la location à l'année
+ *  est une résidence principale (fiche État ANAH). */
+export const MODES_LOCATION = [
+  "Loué à l'année (résidence principale du locataire)",
+  "Location saisonnière ou meublé de tourisme",
+  "Vacant (entre deux locations)",
+];
 
 const SCI = ["SCI soumise à l'impôt sur le revenu", "SCI soumise à l'impôt sur les sociétés"];
 /** Questions de ressources : personnes physiques et indivisions (posées tant que le type n'est pas répondu). */
 const MENAGE: Condition = { qid: "type-coproprietaire", vals: ["Personne physique", "Indivision"], defaut: true };
 const HAB = { qid: "usage-lot", vals: ["Habitation"] };
+const BAILLEUR = { qid: "type-occupation", vals: ["Propriétaire bailleur (logement loué)"] };
+/** Nomenclature INSEE simplifiée des catégories socioprofessionnelles. */
+const CSP_INSEE = [
+  "Agriculteur", "Artisan, commerçant, chef d'entreprise", "Cadre, profession intellectuelle supérieure",
+  "Profession intermédiaire", "Employé", "Ouvrier", "Retraité", "Étudiant", "Sans activité professionnelle",
+];
 const HAB_COM = { qid: "usage-lot", vals: ["Habitation", "Commerce"] };
 /** Logement équipé de radiateurs (posée tant que les émetteurs ne sont pas renseignés). */
 const EMETTEURS_RADIATEURS: Condition = {
@@ -125,10 +140,38 @@ export const CATALOGUE: CatalogueQuestion[] = [
     locked: true, defaultOn: true,
   },
   {
+    id: "nb-avis-imposition", section: "situation", tag: "Nombre d'avis d'imposition", q: "Votre ménage reçoit-il un seul avis d'imposition, ou deux ?", type: "choix",
+    options: ["Un seul avis", "Deux avis (deux déclarants)"],
+    cond: [MENAGE],
+    aide: "Un couple non marié ni pacsé déclare séparément et reçoit deux avis : l'Anah demande les deux (pièces à déposer sur cette page).",
+    locked: true, defaultOn: true,
+  },
+  {
     id: "rfr-n2", section: "situation", tag: "Revenu fiscal de référence N-2", q: "Quel est le revenu fiscal de référence N-2 de votre ménage (avant-dernier avis d'imposition) ?", type: "montant",
     cond: [MENAGE],
-    aide: "RFR de l'avant-dernier avis d'imposition. L'Anah peut le demander en cas de baisse de revenus ou de changement de situation. Donnée confidentielle, visible uniquement par l'AMO.",
-    defaultOn: true,
+    aide: "Facultatif. RFR de l'avant-dernier avis d'imposition. L'Anah peut le demander en cas de baisse de revenus ou de changement de situation. Donnée confidentielle, visible uniquement par l'AMO.",
+    facultatif: true, defaultOn: true,
+  },
+  // Volet social du rapport d'enquête (feedback Marius MAZZANTE 30/09/2026) : posé « en dur ».
+  {
+    id: "csp-reference", section: "situation", tag: "CSP de la personne de référence", q: "Quelle est la catégorie socioprofessionnelle de la personne de référence du ménage ?", type: "choix",
+    options: CSP_INSEE,
+    cond: [MENAGE],
+    aide: "Personne de référence : celle qui déclare les revenus du ménage (ou la plus âgée des deux déclarants). Nomenclature INSEE simplifiée.",
+    locked: true, defaultOn: true,
+  },
+  {
+    id: "situations-foyer", section: "situation", tag: "Situations du foyer", q: "Votre foyer est-il concerné par l'une de ces situations ?", type: "multi",
+    options: ["Handicap ou perte d'autonomie", "Personne isolée", "Famille monoparentale", "Aucune de ces situations"],
+    cond: [MENAGE],
+    aide: "Plusieurs réponses possibles. Ces informations restent confidentielles et orientent l'accompagnement social.",
+    locked: true, defaultOn: true,
+  },
+  {
+    id: "impayes-charges", section: "situation", tag: "Difficultés de paiement des charges", q: "Rencontrez-vous des difficultés pour payer vos charges de copropriété ?", type: "choix",
+    options: ["Non", "Oui, ponctuellement", "Oui, avec des impayés en cours"],
+    aide: "Information confidentielle, qui n'est pas communiquée au syndic : elle permet à l'AMO de vous orienter vers les aides adaptées.",
+    locked: true, defaultOn: true,
   },
   {
     id: "accord-visite", section: "situation", tag: "Accord pour la visite", q: "Seriez-vous d'accord pour qu'un de vos lots fasse l'objet d'une visite dans le cadre du projet de rénovation ?", type: "choix",
@@ -139,6 +182,12 @@ export const CATALOGUE: CatalogueQuestion[] = [
     id: "curatelle-tutelle", section: "situation", tag: "Curatelle ou tutelle", q: "L'un des copropriétaires est-il en sauvegarde de justice, sous curatelle ou sous tutelle ?", type: "choix",
     options: ["Non", "Sauvegarde de justice", "Curatelle", "Tutelle"],
     aide: "Information nécessaire pour les signatures (contrats, prêts) : un représentant légal peut devoir intervenir.",
+    defaultOn: true,
+  },
+  {
+    id: "coordonnees-representant", section: "situation", tag: "Représentant légal", q: "Nom et coordonnées du représentant légal (tuteur ou curateur) :", type: "texte",
+    cond: [{ qid: "curatelle-tutelle", vals: ["Curatelle", "Tutelle"] }],
+    aide: "Nom, téléphone et adresse e-mail. Le jugement est à déposer avec les pièces justificatives.",
     defaultOn: true,
   },
   {
@@ -163,7 +212,19 @@ export const CATALOGUE: CatalogueQuestion[] = [
   { id: "lot-parent", section: "lot", tag: "Lot parent", q: "À quel lot principal est lié ce lot secondaire ?", type: "lotParent", cond: [{ qid: "usage-lot", vals: ["Stationnement", "Garage", "Cave", "Box", "Autre"] }], locked: true, defaultOn: true },
   { id: "type-occupation", section: "lot", tag: "Type d'occupation", q: "Êtes-vous propriétaire bailleur ou propriétaire occupant de ce lot ?", type: "choix", options: ["Propriétaire occupant", "Propriétaire bailleur (logement loué)", "Logement vacant"], cond: [HAB], locked: true, defaultOn: true },
   { id: "nb-habitants", section: "lot", tag: "Nombre d'habitants", q: "Combien de personnes habitent dans ce logement ?", type: "nombre", cond: [HAB], locked: true, defaultOn: true },
-  { id: "type-residence", section: "lot", tag: "Type de résidence", q: "Le logement est-il occupé (votre locataire ou vous) à titre de résidence principale ou secondaire ?", type: "choix", options: ["Résidence principale", "Résidence secondaire"], cond: [HAB], locked: true, defaultOn: true },
+  {
+    id: "type-residence", section: "lot", tag: "Type de résidence", q: "Ce logement est-il votre résidence principale ou secondaire ?", type: "choix",
+    options: ["Résidence principale", "Résidence secondaire"],
+    cond: [HAB, { qid: "type-occupation", vals: ["Propriétaire occupant"], defaut: true }], locked: true, defaultOn: true,
+  },
+  {
+    // feedback Marius MAZZANTE 30/09/2026 : « principale / secondaire » ne suffit pas pour un logement loué
+    id: "mode-location", section: "lot", tag: "Mode de location", q: "Comment ce logement est-il loué ?", type: "choix",
+    options: MODES_LOCATION,
+    cond: [HAB, BAILLEUR],
+    aide: "L'aide aux propriétaires bailleurs de l'Eurométropole de Strasbourg dépend du mode de location.",
+    locked: true, defaultOn: true,
+  },
   { id: "commodat", section: "lot", tag: "Mise à disposition du logement", q: "Le logement est-il mis à disposition gratuitement (modèle du commodat) ?", type: "choix", options: ["Oui", "Non"], cond: [HAB], defaultOn: true },
   { id: "associes-occupants", section: "lot", tag: "Associés occupants le logement", q: "Combien y a-t-il d'associés de la SCI occupants le logement ?", type: "nombre", cond: [HAB, { qid: "type-coproprietaire", vals: SCI }], aide: "L'occupation par un associé conditionne certaines aides individuelles.", defaultOn: true },
   { id: "indivisaires-occupants", section: "lot", tag: "Indivisaires occupants le logement", q: "Combien y a-t-il d'indivisaires occupants le logement ?", type: "nombre", cond: [HAB, { qid: "type-coproprietaire", vals: ["Indivision"] }], aide: "L'occupation par un indivisaire conditionne certaines aides individuelles.", defaultOn: true },
@@ -233,6 +294,12 @@ export const CATALOGUE: CatalogueQuestion[] = [
 
   // ========== Confort & occupation ==========
   {
+    id: "difficultes-logement", section: "confort", tag: "Difficultés dans le logement", q: "Ce logement présente-t-il l'une de ces difficultés ?", type: "multi",
+    options: ["Logement trop petit", "Sur-occupation", "Insalubre ou très dégradé", "Difficile à chauffer", "Aucune difficulté particulière"],
+    aide: "Plusieurs réponses possibles - volet social du rapport d'enquête.",
+    cond: [HAB], locked: true, defaultOn: true,
+  },
+  {
     id: "inconforts", section: "confort", tag: "Inconforts", q: "Ressentez-vous un inconfort particulier ?", type: "multi",
     options: ["Froid en hiver", "Chaleur excessive en été", "Courants d'air", "Parois ou sols froids", "Humidité", "Bruits (voisinage, extérieur)", "Odeurs / qualité de l'air", "Aucun inconfort particulier"],
     aide: "Plusieurs réponses possibles - ces ressentis alimentent le diagnostic.",
@@ -252,7 +319,7 @@ export const CATALOGUE: CatalogueQuestion[] = [
   },
   {
     id: "csp", section: "confort", tag: "CSP des personnes occupantes", q: "Quelle est la catégorie socio-professionnelle principale des personnes occupantes ?", type: "choix",
-    options: ["Agriculteur", "Artisan, commerçant, chef d'entreprise", "Cadre, profession intellectuelle supérieure", "Profession intermédiaire", "Employé", "Ouvrier", "Retraité", "Étudiant", "Sans activité professionnelle"],
+    options: CSP_INSEE,
     aide: "Nomenclature INSEE simplifiée - donnée statistique pour le volet social.",
     cond: [HAB], defaultOn: false,
   },

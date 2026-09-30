@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
+import { piecesAttendues, type ReponsesPieces } from "@/lib/piecesSituation";
 import { Avatar, PhaseBadge, THUMB_BG } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
 import { compteNonLus, useLectures, useMessagesPortail } from "@/api/messages";
@@ -323,13 +324,17 @@ export default function Portail() {
   const profil = (reponse?.profil_mpr as Profil | null) ?? null;
   const profilMeta = profilMetaDepuisReponse(reponse);
   const enqueteComplete = !!(reponse?.reponses as { complet?: boolean } | null)?.complet;
-  // Avis d'imposition : refusé = à redéposer, donc pas fourni (feedback 10/09).
-  const avisFourni = (pieces ?? []).some((x) => x.type === "avis_imposition" && x.statut !== "refuse");
+  // Pièces attendues selon les réponses enregistrées (feedback Marius MAZZANTE
+  // 30/09/2026) ; refusée = à redéposer, donc pas fournie (feedback 10/09).
+  const attendues = piecesAttendues(reponse?.reponses as ReponsesPieces | null);
+  const piecesManquantes = attendues
+    .filter((a) => !(pieces ?? []).some((x) => x.type === a.type && x.statut !== "refuse"))
+    .map((a) => a.nom);
   // pastilles du menu : « ! » pour une action attendue, le nombre de messages
   // non lus pour l'onglet « Nous contacter »
   const nonLus = compteNonLus(messages, lectures, session?.user.id);
   const flags: Record<string, boolean | number> = {
-    enquete: !enqueteComplete || !avisFourni,
+    enquete: !enqueteComplete || piecesManquantes.length > 0,
     pret: !choix,
     messages: nonLus,
   };
@@ -404,7 +409,8 @@ export default function Portail() {
           <Accueil
             {...common}
             userName={isAmo ? membership.nom : userName}
-            avisFourni={avisFourni}
+            piecesManquantes={piecesManquantes}
+            nbPiecesAttendues={attendues.length}
             choix={choix ?? null}
             enqueteComplete={enqueteComplete}
           />
