@@ -1,7 +1,8 @@
 // Espace prestataire (MOE & autres intervenants) - même chrome que le portail
 // copropriétaire. Le prestataire ne voit que les consultations EN LIGNE de ses
 // métiers et ses candidatures ; la section « Mes projets » n'existe que pour
-// une MOE (accès lecture aux copros où elle a été retenue). Les autres
+// une MOE (accès lecture aux copros où elle a été retenue ou dont elle est le
+// maître d'œuvre saisi). Les autres
 // intervenants n'ont AUCUN accès aux projets en cours.
 import { useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";

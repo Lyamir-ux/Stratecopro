@@ -488,26 +488,36 @@ export function useLogoPresta(logoPath: string | null) {
 }
 
 export type ProjetMoe = {
-  candidature: Tables<"candidatures">;
-  consultation: Tables<"consultations">;
+  // null : aucune consultation MOE retenue dans le logiciel sur ce dossier
+  candidature: Tables<"candidatures"> | null;
+  consultation: Tables<"consultations"> | null;
+  // l'entreprise est le maître d'œuvre saisi sur le dossier (coproprietes.maitre_oeuvre)
+  designe: boolean;
   copro: CoproPublic;
   batiments: Tables<"batiments">[];
 };
 
-/** Projets d'une MOE retenue : copros accessibles en lecture (fiche + bâtiments). */
+/** Projets d'une MOE : consultations MOE retenues et dossiers où elle est le
+ *  maître d'œuvre saisi (0119) - copros accessibles en lecture (fiche + bâtiments). */
 export function useMesProjetsMoe(enabled: boolean, prestaId: string) {
   return useQuery({
     queryKey: ["presta-projets-moe", prestaId],
     enabled,
     queryFn: async (): Promise<ProjetMoe[]> => {
-      const { data, error } = await supabase
-        .from("candidatures")
-        .select(`*, consultations(*, coproprietes(${COPRO_COLS}))`)
-        .eq("prestataire_id", prestaId)
-        .eq("statut", "retenue");
-      if (error) throw error;
+      const [cands, designes] = await Promise.all([
+        supabase
+          .from("candidatures")
+          .select(`*, consultations(*, coproprietes(${COPRO_COLS}))`)
+          .eq("prestataire_id", prestaId)
+          .eq("statut", "retenue"),
+        supabase.rpc("copros_moe_designe", { p_prestataire_id: prestaId }),
+      ]);
+      if (cands.error) throw cands.error;
+      if (designes.error) throw designes.error;
+      const idsDesignes = new Set(designes.data ?? []);
+
       const rows: Omit<ProjetMoe, "batiments">[] = [];
-      for (const c of data ?? []) {
+      for (const c of cands.data ?? []) {
         const { consultations, ...cand } = c as typeof c & {
           consultations:
             | (Tables<"consultations"> & { coproprietes: CoproPublic | null })
@@ -518,12 +528,27 @@ export function useMesProjetsMoe(enabled: boolean, prestaId: string) {
           rows.push({
             candidature: cand as Tables<"candidatures">,
             consultation: cs as Tables<"consultations">,
+            designe: idsDesignes.has(coproprietes.id),
             copro: coproprietes,
           });
         }
       }
 
+      // dossiers désignés sans consultation retenue : fiche seule
+      const aCharger = [...idsDesignes].filter((id) => !rows.some((r) => r.copro.id === id));
+      if (aCharger.length > 0) {
+        const { data: copros, error: cErr } = await supabase
+          .from("coproprietes")
+          .select(COPRO_COLS)
+          .in("id", aCharger);
+        if (cErr) throw cErr;
+        for (const copro of copros ?? []) {
+          rows.push({ candidature: null, consultation: null, designe: true, copro });
+        }
+      }
+
       if (rows.length === 0) return [];
+      rows.sort((a, b) => a.copro.name.localeCompare(b.copro.name, "fr", { numeric: true }));
       const { data: bats, error: bErr } = await supabase
         .from("batiments")
         .select("*")

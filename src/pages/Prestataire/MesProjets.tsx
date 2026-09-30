@@ -1,4 +1,6 @@
-// Mes projets - réservé aux MOE RETENUES : suivi de l'avancement de
+// Mes projets - réservé aux MOE : dossiers où l'entreprise est le maître
+// d'œuvre saisi par l'équipe Strat Eco (coproprietes.maitre_oeuvre), ou retenue
+// sur une consultation MOE avec engagement confirmé. Suivi de l'avancement de
 // l'opération (phase du projet), fiche copro et bâtiments, et documents de
 // projet : l'entreprise dépose devis, plannings, PV… que l'équipe Strat Eco
 // retrouve dans l'onglet Prestataires du dossier. Les autres intervenants
@@ -130,10 +132,11 @@ function ProjetDocsSection({
 export function MesProjets({ presta }: { presta: Tables<"prestataires"> }) {
   const { data: projets } = useMesProjetsMoe(true, presta.id);
   const { data: projetDocs } = useProjetDocs(presta.id);
-  // le projet n'entre dans « Mes projets » qu'une fois l'engagement confirmé
-  // (bouton « Je m'engage » de Mes candidatures)
-  const list = (projets ?? []).filter((p) => p.candidature.engagement_at);
-  const enAttente = (projets ?? []).length - list.length;
+  // une candidature retenue n'entre dans « Mes projets » qu'une fois
+  // l'engagement confirmé (bouton « Je m'engage » de Mes candidatures) ; un
+  // dossier où l'entreprise est le maître d'œuvre saisi y figure d'office
+  const list = (projets ?? []).filter((p) => p.designe || p.candidature?.engagement_at);
+  const enAttente = (projets ?? []).filter((p) => p.candidature && !p.candidature.engagement_at).length;
 
   return (
     <div className="page" style={{ padding: 0 }}>
@@ -141,9 +144,8 @@ export function MesProjets({ presta }: { presta: Tables<"prestataires"> }) {
         <div>
           <h1 className="page-title">Mes projets</h1>
           <p className="page-sub">
-            Opérations où votre candidature de maîtrise d'œuvre a été retenue et votre engagement confirmé -
-            suivez l'avancement, consultez les données de l'opération et partagez vos documents avec l'équipe
-            Strat Eco
+            Opérations dont vous êtes le maître d'œuvre - suivez l'avancement, consultez les données de
+            l'opération et partagez vos documents avec l'équipe Strat Eco
           </p>
         </div>
       </div>
@@ -166,15 +168,15 @@ export function MesProjets({ presta }: { presta: Tables<"prestataires"> }) {
           <div className="ps-ico"><Icon name="building" size={30} /></div>
           <h2>Aucun projet en cours</h2>
           <p>
-            Lorsqu'une de vos candidatures MOE est retenue par l'AMO et que vous confirmez votre engagement,
-            l'opération apparaît ici.
+            Les opérations dont l'équipe Strat Eco vous a désigné maître d'œuvre apparaissent ici, ainsi que
+            celles où votre candidature MOE est retenue et votre engagement confirmé.
           </p>
         </div>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {list.map((p) => (
-          <div key={p.candidature.id} className="panel" style={{ display: "flex", gap: 16, padding: 18, alignItems: "flex-start" }}>
+          <div key={p.candidature?.id ?? p.copro.id} className="panel" style={{ display: "flex", gap: 16, padding: 18, alignItems: "flex-start" }}>
             <span style={{ width: 64, height: 64, borderRadius: "var(--radius-md)", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: THUMB_BG, color: "var(--color-primary-700)" }}>
               <Icon name="building" size={28} />
             </span>
@@ -183,19 +185,30 @@ export function MesProjets({ presta }: { presta: Tables<"prestataires"> }) {
                 <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20 }}>{p.copro.name}</span>
                 <PhaseBadge phase={p.copro.phase} />
                 {p.copro.fragile && <Badge kind="warn">Fragile</Badge>}
-                <Badge kind="success" dot>MOE retenue</Badge>
+                <Badge kind="success" dot>
+                  {p.candidature?.engagement_at ? "MOE retenue" : "MOE du dossier"}
+                </Badge>
               </div>
               <div style={{ fontSize: 13, color: "var(--fg3)", marginTop: 4 }}>
                 {[p.copro.adresse, [p.copro.code_postal, p.copro.city].filter(Boolean).join(" ")].filter(Boolean).join(" · ")}
               </div>
               <PhaseTimeline phase={p.copro.phase} />
-              <p className="cs-mission" style={{ marginTop: 10 }}>{p.consultation.mission}</p>
+              {p.consultation?.mission && (
+                <p className="cs-mission" style={{ marginTop: 10 }}>{p.consultation.mission}</p>
+              )}
               <div className="cs-meta" style={{ marginTop: 8 }}>
-                <span>
-                  <Icon name="check" size={14} />
-                  Retenue le {fmtDate(p.candidature.decision_at ?? p.candidature.received_at)}
-                </span>
-                {p.candidature.montant != null && (
+                {p.candidature?.engagement_at ? (
+                  <span>
+                    <Icon name="check" size={14} />
+                    Retenue le {fmtDate(p.candidature.decision_at ?? p.candidature.received_at)}
+                  </span>
+                ) : (
+                  <span>
+                    <Icon name="check" size={14} />
+                    Maître d'œuvre désigné par l'équipe Strat Eco
+                  </span>
+                )}
+                {p.candidature?.engagement_at && p.candidature.montant != null && (
                   <span>
                     <Icon name="euro" size={14} />
                     Offre : {fmtEuro(p.candidature.montant)} HT

@@ -4286,6 +4286,7 @@ export type Database = {
         Returns: number
       }
       copro_visible_presta: { Args: { p_copro_id: string }; Returns: boolean }
+      copros_moe_designe: { Args: { p_prestataire_id: string }; Returns: string[] }
       devis_amo_chef_projet: {
         Args: { p_copro_id: string }
         Returns: {
@@ -4341,6 +4342,7 @@ export type Database = {
       is_copro_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_directeur_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_dirigeant: { Args: never; Returns: boolean }
+      is_moe_designe_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_moe_retenu_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_org_membre_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_presta_retenu_of: { Args: { p_copro_id: string }; Returns: boolean }
@@ -4368,6 +4370,7 @@ export type Database = {
         Returns: Database["public"]["Enums"]["type_consultation"][]
       }
       my_prestataire_id: { Args: never; Returns: string }
+      nom_moe_normalise: { Args: { p: string }; Returns: string }
       org_acces_copro: {
         Args: { p_acces: boolean; p_copro: string; p_user: string }
         Returns: undefined
