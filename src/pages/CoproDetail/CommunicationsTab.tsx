@@ -8,6 +8,7 @@
 // 2. Questions/réponses des candidats sur les consultations de la copro.
 // 3. Notes internes de l'équipe AMO (historique existant).
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
 import { useAddNote, useNotes } from "@/api/notes";
@@ -50,9 +51,16 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
   const envoyer = useEnvoyerMessage(c.id);
   const { data: lectures } = useLectures();
   const marquerLu = useMarquerLu();
-  const [canal, setCanal] = useState<CanalMessage>("prestataires");
+  // Lien de l'e-mail « Une question de … vous attend » (notifier-copro) :
+  // ?canal=coproprietaires&cp=<coproprietaire_id> ouvre le fil privé de ce
+  // copropriétaire, réponse privée présélectionnée.
+  const [params] = useSearchParams();
+  const canalLien = CANAUX.find((k) => k.id === params.get("canal"))?.id;
+  const [canal, setCanal] = useState<CanalMessage>(canalLien ?? "prestataires");
   const [dest, setDest] = useState<string>("tous"); // "tous" ou prestataire_id
-  const [destCopro, setDestCopro] = useState<string>("tous"); // "tous" ou coproprietaire_id
+  const [destCopro, setDestCopro] = useState<string>(
+    (canalLien === "coproprietaires" && params.get("cp")) || "tous"
+  ); // "tous" ou coproprietaire_id
   const [body, setBody] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
 

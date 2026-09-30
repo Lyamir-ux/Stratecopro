@@ -140,7 +140,8 @@ export function useMessagesPortail(coproId: string | undefined, coproprietaireId
 
 /** « Envoyez-nous un message » : le copropriétaire écrit à l'équipe AMO de son
  *  dossier. Le message reste privé (ni les autres copropriétaires, ni le
- *  syndic, ni les entreprises ne le voient) ; l'équipe est alertée par e-mail
+ *  syndic, ni les entreprises ne le voient) ; le chef de projet du dossier (et
+ *  les membres AMO du dossier) reçoit « Une question de … vous attend pour … »,
  *  sans le contenu (`notifier-copro`). En aperçu AMO, l'envoi est refusé par
  *  la RLS - l'AMO répond depuis l'onglet Communications du dossier. */
 export function useEnvoyerMessagePortail() {

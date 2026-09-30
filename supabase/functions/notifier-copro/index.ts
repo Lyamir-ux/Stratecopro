@@ -1,8 +1,10 @@
 // Edge function « notifier-copro » - alertes e-mail du fil privé entre un
 // copropriétaire et l'équipe AMO de son dossier (onglet « Nous contacter » du
 // portail, feedback Amir 22/09/2026). Deux événements :
-//   - message_copro     : le copropriétaire a écrit → alerte à l'équipe AMO
-//                         du dossier (copro_members de rôle amo) ;
+//   - message_copro     : le copropriétaire a écrit → alerte « Une question de
+//                         UNTEL vous attend pour telle copropriété » au chef de
+//                         projet du dossier (demande d'Amir du 30/09/2026), et
+//                         aux membres AMO du dossier (copro_members) s'il y en a ;
 //   - message_amo_copro : l'AMO a répondu dans le fil privé → alerte au
 //                         copropriétaire concerné.
 // L'alerte ne contient jamais le corps du message : il se lit dans l'espace.
@@ -23,6 +25,22 @@ function json(status: number, body: unknown): Response {
 }
 
 type TypeNotif = "message_copro" | "message_amo_copro";
+
+/** Comparaison de noms : minuscules, sans accents, espaces simples (même règle
+ *  que notifier-passation et la fonction SQL devis_amo_normaliser_nom). */
+function normaliser(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Texte saisi (noms) inséré dans le HTML de l'e-mail. */
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 
 const BOUTON = (href: string, libelle: string) =>
   `<p style="margin:22px 0">
@@ -88,16 +106,45 @@ Deno.serve(async (req: Request) => {
   }
 
   // --- Destinataires ---
-  const cibles = new Map<string, { user_id: string; nom: string }>();
+  // role : chef = chef de projet du dossier, equipe = membre AMO du dossier,
+  // repli = dirigeant alerté faute de chef de projet identifié
+  const cibles = new Map<string, { user_id: string; nom: string; role?: "chef" | "equipe" | "repli" }>();
+  let chefNom: string | null = null;
 
   if (typeNotif === "message_copro") {
+    // Le chef de projet est saisi en clair sur la fiche : on retrouve son compte
+    // parmi les AMO actifs par son nom. Le 30/09/2026, seuls 6 dossiers sur 204
+    // avaient un membre AMO (copro_members) : les questions du portail ne
+    // prévenaient donc personne (Parc des Cigognes).
+    const { data: equipe } = await admin
+      .from("profiles")
+      .select("user_id, full_name, dirigeant")
+      .eq("role", "amo")
+      .eq("active", true);
+    const chefSaisi = (copro.chef_projet ?? "").trim();
+    const chef = chefSaisi
+      ? (equipe ?? []).find((p) => normaliser(p.full_name ?? "") === normaliser(chefSaisi))
+      : undefined;
+    if (chef) {
+      chefNom = chef.full_name ?? chefSaisi;
+      cibles.set(chef.user_id, { user_id: chef.user_id, nom: chef.full_name ?? "", role: "chef" });
+    }
     const { data: membres } = await admin
       .from("copro_members")
       .select("user_id, profiles(full_name, role, active)")
       .eq("copro_id", copro_id);
     for (const m of membres ?? []) {
       const p = m.profiles as { full_name?: string; role?: string; active?: boolean } | null;
-      if (p?.role === "amo" && p.active) cibles.set(m.user_id, { user_id: m.user_id, nom: p.full_name ?? "" });
+      if (p?.role === "amo" && p.active && !cibles.has(m.user_id)) {
+        cibles.set(m.user_id, { user_id: m.user_id, nom: p.full_name ?? "", role: "equipe" });
+      }
+    }
+    // ni chef de projet identifié ni équipe : le dirigeant, pour qu'aucune
+    // question ne reste sans lecteur
+    if (cibles.size === 0) {
+      for (const p of equipe ?? []) {
+        if (p.dirigeant) cibles.set(p.user_id, { user_id: p.user_id, nom: p.full_name ?? "", role: "repli" });
+      }
     }
   } else if (coproprietaire.user_id) {
     const { data: p } = await admin
@@ -118,20 +165,30 @@ Deno.serve(async (req: Request) => {
   const from = Deno.env.get("RESEND_FROM") ?? "Strat Eco <onboarding@resend.dev>";
   const appUrl = Deno.env.get("APP_URL") ?? "https://stratecopro.vercel.app";
 
-  const contenu = (nom: string): { sujet: string; html: string } => {
-    const bonjour = `<p>Bonjour${nom ? " " + nom : ""},</p>`;
+  const contenu = (nom: string, role?: "chef" | "equipe" | "repli"): { sujet: string; html: string } => {
+    const bonjour = `<p>Bonjour${nom ? " " + esc(nom) : ""},</p>`;
     const signature = `<p>Bien cordialement,<br/><strong>Strat Eco pro</strong></p>`;
     if (typeNotif === "message_copro") {
+      const auteur = coproprietaire.nom || profile.full_name || "un copropriétaire";
+      const chefSaisi = (copro.chef_projet ?? "").trim();
+      // le bouton ouvre directement le fil privé de ce copropriétaire, prêt pour la réponse
+      const lien = `${appUrl}/copros/${copro.id}/communications?canal=coproprietaires&cp=${coproprietaire.id}`;
       return {
-        sujet: `Message d'un copropriétaire - ${copro.name}`,
+        sujet: `Une question de ${auteur} vous attend pour ${copro.name}`,
         html: `
           <div style="font-family:Arial,Helvetica,sans-serif;font-size:14.5px;line-height:1.55;color:#1a1a1a;max-width:620px">
             ${bonjour}
-            <p><strong>${coproprietaire.nom}</strong>, copropriétaire de <strong>${copro.name}</strong>,
-            vous a écrit depuis son portail (onglet « Nous contacter »). Son message vous attend dans
-            l'onglet Communications du dossier.</p>
-            ${copro.chef_projet ? `<p>Chef de projet du dossier : <strong>${copro.chef_projet}</strong>.</p>` : ""}
-            ${BOUTON(`${appUrl}/copros/${copro.id}/communications`, "Lire le message")}
+            <p>Une question de <strong>${esc(auteur)}</strong> vous attend pour la copropriété
+            <strong>${esc(copro.name)}</strong>.</p>
+            <p>Elle a été posée depuis l'espace copropriétaire (onglet « Nous contacter »). Vous pouvez la
+            lire et y répondre en privé dans l'onglet Communications du dossier.</p>
+            ${role === "equipe" && chefNom ? `<p>Chef de projet du dossier : <strong>${esc(chefNom)}</strong>.</p>` : ""}
+            ${role === "repli"
+              ? `<p>Cette alerte vous est adressée car ${chefSaisi
+                  ? `le chef de projet saisi sur le dossier (« ${esc(chefSaisi)} ») ne correspond à aucun compte Strat Eco`
+                  : "le dossier n'a pas de chef de projet"}.</p>`
+              : ""}
+            ${BOUTON(lien, "Lire et répondre")}
             ${signature}
           </div>`,
       };
@@ -161,7 +218,7 @@ Deno.serve(async (req: Request) => {
       simules++;
       continue;
     }
-    const { sujet, html } = contenu(cible.nom);
+    const { sujet, html } = contenu(cible.nom, cible.role);
     try {
       const r = await fetch("https://api.resend.com/emails", {
         method: "POST",
