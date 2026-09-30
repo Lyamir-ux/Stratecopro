@@ -1013,6 +1013,8 @@ export type Database = {
           copro_id: string
           created_at: string
           email: string | null
+          espace_invite_le: string | null
+          espace_invite_par: string | null
           id: string
           nom: string
           sortant_le: string | null
@@ -1025,6 +1027,8 @@ export type Database = {
           copro_id: string
           created_at?: string
           email?: string | null
+          espace_invite_le?: string | null
+          espace_invite_par?: string | null
           id?: string
           nom: string
           sortant_le?: string | null
@@ -1037,6 +1041,8 @@ export type Database = {
           copro_id?: string
           created_at?: string
           email?: string | null
+          espace_invite_le?: string | null
+          espace_invite_par?: string | null
           id?: string
           nom?: string
           sortant_le?: string | null
@@ -4283,6 +4289,15 @@ export type Database = {
           email: string
           full_name: string
           initials: string
+        }[]
+      }
+      espaces_coproprietaires: {
+        Args: { p_copro_id: string }
+        Returns: {
+          coproprietaire_id: string
+          etat: string
+          invite_le: string | null
+          role_compte: Database["public"]["Enums"]["app_role"] | null
         }[]
       }
       documents_dossier: {

@@ -24,6 +24,8 @@ import {
 import type { CoproWithStats } from "@/api/copros";
 import { useGenererRapportEnquete } from "@/api/rapportEnquete";
 import { useFicheEtat } from "@/api/ficheEtat";
+import { useEspacesCoproprietaires, type EtatEspace } from "@/api/espaces";
+import { OuvrirEspacesFenetre } from "@/components/EspacesCoproprietaires";
 
 // Libellés grand public (plafonds Anah) - les couleurs MPR restent un simple repère visuel.
 const PROFIL_META: { p: Profil; label: string; color: string }[] = [
@@ -222,8 +224,13 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
   const [cible, setCible] = useState<"tous" | "nonrep">("nonrep");
   const [parEmail, setParEmail] = useState(true);
   const [dateLimite, setDateLimite] = useState("");
+  // espaces copropriétaires (portail) - feedback d'Amir du 30/09/2026
+  const { data: espaces } = useEspacesCoproprietaires(c.id);
+  const [fenetreEspaces, setFenetreEspaces] = useState(false);
 
   const coproprietaires = donnees?.coproprietaires ?? [];
+  const compteEspaces = (etat: EtatEspace) => coproprietaires.filter((cp) => espaces?.get(cp.id)?.etat === etat).length;
+  const espacesACreer = coproprietaires.filter((cp) => espaces?.get(cp.id)?.etat === "a_creer");
   const total = coproprietaires.length;
   const repondus = useMemo(
     () => new Map((reponses ?? []).map((r) => [r.coproprietaire_id, r])),
@@ -562,6 +569,26 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
               Espace individuel : enquête sociale, fichiers partagés et aides individuelles.
             </p>
             <div className="kv">
+              <span className="k">Espaces activés</span>
+              <span className="v">{compteEspaces("actif")}</span>
+            </div>
+            <div className="kv">
+              <span className="k" title="E-mail d'activation envoyé, lien pas encore utilisé">Invitations en attente</span>
+              <span className="v">{compteEspaces("invite")}</span>
+            </div>
+            <div className="kv">
+              <span className="k">Espaces à créer</span>
+              <span className="v">{compteEspaces("a_creer")}</span>
+            </div>
+            {compteEspaces("sans_email") + compteEspaces("email_pris") > 0 && (
+              <div className="kv">
+                <span className="k" title="Sans adresse e-mail, ou adresse déjà utilisée par un compte Strat Eco, syndic ou prestataire">
+                  Sans adresse utilisable
+                </span>
+                <span className="v">{compteEspaces("sans_email") + compteEspaces("email_pris")}</span>
+              </div>
+            )}
+            <div className="kv">
               <span className="k">Réponses saisies</span>
               <span className="v">{repondants}</span>
             </div>
@@ -571,9 +598,27 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
                 <Badge kind={sent ? "success" : "warn"}>{sent ? "Préparé" : "À préparer"}</Badge>
               </span>
             </div>
-            <p className="se-small" style={{ marginTop: 14, color: "var(--fg-muted)" }}>
-              La saisie complète du questionnaire par les copropriétaires arrive avec la prochaine étape du portail.
+            <button
+              className="se-btn se-btn-secondary"
+              style={{ width: "100%", marginTop: 14, justifyContent: "center" }}
+              disabled={espacesACreer.length === 0}
+              onClick={() => setFenetreEspaces(true)}
+              title="Envoie aux copropriétaires qui n'ont pas encore d'espace un e-mail avec un lien pour choisir leur mot de passe"
+            >
+              <Icon name="send" size={16} />
+              Créer les espaces manquants · {espacesACreer.length}
+            </button>
+            <p className="se-small" style={{ marginTop: 10, marginBottom: 0, color: "var(--fg-muted)" }}>
+              Une fiche à la fois depuis l'onglet Copropriétaires (création ou renvoi de l'invitation).
             </p>
+            {fenetreEspaces && (
+              <OuvrirEspacesFenetre
+                coproId={c.id}
+                cibles={espacesACreer.map((cp) => ({ id: cp.id, nom: cp.nom, email: cp.email }))}
+                ignores={{ sansEmail: compteEspaces("sans_email"), emailPris: compteEspaces("email_pris") }}
+                onClose={() => setFenetreEspaces(false)}
+              />
+            )}
           </div>
         </div>
       </div>

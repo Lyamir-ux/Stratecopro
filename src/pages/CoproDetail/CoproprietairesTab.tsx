@@ -34,6 +34,8 @@ import {
 import { useGenererRapportEnquete } from "@/api/rapportEnquete";
 import type { CoproWithStats } from "@/api/copros";
 import { messageErreur } from "@/lib/erreurs";
+import { useEspacesCoproprietaires, type EspaceCoproprietaire } from "@/api/espaces";
+import { EspaceBadge, OuvrirEspacesFenetre, type CibleEspace } from "@/components/EspacesCoproprietaires";
 
 type FiltreStatut = "tous" | "a_relancer" | "complet";
 
@@ -100,6 +102,9 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
   // file « Pièces à vérifier » de la page Vos tâches, feedback 10/09).
   const [searchParams] = useSearchParams();
   const [ouvert, setOuvert] = useState<string | null>(searchParams.get("cp"));
+  // espaces copropriétaires (portail), ouverts sur un clic de l'AMO - feedback 30/09
+  const { data: espaces } = useEspacesCoproprietaires(c.id);
+  const [fenetreEspaces, setFenetreEspaces] = useState<{ cibles: CibleEspace[]; renvoi?: boolean; bilan?: boolean } | null>(null);
 
   const filtres = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -123,6 +128,8 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
   };
   const dossierOuvert = data.dossiers.find((d) => d.id === ouvert) ?? null;
   const openPortail = (id: string) => navigate(`/portail?cp=${id}`);
+  const etatEspace = (d: DossierCoproprietaire) => espaces?.get(d.id)?.etat;
+  const espacesACreer = data.dossiers.filter((d) => etatEspace(d) === "a_creer");
 
   if (data.chargement && data.dossiers.length === 0) {
     return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
@@ -135,6 +142,17 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
           <Icon name="users" size={18} />
           <h3>Copropriétaires · {data.dossiers.length}</h3>
           <span style={{ flex: 1 }}></span>
+          <button
+            className="se-btn se-btn-secondary btn-sm"
+            title="Envoie aux copropriétaires qui n'ont pas encore d'espace un e-mail avec un lien pour choisir leur mot de passe"
+            disabled={espacesACreer.length === 0}
+            onClick={() =>
+              setFenetreEspaces({ cibles: espacesACreer.map((d) => ({ id: d.id, nom: d.nom, email: d.email })), bilan: true })
+            }
+          >
+            <Icon name="send" size={14} />
+            Créer les espaces manquants · {espacesACreer.length}
+          </button>
           <button
             className="se-btn se-btn-secondary btn-sm"
             title="Liste des primes : aides collectives affectées et primes individuelles par copropriétaire, ventilées par bâtiment"
@@ -228,6 +246,7 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
                       <th style={{ textAlign: "center" }}>RIB</th>
                       <th style={{ textAlign: "center" }}>CNI</th>
                       <th style={{ textAlign: "center" }}>Avis d'imp.</th>
+                      <th title="Espace copropriétaire (portail) : activé, invité (lien pas encore utilisé), à créer">Espace</th>
                       <th>Statut</th>
                       <th></th>
                     </tr>
@@ -263,6 +282,9 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
                         <td style={{ textAlign: "center" }}><Etat e={d.etat.cni} title="Pièce d'identité" /></td>
                         <td style={{ textAlign: "center" }}><Etat e={d.etat.avis} title="Avis d'imposition" /></td>
                         <td>
+                          <EspaceBadge espace={espaces?.get(d.id)} />
+                        </td>
+                        <td>
                           <StatutBadge d={d} />
                         </td>
                         <td style={{ whiteSpace: "nowrap" }}>
@@ -281,7 +303,7 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
                     ))}
                     {filtres.length === 0 && (
                       <tr style={{ cursor: "default" }}>
-                        <td colSpan={12} style={{ color: "var(--fg-muted)", textAlign: "center" }}>
+                        <td colSpan={13} style={{ color: "var(--fg-muted)", textAlign: "center" }}>
                           Aucun copropriétaire ne correspond aux filtres.
                         </td>
                       </tr>
@@ -309,6 +331,27 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
           lb={lb}
           onClose={() => setOuvert(null)}
           onPortail={() => openPortail(dossierOuvert.id)}
+          espace={espaces?.get(dossierOuvert.id)}
+          onEspace={(renvoi) =>
+            setFenetreEspaces({ cibles: [{ id: dossierOuvert.id, nom: dossierOuvert.nom, email: dossierOuvert.email }], renvoi })
+          }
+        />
+      )}
+
+      {fenetreEspaces && (
+        <OuvrirEspacesFenetre
+          coproId={c.id}
+          cibles={fenetreEspaces.cibles}
+          renvoi={fenetreEspaces.renvoi}
+          ignores={
+            fenetreEspaces.bilan
+              ? {
+                  sansEmail: data.dossiers.filter((d) => etatEspace(d) === "sans_email").length,
+                  emailPris: data.dossiers.filter((d) => etatEspace(d) === "email_pris").length,
+                }
+              : undefined
+          }
+          onClose={() => setFenetreEspaces(null)}
         />
       )}
     </div>
@@ -341,6 +384,8 @@ function FicheCoproprietaire({
   lb,
   onClose,
   onPortail,
+  espace,
+  onEspace,
 }: {
   d: DossierCoproprietaire;
   data: DossiersCopro;
@@ -349,6 +394,9 @@ function FicheCoproprietaire({
   lb: ReturnType<typeof libellesBatiments>;
   onClose: () => void;
   onPortail: () => void;
+  espace: EspaceCoproprietaire | undefined;
+  /** Ouvre l'espace (renvoi = nouvel e-mail d'activation). */
+  onEspace: (renvoi: boolean) => void;
 }) {
   const save = useSaveReponse(enqueteId, coproId);
   const verifier = useVerifierProfil(enqueteId, coproId);
@@ -405,6 +453,21 @@ function FicheCoproprietaire({
           {d.telephone ? ` · ${d.telephone}` : ""}
         </span>
         <span style={{ flex: 1 }}></span>
+        <span className="se-small" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--fg3)" }}>
+          Espace <EspaceBadge espace={espace} />
+        </span>
+        {espace?.etat === "a_creer" && (
+          <button className="se-btn se-btn-secondary btn-sm" onClick={() => onEspace(false)} title="Envoie un e-mail avec un lien pour choisir son mot de passe">
+            <Icon name="send" size={14} />
+            Créer l'espace
+          </button>
+        )}
+        {espace?.etat === "invite" && (
+          <button className="se-btn se-btn-secondary btn-sm" onClick={() => onEspace(true)} title="Le lien précédent n'a pas été utilisé : nouvel e-mail d'activation">
+            <Icon name="send" size={14} />
+            Renvoyer l'invitation
+          </button>
+        )}
         <StatutBadge d={d} />
         <button className="se-btn se-btn-secondary btn-sm" onClick={onPortail} title="Voir le portail tel que ce copropriétaire le voit (les actions y écrivent réellement)">
           <Icon name="eye" size={14} />
