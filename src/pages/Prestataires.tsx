@@ -8,7 +8,11 @@
 // n'est alertée de rien et ne peut pas recevoir de compte.
 // Plusieurs e-mails par entreprise depuis le 27/09/2026 (0106) : la principale
 // et autant d'adresses en copie des alertes que voulu.
-import { useMemo, useState } from "react";
+// Bug d'Amir du 01/10/2026 (fiche « Pierre Baumann » créée mais introuvable) :
+// recherche sur le nom, le contact, la ville et les e-mails, et ouverture
+// directe d'une fiche par /prestataires?fiche=<id> (lien du bandeau du dossier).
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
@@ -25,6 +29,7 @@ import {
   type Prestataire,
 } from "@/api/prestataires";
 import type { Tables } from "@/lib/database.types";
+import { normaliserRecherche } from "@/lib/format";
 
 type TypeConsult = Tables<"consultations">["type"];
 
@@ -143,13 +148,35 @@ export default function Prestataires() {
   const del = useDeletePrestataire();
 
   const [filter, setFilter] = useState<TypeConsult | "">("");
+  const [recherche, setRecherche] = useState("");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Prestataire | null>(null);
+  const [params, setParams] = useSearchParams();
+  const ficheDemandee = params.get("fiche");
 
-  const list = useMemo(
-    () => (prestas ?? []).filter((p) => !filter || p.types.includes(filter)),
-    [prestas, filter]
-  );
+  // /prestataires?fiche=<id> : la fiche s'ouvre directement, une seule fois
+  useEffect(() => {
+    if (!ficheDemandee || !prestas) return;
+    const p = prestas.find((x) => x.id === ficheDemandee);
+    if (p) setEditing(p);
+    setParams((prev) => {
+      const suite = new URLSearchParams(prev);
+      suite.delete("fiche");
+      return suite;
+    }, { replace: true });
+  }, [ficheDemandee, prestas, setParams]);
+
+  const list = useMemo(() => {
+    const q = normaliserRecherche(recherche.trim());
+    return (prestas ?? []).filter(
+      (p) =>
+        (!filter || p.types.includes(filter)) &&
+        (!q ||
+          normaliserRecherche(
+            [p.raison_sociale, p.contact_nom, p.ville, p.email, ...p.emails_secondaires].filter(Boolean).join(" ")
+          ).includes(q))
+    );
+  }, [prestas, filter, recherche]);
 
   const save = async (draft: typeof EMPTY, id?: string) => {
     const payload = {
@@ -178,6 +205,14 @@ export default function Prestataires() {
           </p>
         </div>
         <span className="spacer"></span>
+        <input
+          className="edit-inp"
+          type="search"
+          placeholder="Rechercher (nom, contact, ville, e-mail)"
+          value={recherche}
+          onChange={(e) => setRecherche(e.target.value)}
+          style={{ maxWidth: 260 }}
+        />
         <select className="edit-sel" value={filter} onChange={(e) => setFilter(e.target.value as TypeConsult | "")}>
           <option value="">Tous les métiers</option>
           {CONSULT_TYPES.map((t) => (
@@ -190,7 +225,11 @@ export default function Prestataires() {
         </button>
       </div>
 
-      {list.length === 0 && (
+      {list.length === 0 && (recherche.trim() || filter) && (prestas?.length ?? 0) > 0 && (
+        <p className="se-small" style={{ color: "var(--fg-muted)" }}>Aucune entreprise ne correspond à cette recherche.</p>
+      )}
+
+      {(prestas?.length ?? 0) === 0 && (
         <div className="placeholder-screen" style={{ minHeight: 300 }}>
           <div className="ps-ico"><Icon name="briefcase" size={30} /></div>
           <h2>Aucune entreprise référencée</h2>

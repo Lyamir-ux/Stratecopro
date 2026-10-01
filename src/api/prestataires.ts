@@ -5,6 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
+import { resoudreMaitreOeuvre } from "@/lib/maitreOeuvre";
 
 export type Prestataire = Tables<"prestataires">;
 
@@ -37,6 +38,26 @@ export async function declencherRappelAgrements(): Promise<void> {
   } catch {
     /* rappel facultatif */
   }
+}
+
+/**
+ * Maître d'œuvre saisi rapproché des fiches de la Base prestataires (règle de
+ * lib/maitreOeuvre) : nom à poser sur le dossier et fiche à créer ou non.
+ */
+export async function resoudreMaitreOeuvreEnBase(saisie: string, options?: { citationSuffit?: boolean }) {
+  const { data, error } = await supabase.from("prestataires").select("id, raison_sociale");
+  if (error) throw error;
+  return resoudreMaitreOeuvre(saisie, data ?? [], options);
+}
+
+/**
+ * Fiche d'un nouveau maître d'œuvre (bug d'Amir du 01/10/2026) : métier
+ * « Maître d'œuvre », sans e-mail - l'AMO complète e-mails et contacts dans la
+ * Base prestataires. Le dossier lui est relié par son nom (0119, 0120).
+ */
+export async function creerFicheMaitreOeuvre(nom: string): Promise<void> {
+  const { error } = await supabase.from("prestataires").insert({ raison_sociale: nom, types: ["moe"] });
+  if (error) throw error;
 }
 
 export function usePrestataires() {

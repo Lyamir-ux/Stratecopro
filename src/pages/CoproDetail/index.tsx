@@ -3,7 +3,7 @@
 // Photo : cadrage choisi à l'import et modifiable ensuite (bouton « Recadrer »,
 // feedback Amir 24/09/2026), la photo d'origine est conservée.
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Badge, DpePair, PhaseBadge, THUMB_BG } from "@/components/ui";
@@ -23,6 +23,8 @@ import { PhotoCadree, RecadrerPhoto, ratioBandeau } from "@/components/PhotoCadr
 import { lireCadrage } from "@/lib/photoCadrage";
 import { messageErreur } from "@/lib/erreurs";
 import { useConsultations } from "@/api/consultations";
+import { usePrestataires } from "@/api/prestataires";
+import { normaliserNomOrganisation } from "@/lib/organisations";
 import { compteNonLus, useLectures, useMessagesCopro } from "@/api/messages";
 import { ProjetTab } from "./ProjetTab";
 import { PrestatairesTab } from "./PrestatairesTab";
@@ -90,6 +92,9 @@ export default function CoproDetail() {
   const { data: messages } = useMessagesCopro(id);
   const { data: lectures } = useLectures();
   const messagesNonLus = compteNonLus(messages, lectures, session?.user.id);
+  // Fiche du maître d'œuvre dans la Base prestataires (bug d'Amir du 01/10/2026) :
+  // son nom dans le bandeau ouvre la fiche, pour y saisir e-mails et contacts.
+  const { data: prestataires } = usePrestataires();
 
   const tab: TabId = TABS.some((t) => t.id === tabParam) ? (tabParam as TabId) : "projet";
 
@@ -97,6 +102,10 @@ export default function CoproDetail() {
 
   if (isLoading || !c) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
   const s = c.stats;
+  const moe = c.maitre_oeuvre?.trim() ?? "";
+  const ficheMoe = moe
+    ? ((prestataires ?? []).find((p) => normaliserNomOrganisation(p.raison_sociale) === normaliserNomOrganisation(moe)) ?? null)
+    : null;
 
   return (
     <div className="page">
@@ -228,7 +237,25 @@ export default function CoproDetail() {
               </span>
               <span>
                 <Icon name="hammer" size={14} />
-                Maître d'œuvre {c.maitre_oeuvre?.trim() ? <b>{c.maitre_oeuvre.trim()}</b> : <i>non désigné</i>}
+                Maître d'œuvre{" "}
+                {ficheMoe ? (
+                  <Link
+                    to={`/prestataires?fiche=${ficheMoe.id}`}
+                    className="dh-lien"
+                    title="Ouvrir la fiche dans la Base prestataires (e-mails, contact, téléphone)"
+                  >
+                    {moe}
+                  </Link>
+                ) : moe ? (
+                  <b>{moe}</b>
+                ) : (
+                  <i>non désigné</i>
+                )}
+                {ficheMoe && !ficheMoe.email && (
+                  <Link to={`/prestataires?fiche=${ficheMoe.id}`} className="dh-a-completer">
+                    e-mail à renseigner
+                  </Link>
+                )}
               </span>
             </div>
           </div>

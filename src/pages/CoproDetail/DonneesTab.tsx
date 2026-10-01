@@ -2,6 +2,7 @@
 // Répartition des lots et matrice bâtiments × clés dérivées des lots réels ;
 // synthèse éditable (fiche copropriété) ; import Excel réel des lots.
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Icon } from "@/components/Icon";
 import { Badge, DpePair, Progress } from "@/components/ui";
 import {
@@ -38,6 +39,7 @@ import {
   type OrganisationNommee,
 } from "@/lib/organisations";
 import { messageErreur } from "@/lib/erreurs";
+import { creerFicheMaitreOeuvre, resoudreMaitreOeuvreEnBase, usePrestataires } from "@/api/prestataires";
 import type { Enums } from "@/lib/database.types";
 import { trierParNomFamille } from "@/lib/nomFamille";
 import { fmtDate } from "@/lib/format";
@@ -54,11 +56,19 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
   const { data: team } = useTeamProfiles();
   const { data: organisations } = useOrganisations();
   const refreshOrganisations = useRefreshOrganisations();
-  // Maîtres d'œuvre déjà saisis sur les autres dossiers : suggestions de saisie
-  // (même graphie partout, les listes se trient et se lisent mieux).
+  // Maîtres d'œuvre déjà saisis sur les autres dossiers et fiches « Maître
+  // d'œuvre » de la Base prestataires : suggestions de saisie (même graphie
+  // partout, les listes se trient et se lisent mieux).
   const { data: tousDossiers } = useCopros();
+  const { data: prestataires } = usePrestataires();
+  const qc = useQueryClient();
   const moesConnus = Array.from(
-    new Set((tousDossiers ?? []).map((d) => d.maitre_oeuvre?.trim()).filter((v): v is string => !!v))
+    new Set(
+      [
+        ...(tousDossiers ?? []).map((d) => d.maitre_oeuvre?.trim()),
+        ...(prestataires ?? []).filter((p) => p.types.includes("moe")).map((p) => p.raison_sociale),
+      ].filter((v): v is string => !!v)
+    )
   ).sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
   const update = useUpdateCopro(c.id);
   const [showImport, setShowImport] = useState(false);
@@ -225,6 +235,18 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
         organisationCible = organisationActuelle;
       }
     }
+    // Nouveau maître d'œuvre (bug d'Amir du 01/10/2026) : sa fiche est créée dans
+    // la Base prestataires après l'enregistrement ; un nom déjà en base reprend
+    // la graphie de la fiche, un nom qui cite des fiches existantes n'en crée pas.
+    const moeSaisi = synth.maitreOeuvre.trim();
+    let moe: { nom: string; ficheACreer: boolean } | null = null;
+    if (moeSaisi && moeSaisi !== (c.maitre_oeuvre ?? "").trim()) {
+      try {
+        moe = await resoudreMaitreOeuvreEnBase(moeSaisi);
+      } catch {
+        moe = null; // lecture impossible : le nom saisi est gardé tel quel
+      }
+    }
     try {
       await update.mutateAsync({
         ...(organisationCible !== organisationActuelle ? { organisation_id: organisationCible } : {}),
@@ -234,7 +256,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
         gestionnaire_nom: synth.gestionnaireNom || null,
         gestionnaire_email: synth.gestionnaireEmail || null,
         chef_projet: synth.chefProjet || null,
-        maitre_oeuvre: synth.maitreOeuvre.trim() || null,
+        maitre_oeuvre: (moe?.nom ?? moeSaisi) || null,
         date_ag: synth.dateAg || null,
         nb_logements: synth.nbLogements > 0 ? synth.nbLogements : null,
         denomination_batiments: synth.denomination,
@@ -250,6 +272,19 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
       if (organisationCreee) refreshOrganisations();
     }
     setEditingSynth(false);
+    if (moe?.ficheACreer) {
+      try {
+        await creerFicheMaitreOeuvre(moe.nom);
+        void qc.invalidateQueries({ queryKey: ["prestataires"] });
+        window.alert(
+          `Fiche « ${moe.nom} » créée dans la Base prestataires (métier Maître d'œuvre, sans e-mail). Complétez ses e-mails depuis la Base prestataires ou en cliquant sur son nom dans le bandeau du dossier.`
+        );
+      } catch (e) {
+        window.alert(
+          `Dossier enregistré, mais la fiche du maître d'œuvre « ${moe.nom} » n'a pas pu être créée (${messageErreur(e, "erreur inconnue")}). Référencez-la depuis la Base prestataires.`
+        );
+      }
+    }
     // Passation de dossier : le changement de chef de projet déclenche
     // l'alerte automatique aux chefs de projet concernés (edge notifier-passation).
     if (nouveauChef && nouveauChef !== ancienChef) {

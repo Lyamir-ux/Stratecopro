@@ -5,7 +5,7 @@ import type { Tables, TablesInsert } from "@/lib/database.types";
 import { buildTaskTemplate } from "@/lib/taskTemplate";
 import type { PhaseId } from "@/lib/referentiels";
 import { organisationIdPourSyndic, resoudreOrganisation, type ChoixOrganisation } from "@/api/organisations";
-import { normaliserNomOrganisation } from "@/lib/organisations";
+import { creerFicheMaitreOeuvre, resoudreMaitreOeuvreEnBase } from "@/api/prestataires";
 import { messageErreur } from "@/lib/erreurs";
 
 export type CoproRow = Tables<"coproprietes">;
@@ -164,13 +164,8 @@ export function slugCopro(nom: string): string {
 
 /** Nom du maître d'œuvre à poser sur le dossier ; un « nouveau » nom déjà en base (casse et accents ignorés) reprend la fiche existante. */
 async function nomMaitreOeuvre(choix: ChoixMaitreOeuvre): Promise<{ nom: string; ficheACreer: boolean }> {
-  const nom = choix.nom.trim().replace(/\s+/g, " ");
-  if (choix.mode === "existant") return { nom, ficheACreer: false };
-  const { data, error } = await supabase.from("prestataires").select("raison_sociale");
-  if (error) throw error;
-  const cible = normaliserNomOrganisation(nom);
-  const deja = (data ?? []).find((p) => normaliserNomOrganisation(p.raison_sociale) === cible);
-  return deja ? { nom: deja.raison_sociale, ficheACreer: false } : { nom, ficheACreer: true };
+  if (choix.mode === "existant") return { nom: choix.nom.trim().replace(/\s+/g, " "), ficheACreer: false };
+  return resoudreMaitreOeuvreEnBase(choix.nom, { citationSuffit: false });
 }
 
 /**
@@ -243,8 +238,11 @@ export async function creerCopro(input: NewCoproInput): Promise<CoproCree> {
   // se rattrape depuis la Base prestataires ou le bloc Honoraires.
   const avertissements: string[] = [];
   if (moe?.ficheACreer) {
-    const { error: eMoe } = await supabase.from("prestataires").insert({ raison_sociale: moe.nom, types: ["moe"] });
-    if (eMoe) avertissements.push(`fiche du maître d'œuvre « ${moe.nom} » non créée (${eMoe.message})`);
+    try {
+      await creerFicheMaitreOeuvre(moe.nom);
+    } catch (eMoe) {
+      avertissements.push(`fiche du maître d'œuvre « ${moe.nom} » non créée (${messageErreur(eMoe, "erreur inconnue")})`);
+    }
   }
   const honoraires = [
     { rpc: "honoraires_saisir_p1", montant: input.honoraires_p1_ht, libelle: "P1" },
