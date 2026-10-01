@@ -110,6 +110,12 @@ export async function resoudreOrganisation(
   return { id: org.id, nom: org.nom, creee: true };
 }
 
+/** Retire l'organisation que resoudreOrganisation vient de créer, quand l'enregistrement qui suit échoue. */
+export async function supprimerOrganisationCreee(id: string): Promise<void> {
+  const { error } = await supabase.from("organisations").delete().eq("id", id);
+  if (error) throw error;
+}
+
 /** Toutes les enseignes, avec leur nombre de dossiers et de membres. */
 export function useOrganisations() {
   return useQuery({
@@ -207,7 +213,7 @@ export function useCoprosRattachables() {
 }
 
 /** Invalide tout ce que touche une écriture sur les enseignes. */
-function useRefreshOrganisations() {
+export function useRefreshOrganisations() {
   const qc = useQueryClient();
   return () => {
     void qc.invalidateQueries({ queryKey: ["organisations"] });

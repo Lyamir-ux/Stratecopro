@@ -22,18 +22,37 @@ import {
   type PassationMailStatut,
 } from "@/api/copros";
 import { useTeamProfiles } from "@/api/profiles";
-import { organisationIdPourSyndic, useOrganisations } from "@/api/organisations";
-import { normaliserNomOrganisation, trouverOrganisationParNom, type OrganisationNommee } from "@/lib/organisations";
+import {
+  organisationIdPourSyndic,
+  resoudreOrganisation,
+  supprimerOrganisationCreee,
+  useOrganisations,
+  useRefreshOrganisations,
+  type ChoixOrganisation,
+} from "@/api/organisations";
+import {
+  nomOrganisationDisponible,
+  nomSyndicBenevole,
+  normaliserNomOrganisation,
+  trouverOrganisationParNom,
+  type OrganisationNommee,
+} from "@/lib/organisations";
+import { messageErreur } from "@/lib/erreurs";
 import type { Enums } from "@/lib/database.types";
 import { trierParNomFamille } from "@/lib/nomFamille";
 import { ImportLotsDialog } from "./ImportLotsDialog";
 import { ChangementProprietaire, JournalMutations } from "@/pages/Syndic/ChangementProprietaire";
+
+/** Choix du menu Organisation qui créent une enseigne (hors des identifiants possibles). */
+const ORG_BENEVOLE = "__benevole__";
+const ORG_NOUVELLE = "__nouvelle__";
 
 export function DonneesTab({ c }: { c: CoproWithStats }) {
   const { data, isLoading } = useDonnees(c.id);
   const { data: mutations } = useMutationsLots(c.id);
   const { data: team } = useTeamProfiles();
   const { data: organisations } = useOrganisations();
+  const refreshOrganisations = useRefreshOrganisations();
   // Maîtres d'œuvre déjà saisis sur les autres dossiers : suggestions de saisie
   // (même graphie partout, les listes se trient et se lisent mieux).
   const { data: tousDossiers } = useCopros();
@@ -60,8 +79,11 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
     denomination: "batiment",
     energyBefore: "",
     energyAfter: "",
-    /** Enseigne choisie explicitement dans la liste (null = aucune organisation). */
+    /** Enseigne choisie explicitement dans la liste (null = aucune organisation,
+     *  ORG_BENEVOLE / ORG_NOUVELLE = organisation à créer à l'enregistrement). */
     organisationId: null as string | null,
+    /** Nom saisi pour le choix « Nouveau ». */
+    organisationNouvelle: "",
   });
 
   if (isLoading || !data) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
@@ -118,6 +140,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
       energyBefore: c.energy_before ?? "",
       energyAfter: c.energy_after ?? "",
       organisationId: c.organisation_id ?? null,
+      organisationNouvelle: "",
     });
     setEditingSynth(true);
   };
@@ -133,6 +156,31 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
   };
   const organisationActuelle = c.organisation_id ?? null;
   const organisationChoisie = synth.organisationId !== organisationActuelle;
+  // Organisation à créer à l'enregistrement (feedback d'Amir du 01/10/2026) :
+  // celle du syndic bénévole du dossier, ou une nouvelle enseigne nommée ici.
+  // Un dossier déjà chez son syndic bénévole y reste (pas de « (2) »), et un nom
+  // déjà pris rejoint l'enseigne existante.
+  const orgs = organisations ?? [];
+  const dejaChezBenevole =
+    !!c.organisation &&
+    normaliserNomOrganisation(c.organisation.nom) === normaliserNomOrganisation(nomSyndicBenevole(c.name));
+  const choixCreation: ChoixOrganisation | null =
+    synth.organisationId === ORG_BENEVOLE && !dejaChezBenevole
+      ? { mode: "benevole" }
+      : synth.organisationId === ORG_NOUVELLE && synth.organisationNouvelle.trim()
+        ? { mode: "nouvelle", nom: synth.organisationNouvelle.trim() }
+        : null;
+  const nouvelleExistante =
+    synth.organisationId === ORG_NOUVELLE ? trouverOrganisationParNom(orgs, synth.organisationNouvelle) : null;
+  const nomACreer =
+    synth.organisationId === ORG_BENEVOLE
+      ? dejaChezBenevole
+        ? null
+        : nomOrganisationDisponible(nomSyndicBenevole(c.name), orgs)
+      : synth.organisationId === ORG_NOUVELLE && !nouvelleExistante
+        ? synth.organisationNouvelle.trim() || null
+        : null;
+  const nouvelleSansNom = synth.organisationId === ORG_NOUVELLE && !synth.organisationNouvelle.trim();
   const saveSynth = async () => {
     if (synth.nbBatiments !== batiments.length) {
       // Peut échouer si on réduit alors que des bâtiments portent des lots - on reste en édition.
@@ -148,25 +196,55 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
     // dans la liste prime ; sinon, changer le syndic pour le nom d'une enseigne
     // déplace le dossier vers elle, et un nom inconnu conserve le rattachement.
     const syndicModifie = (synth.syndic.trim() || null) !== (c.syndic_name?.trim() || null);
-    const organisationCible = organisationChoisie
+    let organisationCible = organisationChoisie
       ? synth.organisationId
       : syndicModifie
         ? ((await organisationIdPourSyndic(synth.syndic)) ?? organisationActuelle)
         : organisationActuelle;
-    await update.mutateAsync({
-      ...(organisationCible !== organisationActuelle ? { organisation_id: organisationCible } : {}),
-      adresse: synth.adresse || null,
-      syndic_name: synth.syndic || null,
-      city: synth.city || null,
-      gestionnaire_nom: synth.gestionnaireNom || null,
-      gestionnaire_email: synth.gestionnaireEmail || null,
-      chef_projet: synth.chefProjet || null,
-      maitre_oeuvre: synth.maitreOeuvre.trim() || null,
-      nb_logements: synth.nbLogements > 0 ? synth.nbLogements : null,
-      denomination_batiments: synth.denomination,
-      energy_before: synth.energyBefore || null,
-      energy_after: synth.energyAfter || null,
-    });
+    let syndicName = synth.syndic || null;
+    // Syndic bénévole ou « Nouveau » : l'organisation est créée (ou retrouvée)
+    // maintenant, et le nom du syndic la suit s'il était vide ou égal à l'ancienne.
+    let organisationCreee: string | null = null;
+    if (synth.organisationId === ORG_BENEVOLE || synth.organisationId === ORG_NOUVELLE) {
+      if (choixCreation) {
+        let resolue: Awaited<ReturnType<typeof resoudreOrganisation>>;
+        try {
+          resolue = await resoudreOrganisation(choixCreation, c.name);
+        } catch (e) {
+          window.alert(messageErreur(e, "L'organisation n'a pas pu être créée. Réessayez."));
+          return;
+        }
+        organisationCible = resolue.id;
+        if (resolue.creee) organisationCreee = resolue.id;
+        const nomActuel = normaliserNomOrganisation(synth.syndic);
+        if (!nomActuel || nomActuel === normaliserNomOrganisation(c.organisation?.nom ?? "")) syndicName = resolue.nom;
+      } else {
+        organisationCible = organisationActuelle;
+      }
+    }
+    try {
+      await update.mutateAsync({
+        ...(organisationCible !== organisationActuelle ? { organisation_id: organisationCible } : {}),
+        adresse: synth.adresse || null,
+        syndic_name: syndicName,
+        city: synth.city || null,
+        gestionnaire_nom: synth.gestionnaireNom || null,
+        gestionnaire_email: synth.gestionnaireEmail || null,
+        chef_projet: synth.chefProjet || null,
+        maitre_oeuvre: synth.maitreOeuvre.trim() || null,
+        nb_logements: synth.nbLogements > 0 ? synth.nbLogements : null,
+        denomination_batiments: synth.denomination,
+        energy_before: synth.energyBefore || null,
+        energy_after: synth.energyAfter || null,
+      });
+    } catch (e) {
+      // Pas d'organisation orpheline si la fiche n'a pas pu être enregistrée.
+      if (organisationCreee) await supprimerOrganisationCreee(organisationCreee);
+      window.alert(messageErreur(e, "Enregistrement impossible. Réessayez."));
+      return;
+    } finally {
+      if (organisationCreee) refreshOrganisations();
+    }
     setEditingSynth(false);
     // Passation de dossier : le changement de chef de projet déclenche
     // l'alerte automatique aux chefs de projet concernés (edge notifier-passation).
@@ -406,7 +484,12 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
               <button className="se-btn se-btn-ghost btn-sm" onClick={() => setEditingSynth(false)}>
                 Annuler
               </button>
-              <button className="se-btn se-btn-primary btn-sm" onClick={() => void saveSynth()}>
+              <button
+                className="se-btn se-btn-primary btn-sm"
+                disabled={nouvelleSansNom}
+                title={nouvelleSansNom ? "Saisissez le nom de la nouvelle organisation" : undefined}
+                onClick={() => void saveSynth()}
+              >
                 <Icon name="check" size={15} />
                 Enregistrer
               </button>
@@ -460,21 +543,50 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                   onChange={(e) => choisirOrganisation(e.target.value || null)}
                 >
                   <option value="">Aucune organisation</option>
-                  {(organisations ?? []).map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.nom}
-                    </option>
-                  ))}
+                  <option value={ORG_BENEVOLE}>Syndic bénévole (nouvelle organisation)</option>
+                  <option value={ORG_NOUVELLE}>Nouveau (saisir le nom)</option>
+                  {orgs.length > 0 && (
+                    <optgroup label="Organisations existantes">
+                      {orgs.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.nom}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               ) : (
                 <span className="v">{c.organisation?.nom ?? "-"}</span>
               )}
             </div>
           )}
+          {editingSynth && synth.organisationId === ORG_NOUVELLE && (
+            <div className="kv">
+              <span className="k">Nouvelle organisation</span>
+              <input
+                className="edit-inp"
+                autoFocus
+                placeholder="Nom de la nouvelle organisation"
+                value={synth.organisationNouvelle}
+                onChange={(e) => setSynth((s) => ({ ...s, organisationNouvelle: e.target.value }))}
+              />
+            </div>
+          )}
           {editingSynth && (
             <OrganisationApercu
               actuelle={c.organisation ?? null}
-              choisie={organisationChoisie ? ((organisations ?? []).find((o) => o.id === synth.organisationId) ?? null) : undefined}
+              choisie={
+                organisationChoisie && synth.organisationId !== ORG_BENEVOLE && synth.organisationId !== ORG_NOUVELLE
+                  ? (orgs.find((o) => o.id === synth.organisationId) ?? null)
+                  : undefined
+              }
+              creation={
+                synth.organisationId === ORG_BENEVOLE
+                  ? { nom: nomACreer, existante: dejaChezBenevole ? (c.organisation?.nom ?? null) : null, benevole: true }
+                  : synth.organisationId === ORG_NOUVELLE
+                    ? { nom: nomACreer, existante: nouvelleExistante?.nom ?? null, benevole: false }
+                    : undefined
+              }
               parNom={enseigneSaisie}
               syndicSaisi={synth.syndic.trim()}
             />
@@ -674,16 +786,32 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
 function OrganisationApercu({
   actuelle,
   choisie,
+  creation,
   parNom,
   syndicSaisi,
 }: {
   actuelle: OrganisationNommee | null;
   choisie: OrganisationNommee | null | undefined;
+  /** Choix « Syndic bénévole » ou « Nouveau » : organisation à créer (`nom`) ou déjà existante. */
+  creation?: { nom: string | null; existante: string | null; benevole: boolean };
   parNom: OrganisationNommee | null;
   syndicSaisi: string;
 }) {
   let message: string | null = null;
-  if (choisie !== undefined) {
+  if (creation) {
+    if (creation.existante) {
+      message =
+        creation.existante === actuelle?.nom
+          ? `Le dossier est déjà dans l'organisation ${creation.existante}.`
+          : `L'organisation ${creation.existante} existe déjà : le dossier y passera à l'enregistrement.`;
+    } else if (creation.nom) {
+      message = `À l'enregistrement, l'organisation « ${creation.nom} » sera créée et le dossier y passera.${
+        creation.benevole ? " Indiquez le copropriétaire bénévole comme gestionnaire." : ""
+      }`;
+    } else {
+      message = "Saisissez le nom de la nouvelle organisation.";
+    }
+  } else if (choisie !== undefined) {
     message = choisie
       ? `À l'enregistrement, le dossier passera dans l'organisation ${choisie.nom}.`
       : "À l'enregistrement, le dossier ne sera plus rattaché à aucune organisation.";
