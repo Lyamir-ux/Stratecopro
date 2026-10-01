@@ -84,7 +84,8 @@ begin
 end;
 $$;
 
-revoke execute on function public.protege_candidature_presta() from anon, authenticated;
+-- fonction de trigger : jamais appelable par l'API (le droit public par défaut compris)
+revoke execute on function public.protege_candidature_presta() from public, anon, authenticated;
 
 -- ========== 2a. Fil privé sur les opérations de l'entreprise ==========
 -- Opération où l'entreprise connectée peut écrire à l'équipe : retenue,
