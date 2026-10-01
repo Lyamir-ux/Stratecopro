@@ -4348,6 +4348,10 @@ export type Database = {
       is_presta_retenu_of: { Args: { p_copro_id: string }; Returns: boolean }
       is_scenario_partage: { Args: { p_scenario_id: string }; Returns: boolean }
       is_syndic_of: { Args: { p_copro_id: string }; Returns: boolean }
+      moe_cite: {
+        Args: { p_maitre_oeuvre: string; p_raison_sociale: string }
+        Returns: boolean
+      }
       my_coproprietaire_ids: { Args: never; Returns: string[] }
       syndic_changer_proprietaire: {
         // retouche manuelle (0090) : tous les paramètres sauf p_lot_id ont un défaut SQL
