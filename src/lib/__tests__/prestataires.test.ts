@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filtrerEntreprises } from "../prestataires";
+import { filtrerEntreprises, motifNonAlertable } from "../prestataires";
 
 const e = (raison_sociale: string, metiers: string, ville: string | null = null, contact_nom: string | null = null) => ({
   raison_sociale,
@@ -37,5 +37,18 @@ describe("filtrerEntreprises", () => {
 
   it("aucun résultat : liste vide", () => {
     expect(chercher("socotec")).toEqual([]);
+  });
+});
+
+describe("motifNonAlertable", () => {
+  const fiche = { actif: true, email: "contact@moe.fr", ne_pas_consulter: false };
+  it("fiche active avec e-mail : alertable", () => {
+    expect(motifNonAlertable(fiche)).toBeNull();
+  });
+  it("donne la raison, dans l'ordre suspendue, e-mail, refus", () => {
+    expect(motifNonAlertable({ ...fiche, actif: false, email: null })).toBe("Fiche suspendue");
+    expect(motifNonAlertable({ ...fiche, email: null })).toBe("Sans e-mail");
+    expect(motifNonAlertable({ ...fiche, email: "  " })).toBe("Sans e-mail");
+    expect(motifNonAlertable({ ...fiche, ne_pas_consulter: true })).toBe("Ne souhaite pas être consultée");
   });
 });

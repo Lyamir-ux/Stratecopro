@@ -174,3 +174,17 @@ export function entrepriseConsultee(
 ): boolean {
   return !presta.ne_pas_consulter && presta.types.includes(type) && couvreDepartement(presta.departements, dept);
 }
+
+/** La consultation est-elle proposée à l'entreprise ? Consultation restreinte
+ *  (prestataires_choisis, 0125) : aux seules entreprises choisies par l'équipe,
+ *  dont le choix passe outre les départements, jamais « Ne pas consulter » ;
+ *  sinon la règle des prestations et des départements. Même règle dans
+ *  notifier-consultation et la RLS du prestataire. */
+export function consultationProposee(
+  presta: { id: string; types: readonly string[]; departements: readonly string[]; ne_pas_consulter: boolean },
+  c: ConsultationSituee & { type: string; prestataires_choisis?: readonly string[] | null }
+): boolean {
+  if (c.prestataires_choisis)
+    return !presta.ne_pas_consulter && presta.types.includes(c.type) && c.prestataires_choisis.includes(presta.id);
+  return entrepriseConsultee(presta, c.type, departementConsultation(c));
+}

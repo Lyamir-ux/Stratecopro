@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthProvider";
 import type { Tables } from "@/lib/database.types";
-import { departementConsultation, entrepriseConsultee } from "@/lib/departements";
+import { consultationProposee } from "@/lib/departements";
 
 export type CoproPublic = Pick<
   Tables<"coproprietes">,
@@ -51,13 +51,15 @@ export function useMonPrestataire(enabled = true) {
  *  + celles où elle a candidaté. Pour les prestations, le filtre client
  *  reproduit la RLS du prestataire - nécessaire quand un AMO consulte l'espace
  *  en aperçu (sa RLS à lui renvoie tout) ; départements et « Ne pas
- *  consulter » ne sont filtrés qu'ici. Filtre posé en `select` : il suit la
- *  fiche dès qu'elle change, sans recharger la liste. */
+ *  consulter » ne sont filtrés qu'ici. Consultation restreinte (0125) : aux
+ *  seules entreprises choisies par l'équipe (RLS comprise), départements
+ *  ignorés. Filtre posé en `select` : il suit la fiche dès qu'elle change,
+ *  sans recharger la liste. */
 export function useConsultationsPresta(presta: Tables<"prestataires">) {
   return useQuery({
     queryKey: ["presta-consultations", presta.id],
     select: (liste: ConsultationPresta[]) =>
-      liste.filter((c) => c.maCandidature || entrepriseConsultee(presta, c.type, departementConsultation(c))),
+      liste.filter((c) => c.maCandidature || consultationProposee(presta, c)),
     queryFn: async (): Promise<ConsultationPresta[]> => {
       const { data, error } = await supabase
         .from("consultations")

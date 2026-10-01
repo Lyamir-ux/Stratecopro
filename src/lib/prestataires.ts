@@ -20,3 +20,13 @@ export function filtrerEntreprises<T extends EntrepriseCherchable>(
     normaliserRecherche([p.raison_sociale, metiers(p), p.ville ?? "", p.contact_nom ?? ""].join(" ")).includes(q)
   );
 }
+
+/** Pourquoi une entreprise du métier ne peut pas recevoir l'alerte d'une
+ *  consultation (null : elle peut la recevoir). Même règle que
+ *  notifier-consultation : fiche active, avec un e-mail, sans « Ne pas consulter ». */
+export function motifNonAlertable(p: { actif: boolean; email: string | null; ne_pas_consulter: boolean }): string | null {
+  if (!p.actif) return "Fiche suspendue";
+  if (!p.email?.trim()) return "Sans e-mail";
+  if (p.ne_pas_consulter) return "Ne souhaite pas être consultée";
+  return null;
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEPARTEMENTS,
   codePostalDans,
+  consultationProposee,
   couvreDepartement,
   departementConsultation,
   departementDuCodePostal,
@@ -85,6 +86,26 @@ describe("couvreDepartement et entrepriseConsultee", () => {
     expect(entrepriseConsultee(presta, "moe", "57")).toBe(false);
     expect(entrepriseConsultee(presta, "be", null)).toBe(true);
     expect(entrepriseConsultee({ ...presta, ne_pas_consulter: true }, "moe", "67")).toBe(false);
+  });
+});
+
+describe("consultationProposee (consultation restreinte, 0125)", () => {
+  const presta = { id: "p1", types: ["moe"], departements: ["67", "68"], ne_pas_consulter: false };
+  const enAlsace = { type: "moe", copro: { code_postal: "67000" } };
+  const enMoselle = { type: "moe", copro: { code_postal: "57000" } };
+  it("consultation ouverte : règle des prestations et des départements", () => {
+    expect(consultationProposee(presta, enAlsace)).toBe(true);
+    expect(consultationProposee(presta, { ...enAlsace, prestataires_choisis: null })).toBe(true);
+    expect(consultationProposee(presta, enMoselle)).toBe(false);
+    expect(consultationProposee(presta, { ...enAlsace, type: "diag" })).toBe(false);
+  });
+  it("consultation restreinte : les seules entreprises choisies, même hors de leurs départements", () => {
+    expect(consultationProposee(presta, { ...enAlsace, prestataires_choisis: ["p2"] })).toBe(false);
+    expect(consultationProposee(presta, { ...enMoselle, prestataires_choisis: ["p2", "p1"] })).toBe(true);
+  });
+  it("le choix de l'équipe ne passe jamais outre « Ne pas consulter » ni la prestation", () => {
+    expect(consultationProposee({ ...presta, ne_pas_consulter: true }, { ...enAlsace, prestataires_choisis: ["p1"] })).toBe(false);
+    expect(consultationProposee(presta, { ...enAlsace, type: "sps", prestataires_choisis: ["p1"] })).toBe(false);
   });
 });
 

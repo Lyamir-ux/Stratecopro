@@ -846,6 +846,7 @@ export type Database = {
           nb_logements: number | null
           options: string[]
           ppt_copro_id: string | null
+          prestataires_choisis: string[] | null
           published_at: string
           sous_type: string | null
           statut: Database["public"]["Enums"]["statut_consultation"]
@@ -869,6 +870,7 @@ export type Database = {
           nb_logements?: number | null
           options?: string[]
           ppt_copro_id?: string | null
+          prestataires_choisis?: string[] | null
           published_at?: string
           sous_type?: string | null
           statut?: Database["public"]["Enums"]["statut_consultation"]
@@ -892,6 +894,7 @@ export type Database = {
           nb_logements?: number | null
           options?: string[]
           ppt_copro_id?: string | null
+          prestataires_choisis?: string[] | null
           published_at?: string
           sous_type?: string | null
           statut?: Database["public"]["Enums"]["statut_consultation"]

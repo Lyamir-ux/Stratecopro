@@ -9,6 +9,9 @@
 // ne pas être consultées et celles dont les départements ne comprennent pas
 // celui de la copropriété (liste vide = toute la France ; département
 // introuvable = pas de filtre). Même règle que src/lib/departements.ts.
+// Depuis 0125 (01/10/2026) : une consultation restreinte (prestataires_choisis)
+// n'alerte que les entreprises choisies par l'équipe, relances comprises ; ce
+// choix passe outre leurs départements, jamais leur « Ne pas consulter ».
 //
 // Envoi réel via Resend si le secret RESEND_API_KEY est configuré
 // (supabase secrets set RESEND_API_KEY=re_xxx [RESEND_FROM="Strat Eco <consultations@strateco.fr>"] [APP_URL=https://...]).
@@ -130,14 +133,14 @@ Deno.serve(async (req: Request) => {
     .select("prestataire_id")
     .eq("consultation_id", consultation_id);
   const dejaIds = new Set((deja ?? []).map((n) => n.prestataire_id));
-  const nouveaux = (prestas ?? []).filter((p) => !dejaIds.has(p.id));
+  // consultation restreinte (0125) : les seules entreprises choisies, départements ignorés
+  const choisis: string[] | null = cs.prestataires_choisis ?? null;
+  const nouveaux = (prestas ?? []).filter((p) => !dejaIds.has(p.id) && (!choisis || choisis.includes(p.id)));
+  const couvre = (p: { departements: string[] | null }) =>
+    !!choisis || !departement || (p.departements ?? []).length === 0 || (p.departements ?? []).includes(departement);
   const horsConsultation = nouveaux.filter((p) => p.ne_pas_consulter).length;
-  const horsDepartement = nouveaux.filter(
-    (p) => !p.ne_pas_consulter && departement && (p.departements ?? []).length > 0 && !p.departements.includes(departement),
-  ).length;
-  const cibles = nouveaux.filter(
-    (p) => !p.ne_pas_consulter && (!departement || (p.departements ?? []).length === 0 || p.departements.includes(departement)),
-  );
+  const horsDepartement = nouveaux.filter((p) => !p.ne_pas_consulter && !couvre(p)).length;
+  const cibles = nouveaux.filter((p) => !p.ne_pas_consulter && couvre(p));
 
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const from = Deno.env.get("RESEND_FROM") ?? "Strat Eco <onboarding@resend.dev>";
@@ -176,7 +179,7 @@ Deno.serve(async (req: Request) => {
         <div style="font-family:Arial,Helvetica,sans-serif;font-size:14.5px;line-height:1.55;color:#1a1a1a;max-width:620px">
           <p>Bonjour${p.contact_nom ? " " + p.contact_nom : ""},</p>
           <p><strong>Strat Eco</strong>, assistant à maîtrise d'ouvrage, lance une consultation${demandePpt?.syndic_name ? ` pour le compte du syndic <strong>${demandePpt.syndic_name}</strong>` : ""}
-          pour laquelle votre entreprise est référencée :</p>
+          ${choisis ? "à laquelle votre entreprise est invitée à répondre :" : "pour laquelle votre entreprise est référencée :"}</p>
           <table style="border-collapse:collapse;margin:14px 0;font-size:14.5px">
             ${ligne("Copropriété", `<strong>${coproNom}</strong>${coproLieu ? " - " + coproLieu : ""}`)}
             ${logements ? ligne("Taille", `${logements} logements`) : ""}
@@ -209,7 +212,11 @@ Deno.serve(async (req: Request) => {
           qui reviendra vers vous à l'issue de la consultation.</p>
           <p>Bien cordialement,<br/><strong>L'équipe Strat Eco</strong></p>
           <p style="color:#888;font-size:13px;border-top:1px solid #e5e5e5;padding-top:12px;margin-top:24px">
-            Vous recevez cet e-mail car votre entreprise est référencée « ${TYPE_LABELS[cs.type] ?? cs.type} » auprès de Strat Eco${departement ? ` (copropriété du département ${departement})` : ""}.
+            ${
+              choisis
+                ? `Vous recevez cet e-mail car l'équipe Strat Eco a choisi de consulter votre entreprise, référencée « ${TYPE_LABELS[cs.type] ?? cs.type} », pour cette mission.`
+                : `Vous recevez cet e-mail car votre entreprise est référencée « ${TYPE_LABELS[cs.type] ?? cs.type} » auprès de Strat Eco${departement ? ` (copropriété du département ${departement})` : ""}.`
+            }
             Vos prestations, vos départements ou le choix de ne plus être consulté se règlent dans
             <a href="${appUrl}/prestataire/entreprise" style="color:#888">Mon entreprise</a> de votre espace prestataire.
           </p>
@@ -257,6 +264,8 @@ Deno.serve(async (req: Request) => {
     hors_consultation: horsConsultation,
     hors_departement: horsDepartement,
     departement,
+    // consultation restreinte (0125) : nombre d'entreprises choisies, null = ouverte au métier
+    choisis: choisis?.length ?? null,
     mode: resendKey ? "resend" : "simulation",
   });
 });

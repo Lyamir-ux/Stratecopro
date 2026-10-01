@@ -3,6 +3,9 @@
 // concerné (edge function `notifier-consultation`). Les candidatures arrivent
 // soit du portail prestataire (offre chiffrée + pièce jointe), soit en saisie
 // manuelle AMO (candidature reçue hors plateforme).
+// Consultation restreinte (0125, idée d'Amir du 01/10/2026) : publiée pour
+// les seules entreprises choisies par l'équipe (prestataires_choisis), qui
+// sont les seules alertées et les seules à la voir dans leur espace.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Tables } from "@/lib/database.types";
@@ -39,7 +42,7 @@ export const sousTypeLabel = (id: string): string => DIAG_SOUS_TYPES.find((s) =>
 
 export type Consultation = Tables<"consultations"> & {
   candidatures: Tables<"candidatures">[];
-  copro: { name: string; city: string | null; adresse: string | null } | null;
+  copro: { name: string; city: string | null; adresse: string | null; code_postal: string | null } | null;
   notifications: (Tables<"consultation_notifications"> & { prestataire: { raison_sociale: string } | null })[];
   docs: Tables<"consultation_docs">[];
   acces: (Tables<"consultation_acces"> & { prestataire: { raison_sociale: string } | null })[];
@@ -67,7 +70,7 @@ export function useConsultations() {
       const { data, error } = await supabase
         .from("consultations")
         .select(
-          "*, candidatures!candidatures_consultation_id_fkey(*), coproprietes(name, city, adresse), consultation_notifications(*, prestataires(raison_sociale)), consultation_docs(*), consultation_acces(*, prestataires(raison_sociale)), consultation_questions(*, prestataires(raison_sociale))"
+          "*, candidatures!candidatures_consultation_id_fkey(*), coproprietes(name, city, adresse, code_postal), consultation_notifications(*, prestataires(raison_sociale)), consultation_docs(*), consultation_acces(*, prestataires(raison_sociale)), consultation_questions(*, prestataires(raison_sociale))"
         )
         .order("published_at", { ascending: false });
       if (error) throw error;
@@ -82,7 +85,7 @@ export function useConsultations() {
           ...rest
         } = c as typeof c & {
           candidatures: Tables<"candidatures">[];
-          coproprietes: { name: string; city: string | null; adresse: string | null } | null;
+          coproprietes: { name: string; city: string | null; adresse: string | null; code_postal: string | null } | null;
           consultation_notifications: (Tables<"consultation_notifications"> & {
             prestataires: { raison_sociale: string } | null;
           })[];
@@ -127,6 +130,8 @@ export interface PublishResult {
     hors_consultation?: number;
     hors_departement?: number;
     departement?: string | null;
+    /** Consultation restreinte (0125) : nombre d'entreprises choisies ; null = ouverte au métier. */
+    choisis?: number | null;
   } | null;
   notifyError: string | null;
   /** Documents dont le dépôt a échoué (la consultation reste publiée). */
@@ -163,6 +168,8 @@ export function usePublishConsultation() {
       nb_batiments: number | null;
       sous_type: string | null;
       options: string[];
+      /** Entreprises choisies (0125) ; null = toutes les entreprises du métier. */
+      prestataires_choisis: string[] | null;
       files: File[];
     }): Promise<PublishResult> => {
       const { data, error } = await supabase.from("consultations").insert(input).select("id").single();
@@ -215,6 +222,39 @@ export function useRelancerAlertes() {
       return data as PublishResult["notification"];
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["consultations"] }),
+  });
+}
+
+/**
+ * Consultation restreinte (0125) : ajoute des entreprises à celles déjà
+ * choisies, puis les alerte (la fonction serveur n'alerte que les choisies pas
+ * encore prévenues). Les entreprises déjà choisies le restent.
+ */
+export function useAjouterPrestatairesChoisis() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      consultationId,
+      dejaChoisis,
+      ajouts,
+    }: {
+      consultationId: string;
+      dejaChoisis: string[];
+      ajouts: string[];
+    }): Promise<PublishResult["notification"]> => {
+      const choisis = [...new Set([...dejaChoisis, ...ajouts])];
+      const { error } = await supabase
+        .from("consultations")
+        .update({ prestataires_choisis: choisis })
+        .eq("id", consultationId);
+      if (error) throw error;
+      const { data, error: fnErr } = await supabase.functions.invoke("notifier-consultation", {
+        body: { consultation_id: consultationId },
+      });
+      if (fnErr) throw new Error("Entreprises ajoutées, mais l'alerte e-mail a échoué : " + String(fnErr.message ?? fnErr));
+      return data as PublishResult["notification"];
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["consultations"] }),
   });
 }
 

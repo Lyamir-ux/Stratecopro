@@ -7,12 +7,18 @@
 // Une demande de consultation PPPT + DPE collectif d'un syndic (0107, page
 // « Demandes des syndics ») ouvre ce formulaire pré-rempli ; la publication
 // passe la demande en « prise en charge ».
+// Consultation restreinte (0125, idée d'Amir du 01/10/2026) : « Alerter
+// seulement certains prestataires » ouvre la liste des entreprises du métier ;
+// seules les entreprises cochées sont alertées et voient la consultation.
+// Sur la carte, « Ajouter des prestataires » en invite d'autres.
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
 import { RenommageDialog } from "@/components/RenommageDialog";
+import { ChoixPrestatairesDialog } from "@/components/ChoixPrestatairesDialog";
+import { departementConsultation } from "@/lib/departements";
 import { fmtEuro, fmtDate } from "@/lib/format";
 import { lignesOffre } from "@/lib/offres";
 import { nbLogements, useCopros } from "@/api/copros";
@@ -26,6 +32,7 @@ import {
   ouvrirDocConsultation,
   ouvrirOffre,
   useAddCandidature,
+  useAjouterPrestatairesChoisis,
   useCloseConsultation,
   useConsultations,
   usePublishConsultation,
@@ -207,25 +214,45 @@ function Card({ cs }: { cs: Consultation }) {
   const close = useCloseConsultation();
   const reopen = useReopenConsultation();
   const relance = useRelancerAlertes();
+  const ajouter = useAjouterPrestatairesChoisis();
   const addCand = useAddCandidature();
+  // consultation restreinte (0125) : réservée aux entreprises choisies
+  const choisis = cs.prestataires_choisis;
+  const [ajout, setAjout] = useState(false);
+  const [ajoutErreur, setAjoutErreur] = useState<string | null>(null);
 
-  // Renvoie les alertes e-mail aux prestataires du métier pas encore prévenus
-  // (la fonction serveur ne notifie jamais deux fois le même prestataire).
-  const relancerAlertes = async () => {
-    const n = await relance.mutateAsync(cs.id);
-    if (!n) return;
+  const bilanAlertes = (n: NonNullable<PublishResult["notification"]>) => {
     const ecartes = texteEcartes(n);
     window.alert(
       (n.total === 0
         ? ecartes
           ? "Aucun nouvel e-mail."
-          : "Tous les prestataires référencés du métier ont déjà été alertés - aucun nouvel e-mail."
+          : choisis
+            ? "Toutes les entreprises choisies ont déjà été alertées - aucun nouvel e-mail."
+            : "Tous les prestataires référencés du métier ont déjà été alertés - aucun nouvel e-mail."
         : n.mode === "simulation"
           ? `${n.total} prestataire${n.total > 1 ? "s" : ""} identifié${n.total > 1 ? "s" : ""} - envoi simulé (configurez RESEND_API_KEY pour l'e-mail réel).`
           : `Alertes envoyées : ${n.envoyes} e-mail${n.envoyes > 1 ? "s" : ""}${n.erreurs ? ` · ${n.erreurs} en erreur` : ""}.`) +
         (ecartes ? `
 Non alertées : ${ecartes}.` : "")
     );
+  };
+  // Renvoie les alertes e-mail aux prestataires du métier (ou aux entreprises
+  // choisies) pas encore prévenus : la fonction serveur ne notifie jamais deux
+  // fois le même prestataire.
+  const relancerAlertes = async () => {
+    const n = await relance.mutateAsync(cs.id);
+    if (n) bilanAlertes(n);
+  };
+  const ajouterChoisis = async (ids: string[]) => {
+    setAjoutErreur(null);
+    try {
+      const n = await ajouter.mutateAsync({ consultationId: cs.id, dejaChoisis: choisis ?? [], ajouts: ids });
+      setAjout(false);
+      if (n) bilanAlertes(n);
+    } catch (e) {
+      setAjoutErreur(String((e as Error).message ?? e));
+    }
   };
   const jr = joursRestants(cs.date_limite);
   const enLigne = cs.statut === "en_ligne";
@@ -238,6 +265,13 @@ Non alertées : ${ecartes}.` : "")
       <div className="cs-card-head">
         <TypeTag type={cs.type} />
         {cs.sous_type && <Badge kind="primary">{sousTypeLabel(cs.sous_type)}</Badge>}
+        {choisis && (
+          <span title="Consultation réservée aux entreprises choisies : seules elles sont alertées et la voient dans leur espace">
+            <Badge kind="blue" dot>
+              Sur invitation · {choisis.length} entreprise{choisis.length > 1 ? "s" : ""}
+            </Badge>
+          </span>
+        )}
         {ppt && (
           <Badge kind="blue" dot>
             Demande du syndic (suivi PPT){cs.analyse_publiee_le ? " · analyse publiée" : ""}
@@ -357,9 +391,26 @@ Non alertées : ${ecartes}.` : "")
         <span className="spacer" style={{ flex: 1 }}></span>
         {enLigne ? (
           <>
+            {choisis && (
+              <button
+                className="se-btn se-btn-ghost btn-sm"
+                title="Choisir d'autres entreprises du métier : elles sont alertées et voient la consultation"
+                onClick={() => {
+                  setAjoutErreur(null);
+                  setAjout(true);
+                }}
+              >
+                <Icon name="plus" size={13} />
+                Ajouter des prestataires
+              </button>
+            )}
             <button
               className="se-btn se-btn-ghost btn-sm"
-              title="Alerter par e-mail les prestataires référencés du métier qui ne l'ont pas encore été"
+              title={
+                choisis
+                  ? "Alerter par e-mail les entreprises choisies qui ne l'ont pas encore été"
+                  : "Alerter par e-mail les prestataires référencés du métier qui ne l'ont pas encore été"
+              }
               disabled={relance.isPending}
               onClick={() => void relancerAlertes()}
             >
@@ -373,7 +424,11 @@ Non alertées : ${ecartes}.` : "")
         ) : (
           <button
             className="se-btn se-btn-ghost btn-sm"
-            title="Relancer la consultation : elle redevient visible des prestataires du métier, qui peuvent de nouveau candidater"
+            title={
+              choisis
+                ? "Relancer la consultation : elle redevient visible des entreprises choisies, qui peuvent de nouveau candidater"
+                : "Relancer la consultation : elle redevient visible des prestataires du métier, qui peuvent de nouveau candidater"
+            }
             disabled={reopen.isPending}
             onClick={() => void reopen.mutateAsync(cs.id)}
           >
@@ -382,6 +437,19 @@ Non alertées : ${ecartes}.` : "")
           </button>
         )}
       </div>
+      {ajout && choisis && (
+        <ChoixPrestatairesDialog
+          type={cs.type}
+          departement={departementConsultation(cs)}
+          verrouilles={choisis}
+          titre="Ajouter des prestataires"
+          libelleValider={(k) => `Ajouter et alerter ${k} prestataire${k > 1 ? "s" : ""}`}
+          enCours={ajouter.isPending}
+          erreur={ajoutErreur}
+          onValider={(ids) => void ajouterChoisis(ids)}
+          onClose={() => setAjout(false)}
+        />
+      )}
       {etat && <EtatConsultation cs={cs} />}
       {analyse && ppt && <AnalysePourSyndic cs={cs} />}
       {qa && <QuestionsPanel cs={cs} />}
@@ -527,9 +595,16 @@ export default function Consultations() {
 
   const cibleOk = draft.cible === "existante" ? !!draft.copro_id : !!draft.ext_nom.trim();
   const [formError, setFormError] = useState<string | null>(null);
+  // « Alerter seulement certains prestataires » (0125) : fenêtre de choix des entreprises
+  const [choix, setChoix] = useState(false);
+  const departementDraft = departementConsultation({
+    copro: draft.cible === "existante" ? (copros ?? []).find((x) => x.id === draft.copro_id) : null,
+    copro_externe_ville: draft.cible === "externe" ? draft.ext_ville : null,
+    copro_externe_adresse: draft.cible === "externe" ? draft.ext_adresse : null,
+  });
 
-  const doPublish = async () => {
-    // validation visible : plus de clic « qui ne fait rien »
+  // validation visible : plus de clic « qui ne fait rien »
+  const formulaireValide = (): boolean => {
     const manques: string[] = [];
     if (!cibleOk) manques.push(draft.cible === "existante" ? "choisissez la copropriété" : "renseignez le nom de la copropriété");
     if (draft.type === "diag" && !draft.sous_type) manques.push("choisissez le type de diagnostic");
@@ -541,9 +616,16 @@ export default function Consultations() {
       );
     if (manques.length > 0) {
       setFormError("Pour publier : " + manques.join(" · ") + ".");
-      return;
+      return false;
     }
     setFormError(null);
+    return true;
+  };
+
+  /** Publie la consultation : ouverte à tout le métier (choisis = null) ou
+   *  réservée aux entreprises choisies (0125). */
+  const doPublish = async (choisis: string[] | null) => {
+    if (!formulaireValide()) return;
     const externe = draft.cible === "externe";
     // nombres de logements et de bâtiments figés sur la consultation (les
     // candidats ne peuvent pas lire les stats des copros de la plateforme)
@@ -576,6 +658,7 @@ export default function Consultations() {
         sous_type: draft.type === "diag" && draft.sous_type ? draft.sous_type : null,
         // options réservées à la maîtrise d'œuvre - jamais publiées pour les autres métiers
         options: draft.type === "moe" ? draft.options : [],
+        prestataires_choisis: choisis && choisis.length > 0 ? choisis : null,
         files,
       });
     } catch (e) {
@@ -588,14 +671,17 @@ export default function Consultations() {
     } else if (res.notification) {
       const n = res.notification;
       const ecartes = texteEcartes(n);
+      const publiee = n.choisis
+        ? `Consultation publiée, réservée à ${n.choisis} entreprise${n.choisis > 1 ? "s" : ""} choisie${n.choisis > 1 ? "s" : ""}.`
+        : "Consultation publiée.";
       setNotice(
         (n.total === 0
-          ? ecartes
-            ? "Consultation publiée. Aucune entreprise alertée."
+          ? ecartes || n.choisis
+            ? `${publiee} Aucune entreprise alertée.`
             : "Consultation publiée. Aucun prestataire référencé pour ce métier - pensez à enrichir la base prestataires."
           : n.mode === "simulation"
-            ? `Consultation publiée. ${n.total} prestataire${n.total > 1 ? "s" : ""} référencé${n.total > 1 ? "s" : ""} identifié${n.total > 1 ? "s" : ""} (envoi simulé : configurez RESEND_API_KEY pour l'e-mail réel).`
-            : `Consultation publiée. ${n.envoyes} e-mail${n.envoyes > 1 ? "s" : ""} envoyé${n.envoyes > 1 ? "s" : ""}${n.erreurs ? `, ${n.erreurs} en erreur` : ""}.`) +
+            ? `${publiee} ${n.total} prestataire${n.total > 1 ? "s" : ""} référencé${n.total > 1 ? "s" : ""} identifié${n.total > 1 ? "s" : ""} (envoi simulé : configurez RESEND_API_KEY pour l'e-mail réel).`
+            : `${publiee} ${n.envoyes} e-mail${n.envoyes > 1 ? "s" : ""} envoyé${n.envoyes > 1 ? "s" : ""}${n.erreurs ? `, ${n.erreurs} en erreur` : ""}.`) +
           (ecartes ? ` Non alertées : ${ecartes}.` : "")
       );
     }
@@ -926,15 +1012,35 @@ export default function Consultations() {
                 {formError}
               </p>
             )}
-            <button
-              className="se-btn se-btn-primary"
-              style={{ marginTop: 18 }}
-              onClick={() => void doPublish()}
-              disabled={publish.isPending}
-            >
-              <Icon name="megaphone" size={16} />
-              {publish.isPending ? "Publication…" : "Mettre en ligne et alerter les prestataires"}
-            </button>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+              <button className="se-btn se-btn-primary" onClick={() => void doPublish(null)} disabled={publish.isPending}>
+                <Icon name="megaphone" size={16} />
+                {publish.isPending ? "Publication…" : "Mettre en ligne et alerter les prestataires"}
+              </button>
+              <button
+                className="se-btn se-btn-secondary"
+                title="Choisir, parmi les entreprises du métier, celles à alerter : seules elles verront la consultation"
+                onClick={() => {
+                  if (formulaireValide()) setChoix(true);
+                }}
+                disabled={publish.isPending}
+              >
+                <Icon name="users" size={16} />
+                Alerter seulement certains prestataires
+              </button>
+            </div>
+            {choix && (
+              <ChoixPrestatairesDialog
+                type={draft.type}
+                departement={departementDraft}
+                libelleValider={(k) => `Mettre en ligne et alerter ${k} prestataire${k > 1 ? "s" : ""}`}
+                enCours={publish.isPending}
+                onValider={(ids) =>
+                  void doPublish(ids).finally(() => setChoix(false))
+                }
+                onClose={() => setChoix(false)}
+              />
+            )}
           </div>
         </div>
       )}
