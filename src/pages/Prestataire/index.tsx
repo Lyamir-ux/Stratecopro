@@ -9,9 +9,17 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Icon, type IconName } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
-import { useDocsPresta, useLogoPresta, useMesCandidatures, useMonPrestataire } from "@/api/espacePrestataire";
+import {
+  projetsEnCours,
+  useDocsPresta,
+  useLogoPresta,
+  useMesCandidatures,
+  useMesProjetsMoe,
+  useMonPrestataire,
+} from "@/api/espacePrestataire";
 import { CONSULT_TYPES } from "@/api/consultations";
 import { usePrestataires } from "@/api/prestataires";
+import { filtrerEntreprises } from "@/lib/prestataires";
 import { compteNonLus, useLectures, useMessagesPresta } from "@/api/messages";
 import { ConsultationsPresta } from "./Consultations";
 import { MesCandidatures } from "./MesCandidatures";
@@ -75,6 +83,19 @@ const pastilleStyle = (background: string): CSSProperties => ({
   fontWeight: 700,
 });
 
+/** Bulle « Mes projets » : nombre de projets en cours de l'entreprise (même
+ *  requête que la page, partagée par le cache). */
+function PastilleProjets({ presta }: { presta: Tables<"prestataires"> }) {
+  const { data: projets } = useMesProjetsMoe(true, presta.id);
+  const n = projetsEnCours(projets ?? []).length;
+  if (n === 0) return null;
+  return (
+    <span title={`${n} projet${n > 1 ? "s" : ""} en cours`} style={pastilleStyle("var(--color-primary-700)")}>
+      {n}
+    </span>
+  );
+}
+
 /** Pastille « sélectionné / refusé » : décisions pas encore vues (l'ouverture
  *  de « Mes candidatures » en accuse réception). */
 function PastilleDecisions({ presta }: { presta: Tables<"prestataires"> }) {
@@ -128,6 +149,7 @@ export default function Prestataire() {
   // aperçu AMO : choisir l'entreprise dont on consulte l'espace
   const { data: tous, isLoading: tousLoading } = usePrestataires();
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [recherche, setRecherche] = useState("");
 
   const isLoading = isAmo ? tousLoading : monLoading;
   const presta = isAmo ? (tous ?? []).find((p) => p.id === previewId) ?? null : (monPresta ?? null);
@@ -136,6 +158,10 @@ export default function Prestataire() {
   if (isLoading || !profile) return <Loader />;
 
   if (isAmo && !presta) {
+    const metiersDe = (p: Tables<"prestataires">) =>
+      p.types.map((t) => CONSULT_TYPES.find((x) => x.id === t)?.label ?? t).join(" · ");
+    const q = recherche.trim();
+    const liste = filtrerEntreprises(tous ?? [], recherche, metiersDe);
     return (
       <div style={{ minHeight: "100vh", background: "var(--bg-soft)", display: "flex", flexDirection: "column" }}>
         <div className="portal-header">
@@ -145,36 +171,57 @@ export default function Prestataire() {
             <Icon name="gauge" size={15} />Espace AMO
           </button>
         </div>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
-          <div style={{ maxWidth: 560, width: "100%", textAlign: "center" }}>
+        <div className="presta-choix-page">
+          <div style={{ textAlign: "center" }}>
             <div className="se-eyebrow" style={{ justifyContent: "center" }}>Aperçu AMO</div>
             <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 30, margin: "10px 0 8px", letterSpacing: "-0.02em" }}>
               Espace prestataire
             </h1>
-            <p className="se-body" style={{ marginTop: 0, marginBottom: 28 }}>
+            <p className="se-body" style={{ marginTop: 0, marginBottom: 20 }}>
               Choisissez une entreprise référencée pour consulter son espace tel qu'elle le voit.
             </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 440, overflowY: "auto", padding: 2 }}>
-              {(tous ?? []).map((p) => (
-                <button
-                  key={p.id}
-                  className="copro-card"
-                  onClick={() => setPreviewId(p.id)}
-                  style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", textAlign: "left", cursor: "pointer", border: "1px solid var(--border)" }}
-                >
-                  <Icon name="briefcase" size={18} style={{ color: "var(--fg-muted)", flex: "none" }} />
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "block", fontWeight: 700, fontSize: 14 }}>{p.raison_sociale}</span>
-                    <span style={{ display: "block", fontSize: 12.5, color: "var(--fg3)" }}>
-                      {p.types.map((t) => CONSULT_TYPES.find((x) => x.id === t)?.label ?? t).join(" · ")}
-                    </span>
-                  </span>
-                  {!p.actif && <Badge kind="neutral">Suspendue</Badge>}
-                  <Icon name="arrowRight" size={17} style={{ color: "var(--accent)" }} />
-                </button>
-              ))}
-            </div>
           </div>
+          <div className="search presta-choix-search">
+            <Icon name="search" size={16} />
+            <input
+              autoFocus
+              placeholder="Rechercher une entreprise, un métier, une ville…"
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+              // Entrée : ouvre l'entreprise quand la recherche n'en laisse qu'une
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && liste.length === 1) setPreviewId(liste[0].id);
+              }}
+            />
+            {recherche && (
+              <button className="icon-btn" style={{ width: 24, height: 24 }} title="Effacer la recherche" onClick={() => setRecherche("")}>
+                <Icon name="x" size={14} />
+              </button>
+            )}
+          </div>
+          <p className="se-small" style={{ textAlign: "center", color: "var(--fg-muted)", margin: "0 0 14px" }}>
+            {q
+              ? `${liste.length} entreprise${liste.length > 1 ? "s" : ""} sur ${(tous ?? []).length}`
+              : `${liste.length} entreprise${liste.length > 1 ? "s" : ""} référencée${liste.length > 1 ? "s" : ""}`}
+          </p>
+          <div className="presta-choix">
+            {liste.map((p) => (
+              <button key={p.id} className="copro-card" onClick={() => setPreviewId(p.id)}>
+                <Icon name="briefcase" size={18} style={{ color: "var(--fg-muted)", flex: "none" }} />
+                <span className="pc-txt">
+                  <span className="pc-nom">{p.raison_sociale}</span>
+                  <span className="pc-metiers">{metiersDe(p)}</span>
+                </span>
+                {!p.actif && <Badge kind="neutral">Suspendue</Badge>}
+                <Icon name="arrowRight" size={17} style={{ color: "var(--accent)", flex: "none" }} />
+              </button>
+            ))}
+          </div>
+          {liste.length === 0 && (
+            <p className="se-body" style={{ textAlign: "center", color: "var(--fg-muted)" }}>
+              Aucune entreprise ne correspond à « {q} ».
+            </p>
+          )}
         </div>
       </div>
     );
@@ -263,6 +310,7 @@ export default function Prestataire() {
             <Icon name={it.icon} size={17} />
             {it.label}
             {it.id === "candidatures" && <PastilleDecisions presta={presta} />}
+            {it.id === "projets" && <PastilleProjets presta={presta} />}
             {it.id === "messages" && <PastilleMessages presta={presta} />}
             {it.id === "entreprise" && <PastilleEntreprise presta={presta} />}
           </button>

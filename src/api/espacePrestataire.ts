@@ -501,6 +501,12 @@ export type ProjetMoe = {
   batiments: Tables<"batiments">[];
 };
 
+/** Projets montrés dans « Mes projets » (et comptés dans la bulle du menu) :
+ *  dossiers où l'entreprise est le maître d'œuvre saisi, et candidatures
+ *  retenues dont l'engagement est confirmé. */
+export const projetsEnCours = (projets: ProjetMoe[]): ProjetMoe[] =>
+  projets.filter((p) => p.designe || p.candidature?.engagement_at);
+
 /** Projets d'une MOE : consultations MOE retenues et dossiers où elle est le
  *  maître d'œuvre saisi (0119) - copros accessibles en lecture (fiche + bâtiments). */
 export function useMesProjetsMoe(enabled: boolean, prestaId: string) {

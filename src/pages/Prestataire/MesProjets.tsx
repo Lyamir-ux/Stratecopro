@@ -13,6 +13,7 @@ import { messageErreur } from "@/lib/erreurs";
 import { PHASES } from "@/lib/referentiels";
 import {
   ouvrirDocPresta,
+  projetsEnCours,
   useDeleteProjetDoc,
   useMesProjetsMoe,
   useProjetDocs,
@@ -136,7 +137,7 @@ export function MesProjets({ presta }: { presta: Tables<"prestataires"> }) {
   // une candidature retenue n'entre dans « Mes projets » qu'une fois
   // l'engagement confirmé (bouton « Je m'engage » de Mes candidatures) ; un
   // dossier où l'entreprise est le maître d'œuvre saisi y figure d'office
-  const list = (projets ?? []).filter((p) => p.designe || p.candidature?.engagement_at);
+  const list = projetsEnCours(projets ?? []);
   const enAttente = (projets ?? []).filter((p) => p.candidature && !p.candidature.engagement_at).length;
 
   return (

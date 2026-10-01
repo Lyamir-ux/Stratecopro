@@ -361,6 +361,10 @@ table.dossiers.ppt-copros th:first-child, table.dossiers.ppt-copros td:first-chi
 .detail-hero .dh-equipe span { display: inline-flex; align-items: center; gap: 5px; }
 .detail-hero .dh-equipe b { color: var(--fg1); font-weight: 600; }
 .detail-hero .dh-equipe i { color: var(--fg-muted); }
+.detail-hero .dh-lien { color: var(--fg1); font-weight: 600; text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
+.detail-hero .dh-lien:hover { color: var(--color-primary-700); text-decoration-color: currentColor; }
+.detail-hero .dh-a-completer { font-size: 12px; font-weight: 600; color: var(--color-warning-700); background: var(--color-warning-50); border-radius: 999px; padding: 1px 8px; text-decoration: none; }
+.detail-hero .dh-a-completer:hover { text-decoration: underline; }
 .detail-hero .dh-stats { display: flex; gap: 28px; margin-left: auto; }
 .detail-hero .dh-stat .v { font-family: var(--font-display); font-weight: 800; font-size: 24px; line-height: 1; }
 .detail-hero .dh-stat .l { font-size: 12px; color: var(--fg-muted); margin-top: 5px; }
@@ -949,6 +953,23 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .pnav:hover { color: var(--fg1); }
 .pnav.on { color: var(--color-primary-700); border-bottom-color: var(--accent); }
 .pnav .pn-badge { font-size: 10px; font-weight: 700; background: var(--color-error-500); color: #fff; border-radius: 999px; padding: 1px 6px; }
+
+/* Aperçu AMO de l'espace prestataire : choix de l'entreprise (grille + recherche).
+   Grille plutôt que colonne à hauteur fixe : dans une colonne flexible, les
+   cartes (overflow: hidden) rétrécissaient et coupaient les noms. */
+.presta-choix-page { flex: 1; width: 100%; max-width: 1080px; margin: 0 auto; padding: 40px 24px; }
+.presta-choix-search { margin: 0 auto 10px; width: 100%; max-width: 520px; background: var(--bg); }
+.presta-choix { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 10px; }
+.presta-choix .copro-card {
+  display: flex; align-items: center; gap: 12px; padding: 13px 16px; text-align: left;
+  border: 1px solid var(--border); font: inherit; color: inherit;
+}
+.presta-choix .pc-txt { flex: 1; min-width: 0; }
+.presta-choix .pc-nom { display: block; font-weight: 700; font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+.presta-choix .pc-metiers { display: block; font-size: 12.5px; line-height: 1.4; color: var(--fg3); margin-top: 2px; }
+@media (max-width: 760px) {
+  .presta-choix-page { padding: 24px 16px; }
+}
 
 .portal-main { width: 100%; max-width: 1060px; margin: 0 auto; padding: 34px 28px 72px; }
 
