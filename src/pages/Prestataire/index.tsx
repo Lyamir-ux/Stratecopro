@@ -4,7 +4,7 @@
 // une MOE (accès lecture aux copros où elle a été retenue ou dont elle est le
 // maître d'œuvre saisi). Les autres
 // intervenants n'ont AUCUN accès aux projets en cours.
-import { useMemo, useState, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Icon, type IconName } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
@@ -20,7 +20,7 @@ import {
 import { CONSULT_TYPES } from "@/api/consultations";
 import { usePrestataires } from "@/api/prestataires";
 import { filtrerEntreprises } from "@/lib/prestataires";
-import { compteNonLus, useLectures, useMessagesPresta } from "@/api/messages";
+import { compteNonLus, nonLusFilGeneral, useFilGeneral, useFilsPresta, useLectures, useLecturesFilGeneral } from "@/api/messages";
 import { ConsultationsPresta } from "./Consultations";
 import { MesCandidatures } from "./MesCandidatures";
 import { MesProjets } from "./MesProjets";
@@ -30,22 +30,17 @@ import type { Tables } from "@/lib/database.types";
 
 export type SectionId = "consultations" | "candidatures" | "projets" | "messages" | "entreprise";
 
-/** Pastille de messages non lus sur l'entrée « Messages » du menu. */
+/** Pastille de messages non lus sur l'entrée « Messages » du menu : fils des
+ *  opérations et fil général « Équipe Strat Eco » (0124). */
 function PastilleMessages({ presta }: { presta: Tables<"prestataires"> }) {
   const { session } = useAuth();
-  const { data: candidatures } = useMesCandidatures(presta.id);
-  const coproIds = useMemo(
-    () =>
-      [...new Set(
-        (candidatures ?? [])
-          .filter((c) => c.statut === "retenue" && c.consultation?.copro)
-          .map((c) => c.consultation!.copro!.id)
-      )],
-    [candidatures]
-  );
-  const { data: messages } = useMessagesPresta(presta.id, coproIds);
+  const { messages } = useFilsPresta(presta);
+  const { data: filGeneral } = useFilGeneral(presta.id);
   const { data: lectures } = useLectures();
-  const nonLus = compteNonLus(messages, lectures, session?.user.id);
+  const { data: lecturesGeneral } = useLecturesFilGeneral();
+  const nonLus =
+    compteNonLus(messages, lectures, session?.user.id) +
+    (nonLusFilGeneral(filGeneral, lecturesGeneral, "presta").get(presta.id) ?? 0);
   if (nonLus === 0) return null;
   return (
     <span

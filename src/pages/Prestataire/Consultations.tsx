@@ -1,6 +1,9 @@
 // Consultations ouvertes pour les métiers du prestataire connecté - porté de
 // design-reference/project/consultations.jsx (ConsultationsMOE), généralisé à
 // tous les intervenants. Dépôt d'offre : montant + note + pièce jointe (PDF).
+// Retours du 01/10/2026 : adresse complète (code postal et ville), société et
+// prestation proposées d'office dans le nommage du devis, offre modifiable tant
+// qu'elle est à l'étude et la consultation en ligne (0124).
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
@@ -8,10 +11,13 @@ import { Badge, PhaseBadge } from "@/components/ui";
 import { Modal } from "@/components/Modal";
 import { RenommageDialog } from "@/components/RenommageDialog";
 import { fmtEuro, fmtDate } from "@/lib/format";
-import { CONSULT_TYPES, optionLabel, ouvrirDocConsultation, sousTypeLabel } from "@/api/consultations";
+import { adresseComplete } from "@/lib/offres";
+import { messageErreur } from "@/lib/erreurs";
+import { CONSULT_TYPES, optionLabel, ouvrirDocConsultation, ouvrirOffre, sousTypeLabel } from "@/api/consultations";
 import {
   marquerConsultationRecuperee,
   useConsultationsPresta,
+  useModifierCandidature,
   usePoserQuestion,
   usePostuler,
   useRetirerCandidature,
@@ -26,7 +32,7 @@ function joursRestants(iso: string | null): number | null {
   return Math.round((new Date(iso).getTime() - Date.now()) / 86400000);
 }
 
-function TypeTag({ type }: { type: ConsultationPresta["type"] }) {
+export function TypeTag({ type }: { type: ConsultationPresta["type"] }) {
   const t = CONSULT_TYPES.find((x) => x.id === type) ?? CONSULT_TYPES[4];
   return (
     <span className="cs-type">
@@ -36,11 +42,18 @@ function TypeTag({ type }: { type: ConsultationPresta["type"] }) {
   );
 }
 
-function cible(cs: ConsultationPresta): { nom: string; lieu: string } {
+/** Consultation vue de l'entreprise : celle de « Consultations en cours » ou
+ *  celle d'une candidature (sans pièces ni questions). */
+type ConsultationVue = Tables<"consultations"> & {
+  copro: ConsultationPresta["copro"];
+  docs?: Tables<"consultation_docs">[];
+};
+
+export function cible(cs: ConsultationVue): { nom: string; lieu: string } {
   if (cs.copro) {
     return {
       nom: cs.copro.name,
-      lieu: cs.copro.adresse || [cs.copro.code_postal, cs.copro.city].filter(Boolean).join(" "),
+      lieu: adresseComplete(cs.copro.adresse, cs.copro.code_postal, cs.copro.city),
     };
   }
   return {
@@ -49,13 +62,19 @@ function cible(cs: ConsultationPresta): { nom: string; lieu: string } {
   };
 }
 
-/** Adresse géocodable de la consultation (adresse + ville, sans le quartier). */
-function adresseMaps(cs: ConsultationPresta): string | null {
-  const parts = cs.copro
-    ? [cs.copro.adresse, cs.copro.city]
-    : [cs.copro_externe_adresse, cs.copro_externe_ville];
-  const q = parts.filter(Boolean).join(", ");
+/** Adresse géocodable de la consultation (adresse, code postal et ville). */
+function adresseMaps(cs: ConsultationVue): string | null {
+  const q = cs.copro
+    ? adresseComplete(cs.copro.adresse, cs.copro.code_postal, cs.copro.city)
+    : [cs.copro_externe_adresse, cs.copro_externe_ville].filter(Boolean).join(", ");
   return q || null;
+}
+
+/** Objet proposé pour le nommage du devis : la prestation consultée. */
+function objetDevis(cs: ConsultationVue): string {
+  if (cs.type === "diag" && cs.sous_type) return sousTypeLabel(cs.sous_type);
+  if (cs.type === "autre") return "";
+  return CONSULT_TYPES.find((t) => t.id === cs.type)?.label ?? "";
 }
 
 const mapsLien = (q: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
@@ -63,7 +82,7 @@ const mapsEmbed = (q: string) => `https://maps.google.com/maps?q=${encodeURIComp
 
 /** Plan de situation SANS quitter l'app - le lien externe reste proposé,
  *  mais l'utilisateur ne perd plus la page de la consultation. */
-function CarteModal({ cs, onClose }: { cs: ConsultationPresta; onClose: () => void }) {
+function CarteModal({ cs, onClose }: { cs: ConsultationVue; onClose: () => void }) {
   const c = cible(cs);
   const adresse = adresseMaps(cs);
   if (!adresse) return null;
@@ -200,26 +219,136 @@ function QuestionsModal({
   );
 }
 
-function PostulerModal({
+/** Situation et contenu d'une consultation : lieu (plan), logements,
+ *  bâtiments, mission et pièces du dossier. En tête du formulaire d'offre et
+ *  dans le détail d'une candidature (« Mes candidatures »). */
+export function InfosConsultation({ cs, presta }: { cs: ConsultationVue; presta: Tables<"prestataires"> }) {
+  const c = cible(cs);
+  const logements = cs.nb_logements ?? cs.copro_externe_lots;
+  const adresse = adresseMaps(cs);
+  const docs = cs.docs ?? [];
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 8, fontSize: 13.5, color: "var(--fg2)" }}>
+        {c.lieu && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Icon name="mapPin" size={14} />
+            {c.lieu}
+          </span>
+        )}
+        {logements != null && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Icon name="building" size={14} />
+            {logements} logement{logements > 1 ? "s" : ""}
+          </span>
+        )}
+        {cs.nb_batiments != null && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Icon name="layers" size={14} />
+            {cs.nb_batiments} bâtiment{cs.nb_batiments > 1 ? "s" : ""}
+          </span>
+        )}
+        {adresse && (
+          <a
+            href={mapsLien(adresse)}
+            target="_blank"
+            rel="noreferrer"
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--accent)", fontWeight: 600 }}
+          >
+            <Icon name="share" size={13} />
+            Google Maps
+          </a>
+        )}
+      </div>
+      {adresse && (
+        <iframe
+          title={"Localisation - " + c.nom}
+          src={mapsEmbed(adresse)}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          style={{
+            width: "100%",
+            height: 170,
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)",
+            marginBottom: 12,
+          }}
+        ></iframe>
+      )}
+      <p className="se-body" style={{ marginTop: 0 }}>{cs.mission}</p>
+      {docs.length > 0 && (
+        <div className="cs-field" style={{ marginBottom: 12 }}>
+          <label>Pièces du dossier de consultation</label>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            {docs.map((d) => (
+              <button
+                key={d.id}
+                className="se-btn se-btn-secondary btn-sm"
+                title={"Télécharger " + d.name}
+                onClick={() => {
+                  void marquerConsultationRecuperee(cs.id, presta.id);
+                  void ouvrirDocConsultation(d.path);
+                }}
+              >
+                <Icon name="download" size={13} />
+                {d.name.length > 34 ? d.name.slice(0, 32) + "…" : d.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+const enTexte = (v: number | null | undefined): string => (v == null ? "" : String(v));
+
+/** Saisie du formulaire reprise d'une offre déposée (modification). */
+function saisieDe(cand: Tables<"candidatures">): Record<string, string> {
+  const options = (cand.tarif_options as Record<string, number> | null) ?? {};
+  return {
+    diag_avp: enTexte(cand.tarif_diag_avp),
+    pro_dce: enTexte(cand.tarif_pro_dce),
+    chantier: enTexte(cand.tarif_chantier),
+    ...Object.fromEntries(Object.entries(options).map(([k, v]) => [k, enTexte(v)])),
+    etancheite_avant: enTexte(cand.tarif_etancheite_avant),
+    etancheite_apres: enTexte(cand.tarif_etancheite_apres),
+    conception: enTexte(cand.tarif_conception),
+    realisation: enTexte(cand.tarif_realisation),
+    pppt: enTexte(cand.tarif_pppt),
+    dpe: enTexte(cand.tarif_dpe),
+    delai_pppt: enTexte(cand.delai_pppt_semaines),
+    delai_dpe: enTexte(cand.delai_dpe_semaines),
+  };
+}
+
+/** Dépôt d'une offre, ou modification de l'offre déposée (`candidature`). */
+export function PostulerModal({
   cs,
   presta,
+  candidature,
   onClose,
 }: {
-  cs: ConsultationPresta;
+  cs: ConsultationVue & { options: string[] };
   presta: Tables<"prestataires">;
+  /** offre à modifier (reçue, consultation en ligne) */
+  candidature?: Tables<"candidatures">;
   onClose: () => void;
 }) {
   const postuler = usePostuler();
+  const modifier = useModifierCandidature();
+  const enCours = postuler.isPending || modifier.isPending;
   const moe = cs.type === "moe";
-  const [montant, setMontant] = useState("");
-  const [tarifs, setTarifs] = useState<Record<string, string>>({});
+  const [tarifs, setTarifs] = useState<Record<string, string>>(() => (candidature ? saisieDe(candidature) : {}));
   // PRO/DCE et suivi de chantier : forfait (€ HT) ou % du montant des travaux
   const [modes, setModes] = useState<Record<"pro_dce" | "chantier", "forfait" | "pourcentage">>({
-    pro_dce: "forfait",
-    chantier: "forfait",
+    pro_dce: candidature?.tarif_pro_dce_mode === "pourcentage" ? "pourcentage" : "forfait",
+    chantier: candidature?.tarif_chantier_mode === "pourcentage" ? "pourcentage" : "forfait",
   });
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(candidature?.message ?? "");
   const [file, setFile] = useState<File | null>(null);
+  // modification : pièce jointe déjà déposée, à garder, remplacer ou retirer
+  const [retirerFichier, setRetirerFichier] = useState(false);
   // Fichier en attente de renommage assisté avant d'être joint à l'offre
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -244,6 +373,7 @@ function PostulerModal({
           ]
         : null;
   const sansMontant = cs.type === "diag" && cs.sous_type === "amiante_plomb";
+  const [montant, setMontant] = useState(enTexte(candidature?.montant));
   const duoTotal = (duo ?? []).reduce((s, d) => s + (num(tarifs[d.key]) ?? 0), 0);
   // PPPT + DPE collectif (0110, demande d'Amir 27/09/2026) : prix et délai de chaque prestation
   const ppptDpe = cs.type === "pppt_dpe";
@@ -302,10 +432,7 @@ function PostulerModal({
         : duo
           ? (Object.fromEntries(duo.map((d) => [d.key, num(tarifs[d.key])])) as TarifsSimples)
           : null;
-      await postuler.mutateAsync({
-        consultation: cs,
-        prestataire: presta,
-        montant: moe
+      const montantOffre = moe
           ? total > 0
             ? total
             : null
@@ -321,91 +448,53 @@ function PostulerModal({
               ? null
               : montant
                 ? Number(montant)
-                : null,
-        message,
-        file,
-        tarifs: tarifsMoe,
-        tarifsSimples,
-      });
+                : null;
+      if (candidature) {
+        await modifier.mutateAsync({
+          cand: candidature,
+          montant: montantOffre,
+          message,
+          file,
+          retirerFichier,
+          tarifs: tarifsMoe,
+          tarifsSimples,
+        });
+      } else {
+        await postuler.mutateAsync({
+          consultation: cs as ConsultationPresta,
+          prestataire: presta,
+          montant: montantOffre,
+          message,
+          file,
+          tarifs: tarifsMoe,
+          tarifsSimples,
+        });
+      }
       onClose();
     } catch (e) {
-      setError("Le dépôt a échoué : " + String((e as Error).message ?? e));
+      setError(
+        (candidature ? "La modification a échoué : " : "Le dépôt a échoué : ") +
+          messageErreur(e, "erreur inconnue")
+      );
     }
   };
 
-  const logements = cs.nb_logements ?? cs.copro_externe_lots;
-  const adresse = adresseMaps(cs);
+  const fichierActuel = candidature?.fichier_path && !retirerFichier && !file ? candidature : null;
 
   return (
-    <Modal title={"Postuler - " + c.nom} onClose={onClose} width={560}>
-      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 8, fontSize: 13.5, color: "var(--fg2)" }}>
-        {c.lieu && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Icon name="mapPin" size={14} />
-            {c.lieu}
-          </span>
-        )}
-        {logements != null && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Icon name="building" size={14} />
-            {logements} logement{logements > 1 ? "s" : ""}
-          </span>
-        )}
-        {cs.nb_batiments != null && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Icon name="layers" size={14} />
-            {cs.nb_batiments} bâtiment{cs.nb_batiments > 1 ? "s" : ""}
-          </span>
-        )}
-        {adresse && (
-          <a
-            href={mapsLien(adresse)}
-            target="_blank"
-            rel="noreferrer"
-            style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--accent)", fontWeight: 600 }}
-          >
-            <Icon name="share" size={13} />
-            Google Maps
-          </a>
-        )}
-      </div>
-      {adresse && (
-        <iframe
-          title={"Localisation - " + c.nom}
-          src={mapsEmbed(adresse)}
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-          style={{
-            width: "100%",
-            height: 170,
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-md)",
-            marginBottom: 12,
-          }}
-        ></iframe>
+    <Modal title={(candidature ? "Modifier ma candidature - " : "Postuler - ") + c.nom} onClose={onClose} width={560}>
+      {candidature && (
+        <p
+          className="se-small"
+          style={{ margin: "0 0 12px", padding: "10px 14px", borderRadius: "var(--radius-md)", background: "var(--bg-soft)", border: "1px solid var(--border)", color: "var(--fg2)" }}
+        >
+          Offre déposée le {fmtDate(candidature.received_at)}
+          {candidature.modifiee_le ? `, modifiée le ${fmtDate(candidature.modifiee_le)}` : ""}. Vous pouvez la
+          corriger tant qu'elle est à l'étude et que la consultation est en ligne ; l'équipe Strat Eco voit la date
+          de la modification.
+        </p>
       )}
-      <p className="se-body" style={{ marginTop: 0 }}>{cs.mission}</p>
-      {cs.docs.length > 0 && (
-        <div className="cs-field" style={{ marginBottom: 12 }}>
-          <label>Pièces du dossier de consultation</label>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            {cs.docs.map((d) => (
-              <button
-                key={d.id}
-                className="se-btn se-btn-secondary btn-sm"
-                title={"Télécharger " + d.name}
-                onClick={() => {
-                  void marquerConsultationRecuperee(cs.id, presta.id);
-                  void ouvrirDocConsultation(d.path);
-                }}
-              >
-                <Icon name="download" size={13} />
-                {d.name.length > 34 ? d.name.slice(0, 32) + "…" : d.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <InfosConsultation cs={cs} presta={presta} />
       <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 6 }}>
         {moe ? (
           <div className="cs-field">
@@ -575,10 +664,44 @@ function PostulerModal({
               if (f) setPendingFile(f); // renommage assisté avant d'être joint
               e.target.value = "";
             }} />
-          <button className="se-btn se-btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>
-            <Icon name="upload" size={15} />
-            {file ? file.name : "Joindre un fichier"}
-          </button>
+          {fichierActuel ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <button
+                className="se-btn se-btn-secondary btn-sm"
+                title="Ouvrir l'offre déposée"
+                onClick={() => void ouvrirOffre(fichierActuel.fichier_path!)}
+              >
+                <Icon name="fileText" size={14} />
+                {fichierActuel.fichier_name ?? "Offre jointe"}
+              </button>
+              <button className="se-btn se-btn-ghost btn-sm" onClick={() => fileRef.current?.click()}>
+                <Icon name="upload" size={14} />
+                Remplacer
+              </button>
+              <button className="se-btn se-btn-ghost btn-sm" onClick={() => setRetirerFichier(true)}>
+                <Icon name="x" size={14} />
+                Retirer
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <button className="se-btn se-btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>
+                <Icon name="upload" size={15} />
+                {file ? file.name : "Joindre un fichier"}
+              </button>
+              {candidature?.fichier_path && (file || retirerFichier) && (
+                <button
+                  className="se-btn se-btn-ghost btn-sm"
+                  onClick={() => {
+                    setFile(null);
+                    setRetirerFichier(false);
+                  }}
+                >
+                  Garder le fichier déposé
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
       {pendingFile && (
@@ -586,6 +709,8 @@ function PostulerModal({
           files={[pendingFile]}
           prefixe={c.nom}
           typeInitial="devis"
+          emetteurInitial={presta.raison_sociale}
+          objetInitial={objetDevis(cs)}
           onConfirm={(f) => setFile(f)}
           onClose={() => setPendingFile(null)}
         />
@@ -596,9 +721,9 @@ function PostulerModal({
         </p>
       )}
       <button className="se-btn se-btn-primary" style={{ marginTop: 18, width: "100%" }}
-        disabled={postuler.isPending} onClick={() => void submit()}>
-        <Icon name="send" size={16} />
-        {postuler.isPending ? "Envoi…" : "Envoyer ma candidature"}
+        disabled={enCours} onClick={() => void submit()}>
+        <Icon name={candidature ? "check" : "send"} size={16} />
+        {enCours ? "Envoi…" : candidature ? "Enregistrer les modifications" : "Envoyer ma candidature"}
       </button>
     </Modal>
   );
@@ -608,6 +733,8 @@ export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires">
   const { data: consultations } = useConsultationsPresta(presta);
   const retirer = useRetirerCandidature();
   const [postulerA, setPostulerA] = useState<ConsultationPresta | null>(null);
+  // offre déposée à modifier (0124)
+  const [modifierA, setModifierA] = useState<ConsultationPresta | null>(null);
   const [questionsDe, setQuestionsDe] = useState<ConsultationPresta | null>(null);
   const [carteDe, setCarteDe] = useState<ConsultationPresta | null>(null);
   // Lien profond des e-mails d'alerte : ?c=<id> cible la consultation en
@@ -802,6 +929,16 @@ export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires">
                     </span>
                     {cs.maCandidature.statut === "recue" && (
                       <button
+                        className="se-btn se-btn-secondary btn-sm"
+                        title="Corriger le montant, la décomposition, la note ou la pièce jointe"
+                        onClick={() => setModifierA(cs)}
+                      >
+                        <Icon name="edit" size={13} />
+                        Modifier
+                      </button>
+                    )}
+                    {cs.maCandidature.statut === "recue" && (
+                      <button
                         className="se-btn se-btn-ghost btn-sm"
                         title="Retirer votre candidature de cette consultation"
                         disabled={retirer.isPending}
@@ -838,6 +975,14 @@ export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires">
       </div>
 
       {postulerA && <PostulerModal cs={postulerA} presta={presta} onClose={() => setPostulerA(null)} />}
+      {modifierA?.maCandidature && (
+        <PostulerModal
+          cs={modifierA}
+          presta={presta}
+          candidature={modifierA.maCandidature}
+          onClose={() => setModifierA(null)}
+        />
+      )}
       {questionsDe && (
         <QuestionsModal
           cs={(consultations ?? []).find((k) => k.id === questionsDe.id) ?? questionsDe}

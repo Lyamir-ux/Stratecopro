@@ -16,6 +16,10 @@
 // « Best Ryan ») : aucune entreprise n'avait de compte, le rattachement se
 // faisait en SQL. Le compte se crée seulement sur un clic dans la fiche, à
 // l'e-mail principal ; l'entreprise reçoit un lien pour choisir son mot de passe.
+// Filtre par zone de chalandise (idée d'Amir du 01/10/2026) : un département,
+// et les entreprises qui y interviennent (celles qui couvrent toute la France
+// comprises). Fil « Équipe Strat Eco » de chaque entreprise (0124) : bouton
+// Messages, pastille des messages non lus.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
@@ -24,7 +28,9 @@ import { Avatar, Badge } from "@/components/ui";
 import { Modal } from "@/components/Modal";
 import { EmailsSecondaires } from "@/components/EmailsSecondaires";
 import { DepartementsPicker, choixVersDepartements, departementsVersChoix } from "@/components/DepartementsPicker";
-import { resumeDepartements } from "@/lib/departements";
+import { DEPARTEMENTS, GRAND_EST, couvreDepartement, nomDepartement, resumeDepartements } from "@/lib/departements";
+import { FilGeneralEntreprise } from "@/components/FilGeneralEntreprise";
+import { nonLusFilGeneral, useFilsGeneraux, useLecturesFilGeneral } from "@/api/messages";
 import { CONSULT_TYPES } from "@/api/consultations";
 import {
   emailValide,
@@ -389,7 +395,13 @@ export default function Prestataires() {
   const del = useDeletePrestataire();
 
   const [filter, setFilter] = useState<TypeConsult | "">("");
+  // zone de chalandise : code de département, "" = toutes les zones
+  const [zone, setZone] = useState("");
   const [recherche, setRecherche] = useState("");
+  const [filDe, setFilDe] = useState<Prestataire | null>(null);
+  const { data: filsGeneraux } = useFilsGeneraux();
+  const { data: lecturesFils } = useLecturesFilGeneral();
+  const nonLus = nonLusFilGeneral(filsGeneraux, lecturesFils, "amo");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Prestataire | null>(null);
   const [params, setParams] = useSearchParams();
@@ -412,12 +424,13 @@ export default function Prestataires() {
     return (prestas ?? []).filter(
       (p) =>
         (!filter || p.types.includes(filter)) &&
+        (!zone || couvreDepartement(p.departements, zone)) &&
         (!q ||
           normaliserRecherche(
             [p.raison_sociale, p.contact_nom, p.ville, p.email, ...p.emails_secondaires].filter(Boolean).join(" ")
           ).includes(q))
     );
-  }, [prestas, filter, recherche]);
+  }, [prestas, filter, zone, recherche]);
 
   const save = async (draft: typeof EMPTY, id?: string) => {
     const payload = {
@@ -462,13 +475,38 @@ export default function Prestataires() {
             <option key={t.id} value={t.id}>{t.label}</option>
           ))}
         </select>
+        <select
+          className="edit-sel"
+          value={zone}
+          onChange={(e) => setZone(e.target.value)}
+          title="Zone de chalandise : entreprises qui interviennent dans ce département, celles qui couvrent toute la France comprises"
+        >
+          <option value="">Toutes les zones</option>
+          <optgroup label="Grand Est">
+            {GRAND_EST.map((code) => (
+              <option key={code} value={code}>{code} - {nomDepartement(code)}</option>
+            ))}
+          </optgroup>
+          <optgroup label="Autres départements">
+            {DEPARTEMENTS.filter((d) => !GRAND_EST.includes(d.code)).map((d) => (
+              <option key={d.code} value={d.code}>{d.code} - {d.nom}</option>
+            ))}
+          </optgroup>
+        </select>
         <button className="se-btn se-btn-primary" onClick={() => setCreating(true)}>
           <Icon name="plus" size={17} />
           Référencer une entreprise
         </button>
       </div>
 
-      {list.length === 0 && (recherche.trim() || filter) && (prestas?.length ?? 0) > 0 && (
+      {(recherche.trim() || filter || zone) && list.length > 0 && (
+        <p className="se-small" style={{ color: "var(--fg-muted)", margin: "0 0 10px" }}>
+          {list.length} entreprise{list.length > 1 ? "s" : ""} sur {prestas?.length ?? 0}
+          {zone ? ` intervenant en ${zone} - ${nomDepartement(zone)}` : ""}
+        </p>
+      )}
+
+      {list.length === 0 && (recherche.trim() || filter || zone) && (prestas?.length ?? 0) > 0 && (
         <p className="se-small" style={{ color: "var(--fg-muted)" }}>Aucune entreprise ne correspond à cette recherche.</p>
       )}
 
@@ -494,7 +532,7 @@ export default function Prestataires() {
                   <span style={{ display: "block", fontSize: 12.5, color: "var(--fg-muted)" }}>
                     {[p.contact_nom, p.ville].filter(Boolean).join(" · ") || "-"}
                   </span>
-                  {p.departements.length > 0 && (
+                  {(p.departements.length > 0 || zone) && (
                     <span
                       style={{ display: "block", fontSize: 12, color: "var(--fg3)" }}
                       title="Départements où l'entreprise peut être consultée"
@@ -534,6 +572,15 @@ export default function Prestataires() {
                 <span style={{ flex: "none", whiteSpace: "nowrap" }}>
                   <BadgeAcces acces={acces?.get(p.id)} lie={!!p.user_id} />
                 </span>
+                <button
+                  className="se-btn se-btn-ghost btn-sm"
+                  title="Fil « Équipe Strat Eco » avec l'entreprise (hors opération)"
+                  onClick={() => setFilDe(p)}
+                >
+                  <Icon name="message" size={14} />
+                  Messages
+                  {(nonLus.get(p.id) ?? 0) > 0 && <Badge kind="warn">{nonLus.get(p.id)}</Badge>}
+                </button>
                 <button
                   className="se-btn se-btn-ghost btn-sm"
                   title={p.actif ? "Suspendre (ne recevra plus d'alertes)" : "Réactiver"}
@@ -590,6 +637,7 @@ export default function Prestataires() {
           acces={acces?.get(editing.id)}
         />
       )}
+      {filDe && <FilGeneralEntreprise presta={prestas?.find((x) => x.id === filDe.id) ?? filDe} onClose={() => setFilDe(null)} />}
     </div>
   );
 }

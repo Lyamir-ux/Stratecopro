@@ -11,6 +11,7 @@ import { usePiecesAVerifierCount } from "@/api/portail";
 import { compteNouvelles, useDemandesAmo } from "@/api/demandesAmo";
 import { compteEnAttente, useHonoraires } from "@/api/honoraires";
 import { declencherRappelAgrements } from "@/api/prestataires";
+import { nonLusFilGeneral, useFilsGeneraux, useLecturesFilGeneral } from "@/api/messages";
 import { declencherRapportSyndic } from "@/api/rapportSyndic";
 import { declencherSignatureCron } from "@/api/signature";
 
@@ -61,6 +62,11 @@ export function Layout() {
   // alerte du menu « Facturation » : dossiers dont une facture attend son paiement
   const { data: honoraires } = useHonoraires();
   const facturationCount = compteEnAttente(honoraires, new Set((copros ?? []).map((c) => c.id)));
+  // alerte du menu « Base prestataires » : messages d'entreprises non lus dans
+  // leur fil « Équipe Strat Eco » (0124, sans alerte e-mail - choix d'Amir)
+  const { data: filsGeneraux } = useFilsGeneraux();
+  const { data: lecturesFils } = useLecturesFilGeneral();
+  const prestatairesCount = [...nonLusFilGeneral(filsGeneraux, lecturesFils, "amo").values()].reduce((a, b) => a + b, 0);
 
   const user = {
     initials: profile?.initials ?? "–",
@@ -78,6 +84,7 @@ export function Layout() {
         pptCount={pptCount || null}
         demandesCount={demandesCount || null}
         facturationCount={facturationCount || null}
+        prestatairesCount={prestatairesCount || null}
         user={user}
         onLogout={() => void signOut()}
       />

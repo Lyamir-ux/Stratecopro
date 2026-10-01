@@ -27,11 +27,23 @@ interface SidebarProps {
   demandesCount?: number | null;
   /** Dossiers dont une facture d'honoraires attend son paiement (0111). */
   facturationCount?: number | null;
+  /** Messages d'entreprises non lus dans leur fil « Équipe Strat Eco » (0124). */
+  prestatairesCount?: number | null;
   user: { initials: string; name: string; org: string };
   onLogout: () => void;
 }
 
-export function Sidebar({ recents, tasksCount, questionsCount, pptCount, demandesCount, facturationCount, user, onLogout }: SidebarProps) {
+export function Sidebar({
+  recents,
+  tasksCount,
+  questionsCount,
+  pptCount,
+  demandesCount,
+  facturationCount,
+  prestatairesCount,
+  user,
+  onLogout,
+}: SidebarProps) {
   const { collapsed, toggleCollapsed, sidebarTheme } = useUi();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -46,7 +58,7 @@ export function Sidebar({ recents, tasksCount, questionsCount, pptCount, demande
     { to: "/facturation", icon: "euro", label: "Facturation", count: facturationCount },
   ];
   const nav2: NavEntry[] = [
-    { to: "/prestataires", icon: "briefcase", label: "Base prestataires" },
+    { to: "/prestataires", icon: "briefcase", label: "Base prestataires", count: prestatairesCount },
     { to: "/collaborateurs", icon: "users", label: "Collaborateurs" },
     { to: "/base-connaissances", icon: "book", label: "Base de connaissances" },
     { to: "/parametres", icon: "settings", label: "Paramètres" },

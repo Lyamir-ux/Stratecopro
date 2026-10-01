@@ -7,9 +7,15 @@
 // Canal copropriétaires (0088) : coproprietaire_id null = annonce à tous les
 // copropriétaires de la copro ; coproprietaire_id posé = fil privé entre CE
 // copropriétaire et l'équipe AMO (onglet « Nous contacter » du portail).
+// Fil général « Équipe Strat Eco » (0124) : une entreprise et l'équipe, sans
+// opération (table prestataire_messages), lu côté équipe depuis la Base
+// prestataires. Depuis 0124, une entreprise écrit aussi sur les opérations où
+// elle a une candidature en cours (pas seulement celles où elle est retenue).
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { supabase, toutesLesLignes } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthProvider";
+import { projetsEnCours, useMesCandidatures, useMesProjetsMoe } from "@/api/espacePrestataire";
 import type { Tables } from "@/lib/database.types";
 
 export type CanalMessage = Tables<"messages_projet">["canal"];
@@ -193,14 +199,15 @@ export type MessagePresta = Tables<"messages_projet"> & {
   copro: { id: string; name: string } | null;
 };
 
-/** Messages visibles du prestataire (RLS : fils de ses projets - « à tous »
- *  + ses échanges privés). Le filtre client reproduit la RLS quand un AMO
+/** Messages visibles du prestataire (RLS 0124) : ses échanges privés sur
+ *  toutes ses opérations, et les messages « à tous » des opérations où il est
+ *  retenu (`coproIdsRetenus`). Le filtre client reproduit la RLS quand un AMO
  *  consulte l'espace en aperçu. */
-export function useMessagesPresta(prestaId: string, coproIds: string[]) {
+export function useMessagesPresta(prestaId: string, coproIdsRetenus: string[]) {
   return useQuery({
-    // coproIds fait partie de la clé : la liste arrive après coup (candidatures)
-    // et doit invalider le premier résultat calculé à vide
-    queryKey: ["messages-presta", prestaId, coproIds.join(",")],
+    // la liste arrive après coup (candidatures) et doit invalider le premier
+    // résultat calculé à vide
+    queryKey: ["messages-presta", prestaId, [...coproIdsRetenus].sort().join(",")],
     queryFn: async (): Promise<MessagePresta[]> => {
       const { data, error } = await supabase
         .from("messages_projet")
@@ -215,12 +222,202 @@ export function useMessagesPresta(prestaId: string, coproIds: string[]) {
           };
           return { ...rest, copro: coproprietes };
         })
-        .filter(
-          (m) =>
-            coproIds.includes(m.copro_id) &&
-            (m.prestataire_id == null || m.prestataire_id === prestaId)
+        .filter((m) =>
+          m.prestataire_id == null ? coproIdsRetenus.includes(m.copro_id) : m.prestataire_id === prestaId
         );
     },
+  });
+}
+
+/** Opération sur laquelle l'entreprise a un fil avec l'équipe. */
+export interface FilOperation {
+  coproId: string;
+  nom: string;
+  /** retenue sur une consultation : voit aussi les messages « à tous » */
+  retenue: boolean;
+  /** peut écrire (même règle que presta_peut_ecrire_sur, 0124) */
+  ouvert: boolean;
+  /** pourquoi le fil existe, pour l'étiquette */
+  motif: "projet" | "candidature" | "historique";
+}
+
+/** Fils de l'entreprise : projets (retenue, maître d'œuvre saisi),
+ *  candidatures en cours, et opérations closes où un échange existe déjà
+ *  (lecture seule). Messages inclus. */
+export function useFilsPresta(presta: Tables<"prestataires">) {
+  const { data: candidatures } = useMesCandidatures(presta.id);
+  const { data: projetsMoe } = useMesProjetsMoe(presta.types.includes("moe"), presta.id);
+
+  const base = useMemo(() => {
+    const fils = new Map<string, FilOperation>();
+    for (const p of projetsEnCours(projetsMoe ?? [])) {
+      if (p.designe) {
+        fils.set(p.copro.id, { coproId: p.copro.id, nom: p.copro.name, retenue: false, ouvert: true, motif: "projet" });
+      }
+    }
+    for (const cand of candidatures ?? []) {
+      const copro = cand.consultation?.copro;
+      if (!copro || cand.retrait_at) continue;
+      if (cand.statut === "retenue") {
+        fils.set(copro.id, { coproId: copro.id, nom: copro.name, retenue: true, ouvert: true, motif: "projet" });
+      } else if (cand.statut === "recue" && !fils.has(copro.id)) {
+        fils.set(copro.id, { coproId: copro.id, nom: copro.name, retenue: false, ouvert: true, motif: "candidature" });
+      }
+    }
+    return fils;
+  }, [candidatures, projetsMoe]);
+
+  const retenues = [...base.values()].filter((f) => f.retenue).map((f) => f.coproId);
+  const { data: messages } = useMessagesPresta(presta.id, retenues);
+
+  const operations = useMemo(() => {
+    const fils = new Map(base);
+    // échange déjà commencé sur une opération close : lisible, plus d'écriture
+    for (const m of messages ?? []) {
+      if (fils.has(m.copro_id)) continue;
+      const nom =
+        m.copro?.name ??
+        (candidatures ?? []).find((c) => c.consultation?.copro?.id === m.copro_id)?.consultation?.copro?.name ??
+        "Opération";
+      fils.set(m.copro_id, { coproId: m.copro_id, nom, retenue: false, ouvert: false, motif: "historique" });
+    }
+    const rang = { projet: 0, candidature: 1, historique: 2 };
+    return [...fils.values()].sort(
+      (a, b) => rang[a.motif] - rang[b.motif] || a.nom.localeCompare(b.nom, "fr", { numeric: true })
+    );
+  }, [base, messages, candidatures]);
+
+  return { operations, messages };
+}
+
+// ========== Fil général « Équipe Strat Eco » (0124) ==========
+
+export type MessageFilGeneral = Tables<"prestataire_messages">;
+
+/** Fil général d'une entreprise (l'entreprise : le sien ; l'équipe : tous). */
+export function useFilGeneral(prestaId: string | undefined) {
+  return useQuery({
+    queryKey: ["fil-general", prestaId],
+    enabled: !!prestaId,
+    queryFn: async (): Promise<MessageFilGeneral[]> => {
+      const { data, error } = await supabase
+        .from("prestataire_messages")
+        .select("*")
+        .eq("prestataire_id", prestaId!)
+        .order("created_at");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/** Côté équipe : tous les messages des fils généraux (pastilles de la Base
+ *  prestataires et du menu), lus par pages (plafond de 1 000 lignes de l'API). */
+export function useFilsGeneraux(enabled = true) {
+  return useQuery({
+    queryKey: ["fil-general", "tous"],
+    enabled,
+    queryFn: () =>
+      toutesLesLignes<Pick<MessageFilGeneral, "id" | "prestataire_id" | "auteur_role" | "created_at">>((debut, fin) =>
+        supabase
+          .from("prestataire_messages")
+          .select("id, prestataire_id, auteur_role, created_at")
+          .order("created_at")
+          .order("id")
+          .range(debut, fin)
+      ),
+  });
+}
+
+/** Repères de lecture des fils généraux du compte connecté. */
+export function useLecturesFilGeneral() {
+  const { session } = useAuth();
+  return useQuery({
+    queryKey: ["fil-general-lectures", session?.user.id],
+    enabled: !!session,
+    queryFn: async (): Promise<Tables<"prestataire_messages_lectures">[]> => {
+      const { data, error } = await supabase.from("prestataire_messages_lectures").select("*");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/** Marque le fil général d'une entreprise comme lu (à l'ouverture du fil). */
+export function useMarquerFilGeneralLu() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (prestaId: string) => {
+      const { data: session } = await supabase.auth.getSession();
+      const uid = session.session?.user.id;
+      if (!uid) return;
+      const { error } = await supabase
+        .from("prestataire_messages_lectures")
+        .upsert(
+          { user_id: uid, prestataire_id: prestaId, last_read_at: new Date().toISOString() },
+          { onConflict: "user_id,prestataire_id" }
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["fil-general-lectures"] }),
+  });
+}
+
+/** Messages non lus des fils généraux, par entreprise : ceux de l'autre côté
+ *  (l'équipe lit les messages de l'entreprise, et inversement), plus récents
+ *  que le repère de lecture. */
+export function nonLusFilGeneral(
+  messages: Pick<MessageFilGeneral, "prestataire_id" | "auteur_role" | "created_at">[] | undefined,
+  lectures: Pick<Tables<"prestataire_messages_lectures">, "prestataire_id" | "last_read_at">[] | undefined,
+  lecteur: "amo" | "presta"
+): Map<string, number> {
+  const repere = new Map((lectures ?? []).map((l) => [l.prestataire_id, l.last_read_at]));
+  const parEntreprise = new Map<string, number>();
+  for (const m of messages ?? []) {
+    if (m.auteur_role === lecteur) continue;
+    const lu = repere.get(m.prestataire_id);
+    if (lu && m.created_at <= lu) continue;
+    parEntreprise.set(m.prestataire_id, (parEntreprise.get(m.prestataire_id) ?? 0) + 1);
+  }
+  return parEntreprise;
+}
+
+/** Message dans le fil général. L'équipe prévient l'entreprise par e-mail,
+ *  sans le contenu (`notifier-message`, comme sur une opération) ; un message
+ *  de l'entreprise n'alerte personne (choix d'Amir du 01/10/2026) : il
+ *  s'affiche en pastille sur la Base prestataires. */
+export function useEcrireFilGeneral() {
+  const qc = useQueryClient();
+  const { profile } = useAuth();
+  return useMutation({
+    mutationFn: async ({
+      presta,
+      role,
+      body,
+    }: {
+      presta: Tables<"prestataires">;
+      role: "amo" | "presta";
+      body: string;
+    }): Promise<EnvoiMessageResult> => {
+      const { data: session } = await supabase.auth.getSession();
+      const { error } = await supabase.from("prestataire_messages").insert({
+        prestataire_id: presta.id,
+        user_id: session.session?.user.id ?? null,
+        auteur_nom: profile?.full_name || (role === "presta" ? presta.raison_sociale : ""),
+        auteur_role: role,
+        body: body.trim(),
+      });
+      if (error) throw error;
+      if (role === "presta") return { notification: null, notifyError: null };
+      const { data, error: fnErr } = await supabase.functions.invoke("notifier-message", {
+        body: { prestataire_id: presta.id, fil_general: true },
+      });
+      return {
+        notification: fnErr ? null : (data as EnvoiMessageResult["notification"]),
+        notifyError: fnErr ? String(fnErr.message ?? fnErr) : null,
+      };
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["fil-general"] }),
   });
 }
 

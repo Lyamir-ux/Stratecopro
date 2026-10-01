@@ -74,17 +74,30 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [c.id, dernierRecu]);
 
-  // entreprises retenues sur une consultation de la copro (destinataires possibles)
+  // destinataires d'un message privé : entreprises retenues sur une
+  // consultation de la copro, candidates en cours et, depuis 0124, toute
+  // entreprise qui a déjà un fil privé sur le dossier (elle a pu écrire la première)
   const retenues = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, { nom: string; rang: number; suffixe: string }>();
     for (const cs of consultations ?? []) {
       if (cs.copro_id !== c.id) continue;
       for (const cand of cs.candidatures) {
-        if (cand.statut === "retenue" && cand.prestataire_id) map.set(cand.prestataire_id, cand.org_name);
+        if (!cand.prestataire_id || cand.retrait_at) continue;
+        if (cand.statut === "retenue") map.set(cand.prestataire_id, { nom: cand.org_name, rang: 0, suffixe: "" });
+        else if (cand.statut === "recue" && !map.has(cand.prestataire_id)) {
+          map.set(cand.prestataire_id, { nom: cand.org_name, rang: 1, suffixe: " (candidature en cours)" });
+        }
       }
     }
-    return [...map.entries()].map(([id, nom]) => ({ id, nom }));
-  }, [consultations, c.id]);
+    for (const m of messages ?? []) {
+      if (m.canal === "prestataires" && m.prestataire_id && !map.has(m.prestataire_id)) {
+        map.set(m.prestataire_id, { nom: m.prestataire?.raison_sociale ?? "Entreprise", rang: 2, suffixe: "" });
+      }
+    }
+    return [...map.entries()]
+      .map(([id, v]) => ({ id, ...v }))
+      .sort((a, b) => a.rang - b.rang || a.nom.localeCompare(b.nom, "fr"));
+  }, [consultations, messages, c.id]);
 
   // copropriétaires ayant un fil privé (ils ont écrit, ou l'AMO leur a écrit)
   const filsCopro = useMemo(() => {
@@ -168,9 +181,10 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
       <div className="p-body">
         {canal === "prestataires" ? (
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 0 }}>
-            Fil avec les entreprises retenues sur le projet. « À tous » est visible de toutes ;
-            un message adressé à une entreprise reste privé. L'envoi déclenche une alerte e-mail
-            sans le contenu du message - il se lit dans l'espace prestataire.
+            Fil avec les entreprises du projet. « À tous » est visible des entreprises retenues ;
+            un message adressé à une entreprise reste privé. Une entreprise candidate peut aussi
+            vous écrire en privé depuis son espace (sans alerte e-mail : pastille de l'onglet). Votre
+            envoi déclenche une alerte e-mail sans le contenu du message - il se lit dans l'espace prestataire.
           </p>
         ) : (
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 0 }}>
@@ -228,6 +242,17 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
                   ) : (
                     <Badge kind="neutral">À tous</Badge>
                   ))}
+                {m.canal === "prestataires" && m.prestataire_id && m.auteur_role === "presta" && dest !== m.prestataire_id && (
+                  <button
+                    type="button"
+                    className="se-btn se-btn-ghost btn-sm"
+                    style={{ padding: "2px 8px", fontSize: 12 }}
+                    onClick={() => setDest(m.prestataire_id!)}
+                  >
+                    <Icon name="undo" size={12} />
+                    Répondre en privé
+                  </button>
+                )}
                 {m.canal === "coproprietaires" && m.coproprietaire_id && destCopro !== m.coproprietaire_id && (
                   <button
                     type="button"
@@ -257,6 +282,7 @@ function MessageriePanel({ c }: { c: CoproWithStats }) {
               {retenues.map((p) => (
                 <option key={p.id} value={p.id}>
                   Privé - {p.nom}
+                  {p.suffixe}
                 </option>
               ))}
             </select>

@@ -178,6 +178,42 @@ export interface TarifsSimples {
   delai_dpe_semaines?: number | null;
 }
 
+/** Colonnes de l'offre (montant, décomposition, note) - communes au dépôt et
+ *  à la modification. */
+function champsOffre(
+  montant: number | null,
+  message: string,
+  tarifs: TarifsMoe | null,
+  tarifsSimples: TarifsSimples | null
+) {
+  return {
+    montant,
+    message: message.trim() || null,
+    tarif_diag_avp: tarifs?.diag_avp ?? null,
+    tarif_pro_dce: tarifs?.pro_dce ?? null,
+    tarif_pro_dce_mode: tarifs?.pro_dce_mode ?? "forfait",
+    tarif_chantier: tarifs?.chantier ?? null,
+    tarif_chantier_mode: tarifs?.chantier_mode ?? "forfait",
+    tarif_options: tarifs && Object.keys(tarifs.options).length > 0 ? tarifs.options : null,
+    tarif_etancheite_avant: tarifsSimples?.etancheite_avant ?? null,
+    tarif_etancheite_apres: tarifsSimples?.etancheite_apres ?? null,
+    tarif_conception: tarifsSimples?.conception ?? null,
+    tarif_realisation: tarifsSimples?.realisation ?? null,
+    tarif_pppt: tarifsSimples?.pppt ?? null,
+    tarif_dpe: tarifsSimples?.dpe ?? null,
+    delai_pppt_semaines: tarifsSimples?.delai_pppt_semaines ?? null,
+    delai_dpe_semaines: tarifsSimples?.delai_dpe_semaines ?? null,
+  };
+}
+
+/** Pièce jointe d'une offre : bucket privé, dossier du compte connecté. */
+async function deposerFichierOffre(uid: string, consultationId: string, file: File) {
+  const path = `${uid}/${consultationId}-${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
+  const { error } = await supabase.storage.from("offres-presta").upload(path, file);
+  if (error) throw error;
+  return { fichier_path: path, fichier_name: file.name };
+}
+
 /** Dépôt d'offre : pièce jointe optionnelle (bucket privé) + candidature. */
 export function usePostuler() {
   const qc = useQueryClient();
@@ -201,38 +237,70 @@ export function usePostuler() {
       tarifsSimples: TarifsSimples | null;
     }) => {
       if (!session) throw new Error("Session expirée");
-      let fichier_path: string | null = null;
-      let fichier_name: string | null = null;
-      if (file) {
-        fichier_path = `${session.user.id}/${consultation.id}-${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
-        fichier_name = file.name;
-        const { error: upErr } = await supabase.storage.from("offres-presta").upload(fichier_path, file);
-        if (upErr) throw upErr;
-      }
+      const fichier = file
+        ? await deposerFichierOffre(session.user.id, consultation.id, file)
+        : { fichier_path: null, fichier_name: null };
       const { error } = await supabase.from("candidatures").insert({
         consultation_id: consultation.id,
         prestataire_id: prestataire.id,
         org_name: prestataire.raison_sociale,
-        montant,
-        message: message.trim() || null,
-        fichier_path,
-        fichier_name,
-        tarif_diag_avp: tarifs?.diag_avp ?? null,
-        tarif_pro_dce: tarifs?.pro_dce ?? null,
-        tarif_pro_dce_mode: tarifs?.pro_dce_mode ?? "forfait",
-        tarif_chantier: tarifs?.chantier ?? null,
-        tarif_chantier_mode: tarifs?.chantier_mode ?? "forfait",
-        tarif_options: tarifs && Object.keys(tarifs.options).length > 0 ? tarifs.options : null,
-        tarif_etancheite_avant: tarifsSimples?.etancheite_avant ?? null,
-        tarif_etancheite_apres: tarifsSimples?.etancheite_apres ?? null,
-        tarif_conception: tarifsSimples?.conception ?? null,
-        tarif_realisation: tarifsSimples?.realisation ?? null,
-        tarif_pppt: tarifsSimples?.pppt ?? null,
-        tarif_dpe: tarifsSimples?.dpe ?? null,
-        delai_pppt_semaines: tarifsSimples?.delai_pppt_semaines ?? null,
-        delai_dpe_semaines: tarifsSimples?.delai_dpe_semaines ?? null,
+        ...champsOffre(montant, message, tarifs, tarifsSimples),
+        ...fichier,
       });
       if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["presta-consultations"] });
+      void qc.invalidateQueries({ queryKey: ["presta-candidatures"] });
+    },
+  });
+}
+
+/** Modification d'une offre encore à l'étude (remarque d'Amir du 01/10/2026,
+ *  0124) : mêmes conditions que le retrait - offre « reçue », consultation en
+ *  ligne -, vérifiées par la base, qui date la modification (modifiee_le).
+ *  `file` remplace la pièce jointe, `retirerFichier` la supprime ; l'ancien
+ *  fichier n'est effacé qu'une fois l'offre enregistrée. */
+export function useModifierCandidature() {
+  const qc = useQueryClient();
+  const { session } = useAuth();
+  return useMutation({
+    mutationFn: async ({
+      cand,
+      montant,
+      message,
+      file,
+      retirerFichier,
+      tarifs,
+      tarifsSimples,
+    }: {
+      cand: Tables<"candidatures">;
+      montant: number | null;
+      message: string;
+      file: File | null;
+      retirerFichier: boolean;
+      tarifs: TarifsMoe | null;
+      tarifsSimples: TarifsSimples | null;
+    }) => {
+      if (!session) throw new Error("Session expirée");
+      const fichier = file
+        ? await deposerFichierOffre(session.user.id, cand.consultation_id, file)
+        : retirerFichier
+          ? { fichier_path: null, fichier_name: null }
+          : {};
+      const { error } = await supabase
+        .from("candidatures")
+        .update({ ...champsOffre(montant, message, tarifs, tarifsSimples), ...fichier })
+        .eq("id", cand.id);
+      if (error) {
+        if (file && "fichier_path" in fichier && fichier.fichier_path) {
+          await supabase.storage.from("offres-presta").remove([fichier.fichier_path]).catch(() => undefined);
+        }
+        throw error;
+      }
+      if (cand.fichier_path && (file || retirerFichier)) {
+        await supabase.storage.from("offres-presta").remove([cand.fichier_path]).catch(() => undefined);
+      }
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["presta-consultations"] });

@@ -7,13 +7,14 @@
 // Une demande de consultation PPPT + DPE collectif d'un syndic (0107, page
 // « Demandes des syndics ») ouvre ce formulaire pré-rempli ; la publication
 // passe la demande en « prise en charge ».
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
 import { RenommageDialog } from "@/components/RenommageDialog";
 import { fmtEuro, fmtDate } from "@/lib/format";
+import { lignesOffre } from "@/lib/offres";
 import { nbLogements, useCopros } from "@/api/copros";
 import {
   CONSULT_OPTIONS,
@@ -407,6 +408,11 @@ Non alertées : ${ecartes}.` : "")
                 <span style={{ fontWeight: 700, fontSize: 13 }}>{fmtEuro(cand.montant)} HT</span>
               )}
               <span className="cs-cand-date">{fmtDate(cand.received_at)}</span>
+              {cand.modifiee_le && (
+                <span title="L'entreprise a modifié son offre depuis son espace (0124)">
+                  <Badge kind="warn">Modifiée le {fmtDate(cand.modifiee_le)}</Badge>
+                </span>
+              )}
               {cand.fichier_path && (
                 <button
                   className="se-btn se-btn-ghost btn-sm"
@@ -419,47 +425,10 @@ Non alertées : ${ecartes}.` : "")
               )}
               <span className="spacer" style={{ flex: 1 }}></span>
               <CandidatureActions cand={cand} />
-              {(cand.tarif_diag_avp != null ||
-                cand.tarif_pro_dce != null ||
-                cand.tarif_chantier != null ||
-                cand.tarif_options != null ||
-                cand.tarif_etancheite_avant != null ||
-                cand.tarif_etancheite_apres != null ||
-                cand.tarif_conception != null ||
-                cand.tarif_realisation != null ||
-                cand.tarif_pppt != null ||
-                cand.tarif_dpe != null ||
-                cand.delai_pppt_semaines != null ||
-                cand.delai_dpe_semaines != null) && (
+              {lignesOffre(cand, optionLabel).length > 0 && (
                 <div style={{ flexBasis: "100%", fontSize: 12.5, color: "var(--fg2)", paddingLeft: 34 }}>
-                  {[
-                    cand.tarif_diag_avp != null ? `DIAG-AVP ${fmtEuro(cand.tarif_diag_avp)}` : null,
-                    cand.tarif_pro_dce != null
-                      ? cand.tarif_pro_dce_mode === "pourcentage"
-                        ? `PRO-DCE ${cand.tarif_pro_dce.toLocaleString("fr-FR")} % du montant des travaux`
-                        : `PRO-DCE ${fmtEuro(cand.tarif_pro_dce)}`
-                      : null,
-                    cand.tarif_chantier != null
-                      ? cand.tarif_chantier_mode === "pourcentage"
-                        ? `Suivi de chantier ${cand.tarif_chantier.toLocaleString("fr-FR")} % du montant des travaux`
-                        : `Suivi de chantier ${fmtEuro(cand.tarif_chantier)}`
-                      : null,
-                    cand.tarif_etancheite_avant != null ? `Étanchéité avant travaux ${fmtEuro(cand.tarif_etancheite_avant)}` : null,
-                    cand.tarif_etancheite_apres != null ? `Étanchéité après travaux ${fmtEuro(cand.tarif_etancheite_apres)}` : null,
-                    cand.tarif_conception != null ? `Phase conception ${fmtEuro(cand.tarif_conception)}` : null,
-                    cand.tarif_realisation != null ? `Phase réalisation ${fmtEuro(cand.tarif_realisation)}` : null,
-                    // PPPT + DPE collectif (0110) : prix et délai de chaque prestation
-                    cand.tarif_pppt != null || cand.delai_pppt_semaines != null
-                      ? `PPPT ${cand.tarif_pppt != null ? fmtEuro(cand.tarif_pppt) : "non chiffré"}${cand.delai_pppt_semaines != null ? ` en ${cand.delai_pppt_semaines} sem.` : ""}`
-                      : null,
-                    cand.tarif_dpe != null || cand.delai_dpe_semaines != null
-                      ? `DPE collectif ${cand.tarif_dpe != null ? fmtEuro(cand.tarif_dpe) : "non chiffré"}${cand.delai_dpe_semaines != null ? ` en ${cand.delai_dpe_semaines} sem.` : ""}`
-                      : null,
-                    ...Object.entries((cand.tarif_options as Record<string, number> | null) ?? {}).map(
-                      ([k, v]) => `${optionLabel(k)} ${fmtEuro(v)}`
-                    ),
-                  ]
-                    .filter(Boolean)
+                  {lignesOffre(cand, optionLabel)
+                    .map((l) => `${l.libelle} ${l.valeur}`)
                     .join(" · ")}
                 </div>
               )}
@@ -501,6 +470,11 @@ export default function Consultations() {
   useCrumbs([{ label: "Consulter un intervenant" }]);
   const { data: consultations } = useConsultations();
   const { data: copros } = useCopros();
+  // idée d'Amir du 01/10/2026 : copropriétés par ordre alphabétique (et non par dernière modification)
+  const coprosTriees = useMemo(
+    () => [...(copros ?? [])].sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base", numeric: true })),
+    [copros]
+  );
   const publish = usePublishConsultation();
 
   // Demande de consultation d'un syndic (Demandes des syndics → « Préparer la consultation »)
@@ -768,7 +742,7 @@ export default function Consultations() {
                     onChange={(e) => set("copro_id", e.target.value)}
                   >
                     <option value="">- Choisir -</option>
-                    {(copros ?? []).map((c) => (
+                    {coprosTriees.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} - {c.city}
                       </option>

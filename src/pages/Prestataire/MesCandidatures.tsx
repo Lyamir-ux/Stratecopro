@@ -5,19 +5,29 @@
 // motif obligatoire ; les candidatures retirées partent dans une corbeille
 // (visibles aussi de l'équipe AMO). L'ouverture de la page accuse réception
 // des décisions (éteint la pastille « sélectionné / refusé » du menu).
+// Retours du 01/10/2026 (Pierre Zently, Best Ryan, Amir) : chaque candidature
+// donne accès au détail de la consultation, à la décomposition complète du
+// prix, au devis envoyé, à la modification de l'offre (0124) et au fil de
+// discussion avec l'équipe.
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
+import { Modal } from "@/components/Modal";
 import { fmtEuro, fmtDate } from "@/lib/format";
+import { lignesOffre } from "@/lib/offres";
 import { useAuth } from "@/auth/AuthProvider";
-import { CONSULT_TYPES } from "@/api/consultations";
+import { CONSULT_TYPES, optionLabel, ouvrirOffre, sousTypeLabel } from "@/api/consultations";
 import {
   useConfirmerEngagement,
+  useConsultationsPresta,
   useMarquerDecisionsVues,
   useMesCandidatures,
   useRetirerCandidature,
   type CandidaturePresta,
+  type ConsultationPresta,
 } from "@/api/espacePrestataire";
+import { InfosConsultation, PostulerModal, TypeTag, cible } from "./Consultations";
 import type { Tables } from "@/lib/database.types";
 
 function StatutBadge({ statut }: { statut: CandidaturePresta["statut"] }) {
@@ -26,12 +36,143 @@ function StatutBadge({ statut }: { statut: CandidaturePresta["statut"] }) {
   return <Badge kind="blue" dot>Reçue - en cours d'analyse</Badge>;
 }
 
+/** Décomposition du prix, note d'intention et devis envoyé d'une offre. */
+function DetailOffre({ cand }: { cand: Tables<"candidatures"> }) {
+  const lignes = lignesOffre(cand, optionLabel);
+  return (
+    <>
+      {lignes.length > 0 && (
+        <span style={{ display: "flex", flexWrap: "wrap", gap: "2px 14px", fontSize: 12.5, color: "var(--fg2)" }}>
+          {lignes.map((l) => (
+            <span key={l.libelle}>
+              {l.libelle} <b style={{ fontWeight: 650 }}>{l.valeur}</b>
+            </span>
+          ))}
+        </span>
+      )}
+      {cand.message && (
+        <span style={{ display: "block", fontSize: 12.5, color: "var(--fg3)", fontStyle: "italic" }}>« {cand.message} »</span>
+      )}
+    </>
+  );
+}
+
+/** Détail d'une candidature : la consultation (lieu, mission, pièces,
+ *  questions) et l'offre déposée. */
+function DetailCandidature({
+  cand,
+  cs,
+  presta,
+  modifiable,
+  onModifier,
+  onEcrire,
+  onClose,
+}: {
+  cand: Tables<"candidatures">;
+  cs: ConsultationPresta;
+  presta: Tables<"prestataires">;
+  modifiable: boolean;
+  onModifier: () => void;
+  onEcrire: (() => void) | null;
+  onClose: () => void;
+}) {
+  const c = cible(cs);
+  return (
+    <Modal title={"Consultation - " + c.nom} onClose={onClose} width={600}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        <TypeTag type={cs.type} />
+        {cs.sous_type && <Badge kind="primary">{sousTypeLabel(cs.sous_type)}</Badge>}
+        {cs.statut === "en_ligne" ? <Badge kind="success" dot>En ligne</Badge> : <Badge kind="neutral">Clôturée</Badge>}
+        {cs.date_limite && (
+          <span className="se-small" style={{ color: "var(--fg2)" }}>
+            <Icon name="calendar" size={13} /> Réponse avant le {fmtDate(cs.date_limite)}
+          </span>
+        )}
+        {(cs.budget ?? 0) > 0 && (
+          <span className="se-small" style={{ color: "var(--fg2)" }}>
+            <Icon name="euro" size={13} /> {fmtEuro(cs.budget)} estimé
+          </span>
+        )}
+      </div>
+      <InfosConsultation cs={cs} presta={presta} />
+      {cs.options.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          {cs.options.map((o) => (
+            <Badge key={o} kind="blue">Option : {optionLabel(o)}</Badge>
+          ))}
+        </div>
+      )}
+      {cs.questions.length > 0 && (
+        <div className="cs-field" style={{ marginBottom: 12 }}>
+          <label>Questions et réponses</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {cs.questions.map((q) => (
+              <div key={q.id} style={{ fontSize: 13, padding: "8px 12px", borderRadius: "var(--radius-md)", background: "var(--bg-soft)" }}>
+                <span style={{ fontWeight: 600 }}>{q.prestataire_id === presta.id ? "Votre question" : "Question d'un candidat"}</span>
+                {" - "}
+                {q.question}
+                <span style={{ display: "block", marginTop: 4, color: q.reponse ? "var(--fg2)" : "var(--fg-muted)", fontStyle: q.reponse ? "normal" : "italic" }}>
+                  {q.reponse ? `Réponse de l'AMO - ${q.reponse}` : "En attente de réponse de l'AMO."}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>Votre offre</span>
+          {cand.montant != null && <span style={{ fontWeight: 700 }}>{fmtEuro(cand.montant)} HT</span>}
+          <span className="se-small" style={{ color: "var(--fg-muted)" }}>
+            déposée le {fmtDate(cand.received_at)}
+            {cand.modifiee_le ? `, modifiée le ${fmtDate(cand.modifiee_le)}` : ""}
+          </span>
+        </div>
+        <DetailOffre cand={cand} />
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+          {cand.fichier_path && (
+            <button className="se-btn se-btn-secondary btn-sm" onClick={() => void ouvrirOffre(cand.fichier_path!)}>
+              <Icon name="fileText" size={14} />
+              Voir le devis envoyé
+            </button>
+          )}
+          {modifiable && (
+            <button className="se-btn se-btn-secondary btn-sm" onClick={onModifier}>
+              <Icon name="edit" size={14} />
+              Modifier mon offre
+            </button>
+          )}
+          {onEcrire && (
+            <button className="se-btn se-btn-ghost btn-sm" onClick={onEcrire}>
+              <Icon name="message" size={14} />
+              Écrire à l'équipe Strat Eco
+            </button>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Consultation d'une candidature, avec pièces et questions quand l'espace
+ *  les charge (consultations visibles de l'entreprise), sinon sans. */
+function consultationDe(cand: CandidaturePresta, visibles: ConsultationPresta[] | undefined): ConsultationPresta | null {
+  const complete = (visibles ?? []).find((c) => c.id === cand.consultation_id);
+  if (complete) return complete;
+  if (!cand.consultation) return null;
+  return { ...cand.consultation, maCandidature: null, docs: [], questions: [] };
+}
+
 export function MesCandidatures({ presta }: { presta: Tables<"prestataires"> }) {
   const { profile } = useAuth();
   const { data: candidatures } = useMesCandidatures(presta.id);
   const engager = useConfirmerEngagement();
   const retirer = useRetirerCandidature();
   const marquerVues = useMarquerDecisionsVues(presta.id);
+  const { data: consultations } = useConsultationsPresta(presta);
+  const navigate = useNavigate();
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [modifierId, setModifierId] = useState<string | null>(null);
   const list = candidatures ?? [];
   const actives = list.filter((c) => !c.retrait_at);
   const corbeille = list.filter((c) => c.retrait_at);
@@ -81,6 +222,8 @@ export function MesCandidatures({ presta }: { presta: Tables<"prestataires"> }) 
               const nom = cs?.copro?.name ?? cs?.copro_externe_nom ?? "-";
               const retirable = cand.statut === "recue" && cs?.statut === "en_ligne";
               const retenueSansEngagement = cand.statut === "retenue" && !cand.engagement_at;
+              // fil de l'opération (candidature en cours ou retenue), sinon fil général
+              const filOperation = cs?.copro && cand.statut !== "non_retenue" ? cs.copro.id : null;
               return (
                 <div key={cand.id} style={{ borderBottom: "1px solid var(--border)" }}>
                   <div className="task-row" style={{ alignItems: "center", flexWrap: "wrap", borderBottom: "none" }}>
@@ -100,25 +243,64 @@ export function MesCandidatures({ presta }: { presta: Tables<"prestataires"> }) 
                     )}
                     <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
                       déposée le {fmtDate(cand.received_at)}
+                      {cand.modifiee_le ? `, modifiée le ${fmtDate(cand.modifiee_le)}` : ""}
                     </span>
                     {cs?.statut === "cloturee" && cand.statut === "recue" && (
                       <Badge kind="neutral">Consultation clôturée</Badge>
                     )}
                     <StatutBadge statut={cand.statut} />
-                    {retirable && retraitId !== cand.id && (
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, margin: "-4px 14px 12px" }}>
+                    <DetailOffre cand={cand} />
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      {cs && (
+                        <button className="se-btn se-btn-secondary btn-sm" onClick={() => setDetailId(cand.id)}>
+                          <Icon name="eye" size={13} />
+                          Voir la consultation
+                        </button>
+                      )}
+                      {cand.fichier_path && (
+                        <button
+                          className="se-btn se-btn-ghost btn-sm"
+                          title={cand.fichier_name ?? "Offre jointe"}
+                          onClick={() => void ouvrirOffre(cand.fichier_path!)}
+                        >
+                          <Icon name="fileText" size={13} />
+                          Voir le devis envoyé
+                        </button>
+                      )}
+                      {retirable && (
+                        <button
+                          className="se-btn se-btn-ghost btn-sm"
+                          title="Corriger le montant, la décomposition, la note ou la pièce jointe"
+                          onClick={() => setModifierId(cand.id)}
+                        >
+                          <Icon name="edit" size={13} />
+                          Modifier mon offre
+                        </button>
+                      )}
                       <button
                         className="se-btn se-btn-ghost btn-sm"
-                        title="Retirer votre candidature de cette consultation"
-                        disabled={retirer.isPending}
-                        onClick={() => {
-                          setRetraitId(cand.id);
-                          setMotif("");
-                        }}
+                        onClick={() => navigate(`/prestataire/messages?fil=${filOperation ?? "general"}`)}
                       >
-                        <Icon name="trash" size={13} />
-                        Retirer ma candidature
+                        <Icon name="message" size={13} />
+                        Écrire à l'équipe
                       </button>
-                    )}
+                      {retirable && retraitId !== cand.id && (
+                        <button
+                          className="se-btn se-btn-ghost btn-sm"
+                          title="Retirer votre candidature de cette consultation"
+                          disabled={retirer.isPending}
+                          onClick={() => {
+                            setRetraitId(cand.id);
+                            setMotif("");
+                          }}
+                        >
+                          <Icon name="trash" size={13} />
+                          Retirer ma candidature
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {retraitId === cand.id && (
                     <div
@@ -206,6 +388,33 @@ export function MesCandidatures({ presta }: { presta: Tables<"prestataires"> }) 
           </div>
         </div>
       )}
+
+      {(() => {
+        const cand = actives.find((c) => c.id === detailId);
+        const cs = cand ? consultationDe(cand, consultations) : null;
+        if (!cand || !cs) return null;
+        const filOperation = cs.copro && cand.statut !== "non_retenue" ? cs.copro.id : null;
+        return (
+          <DetailCandidature
+            cand={cand}
+            cs={cs}
+            presta={presta}
+            modifiable={cand.statut === "recue" && cs.statut === "en_ligne"}
+            onModifier={() => {
+              setDetailId(null);
+              setModifierId(cand.id);
+            }}
+            onEcrire={() => navigate(`/prestataire/messages?fil=${filOperation ?? "general"}`)}
+            onClose={() => setDetailId(null)}
+          />
+        );
+      })()}
+      {(() => {
+        const cand = actives.find((c) => c.id === modifierId);
+        const cs = cand ? consultationDe(cand, consultations) : null;
+        if (!cand || !cs) return null;
+        return <PostulerModal cs={cs} presta={presta} candidature={cand} onClose={() => setModifierId(null)} />;
+      })()}
 
       {corbeille.length > 0 && (
         <div className="panel" style={{ marginTop: 16 }}>

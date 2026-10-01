@@ -5,6 +5,8 @@
 // Destinataires : l'entreprise visée si le message est privé, sinon toutes les
 // entreprises retenues sur une consultation de la copro ; chaque entreprise à
 // son adresse principale et à ses adresses en copie (0106).
+// Fil général « Équipe Strat Eco » (0124) : `fil_general` + `prestataire_id`,
+// sans copro_id - message de l'équipe hors de toute opération.
 // Envoi réel via Resend si RESEND_API_KEY est configuré, sinon 'simule'.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -43,14 +45,14 @@ Deno.serve(async (req: Request) => {
     return json(403, { error: "Réservé à l'équipe AMO" });
   }
 
-  const { copro_id, prestataire_id } = await req.json().catch(() => ({}));
-  if (!copro_id) return json(400, { error: "copro_id manquant" });
+  const { copro_id, prestataire_id, fil_general } = await req.json().catch(() => ({}));
+  if (fil_general ? !prestataire_id : !copro_id) {
+    return json(400, { error: fil_general ? "prestataire_id manquant" : "copro_id manquant" });
+  }
 
-  const { data: copro } = await admin
-    .from("coproprietes")
-    .select("name")
-    .eq("id", copro_id)
-    .maybeSingle();
+  const copro: { name: string } | null = fil_general
+    ? null
+    : (await admin.from("coproprietes").select("name").eq("id", copro_id).maybeSingle()).data;
 
   // --- Destinataires : entreprise visée, ou toutes les retenues du projet ---
   let cibles: {
@@ -99,7 +101,8 @@ Deno.serve(async (req: Request) => {
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const from = Deno.env.get("RESEND_FROM") ?? "Strat Eco <onboarding@resend.dev>";
   const appUrl = Deno.env.get("APP_URL") ?? "https://stratecopro.vercel.app";
-  const lien = `${appUrl}/prestataire/messages`;
+  // le lien ouvre directement le bon fil
+  const lien = `${appUrl}/prestataire/messages?fil=${fil_general ? "general" : copro_id}`;
 
   let envoyes = 0, simules = 0, erreurs = 0;
 
@@ -111,8 +114,10 @@ Deno.serve(async (req: Request) => {
     const html = `
       <div style="font-family:Arial,Helvetica,sans-serif;font-size:14.5px;line-height:1.55;color:#1a1a1a;max-width:620px">
         <p>Bonjour${p.contact_nom ? " " + p.contact_nom : ""},</p>
-        <p>L'équipe <strong>Strat Eco</strong> vous a adressé un message concernant l'opération
-        <strong>${copro?.name ?? ""}</strong>.</p>
+        <p>${fil_general
+          ? "L'équipe <strong>Strat Eco</strong> vous a adressé un message."
+          : `L'équipe <strong>Strat Eco</strong> vous a adressé un message concernant l'opération
+        <strong>${copro?.name ?? ""}</strong>.`}</p>
         <p>Pour des raisons de confidentialité, le contenu du message n'est pas transmis par e-mail :
         il vous attend dans votre espace prestataire.</p>
         <p style="margin:22px 0">
@@ -130,7 +135,7 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({
           from,
           to: [p.email, ...(p.emails_secondaires ?? [])],
-          subject: `Nouveau message Strat Eco - ${copro?.name ?? "votre projet"}`,
+          subject: fil_general ? "Nouveau message Strat Eco" : `Nouveau message Strat Eco - ${copro?.name ?? "votre projet"}`,
           html,
         }),
       });

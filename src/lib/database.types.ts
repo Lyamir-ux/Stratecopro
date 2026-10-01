@@ -350,6 +350,7 @@ export type Database = {
           fichier_path: string | null
           id: string
           message: string | null
+          modifiee_le: string | null
           montant: number | null
           org_name: string
           prestataire_id: string | null
@@ -382,6 +383,7 @@ export type Database = {
           fichier_path?: string | null
           id?: string
           message?: string | null
+          modifiee_le?: string | null
           montant?: number | null
           org_name: string
           prestataire_id?: string | null
@@ -414,6 +416,7 @@ export type Database = {
           fichier_path?: string | null
           id?: string
           message?: string | null
+          modifiee_le?: string | null
           montant?: number | null
           org_name?: string
           prestataire_id?: string | null
@@ -3917,6 +3920,70 @@ export type Database = {
           },
         ]
       }
+      prestataire_messages: {
+        Row: {
+          auteur_nom: string
+          auteur_role: string
+          body: string
+          created_at: string
+          id: string
+          prestataire_id: string
+          user_id: string | null
+        }
+        Insert: {
+          auteur_nom?: string
+          auteur_role: string
+          body: string
+          created_at?: string
+          id?: string
+          prestataire_id: string
+          user_id?: string | null
+        }
+        Update: {
+          auteur_nom?: string
+          auteur_role?: string
+          body?: string
+          created_at?: string
+          id?: string
+          prestataire_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prestataire_messages_prestataire_id_fkey"
+            columns: ["prestataire_id"]
+            isOneToOne: false
+            referencedRelation: "prestataires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prestataire_messages_lectures: {
+        Row: {
+          last_read_at: string
+          prestataire_id: string
+          user_id: string
+        }
+        Insert: {
+          last_read_at?: string
+          prestataire_id: string
+          user_id: string
+        }
+        Update: {
+          last_read_at?: string
+          prestataire_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prestataire_messages_lectures_prestataire_id_fkey"
+            columns: ["prestataire_id"]
+            isOneToOne: false
+            referencedRelation: "prestataires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prestataires: {
         Row: {
           actif: boolean
@@ -4755,6 +4822,7 @@ export type Database = {
         }[]
       }
       peut_postuler: { Args: { p_consultation_id: string }; Returns: boolean }
+      presta_peut_ecrire_sur: { Args: { p_copro_id: string }; Returns: boolean }
       peut_voir_consultation: {
         Args: { p_consultation_id: string }
         Returns: boolean

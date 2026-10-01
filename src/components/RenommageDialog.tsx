@@ -29,6 +29,11 @@ interface RenommageDialogProps {
   prefixe: string | null;
   /** Type présélectionné quand le point de dépôt le connaît déjà (pièce attendue). */
   typeInitial?: string;
+  /** Émetteur et objet pré-remplis quand le point de dépôt les connaît : dans
+   *  l'espace prestataire, la société et la prestation consultée (Best Ryan,
+   *  01/10/2026 : « tout de suite proposer, dans les émetteurs, le nom de la société »). */
+  emetteurInitial?: string;
+  objetInitial?: string;
   /** Si fourni, un sélecteur de dossier de classement est affiché (onglet Fichiers). */
   dossiers?: readonly string[];
   dossierInitial?: string;
@@ -43,13 +48,22 @@ export function RenommageDialog({
   files,
   prefixe,
   typeInitial,
+  emetteurInitial,
+  objetInitial,
   dossiers,
   dossierInitial,
   onConfirm,
   onClose,
 }: RenommageDialogProps) {
   const [index, setIndex] = useState(0);
-  const [champs, setChamps] = useState<Champs>({ type: typeInitial ?? "autre", objet: "", emetteur: "", date: "", etat: "" });
+  const champsInitiaux = (): Champs => ({
+    type: typeInitial ?? "autre",
+    objet: objetInitial ?? "",
+    emetteur: emetteurInitial ?? "",
+    date: "",
+    etat: "",
+  });
+  const [champs, setChamps] = useState<Champs>(champsInitiaux);
   const [dossier, setDossier] = useState<string>(dossierInitial ?? dossiers?.[0] ?? "");
   const [dossierTouche, setDossierTouche] = useState(false);
   const [envoi, setEnvoi] = useState(false);
@@ -59,7 +73,7 @@ export function RenommageDialog({
 
   // Remise à zéro des champs à chaque nouveau fichier de la file
   useEffect(() => {
-    setChamps({ type: typeInitial ?? "autre", objet: "", emetteur: "", date: "", etat: "" });
+    setChamps(champsInitiaux());
     setDossier(dossierInitial ?? dossiers?.[0] ?? "");
     setDossierTouche(false);
     setErreur(null);
