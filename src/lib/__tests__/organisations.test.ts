@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { normaliserNomOrganisation, trouverOrganisationParNom } from "../organisations";
+import {
+  nomOrganisationDisponible,
+  nomSyndicBenevole,
+  normaliserNomOrganisation,
+  trouverOrganisationParNom,
+} from "../organisations";
 
 const ORGS = [
   { id: "immo4", nom: "Citya Immo 4" },
@@ -32,5 +37,40 @@ describe("trouverOrganisationParNom", () => {
     expect(trouverOrganisationParNom(ORGS, "")).toBeNull();
     expect(trouverOrganisationParNom(ORGS, null)).toBeNull();
     expect(trouverOrganisationParNom(ORGS, "Foncia Colmar")).toBeNull();
+  });
+});
+
+describe("nomSyndicBenevole", () => {
+  it("reprend la convention des enseignes en base (nom du dossier en capitales)", () => {
+    expect(nomSyndicBenevole("HERMITE")).toBe("Syndic Bénévole HERMITE");
+    expect(nomSyndicBenevole("19 rue Saint Paul")).toBe("Syndic Bénévole 19 RUE SAINT PAUL");
+  });
+
+  it("retire le préfixe « Copropriété des / du / de la »", () => {
+    expect(nomSyndicBenevole("COPROPRIETE DES TROIS FIGUIERS")).toBe("Syndic Bénévole TROIS FIGUIERS");
+    expect(nomSyndicBenevole("Copropriété du Parc")).toBe("Syndic Bénévole PARC");
+    expect(nomSyndicBenevole("Copropriété de l'Ill")).toBe("Syndic Bénévole ILL");
+    expect(nomSyndicBenevole("Copropriété Les Lilas")).toBe("Syndic Bénévole LES LILAS");
+  });
+
+  it("ne coupe pas un nom qui contient le mot ailleurs", () => {
+    expect(nomSyndicBenevole("Les Copropriétés du Rhin")).toBe("Syndic Bénévole LES COPROPRIÉTÉS DU RHIN");
+  });
+});
+
+describe("nomOrganisationDisponible", () => {
+  const BENEVOLES = [
+    { id: "a", nom: "Syndic Bénévole HERMITE" },
+    { id: "b", nom: "Syndic Benevole LES LILAS" },
+    { id: "c", nom: "Syndic Bénévole LES LILAS (2)" },
+  ];
+
+  it("garde le nom s'il est libre", () => {
+    expect(nomOrganisationDisponible("Syndic Bénévole PARC", BENEVOLES)).toBe("Syndic Bénévole PARC");
+  });
+
+  it("numérote un homonyme (casse et accents ignorés)", () => {
+    expect(nomOrganisationDisponible("Syndic Bénévole hermite", BENEVOLES)).toBe("Syndic Bénévole hermite (2)");
+    expect(nomOrganisationDisponible("Syndic Bénévole LES LILAS", BENEVOLES)).toBe("Syndic Bénévole LES LILAS (3)");
   });
 });

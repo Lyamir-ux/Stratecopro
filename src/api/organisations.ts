@@ -5,7 +5,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { creerCompte, type CollaborateurCree } from "@/api/profiles";
-import { normaliserNomOrganisation, trouverOrganisationParNom } from "@/lib/organisations";
+import {
+  nomOrganisationDisponible,
+  nomSyndicBenevole,
+  normaliserNomOrganisation,
+  trouverOrganisationParNom,
+} from "@/lib/organisations";
 import type { Enums, Tables } from "@/lib/database.types";
 
 export type OrgRole = Enums<"org_role">;
@@ -51,6 +56,58 @@ export async function organisationIdPourSyndic(syndicName: string | null | undef
   const { data, error } = await supabase.from("organisations").select("id, nom");
   if (error) throw error;
   return trouverOrganisationParNom(data ?? [], syndicName)?.id ?? null;
+}
+
+/**
+ * Organisation choisie à la création d'un dossier (feedback d'Amir du
+ * 01/10/2026) : une enseigne existante, une nouvelle enseigne nommée par l'AMO,
+ * ou l'organisation propre au syndic bénévole du dossier. Sans choix, le nom
+ * du syndic fait foi (organisationIdPourSyndic).
+ */
+export type ChoixOrganisation =
+  | { mode: "existante"; id: string }
+  | { mode: "nouvelle"; nom: string }
+  | { mode: "benevole" };
+
+/** Crée l'enseigne `nom` ; le slug (clé technique unique) prend un suffixe -2, -3… s'il est déjà pris. */
+async function insererOrganisation(nom: string, slugsPris: readonly string[]) {
+  const base = slugify(nom) || "organisation";
+  const pris = new Set(slugsPris);
+  let slug = base;
+  for (let i = 2; pris.has(slug); i++) slug = `${base}-${i}`;
+  const { data, error } = await supabase.from("organisations").insert({ nom: nom.trim(), slug }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * L'enseigne à poser sur un nouveau dossier, créée au besoin. Une « nouvelle »
+ * enseigne dont le nom existe déjà (casse et accents ignorés) n'est pas
+ * dupliquée : le dossier rejoint l'existante. Un syndic bénévole a toujours sa
+ * propre organisation, « Syndic Bénévole <NOM DU DOSSIER> ».
+ * `creee` permet à l'appelant de la supprimer si la suite de la création échoue.
+ */
+export async function resoudreOrganisation(
+  choix: ChoixOrganisation,
+  nomCopro: string
+): Promise<{ id: string; nom: string; creee: boolean }> {
+  const { data, error } = await supabase.from("organisations").select("id, nom, slug");
+  if (error) throw error;
+  const existantes = data ?? [];
+  const slugs = existantes.map((o) => o.slug);
+  if (choix.mode === "existante") {
+    const org = existantes.find((o) => o.id === choix.id);
+    if (!org) throw new Error("L'organisation choisie n'existe plus. Rechargez la page et choisissez-en une autre.");
+    return { id: org.id, nom: org.nom, creee: false };
+  }
+  if (choix.mode === "nouvelle") {
+    const deja = trouverOrganisationParNom(existantes, choix.nom);
+    if (deja) return { id: deja.id, nom: deja.nom, creee: false };
+    const org = await insererOrganisation(choix.nom, slugs);
+    return { id: org.id, nom: org.nom, creee: true };
+  }
+  const org = await insererOrganisation(nomOrganisationDisponible(nomSyndicBenevole(nomCopro), existantes), slugs);
+  return { id: org.id, nom: org.nom, creee: true };
 }
 
 /** Toutes les enseignes, avec leur nombre de dossiers et de membres. */
@@ -166,13 +223,9 @@ export function useCreerOrganisation() {
   const refresh = useRefreshOrganisations();
   return useMutation({
     mutationFn: async (nom: string) => {
-      const { data, error } = await supabase
-        .from("organisations")
-        .insert({ nom: nom.trim(), slug: slugify(nom) })
-        .select()
-        .single();
+      const { data, error } = await supabase.from("organisations").select("slug");
       if (error) throw error;
-      return data;
+      return insererOrganisation(nom, (data ?? []).map((o) => o.slug));
     },
     onSuccess: refresh,
   });

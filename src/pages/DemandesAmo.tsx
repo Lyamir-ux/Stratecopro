@@ -66,6 +66,8 @@ function Carte({ d }: { d: DemandeAmo }) {
         code_postal: parts.code_postal,
         adresse: parts.adresse,
         syndic_name: d.syndic_name ?? "",
+        // la demande venue d'un compte syndic porte son enseigne
+        organisation: d.organisation_id ? { mode: "existante", id: d.organisation_id } : null,
         gestionnaire_nom: d.demandeur_nom,
         gestionnaire_email: d.demandeur_email ?? "",
         nb_logements: d.nb_lots,

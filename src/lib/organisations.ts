@@ -33,3 +33,33 @@ export function trouverOrganisationParNom<T extends OrganisationNommee>(
   if (!cible) return null;
   return organisations.find((o) => normaliserNomOrganisation(o.nom) === cible) ?? null;
 }
+
+/**
+ * Nom de l'organisation créée pour le syndic bénévole d'un dossier, sur le
+ * modèle des enseignes déjà en base (« Syndic Bénévole HERMITE », « Syndic
+ * Bénévole TROIS FIGUIERS ») : une organisation par copropriété, le nom du
+ * dossier en capitales, sans le préfixe « Copropriété des / du / de la ».
+ * Feedback d'Amir du 01/10/2026.
+ */
+export function nomSyndicBenevole(nomCopro: string): string {
+  const nom = nomCopro
+    .trim()
+    .replace(/^copropri[ée]t[ée]s?\s+(?:(?:des|du|de\s+la|de\s+l['’]|de|d['’])\s*)?/i, "")
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+  return nom ? `Syndic Bénévole ${nom}` : "Syndic Bénévole";
+}
+
+/**
+ * `base` si aucune enseigne ne porte déjà ce nom (casse et accents ignorés),
+ * sinon `base (2)`, `base (3)`… - deux syndics bénévoles homonymes restent
+ * deux organisations distinctes.
+ */
+export function nomOrganisationDisponible(base: string, organisations: readonly OrganisationNommee[]): string {
+  const pris = new Set(organisations.map((o) => normaliserNomOrganisation(o.nom)));
+  if (!pris.has(normaliserNomOrganisation(base))) return base;
+  for (let i = 2; ; i++) {
+    const nom = `${base} (${i})`;
+    if (!pris.has(normaliserNomOrganisation(nom))) return nom;
+  }
+}

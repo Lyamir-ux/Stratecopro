@@ -23,7 +23,14 @@ import {
   type CoproWithStats,
 } from "@/api/copros";
 import { useTeamProfiles } from "@/api/profiles";
-import { useOrganisations } from "@/api/organisations";
+import { useOrganisations, type ChoixOrganisation } from "@/api/organisations";
+import {
+  nomOrganisationDisponible,
+  nomSyndicBenevole,
+  normaliserNomOrganisation,
+  trouverOrganisationParNom,
+} from "@/lib/organisations";
+import { messageErreur } from "@/lib/erreurs";
 import { fmtDate } from "@/lib/format";
 import { uploadFichierDirect } from "@/api/fichiers";
 
@@ -218,6 +225,10 @@ function KpiStrip({ copros }: { copros: CoproWithStats[] }) {
 
 const DPE_CLASSES: DpeClass[] = ["A", "B", "C", "D", "E", "F", "G"];
 
+/** Choix du menu Organisation qui créent une enseigne (hors des identifiants possibles). */
+const ORG_BENEVOLE = "__benevole__";
+const ORG_NOUVELLE = "__nouvelle__";
+
 function NewCoproDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateCopro();
   const { data: team } = useTeamProfiles();
@@ -240,6 +251,31 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
     fragile: false,
   });
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+  // Organisation (feedback d'Amir du 01/10/2026) : "" = selon le nom du syndic,
+  // ORG_BENEVOLE, ORG_NOUVELLE ou l'identifiant d'une enseigne existante.
+  const [orgChoix, setOrgChoix] = useState("");
+  const [orgNouvelle, setOrgNouvelle] = useState("");
+  const orgs = organisations ?? [];
+  const enseigneChoisie = orgs.find((o) => o.id === orgChoix) ?? null;
+  const nomBenevole = nomOrganisationDisponible(nomSyndicBenevole(form.name), orgs);
+  const nouvelleExistante = orgChoix === ORG_NOUVELLE ? trouverOrganisationParNom(orgs, orgNouvelle) : null;
+  const syndicReconnu = orgChoix === "" ? trouverOrganisationParNom(orgs, form.syndic_name) : null;
+  // Nom repris pour le syndic s'il est laissé vide
+  const nomOrganisation =
+    orgChoix === ORG_BENEVOLE
+      ? nomBenevole
+      : orgChoix === ORG_NOUVELLE
+        ? (nouvelleExistante?.nom ?? orgNouvelle.trim())
+        : (enseigneChoisie?.nom ?? "");
+  // Le nom du syndic suit l'enseigne choisie s'il était vide ou égal à la précédente.
+  const choisirOrganisation = (valeur: string) => {
+    const nouvelle = orgs.find((o) => o.id === valeur) ?? null;
+    const nomActuel = normaliserNomOrganisation(form.syndic_name);
+    if (nouvelle && (!nomActuel || nomActuel === normaliserNomOrganisation(enseigneChoisie?.nom ?? ""))) {
+      set({ syndic_name: nouvelle.nom });
+    }
+    setOrgChoix(valeur);
+  };
   // Documents de passation joints à la création - déposés dans le dossier « Passation »
   const [passation, setPassation] = useState<File[]>([]);
   const passationRef = useRef<HTMLInputElement>(null);
@@ -253,8 +289,18 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    const organisation: ChoixOrganisation | null =
+      orgChoix === ORG_BENEVOLE
+        ? { mode: "benevole" }
+        : orgChoix === ORG_NOUVELLE
+          ? { mode: "nouvelle", nom: orgNouvelle.trim() }
+          : orgChoix
+            ? { mode: "existante", id: orgChoix }
+            : null;
     const copro = await create.mutateAsync({
       ...form,
+      syndic_name: form.syndic_name.trim(),
+      organisation,
       nb_batiments: nbBats,
       nb_logements: form.nb_logements ? Number(form.nb_logements) : null,
       energy_before: form.energy_before || null,
@@ -358,12 +404,52 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
           </div>
         )}
         {field(
+          "Organisation",
+          <>
+            {/* Enseigne lue par l'espace syndic : existante, nouvelle, ou propre au syndic bénévole */}
+            <select className="login-input" value={orgChoix} onChange={(e) => choisirOrganisation(e.target.value)}>
+              <option value="">Aucune organisation</option>
+              <option value={ORG_BENEVOLE}>Syndic bénévole (nouvelle organisation)</option>
+              <option value={ORG_NOUVELLE}>Nouveau (saisir le nom)</option>
+              {orgs.length > 0 && (
+                <optgroup label="Organisations existantes">
+                  {orgs.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.nom}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+            {orgChoix === ORG_NOUVELLE && (
+              <input
+                className="login-input"
+                required
+                autoFocus
+                placeholder="Nom de la nouvelle organisation"
+                value={orgNouvelle}
+                onChange={(e) => setOrgNouvelle(e.target.value)}
+              />
+            )}
+            <OrganisationCreationApercu
+              choix={orgChoix}
+              nomCopro={form.name.trim()}
+              nomBenevole={nomBenevole}
+              nouvelle={orgNouvelle.trim()}
+              nouvelleExistante={nouvelleExistante?.nom ?? null}
+              syndicSaisi={form.syndic_name.trim()}
+              syndicReconnu={syndicReconnu?.nom ?? null}
+            />
+          </>
+        )}
+        {field(
           "Syndic (société en charge de la gestion)",
           <>
             {/* Suggestions = enseignes de Paramètres → Organisations : un nom reconnu rattache le dossier */}
             <input
               className="login-input"
               list="syndics-suggestions-creation"
+              placeholder={nomOrganisation || undefined}
               value={form.syndic_name}
               onChange={(e) => set({ syndic_name: e.target.value })}
             />
@@ -530,7 +616,7 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
         </label>
         {create.isError && (
           <p style={{ color: "var(--color-error-700)", fontSize: 13.5, margin: 0 }}>
-            Impossible de créer le dossier. Réessayez.
+            {erreurCreation(create.error)}
           </p>
         )}
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
@@ -545,6 +631,46 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
       </form>
     </Modal>
   );
+}
+
+/** Message d'échec de la création ; le nom du dossier (slug) est unique, corbeille comprise. */
+function erreurCreation(e: unknown): string {
+  const message = messageErreur(e, "Impossible de créer le dossier. Réessayez.");
+  return (e as { code?: string } | null)?.code === "23505" && message.includes("coproprietes_slug")
+    ? "Un dossier porte déjà ce nom (corbeille comprise) : précisez-le, par exemple avec la ville ou l'adresse."
+    : message;
+}
+
+/** Ce que fera la création côté organisation, sous le menu. */
+function OrganisationCreationApercu({
+  choix,
+  nomCopro,
+  nomBenevole,
+  nouvelle,
+  nouvelleExistante,
+  syndicSaisi,
+  syndicReconnu,
+}: {
+  choix: string;
+  nomCopro: string;
+  nomBenevole: string;
+  nouvelle: string;
+  nouvelleExistante: string | null;
+  syndicSaisi: string;
+  syndicReconnu: string | null;
+}) {
+  let message: string | null = null;
+  if (choix === ORG_BENEVOLE) {
+    message = `Une organisation « ${nomCopro ? nomBenevole : "Syndic Bénévole <nom de la copropriété>"} » sera créée pour ce dossier. Indiquez le copropriétaire bénévole comme gestionnaire ci-dessous.`;
+  } else if (choix === ORG_NOUVELLE) {
+    if (nouvelleExistante) message = `L'organisation « ${nouvelleExistante} » existe déjà : le dossier y sera rattaché.`;
+    else if (nouvelle) message = `L'organisation « ${nouvelle} » sera créée avec le dossier.`;
+  } else if (choix === "") {
+    if (syndicReconnu) message = `Nom du syndic reconnu : le dossier sera rattaché à l'organisation ${syndicReconnu}.`;
+    else if (syndicSaisi) message = `Aucune organisation ne s'appelle « ${syndicSaisi} » : le dossier sera créé sans organisation.`;
+  }
+  if (!message) return null;
+  return <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>{message}</span>;
 }
 
 /** Corbeille des projets : restaurer un dossier ou le supprimer définitivement. */

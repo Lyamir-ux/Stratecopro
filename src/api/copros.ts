@@ -4,7 +4,7 @@ import type { Cadrage } from "@/lib/photoCadrage";
 import type { Tables, TablesInsert } from "@/lib/database.types";
 import { buildTaskTemplate } from "@/lib/taskTemplate";
 import type { PhaseId } from "@/lib/referentiels";
-import { organisationIdPourSyndic } from "@/api/organisations";
+import { organisationIdPourSyndic, resoudreOrganisation, type ChoixOrganisation } from "@/api/organisations";
 
 export type CoproRow = Tables<"coproprietes">;
 export type CoproStats = Tables<"copro_stats">;
@@ -117,6 +117,8 @@ export interface NewCoproInput {
   /** Adresse de chaque bâtiment (utilisé quand nb_batiments > 1). */
   batiment_adresses: string[];
   syndic_name: string;
+  /** Organisation choisie dans la liste (prime sur le nom du syndic) ; null = selon le nom du syndic. */
+  organisation: ChoixOrganisation | null;
   gestionnaire_nom: string;
   gestionnaire_email: string;
   /** Nombre de logements déclaré au portefeuille, avant l'import des lots. */
@@ -132,6 +134,10 @@ export function useCreateCopro() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: NewCoproInput) => {
+      // Organisation choisie dans la liste, créée au besoin (nouvelle enseigne,
+      // syndic bénévole) ; sans choix, un syndic dont le nom est celui d'une
+      // enseigne rattache d'emblée le dossier à cette enseigne.
+      const organisation = input.organisation ? await resoudreOrganisation(input.organisation, input.name) : null;
       const insert: TablesInsert<"coproprietes"> = {
         name: input.name,
         slug: input.name
@@ -143,10 +149,9 @@ export function useCreateCopro() {
         city: input.city || null,
         code_postal: input.code_postal || null,
         adresse: input.adresse || null,
-        syndic_name: input.syndic_name || null,
-        // Un syndic dont le nom est celui d'une enseigne rattache d'emblée le dossier
-        // à cette enseigne (sinon rattachement manuel dans Paramètres → Organisations).
-        organisation_id: await organisationIdPourSyndic(input.syndic_name),
+        // nom du syndic laissé vide : celui de l'organisation choisie
+        syndic_name: input.syndic_name || organisation?.nom || null,
+        organisation_id: organisation ? organisation.id : await organisationIdPourSyndic(input.syndic_name),
         gestionnaire_nom: input.gestionnaire_nom || null,
         gestionnaire_email: input.gestionnaire_email || null,
         nb_logements: input.nb_logements,
@@ -156,7 +161,11 @@ export function useCreateCopro() {
         fragile: input.fragile,
       };
       const { data: copro, error } = await supabase.from("coproprietes").insert(insert).select().single();
-      if (error) throw error;
+      if (error) {
+        // Pas d'organisation orpheline si le dossier n'a pas pu être créé.
+        if (organisation?.creee) await supabase.from("organisations").delete().eq("id", organisation.id);
+        throw error;
+      }
 
       // Bâtiments déclarés à la création - ceux qui ont une adresse font foi et ne
       // sont jamais supprimés par le ménage de l'import des lots ; un bâtiment sans
@@ -188,7 +197,11 @@ export function useCreateCopro() {
       }
       return copro;
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["copros"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["copros"] });
+      void qc.invalidateQueries({ queryKey: ["organisations"] });
+      void qc.invalidateQueries({ queryKey: ["copros-rattachables"] });
+    },
   });
 }
 
