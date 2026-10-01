@@ -8,20 +8,26 @@ import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import { Badge, DpePair, PhaseBadge, Progress } from "@/components/ui";
 import { PHASES, type DpeClass, type PhaseId } from "@/lib/referentiels";
-import { fmtEuro } from "@/lib/format";
+import { fmtEuro, fmtEuroFull } from "@/lib/format";
+import { lireMontant } from "@/lib/importCopros";
+import { PARTS_P1, PARTS_P2, repartitionP1, repartitionP2 } from "@/lib/facturation";
 import { telechargerCsv } from "@/lib/csv";
 import { useUi } from "@/stores/ui";
 import {
   avancementAmo,
   nbLogements,
+  erreurCreation,
   notifierPassation,
   useCopros,
   useCoprosCorbeille,
   useCreateCopro,
   useRestaurerCopro,
   useSupprimerDefinitivement,
+  type ChoixMaitreOeuvre,
   type CoproWithStats,
 } from "@/api/copros";
+import { usePrestataires } from "@/api/prestataires";
+import { ImportCoprosDialog } from "./ImportCoprosDialog";
 import { useTeamProfiles } from "@/api/profiles";
 import { useOrganisations, type ChoixOrganisation } from "@/api/organisations";
 import {
@@ -30,7 +36,6 @@ import {
   normaliserNomOrganisation,
   trouverOrganisationParNom,
 } from "@/lib/organisations";
-import { messageErreur } from "@/lib/erreurs";
 import { fmtDate } from "@/lib/format";
 import { uploadFichierDirect } from "@/api/fichiers";
 
@@ -228,6 +233,19 @@ const DPE_CLASSES: DpeClass[] = ["A", "B", "C", "D", "E", "F", "G"];
 /** Choix du menu Organisation qui créent une enseigne (hors des identifiants possibles). */
 const ORG_BENEVOLE = "__benevole__";
 const ORG_NOUVELLE = "__nouvelle__";
+/** Choix « Nouveau maître d'œuvre » du menu (hors des raisons sociales possibles). */
+const MOE_NOUVEAU = "__nouveau__";
+
+/** « P1a 4 500 € · P1b 2 250 € · P1c 2 250 € » sous le montant saisi, ou la règle de répartition. */
+function apercuRepartition(saisie: string, phase: "p1" | "p2"): string {
+  const parts: Record<string, number> = phase === "p1" ? PARTS_P1 : PARTS_P2;
+  const m = lireMontant(saisie);
+  if (m == null || Number.isNaN(m) || m <= 0) {
+    return Object.entries(parts).map(([code, p]) => `${Math.round(p * 100)} % ${code}`).join(", ");
+  }
+  const rep: Record<string, number> = phase === "p1" ? repartitionP1(m) : repartitionP2(m);
+  return Object.entries(rep).map(([code, v]) => `${code} ${fmtEuroFull(v)}`).join(" · ");
+}
 
 function NewCoproDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateCopro();
@@ -249,8 +267,27 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
     phase: "diagnostic" as PhaseId,
     energy_before: "" as string,
     fragile: false,
+    date_ag: "",
+    honoraires_p1: "",
+    honoraires_p2: "",
   });
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+  // Maître d'œuvre (idée d'Amir du 01/10/2026) : une fiche « Maître d'œuvre » de
+  // la Base prestataires, ou un nouveau nom dont la fiche est créée avec le dossier.
+  const { data: prestataires } = usePrestataires();
+  const [moeChoix, setMoeChoix] = useState("");
+  const [moeNouveau, setMoeNouveau] = useState("");
+  const [erreurSaisie, setErreurSaisie] = useState<string | null>(null);
+  const fichesMoe = (prestataires ?? [])
+    .filter((p) => p.types.includes("moe"))
+    .map((p) => p.raison_sociale)
+    .sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
+  const moeDejaFiche =
+    moeChoix === MOE_NOUVEAU && moeNouveau.trim()
+      ? ((prestataires ?? []).find(
+          (p) => normaliserNomOrganisation(p.raison_sociale) === normaliserNomOrganisation(moeNouveau)
+        )?.raison_sociale ?? null)
+      : null;
   // Organisation (feedback d'Amir du 01/10/2026) : "" = selon le nom du syndic,
   // ORG_BENEVOLE, ORG_NOUVELLE ou l'identifiant d'une enseigne existante.
   const [orgChoix, setOrgChoix] = useState("");
@@ -289,6 +326,19 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    setErreurSaisie(null);
+    const p1 = lireMontant(form.honoraires_p1);
+    const p2 = lireMontant(form.honoraires_p2);
+    if ((p1 != null && Number.isNaN(p1)) || (p2 != null && Number.isNaN(p2))) {
+      setErreurSaisie("Honoraires : saisissez un montant en euros HT, par exemple 9 000 ou 12 345,67.");
+      return;
+    }
+    const maitreOeuvre: ChoixMaitreOeuvre | null =
+      moeChoix === MOE_NOUVEAU
+        ? { mode: "nouveau", nom: moeNouveau.trim() }
+        : moeChoix
+          ? { mode: "existant", nom: moeChoix }
+          : null;
     const organisation: ChoixOrganisation | null =
       orgChoix === ORG_BENEVOLE
         ? { mode: "benevole" }
@@ -304,6 +354,10 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
       nb_batiments: nbBats,
       nb_logements: form.nb_logements ? Number(form.nb_logements) : null,
       energy_before: form.energy_before || null,
+      maitre_oeuvre: maitreOeuvre,
+      date_ag: form.date_ag || null,
+      honoraires_p1_ht: p1,
+      honoraires_p2_ht: p2,
     });
     // Le chef de projet désigné à la création est alerté par e-mail
     // (edge notifier-passation) - sans bloquer la création du dossier.
@@ -323,6 +377,11 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
     }
     if (rates.length > 0) {
       window.alert(`Dossier créé, mais document(s) de passation non déposé(s) : ${rates.join(", ")}. Redéposez-les depuis l'onglet Fichiers (dossier Passation).`);
+    }
+    if (copro.avertissements.length > 0) {
+      window.alert(
+        `Dossier créé, mais : ${copro.avertissements.join(" ; ")}. Les honoraires se saisissent aussi depuis le bloc « Honoraires AMO » de l'onglet Projet, les fiches depuis la Base prestataires.`
+      );
     }
     onClose();
     navigate(`/copros/${copro.id}`);
@@ -554,6 +613,92 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
             </select>
           )}
         </div>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, alignItems: "start" }}>
+          {field(
+            "Maître d'œuvre",
+            <>
+              {/* Fiches « Maître d'œuvre » de la Base prestataires, ou un nouveau nom */}
+              <select className="login-input" value={moeChoix} onChange={(e) => setMoeChoix(e.target.value)}>
+                <option value="">Non désigné</option>
+                <option value={MOE_NOUVEAU}>Nouveau maître d'œuvre (saisir le nom)</option>
+                {fichesMoe.length > 0 && (
+                  <optgroup label="Base prestataires">
+                    {fichesMoe.map((nom) => (
+                      <option key={nom} value={nom}>
+                        {nom}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+              {moeChoix === MOE_NOUVEAU && (
+                <>
+                  <input
+                    className="login-input"
+                    required
+                    autoFocus
+                    placeholder="Raison sociale du maître d'œuvre"
+                    value={moeNouveau}
+                    onChange={(e) => setMoeNouveau(e.target.value)}
+                  />
+                  {moeNouveau.trim() && (
+                    <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
+                      {moeDejaFiche
+                        ? `La fiche « ${moeDejaFiche} » existe déjà dans la Base prestataires : elle est reprise.`
+                        : `Une fiche « ${moeNouveau.trim()} » (métier Maître d'œuvre, sans e-mail) sera créée dans la Base prestataires.`}
+                    </span>
+                  )}
+                </>
+              )}
+            </>
+          )}
+          {field(
+            "Date d'AG",
+            <input className="login-input" type="date" value={form.date_ag} onChange={(e) => set({ date_ag: e.target.value })} />
+          )}
+        </div>
+        <div
+          style={{
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)",
+            padding: "12px 14px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <span className="se-eyebrow" style={{ color: "var(--fg-muted)" }}>
+            Honoraires AMO du contrat
+          </span>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {field(
+              "Honoraires P1 - études (€ HT)",
+              <>
+                <input
+                  className="login-input"
+                  inputMode="decimal"
+                  placeholder="Par exemple 9 000"
+                  value={form.honoraires_p1}
+                  onChange={(e) => set({ honoraires_p1: e.target.value })}
+                />
+                <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>{apercuRepartition(form.honoraires_p1, "p1")}</span>
+              </>
+            )}
+            {field(
+              "Honoraires P2 - travaux (€ HT)",
+              <>
+                <input
+                  className="login-input"
+                  inputMode="decimal"
+                  placeholder="Par exemple 15 000"
+                  value={form.honoraires_p2}
+                  onChange={(e) => set({ honoraires_p2: e.target.value })}
+                />
+                <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>{apercuRepartition(form.honoraires_p2, "p2")}</span>
+              </>
+            )}
+          </div>
+        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <label style={{ fontSize: 13, fontWeight: 500, color: "var(--fg2)" }}>
             Documents de passation{" "}
@@ -614,9 +759,9 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
           <input type="checkbox" checked={form.fragile} onChange={(e) => set({ fragile: e.target.checked })} />
           Copropriété fragile (taux d'impayés &gt; 8 %)
         </label>
-        {create.isError && (
+        {(erreurSaisie || create.isError) && (
           <p style={{ color: "var(--color-error-700)", fontSize: 13.5, margin: 0 }}>
-            {erreurCreation(create.error)}
+            {erreurSaisie ?? erreurCreation(create.error)}
           </p>
         )}
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
@@ -631,14 +776,6 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
       </form>
     </Modal>
   );
-}
-
-/** Message d'échec de la création ; le nom du dossier (slug) est unique, corbeille comprise. */
-function erreurCreation(e: unknown): string {
-  const message = messageErreur(e, "Impossible de créer le dossier. Réessayez.");
-  return (e as { code?: string } | null)?.code === "23505" && message.includes("coproprietes_slug")
-    ? "Un dossier porte déjà ce nom (corbeille comprise) : précisez-le, par exemple avec la ville ou l'adresse."
-    : message;
 }
 
 /** Ce que fera la création côté organisation, sous le menu. */
@@ -770,6 +907,7 @@ function exportCsv(copros: CoproWithStats[]) {
       "Syndic",
       "Gestionnaire",
       "Maître d'œuvre",
+      "Date d'AG",
       "Fragile",
       "Prochaine étape",
     ],
@@ -792,6 +930,8 @@ function exportCsv(copros: CoproWithStats[]) {
       c.syndic_name ?? "",
       c.gestionnaire_nom ?? "",
       c.maitre_oeuvre ?? "",
+      // JJ/MM/AAAA : relu tel quel par « Importer un CSV »
+      c.date_ag ? c.date_ag.split("-").reverse().join("/") : "",
       c.fragile ? "Oui" : "",
       c.stats?.next_task ?? "",
     ])
@@ -808,6 +948,7 @@ export default function Dashboard() {
   const [moeFilter, setMoeFilter] = useState<string>("");
   const [tri, setTri] = useState<Tri>({ col: "name", desc: false });
   const [showNew, setShowNew] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [showCorbeille, setShowCorbeille] = useState(false);
   const { data: corbeille } = useCoprosCorbeille();
 
@@ -888,6 +1029,14 @@ export default function Dashboard() {
         >
           <Icon name="download" size={16} />
           Exporter la liste
+        </button>
+        <button
+          className="se-btn se-btn-secondary btn-sm"
+          title="Créer plusieurs dossiers depuis un fichier CSV (modèle téléchargeable, aperçu avant création)"
+          onClick={() => setShowImport(true)}
+        >
+          <Icon name="upload" size={16} />
+          Importer un CSV
         </button>
         <button className="se-btn se-btn-primary btn-sm" onClick={() => setShowNew(true)}>
           <Icon name="plus" size={16} />
@@ -986,6 +1135,7 @@ export default function Dashboard() {
       )}
 
       {showNew && <NewCoproDialog onClose={() => setShowNew(false)} />}
+      {showImport && <ImportCoprosDialog onClose={() => setShowImport(false)} />}
       {showCorbeille && <CorbeilleDialog onClose={() => setShowCorbeille(false)} />}
     </div>
   );

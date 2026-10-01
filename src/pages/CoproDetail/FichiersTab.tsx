@@ -10,6 +10,7 @@ import {
   DISPOSITIFS_RECAP,
   DOSSIERS,
   DOSSIER_AIDE,
+  DOSSIER_FACTURATION,
   downloadFichier,
   estVisualisable,
   useChecklists,
@@ -185,6 +186,43 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                 </div>
               );
             })}
+            {/* Factures et avoirs émis depuis le logiciel (0115) : pas de dépôt ici */}
+            {byFolder(DOSSIER_FACTURATION).length > 0 && (
+              <div
+                className="file-card"
+                onClick={() => {
+                  setOpenFolder(openFolder === DOSSIER_FACTURATION ? null : DOSSIER_FACTURATION);
+                  setOpenDispositif(null);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.dataTransfer.dropEffect = "none";
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                style={{
+                  position: "relative",
+                  cursor: "pointer",
+                  outline: openFolder === DOSSIER_FACTURATION ? "2px solid var(--accent)" : "none",
+                }}
+              >
+                <span className="fc-help" tabIndex={0} onClick={(e) => e.stopPropagation()}>
+                  <Icon name="help" size={15} />
+                  <span className="fc-help-bulle" role="tooltip">
+                    Factures et avoirs émis depuis la facturation du logiciel, classés automatiquement. Les factures CEE
+                    (Hellio) restent réservées à l'équipe Strat Eco.
+                  </span>
+                </span>
+                <Icon name="euro" size={26} className="fc-ico" />
+                <div className="fc-name">{DOSSIER_FACTURATION}</div>
+                <div className="fc-sub">
+                  {byFolder(DOSSIER_FACTURATION).length} pièce{byFolder(DOSSIER_FACTURATION).length > 1 ? "s" : ""}
+                </div>
+              </div>
+            )}
           </div>
           <div className="se-eyebrow" style={{ margin: "18px 0 8px", color: "var(--fg-muted)" }}>
             Dossiers par dispositif - récapitulatifs, aucun dépôt
@@ -259,17 +297,20 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                       <div className="t-copro">
                         {fmtSize(f.size)}
                         {f.partage_copro && " · visible au portail copropriétaires"}
+                        {f.confidentiel && " · réservé à l'équipe Strat Eco"}
                       </div>
                     </div>
                     <span className="spacer"></span>
-                    <button
-                      className="icon-btn"
-                      title={f.partage_copro ? "Ne plus partager aux copropriétaires" : "Partager aux copropriétaires (portail)"}
-                      style={f.partage_copro ? { color: "var(--color-primary-700)" } : undefined}
-                      onClick={() => void partage.mutateAsync({ id: f.id, partage: !f.partage_copro })}
-                    >
-                      <Icon name="share" size={16} />
-                    </button>
+                    {f.dossier !== DOSSIER_FACTURATION && (
+                      <button
+                        className="icon-btn"
+                        title={f.partage_copro ? "Ne plus partager aux copropriétaires" : "Partager aux copropriétaires (portail)"}
+                        style={f.partage_copro ? { color: "var(--color-primary-700)" } : undefined}
+                        onClick={() => void partage.mutateAsync({ id: f.id, partage: !f.partage_copro })}
+                      >
+                        <Icon name="share" size={16} />
+                      </button>
+                    )}
                     <button
                       className="icon-btn"
                       title={
@@ -284,17 +325,24 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                     <button className="icon-btn" title="Télécharger" onClick={() => void downloadFichier(f)}>
                       <Icon name="download" size={16} />
                     </button>
-                    <button
-                      className="icon-btn"
-                      title="Supprimer"
-                      onClick={() => {
-                        if (window.confirm(`Supprimer « ${f.name} » ?`)) void del.mutateAsync(f);
-                      }}
-                    >
-                      <Icon name="trash" size={16} />
-                    </button>
+                    {f.dossier !== DOSSIER_FACTURATION && (
+                      <button
+                        className="icon-btn"
+                        title="Supprimer"
+                        onClick={() => {
+                          if (window.confirm(`Supprimer « ${f.name} » ?`)) void del.mutateAsync(f);
+                        }}
+                      >
+                        <Icon name="trash" size={16} />
+                      </button>
+                    )}
                   </div>
                 ))
+              )}
+              {openFolder === DOSSIER_FACTURATION && (
+                <p className="se-small" style={{ marginTop: 8, color: "var(--fg-muted)" }}>
+                  Pièces émises depuis le menu Facturation : elles ne se suppriment pas, un avoir annule une facture.
+                </p>
               )}
             </div>
           )}

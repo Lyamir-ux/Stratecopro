@@ -62,6 +62,10 @@ export interface DossierHonoraires {
 }
 
 export interface SaisiesHonoraires {
+  /** Phase études saisie à la création du dossier ou par « Saisir la P1 » (0121). */
+  p1MontantHt: number | null;
+  p1SaisiLe: string | null;
+  p1SaisiPar: string | null;
   p2MontantHt: number | null;
   p2SaisiLe: string | null;
   p2SaisiPar: string | null;
@@ -141,6 +145,22 @@ export const cocheSansMontant = (j: JalonHonoraires): boolean => montant(j) === 
 // elles servent à l'aperçu de la fenêtre de saisie.
 
 const arrondi2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
+
+/**
+ * Règlement de la phase études du contrat AMO (devis-amo) : 50 % P1a au
+ * démarrage de la mission, 25 % P1b à l'enquête sociale, 25 % P1c à la
+ * convocation de l'AG de vote des travaux. Saisie à la création du dossier
+ * (idée d'Amir du 01/10/2026), même règle que honoraires_saisir_p1 (0121).
+ */
+export const PARTS_P1 = { P1a: 0.5, P1b: 0.25, P1c: 0.25 } as const;
+
+/** Répartit les honoraires HT de la phase études ; P1c prend le reste pour que la somme tombe juste. */
+export function repartitionP1(totalHt: number): { P1a: number; P1b: number; P1c: number } {
+  const total = arrondi2(totalHt);
+  const P1a = arrondi2(total * PARTS_P1.P1a);
+  const P1b = arrondi2(total * PARTS_P1.P1b);
+  return { P1a, P1b, P1c: arrondi2(total - P1a - P1b) };
+}
 
 /** Règlement de la phase travaux du contrat AMO : 50 % P2a, 30 % P2b, 20 % P2c. */
 export const PARTS_P2 = { P2a: 0.5, P2b: 0.3, P2c: 0.2 } as const;

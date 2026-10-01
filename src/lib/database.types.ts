@@ -1085,6 +1085,7 @@ export type Database = {
           city: string | null
           code_postal: string | null
           created_at: string
+          date_ag: string | null
           deleted_at: string | null
           denomination_batiments: string
           energy_after: string | null
@@ -1114,6 +1115,7 @@ export type Database = {
           city?: string | null
           code_postal?: string | null
           created_at?: string
+          date_ag?: string | null
           deleted_at?: string | null
           denomination_batiments?: string
           energy_after?: string | null
@@ -1143,6 +1145,7 @@ export type Database = {
           city?: string | null
           code_postal?: string | null
           created_at?: string
+          date_ag?: string | null
           deleted_at?: string | null
           denomination_batiments?: string
           energy_after?: string | null
@@ -1431,6 +1434,267 @@ export type Database = {
           },
         ]
       }
+      facturation_clients: {
+        Row: {
+          attribue_le: string
+          copro_id: string
+          numero: string
+          test: boolean
+        }
+        Insert: {
+          attribue_le?: string
+          copro_id: string
+          numero: string
+          test?: boolean
+        }
+        Update: {
+          attribue_le?: string
+          copro_id?: string
+          numero?: string
+          test?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facturation_clients_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      facturation_journal: {
+        Row: {
+          action: string
+          copro_id: string
+          detail: string | null
+          dossier_avant: Json | null
+          facture_id: string | null
+          id: string
+          jalon: string | null
+          jalon_avant: Json | null
+          le: string
+          ordre: number
+          par: string | null
+          test: boolean
+        }
+        Insert: {
+          action: string
+          copro_id: string
+          detail?: string | null
+          dossier_avant?: Json | null
+          facture_id?: string | null
+          id?: string
+          jalon?: string | null
+          jalon_avant?: Json | null
+          le?: string
+          ordre?: number
+          par?: string | null
+          test: boolean
+        }
+        Update: {
+          action?: string
+          copro_id?: string
+          detail?: string | null
+          dossier_avant?: Json | null
+          facture_id?: string | null
+          id?: string
+          jalon?: string | null
+          jalon_avant?: Json | null
+          le?: string
+          ordre?: number
+          par?: string | null
+          test?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facturation_journal_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "facturation_journal_facture_id_fkey"
+            columns: ["facture_id"]
+            isOneToOne: false
+            referencedRelation: "factures"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      facturation_parametres: {
+        Row: {
+          cee_client: Json
+          en_production_le: string | null
+          en_production_par: string | null
+          id: boolean
+          mode: string
+          prochain_avoir: number
+          prochain_client: number
+          prochain_facture: number
+          prochain_test_avoir: number
+          prochain_test_facture: number
+        }
+        Insert: {
+          cee_client?: Json
+          en_production_le?: string | null
+          en_production_par?: string | null
+          id?: boolean
+          mode?: string
+          prochain_avoir?: number
+          prochain_client?: number
+          prochain_facture?: number
+          prochain_test_avoir?: number
+          prochain_test_facture?: number
+        }
+        Update: {
+          cee_client?: Json
+          en_production_le?: string | null
+          en_production_par?: string | null
+          id?: boolean
+          mode?: string
+          prochain_avoir?: number
+          prochain_client?: number
+          prochain_facture?: number
+          prochain_test_avoir?: number
+          prochain_test_facture?: number
+        }
+        Relationships: []
+      }
+      factures: {
+        Row: {
+          client_adresse: string | null
+          client_nom: string
+          client_numero: string | null
+          client_pa: string | null
+          copro_id: string
+          cree_le: string
+          cree_par: string | null
+          date_echeance: string | null
+          date_emission: string | null
+          destinataire_email: string | null
+          destinataire_nom: string | null
+          envoi_detail: string | null
+          envoi_le: string | null
+          envoi_statut: string | null
+          facture_origine_id: string | null
+          fichier_id: string | null
+          id: string
+          jalon: string
+          lignes: Json
+          nature: string
+          numero: string | null
+          payee_le: string | null
+          payee_par: string | null
+          pdf_path: string | null
+          reference: string
+          sous_reference: string | null
+          statut: string
+          test: boolean
+          total_ht: number
+          total_ttc: number
+          total_tva: number
+          type: string
+          valide_le: string | null
+          valide_par: string | null
+        }
+        Insert: {
+          client_adresse?: string | null
+          client_nom: string
+          client_numero?: string | null
+          client_pa?: string | null
+          copro_id: string
+          cree_le?: string
+          cree_par?: string | null
+          date_echeance?: string | null
+          date_emission?: string | null
+          destinataire_email?: string | null
+          destinataire_nom?: string | null
+          envoi_detail?: string | null
+          envoi_le?: string | null
+          envoi_statut?: string | null
+          facture_origine_id?: string | null
+          fichier_id?: string | null
+          id?: string
+          jalon: string
+          lignes: Json
+          nature: string
+          numero?: string | null
+          payee_le?: string | null
+          payee_par?: string | null
+          pdf_path?: string | null
+          reference: string
+          sous_reference?: string | null
+          statut?: string
+          test: boolean
+          total_ht: number
+          total_ttc: number
+          total_tva: number
+          type: string
+          valide_le?: string | null
+          valide_par?: string | null
+        }
+        Update: {
+          client_adresse?: string | null
+          client_nom?: string
+          client_numero?: string | null
+          client_pa?: string | null
+          copro_id?: string
+          cree_le?: string
+          cree_par?: string | null
+          date_echeance?: string | null
+          date_emission?: string | null
+          destinataire_email?: string | null
+          destinataire_nom?: string | null
+          envoi_detail?: string | null
+          envoi_le?: string | null
+          envoi_statut?: string | null
+          facture_origine_id?: string | null
+          fichier_id?: string | null
+          id?: string
+          jalon?: string
+          lignes?: Json
+          nature?: string
+          numero?: string | null
+          payee_le?: string | null
+          payee_par?: string | null
+          pdf_path?: string | null
+          reference?: string
+          sous_reference?: string | null
+          statut?: string
+          test?: boolean
+          total_ht?: number
+          total_ttc?: number
+          total_tva?: number
+          type?: string
+          valide_le?: string | null
+          valide_par?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "factures_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "factures_facture_origine_id_fkey"
+            columns: ["facture_origine_id"]
+            isOneToOne: false
+            referencedRelation: "factures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "factures_fichier_id_fkey"
+            columns: ["fichier_id"]
+            isOneToOne: false
+            referencedRelation: "fichiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feedbacks: {
         Row: {
           auteur_nom: string
@@ -1534,6 +1798,7 @@ export type Database = {
       }
       fichiers: {
         Row: {
+          confidentiel: boolean
           copro_id: string
           created_at: string
           dossier: string
@@ -1547,6 +1812,7 @@ export type Database = {
           uploaded_by: string | null
         }
         Insert: {
+          confidentiel?: boolean
           copro_id: string
           created_at?: string
           dossier?: string
@@ -1560,6 +1826,7 @@ export type Database = {
           uploaded_by?: string | null
         }
         Update: {
+          confidentiel?: boolean
           copro_id?: string
           created_at?: string
           dossier?: string
@@ -1604,6 +1871,9 @@ export type Database = {
           copro_id: string
           derniere_facture: string | null
           importe_le: string | null
+          p1_montant_ht: number | null
+          p1_saisi_le: string | null
+          p1_saisi_par: string | null
           p2_montant_ht: number | null
           p2_saisi_le: string | null
           p2_saisi_par: string | null
@@ -1616,6 +1886,9 @@ export type Database = {
           copro_id: string
           derniere_facture?: string | null
           importe_le?: string | null
+          p1_montant_ht?: number | null
+          p1_saisi_le?: string | null
+          p1_saisi_par?: string | null
           p2_montant_ht?: number | null
           p2_saisi_le?: string | null
           p2_saisi_par?: string | null
@@ -1628,6 +1901,9 @@ export type Database = {
           copro_id?: string
           derniere_facture?: string | null
           importe_le?: string | null
+          p1_montant_ht?: number | null
+          p1_saisi_le?: string | null
+          p1_saisi_par?: string | null
           p2_montant_ht?: number | null
           p2_saisi_le?: string | null
           p2_saisi_par?: string | null
@@ -2244,6 +2520,7 @@ export type Database = {
       }
       organisations: {
         Row: {
+          adresse_facturation: string | null
           created_at: string
           id: string
           module_ppt: boolean
@@ -2251,6 +2528,7 @@ export type Database = {
           slug: string
         }
         Insert: {
+          adresse_facturation?: string | null
           created_at?: string
           id?: string
           module_ppt?: boolean
@@ -2258,6 +2536,7 @@ export type Database = {
           slug: string
         }
         Update: {
+          adresse_facturation?: string | null
           created_at?: string
           id?: string
           module_ppt?: boolean
@@ -4325,6 +4604,33 @@ export type Database = {
           updated_at: string
         }[]
       }
+      facture_creer_avoir: { Args: { p_facture_id: string }; Returns: string }
+      facture_creer_brouillon: {
+        Args: { p_copro_id: string; p_jalon: string }
+        Returns: string
+      }
+      facture_enregistrer_pdf: {
+        Args: { p_id: string; p_nom: string; p_storage_path: string; p_taille: number }
+        Returns: string
+      }
+      facture_modifier_brouillon: {
+        Args: { p_client_adresse: string; p_id: string }
+        Returns: undefined
+      }
+      facture_supprimer_brouillon: { Args: { p_id: string }; Returns: undefined }
+      facture_valider: {
+        Args: { p_id: string }
+        Returns: Database["public"]["Tables"]["factures"]["Row"]
+      }
+      facturation_passer_en_production: { Args: never; Returns: Json }
+      honoraires_annuler_paiement: {
+        Args: { p_copro_id: string; p_jalon: string }
+        Returns: undefined
+      }
+      honoraires_marquer_paye: {
+        Args: { p_copro_id: string; p_date: string; p_jalon: string }
+        Returns: undefined
+      }
       honoraires_annuler_saisie: {
         Args: { p_copro_id: string; p_type: string }
         Returns: undefined
@@ -4335,6 +4641,10 @@ export type Database = {
       }
       honoraires_saisir_cee: {
         Args: { p_copro_id: string; p_kwhc: number }
+        Returns: undefined
+      }
+      honoraires_saisir_p1: {
+        Args: { p_copro_id: string; p_montant_ht: number }
         Returns: undefined
       }
       is_amo: { Args: never; Returns: boolean }

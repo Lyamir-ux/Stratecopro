@@ -5,6 +5,8 @@ import type { Tables, TablesInsert } from "@/lib/database.types";
 import { buildTaskTemplate } from "@/lib/taskTemplate";
 import type { PhaseId } from "@/lib/referentiels";
 import { organisationIdPourSyndic, resoudreOrganisation, type ChoixOrganisation } from "@/api/organisations";
+import { normaliserNomOrganisation } from "@/lib/organisations";
+import { messageErreur } from "@/lib/erreurs";
 
 export type CoproRow = Tables<"coproprietes">;
 export type CoproStats = Tables<"copro_stats">;
@@ -128,80 +130,154 @@ export interface NewCoproInput {
   phase: PhaseId;
   energy_before: string | null;
   fragile: boolean;
+  // Idée d'Amir du 01/10/2026 (fenêtre « Nouvelle copropriété » et import CSV)
+  /** Maître d'œuvre : une fiche de la Base prestataires, ou un nouveau nom. */
+  maitre_oeuvre?: ChoixMaitreOeuvre | null;
+  /** Date d'AG (AAAA-MM-JJ). */
+  date_ag?: string | null;
+  /** Honoraires HT de la phase études, répartis 50 / 25 / 25 (honoraires_saisir_p1). */
+  honoraires_p1_ht?: number | null;
+  /** Honoraires HT de la phase travaux, répartis 50 / 30 / 20 (honoraires_revaloriser_p2). */
+  honoraires_p2_ht?: number | null;
+}
+
+/**
+ * Maître d'œuvre choisi à la création : une fiche de la Base prestataires, ou un
+ * nom nouveau, dont la fiche (sans e-mail, métier « Maître d'œuvre ») est créée
+ * avec le dossier - le maître d'œuvre retrouve alors le dossier dans « Mes
+ * projets » (0119, 0120) dès qu'un compte est rattaché à la fiche.
+ */
+export type ChoixMaitreOeuvre = { mode: "existant"; nom: string } | { mode: "nouveau"; nom: string };
+
+/** Dossier créé, avec ce qui n'a pas pu suivre (honoraires, fiche du maître d'œuvre) : le dossier existe quand même. */
+export type CoproCree = CoproRow & { avertissements: string[] };
+
+/** Clé technique unique du dossier (corbeille comprise) tirée de son nom. */
+export function slugCopro(nom: string): string {
+  return nom
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+/** Nom du maître d'œuvre à poser sur le dossier ; un « nouveau » nom déjà en base (casse et accents ignorés) reprend la fiche existante. */
+async function nomMaitreOeuvre(choix: ChoixMaitreOeuvre): Promise<{ nom: string; ficheACreer: boolean }> {
+  const nom = choix.nom.trim().replace(/\s+/g, " ");
+  if (choix.mode === "existant") return { nom, ficheACreer: false };
+  const { data, error } = await supabase.from("prestataires").select("raison_sociale");
+  if (error) throw error;
+  const cible = normaliserNomOrganisation(nom);
+  const deja = (data ?? []).find((p) => normaliserNomOrganisation(p.raison_sociale) === cible);
+  return deja ? { nom: deja.raison_sociale, ficheACreer: false } : { nom, ficheACreer: true };
+}
+
+/**
+ * Crée un dossier complet : fiche, bâtiments, plan de tâches, créateur, puis
+ * fiche du maître d'œuvre et honoraires. Partagé par la fenêtre « Nouvelle
+ * copropriété », l'import CSV et les demandes d'AMO.
+ */
+export async function creerCopro(input: NewCoproInput): Promise<CoproCree> {
+  const moe = input.maitre_oeuvre?.nom.trim() ? await nomMaitreOeuvre(input.maitre_oeuvre) : null;
+  // Organisation choisie dans la liste, créée au besoin (nouvelle enseigne,
+  // syndic bénévole) ; sans choix, un syndic dont le nom est celui d'une
+  // enseigne rattache d'emblée le dossier à cette enseigne.
+  const organisation = input.organisation ? await resoudreOrganisation(input.organisation, input.name) : null;
+  const insert: TablesInsert<"coproprietes"> = {
+    name: input.name,
+    slug: slugCopro(input.name),
+    city: input.city || null,
+    code_postal: input.code_postal || null,
+    adresse: input.adresse || null,
+    // nom du syndic laissé vide : celui de l'organisation choisie
+    syndic_name: input.syndic_name || organisation?.nom || null,
+    organisation_id: organisation ? organisation.id : await organisationIdPourSyndic(input.syndic_name),
+    gestionnaire_nom: input.gestionnaire_nom || null,
+    gestionnaire_email: input.gestionnaire_email || null,
+    nb_logements: input.nb_logements,
+    chef_projet: input.chef_projet || null,
+    phase: input.phase,
+    energy_before: input.energy_before,
+    fragile: input.fragile,
+    maitre_oeuvre: moe?.nom || null,
+    date_ag: input.date_ag || null,
+  };
+  const { data: copro, error } = await supabase.from("coproprietes").insert(insert).select().single();
+  if (error) {
+    // Pas d'organisation orpheline si le dossier n'a pas pu être créé.
+    if (organisation?.creee) await supabase.from("organisations").delete().eq("id", organisation.id);
+    throw error;
+  }
+
+  // Bâtiments déclarés à la création - ceux qui ont une adresse font foi et ne
+  // sont jamais supprimés par le ménage de l'import des lots ; un bâtiment sans
+  // adresse resté vide disparaît dès que l'import range les lots ailleurs.
+  const nbBats = Math.max(1, Math.floor(input.nb_batiments) || 1);
+  const { error: eBats } = await supabase.from("batiments").insert(
+    Array.from({ length: nbBats }, (_, i) => ({
+      copro_id: copro.id,
+      code: String(i + 1).padStart(2, "0"),
+      adresse: nbBats > 1 ? input.batiment_adresses[i]?.trim() || null : null,
+      position: i,
+      declare_creation: true,
+    }))
+  );
+  if (eBats) throw eBats;
+
+  // Plan de tâches gabarit + rattachement du créateur.
+  // (Pas de clé de répartition créée d'office : les clés sont reprises
+  // des en-têtes du fichier lors de l'import des lots & tantièmes.)
+  const { error: eTaches } = await supabase.from("taches").insert(
+    buildTaskTemplate(input.phase).map((t) => ({ ...t, copro_id: copro.id }))
+  );
+  if (eTaches) throw eTaches;
+
+  const { data: session } = await supabase.auth.getSession();
+  const uid = session.session?.user.id;
+  if (uid) {
+    await supabase.from("copro_members").insert({ copro_id: copro.id, user_id: uid, member_role: "amo_referent" });
+  }
+
+  // Le dossier existe : la suite ne l'annule pas, un échec est signalé et
+  // se rattrape depuis la Base prestataires ou le bloc Honoraires.
+  const avertissements: string[] = [];
+  if (moe?.ficheACreer) {
+    const { error: eMoe } = await supabase.from("prestataires").insert({ raison_sociale: moe.nom, types: ["moe"] });
+    if (eMoe) avertissements.push(`fiche du maître d'œuvre « ${moe.nom} » non créée (${eMoe.message})`);
+  }
+  const honoraires = [
+    { rpc: "honoraires_saisir_p1", montant: input.honoraires_p1_ht, libelle: "P1" },
+    { rpc: "honoraires_revaloriser_p2", montant: input.honoraires_p2_ht, libelle: "P2" },
+  ] as const;
+  for (const h of honoraires) {
+    if (h.montant == null || !(h.montant > 0)) continue;
+    const { error: eHon } = await supabase.rpc(h.rpc, { p_copro_id: copro.id, p_montant_ht: h.montant });
+    if (eHon) avertissements.push(`honoraires ${h.libelle} non enregistrés (${eHon.message})`);
+  }
+  return { ...copro, avertissements };
+}
+
+/** Message d'échec de la création ; le nom du dossier (slug) est unique, corbeille comprise. */
+export function erreurCreation(e: unknown): string {
+  const message = messageErreur(e, "Impossible de créer le dossier. Réessayez.");
+  return (e as { code?: string } | null)?.code === "23505" && message.includes("coproprietes_slug")
+    ? "Un dossier porte déjà ce nom (corbeille comprise) : précisez-le, par exemple avec la ville ou l'adresse."
+    : message;
+}
+
+/** Rafraîchit ce qu'une création de dossier change ailleurs (listes, enseignes, honoraires, prestataires). */
+export function invaliderCreationCopros(qc: ReturnType<typeof useQueryClient>) {
+  for (const queryKey of [["copros"], ["organisations"], ["copros-rattachables"], ["honoraires"], ["prestataires"]]) {
+    void qc.invalidateQueries({ queryKey });
+  }
 }
 
 export function useCreateCopro() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: NewCoproInput) => {
-      // Organisation choisie dans la liste, créée au besoin (nouvelle enseigne,
-      // syndic bénévole) ; sans choix, un syndic dont le nom est celui d'une
-      // enseigne rattache d'emblée le dossier à cette enseigne.
-      const organisation = input.organisation ? await resoudreOrganisation(input.organisation, input.name) : null;
-      const insert: TablesInsert<"coproprietes"> = {
-        name: input.name,
-        slug: input.name
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[̀-ͯ]/g, "")
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/(^-|-$)/g, ""),
-        city: input.city || null,
-        code_postal: input.code_postal || null,
-        adresse: input.adresse || null,
-        // nom du syndic laissé vide : celui de l'organisation choisie
-        syndic_name: input.syndic_name || organisation?.nom || null,
-        organisation_id: organisation ? organisation.id : await organisationIdPourSyndic(input.syndic_name),
-        gestionnaire_nom: input.gestionnaire_nom || null,
-        gestionnaire_email: input.gestionnaire_email || null,
-        nb_logements: input.nb_logements,
-        chef_projet: input.chef_projet || null,
-        phase: input.phase,
-        energy_before: input.energy_before,
-        fragile: input.fragile,
-      };
-      const { data: copro, error } = await supabase.from("coproprietes").insert(insert).select().single();
-      if (error) {
-        // Pas d'organisation orpheline si le dossier n'a pas pu être créé.
-        if (organisation?.creee) await supabase.from("organisations").delete().eq("id", organisation.id);
-        throw error;
-      }
-
-      // Bâtiments déclarés à la création - ceux qui ont une adresse font foi et ne
-      // sont jamais supprimés par le ménage de l'import des lots ; un bâtiment sans
-      // adresse resté vide disparaît dès que l'import range les lots ailleurs.
-      const nbBats = Math.max(1, Math.floor(input.nb_batiments) || 1);
-      const { error: eBats } = await supabase.from("batiments").insert(
-        Array.from({ length: nbBats }, (_, i) => ({
-          copro_id: copro.id,
-          code: String(i + 1).padStart(2, "0"),
-          adresse: nbBats > 1 ? input.batiment_adresses[i]?.trim() || null : null,
-          position: i,
-          declare_creation: true,
-        }))
-      );
-      if (eBats) throw eBats;
-
-      // Plan de tâches gabarit + rattachement du créateur.
-      // (Pas de clé de répartition créée d'office : les clés sont reprises
-      // des en-têtes du fichier lors de l'import des lots & tantièmes.)
-      const { error: eTaches } = await supabase.from("taches").insert(
-        buildTaskTemplate(input.phase).map((t) => ({ ...t, copro_id: copro.id }))
-      );
-      if (eTaches) throw eTaches;
-
-      const { data: session } = await supabase.auth.getSession();
-      const uid = session.session?.user.id;
-      if (uid) {
-        await supabase.from("copro_members").insert({ copro_id: copro.id, user_id: uid, member_role: "amo_referent" });
-      }
-      return copro;
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["copros"] });
-      void qc.invalidateQueries({ queryKey: ["organisations"] });
-      void qc.invalidateQueries({ queryKey: ["copros-rattachables"] });
-    },
+    mutationFn: creerCopro,
+    onSuccess: () => invaliderCreationCopros(qc),
   });
 }
 

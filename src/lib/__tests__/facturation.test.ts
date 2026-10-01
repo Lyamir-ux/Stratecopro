@@ -11,6 +11,7 @@ import {
   libelleAnciennete,
   pasAxeEuros,
   prochainJalon,
+  repartitionP1,
   repartitionP2,
   sommesDossier,
   sommesPortefeuille,
@@ -117,6 +118,14 @@ describe("facturation des jalons", () => {
     expect(repartitionP2(12345.67)).toEqual({ P2a: 6172.84, P2b: 3703.7, P2c: 2469.13 });
     const r = repartitionP2(1000.01);
     expect(r.P2a + r.P2b + r.P2c).toBeCloseTo(1000.01, 6);
+  });
+
+  it("répartit la P1 à 50 / 25 / 25 sans perdre de centime", () => {
+    expect(repartitionP1(12000)).toEqual({ P1a: 6000, P1b: 3000, P1c: 3000 });
+    // mêmes montants que la fonction SQL honoraires_saisir_p1 (testée le 01/10/2026)
+    expect(repartitionP1(10000.01)).toEqual({ P1a: 5000.01, P1b: 2500, P1c: 2500 });
+    const r = repartitionP1(12345.67);
+    expect(r.P1a + r.P1b + r.P1c).toBeCloseTo(12345.67, 6);
   });
 
   it("calcule FCEE 1 et FCEE 2 à 250 € HT par GWh cumac", () => {

@@ -2125,6 +2125,71 @@ table.dossiers.fact-table tfoot td { position: sticky; bottom: 0; z-index: 2; ba
 .fact-saisies .fs-ligne { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--fg-muted); }
 .fact-saisies .fs-ligne .se-btn { padding: 4px 10px; font-size: 12px; }
 
+/* facturation directe (0115) : bulles et jalons cliquables */
+.fact-pas.cliquable { border: none; padding: 0; margin: 0; font: inherit; cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease; }
+.fact-pas.cliquable:hover { transform: scale(1.15); }
+.fact-pas.cliquable:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.fact-pas.brouillon, .fact-pas.cliquable.brouillon { background: var(--color-warning-50); box-shadow: inset 0 0 0 2px var(--color-warning-500); }
+.fact-sw.brouillon { background: var(--color-warning-50); box-shadow: inset 0 0 0 1.5px var(--color-warning-500); }
+button.fact-etape { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; transition: border-color 0.12s ease, box-shadow 0.12s ease; }
+button.fact-etape:hover { border-color: var(--color-primary-400); box-shadow: var(--shadow-sm); }
+button.fact-etape:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.fact-etape.brouillon { border: 1.5px dashed var(--color-warning-500); background: var(--color-warning-50); }
+.fact-etape .fe-action { display: flex; align-items: center; gap: 4px; margin-top: 6px; padding-top: 5px; border-top: 1px solid var(--border); font-size: 11px; font-weight: 600; color: var(--fg3); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fact-etape .fe-action.facturer { color: var(--color-primary-700); font-family: inherit; }
+.fact-etape.brouillon .fe-action { color: var(--color-warning-700); font-family: inherit; }
+
+/* fenêtre d'une facture ou d'un avoir */
+.fz-grille { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; align-items: start; }
+.fz-apercu iframe { display: block; width: 100%; height: 72vh; min-height: 520px; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; }
+.fz-apercu-vide { height: 72vh; min-height: 520px; display: grid; place-items: center; border: 1px dashed var(--border); border-radius: var(--radius-md); color: var(--fg-muted); font-size: 13px; padding: 20px; text-align: center; }
+.fz-cote { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.fz-etat { display: flex; align-items: center; gap: 8px; }
+.fz-test { display: inline-block; margin-left: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-error-700); background: var(--color-error-50, #fdecec); border-radius: 4px; padding: 1px 6px; }
+.fz-infos { margin: 0; display: grid; grid-template-columns: 1fr; }
+.fz-infos dt { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-muted); margin-top: 8px; }
+.fz-infos dt:first-child { margin-top: 0; }
+.fz-infos dd { margin: 2px 0 0; font-size: 13px; color: var(--fg1); overflow-wrap: anywhere; }
+.fz-infos dd small { display: block; font-size: 11.5px; color: var(--fg-muted); margin-top: 1px; }
+.fz-manque { color: var(--color-error-700); font-weight: 600; }
+.fz-actions { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px; }
+.fz-actions textarea { width: 100%; resize: vertical; font: inherit; font-size: 13px; }
+.fz-boutons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.fz-boutons.colonne { flex-direction: column; align-items: stretch; }
+.fz-boutons.colonne .se-btn { justify-content: center; }
+.fz-confirmation { background: var(--bg-soft); border-radius: var(--radius-md); padding: 12px 14px; font-size: 12.5px; line-height: 1.5; color: var(--fg2); }
+.fz-confirmation p { margin: 0 0 10px; }
+.fz-etapes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.fz-etapes li { display: flex; gap: 7px; align-items: flex-start; }
+.fz-etapes li svg { flex: none; margin-top: 2px; }
+.fz-etapes li.ok { color: var(--color-primary-700); }
+.fz-etapes li.ko { color: var(--color-error-700); }
+.fz-case { display: flex; gap: 8px; align-items: flex-start; margin-top: 14px; font-size: 13px; color: var(--fg1); cursor: pointer; }
+.fz-case input { margin-top: 3px; }
+
+/* journal de facturation */
+.fact-bandeau-test { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; padding: 12px 14px; border-radius: var(--radius-md); background: var(--color-warning-50); border: 1px solid #F7D9A6; color: var(--color-warning-700); font-size: 12.5px; line-height: 1.5; }
+.fact-bandeau-test svg { flex: none; margin-top: 2px; }
+.fact-bandeau-test > div { flex: 1; min-width: 0; }
+.fact-bandeau-test .se-btn { flex: none; }
+.fact-historique { display: flex; flex-direction: column; max-height: 520px; overflow-y: auto; }
+.fh-ligne { display: grid; grid-template-columns: 118px 150px minmax(0, 1fr) 120px; gap: 12px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.fh-ligne:last-child { border-bottom: none; }
+.fh-date { color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.fh-action { font-weight: 600; color: var(--fg2); }
+.fh-action.validation { color: var(--color-warning-700); }
+.fh-action.paiement { color: var(--color-primary-700); }
+.fh-action.brouillon_supprime, .fh-action.paiement_annule { color: var(--fg-muted); }
+.fh-texte { color: var(--fg2); min-width: 0; overflow-wrap: anywhere; }
+.fh-qui { color: var(--fg-muted); text-align: right; }
+@media (max-width: 900px) {
+  .fz-grille { grid-template-columns: 1fr; }
+  .fz-apercu iframe, .fz-apercu-vide { height: 60vh; min-height: 380px; }
+  .fh-ligne { grid-template-columns: 1fr; gap: 2px; }
+  .fh-qui { text-align: left; }
+  .fact-bandeau-test { flex-wrap: wrap; }
+}
+
 @media (max-width: 1000px) {
   .fact-tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fact-relances { grid-template-columns: 1fr; }
@@ -2136,4 +2201,22 @@ table.dossiers.fact-table tfoot td { position: sticky; bottom: 0; z-index: 2; ba
   .fact-cpj-ligne .cpj-tot { grid-column: 2; text-align: left; margin-top: -8px; }
   .fact-cpj-ligne.axe > div:first-child, .fact-cpj-ligne.axe > div:last-child { display: none; }
   .fact-cpj-ligne.axe .fact-axe { grid-column: 2; }
+}
+
+/* ---------- Import CSV de copropriétés (tableau de bord, idée d'Amir du 01/10/2026) ---------- */
+.imp-copros-colonnes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-soft); font-size: 12.5px; color: var(--fg2); }
+.imp-copros-colonnes b { color: var(--fg1); font-weight: 600; }
+.imp-copros-colonnes span { color: var(--fg-muted); }
+.imp-copros-table { max-height: 48vh; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-md); margin-top: 12px; }
+.imp-copros-table .fact-apercu { margin-top: 0; }
+.imp-copros-table .fact-apercu th { position: sticky; top: 0; background: var(--bg); z-index: 1; }
+.imp-copros-ligne-ko td { background: var(--color-error-50); }
+.imp-copros-ok { color: var(--color-success-700); font-weight: 600; }
+.imp-copros-note { color: var(--fg-muted); font-weight: 400; }
+.imp-copros-ko { color: var(--color-error-700); }
+.imp-copros-attention { color: var(--color-warning-700); }
+.imp-copros-option { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; font-size: 13px; color: var(--fg2); }
+.imp-copros-option input { margin-top: 2px; }
+@media (max-width: 760px) {
+  .imp-copros-colonnes { grid-template-columns: minmax(0, 1fr); }
 }

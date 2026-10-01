@@ -2,6 +2,8 @@
 // Notion « AMO COPRO », chargée en SQL ; depuis 0112 le bloc Honoraires de
 // l'onglet Projet revalorise la P2 et calcule les honoraires CEE (fonctions
 // SQL, seules à écrire). La facturation directe viendra dans un second temps.
+// Depuis 0121 (idée d'Amir du 01/10/2026), les honoraires de la phase études se
+// saisissent aussi, à la création du dossier ou depuis le bloc.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, toutesLesLignes } from "@/lib/supabase";
 import { jalonsOrdonnes, jalonsEnAttente, type DossierHonoraires } from "@/lib/facturation";
@@ -30,7 +32,9 @@ export function useHonoraires() {
         ),
         supabase
           .from("honoraires_dossiers")
-          .select("copro_id, derniere_facture, source, p2_montant_ht, p2_saisi_le, p2_saisi_par, cee_kwhc, cee_saisi_le, cee_saisi_par"),
+          .select(
+            "copro_id, derniere_facture, source, p1_montant_ht, p1_saisi_le, p1_saisi_par, p2_montant_ht, p2_saisi_le, p2_saisi_par, cee_kwhc, cee_saisi_le, cee_saisi_par"
+          ),
       ]);
       if (e2) throw e2;
       const parCopro = new Map<string, { jalon: string; montant_ht: number | null; etat: string }[]>();
@@ -50,6 +54,9 @@ export function useHonoraires() {
           derniereFacture: info?.derniere_facture ?? null,
           source: info?.source ?? null,
           saisies: {
+            p1MontantHt: nombre(info?.p1_montant_ht ?? null),
+            p1SaisiLe: info?.p1_saisi_le ?? null,
+            p1SaisiPar: info?.p1_saisi_par ?? null,
             p2MontantHt: nombre(info?.p2_montant_ht ?? null),
             p2SaisiLe: info?.p2_saisi_le ?? null,
             p2SaisiPar: info?.p2_saisi_par ?? null,
@@ -69,6 +76,18 @@ const invaliderHonoraires = (qc: ReturnType<typeof useQueryClient>, coproId: str
   void qc.invalidateQueries({ queryKey: ["honoraires"] });
   void qc.invalidateQueries({ queryKey: ["honoraires-saisies", coproId] });
 };
+
+/** « Saisir la P1 » : honoraires HT de la phase études, répartis 50 / 25 / 25 côté serveur (0121). */
+export function useSaisirP1() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ coproId, montantHt }: { coproId: string; montantHt: number }) => {
+      const { error } = await supabase.rpc("honoraires_saisir_p1", { p_copro_id: coproId, p_montant_ht: montantHt });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => invaliderHonoraires(qc, v.coproId),
+  });
+}
 
 /** « Revaloriser la P2 » : honoraires HT de la phase travaux, répartis 50 / 30 / 20 côté serveur. */
 export function useRevaloriserP2() {
@@ -99,7 +118,7 @@ export function useSaisirCee() {
 // P2 ou la dernière saisie CEE. Chaque saisie garde les montants qu'elle a
 // remplacés ; l'annulation les rétablit (fonction SQL honoraires_annuler_saisie).
 
-export type TypeSaisie = "p2" | "cee";
+export type TypeSaisie = "p1" | "p2" | "cee";
 
 export interface JalonAvant {
   existe: boolean;

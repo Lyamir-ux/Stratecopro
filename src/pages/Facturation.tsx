@@ -6,14 +6,32 @@
 // paiements à relancer et chiffre d'affaires par chef de projet, pour tous les
 // AMO (idée d'Amir 29/09/2026 : d'abord réservé au dirigeant ; la P1a en est
 // retirée, hachurée en tête de barre). Le bloc « Honoraires » de l'onglet Projet reprend la même
-// lecture pour un dossier. Lecture seule : la facturation directe depuis le
-// logiciel viendra ensuite.
+// lecture pour un dossier.
+// Facturation directe (0115, demande d'Amir du 28/09/2026) : les bulles de la
+// frise sont cliquables (grise = brouillon de facture, orange = paiement pour
+// le dirigeant) et le « Journal de facturation » liste les factures, avoirs
+// et brouillons, avec l'historique des actions et le passage en production.
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
+import { Modal } from "@/components/Modal";
 import { Badge, type BadgeKind } from "@/components/ui";
+import { useAuth } from "@/auth/AuthProvider";
 import { useCopros, type CoproWithStats } from "@/api/copros";
 import { useHonoraires } from "@/api/honoraires";
+import { useFactures, useJournalFacturation, useParametresFacturation, usePasserEnProduction, type BilanProduction } from "@/api/factures";
+import { useTeamProfiles } from "@/api/profiles";
+import { FacturationJalon, FenetrePieceSeule } from "@/components/FactureFenetres";
+import { messageErreur } from "@/lib/erreurs";
+import {
+  LIBELLE_ETAT_PIECE,
+  dateFr,
+  etatPiece,
+  euros,
+  libelleType,
+  type EtatPiece,
+  type PieceFacture,
+} from "@/lib/factureDoc";
 import { telechargerCsv } from "@/lib/csv";
 import { fmtEuro, normaliserRecherche } from "@/lib/format";
 import { fmtKEur } from "@/lib/ppt/formats";
@@ -37,6 +55,7 @@ import {
   sommesPortefeuille,
   trancheAnciennete,
   type DossierHonoraires,
+  type JalonHonoraires,
   type SommesHonoraires,
   type TrancheAnciennete,
 } from "@/lib/facturation";
@@ -123,6 +142,7 @@ export default function Facturation() {
         <div className="fact-page">
           <Synthese lignes={lignes} />
           <Frise lignes={lignes} />
+          <Journal lignes={lignes} />
           <Relances lignes={lignes} />
           <ParChefProjet lignes={lignes} />
         </div>
@@ -182,10 +202,24 @@ type Tri = "reste" | "attente" | "date" | "nom";
 
 function Frise({ lignes }: { lignes: Ligne[] }) {
   const navigate = useNavigate();
+  const { data: pieces } = useFactures();
   const [filtre, setFiltre] = useState<Filtre>("tous");
   const [chef, setChef] = useState("");
   const [tri, setTri] = useState<Tri>("reste");
   const [q, setQ] = useState("");
+  const [actif, setActif] = useState<{ copro: CoproWithStats; jalon: JalonHonoraires } | null>(null);
+
+  // jalons qui ont un brouillon de facture à valider (contour orange)
+  const brouillons = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const p of pieces ?? []) {
+      if (p.type !== "facture" || p.statut !== "brouillon") continue;
+      const s = m.get(p.copro_id) ?? new Set<string>();
+      s.add(p.jalon);
+      m.set(p.copro_id, s);
+    }
+    return m;
+  }, [pieces]);
 
   const chefs = useMemo(() => [...new Set(lignes.map((l) => l.chef))].sort((a, b) => a.localeCompare(b, "fr")), [lignes]);
   const nAttente = lignes.filter((l) => l.s.enAttente > 0).length;
@@ -231,7 +265,9 @@ function Frise({ lignes }: { lignes: Ligne[] }) {
     <section className="panel">
       <div className="p-head">
         <h3>Frise des jalons</h3>
-        <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Survolez une case pour le montant et l'état du jalon</span>
+        <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
+          Cliquez sur une bulle grise pour préparer la facture du jalon, sur une bulle orange pour la facture ou le paiement
+        </span>
         <span style={{ flex: 1 }}></span>
         <button className="se-btn se-btn-secondary btn-sm" onClick={exporter} disabled={visibles.length === 0}>
           <Icon name="download" size={14} /> Exporter
@@ -299,7 +335,14 @@ function Frise({ lignes }: { lignes: Ligne[] }) {
                       <div className="fact-meta">{l.copro.syndic_name?.trim() || "-"} · {l.chef}</div>
                     </td>
                     <td><Badge kind={BADGE_PHASE[l.copro.phase]}>{libellePhase(l.copro.phase)}</Badge></td>
-                    <td><FriseJalons d={l.d} copro={l.copro.name} /></td>
+                    <td>
+                      <FriseJalons
+                        d={l.d}
+                        copro={l.copro.name}
+                        brouillons={brouillons.get(l.copro.id)}
+                        onJalon={(jalon) => setActif({ copro: l.copro, jalon })}
+                      />
+                    </td>
                     <td className="r">{fmtEuro(l.s.contrat)}</td>
                     <td className="r">
                       {fmtEuro(l.s.encaisse)}
@@ -330,7 +373,286 @@ function Frise({ lignes }: { lignes: Ligne[] }) {
           </table>
         </div>
       </div>
+      {actif && (
+        <FacturationJalon copro={{ id: actif.copro.id, name: actif.copro.name }} jalon={actif.jalon} onClose={() => setActif(null)} />
+      )}
     </section>
+  );
+}
+
+// ---------- Journal de facturation (0115) ----------
+
+type FiltreJournal = "tous" | "brouillons" | "factures" | "avoirs" | "a_terminer";
+
+const BADGE_PIECE: Record<EtatPiece, BadgeKind> = {
+  brouillon: "blue",
+  a_envoyer: "warn",
+  envoi_erreur: "warn",
+  envoyee: "neutral",
+  payee: "success",
+  annulee: "neutral",
+};
+
+const LIBELLE_ACTION: Record<string, string> = {
+  brouillon: "Brouillon",
+  brouillon_supprime: "Brouillon supprimé",
+  validation: "Validation",
+  envoi: "E-mail",
+  paiement: "Paiement",
+  paiement_annule: "Paiement annulé",
+  production: "Passage en production",
+};
+
+function Journal({ lignes }: { lignes: Ligne[] }) {
+  const { profile } = useAuth();
+  const { data: pieces, isLoading } = useFactures();
+  const { data: parametres } = useParametresFacturation();
+  const { data: evenements } = useJournalFacturation();
+  const { data: equipe } = useTeamProfiles();
+  const [vue, setVue] = useState<"pieces" | "historique">("pieces");
+  const [filtre, setFiltre] = useState<FiltreJournal>("tous");
+  const [ouverte, setOuverte] = useState<PieceFacture | null>(null);
+  const [production, setProduction] = useState(false);
+
+  const parCopro = useMemo(() => new Map(lignes.map((l) => [l.copro.id, l])), [lignes]);
+  const nomCopro = (id: string) => parCopro.get(id)?.copro.name ?? "Dossier";
+  const nom = (uid: string | null) => (uid && equipe?.find((p) => p.user_id === uid)?.full_name) || "-";
+  const tout = pieces ?? [];
+  const etat = (p: PieceFacture) => etatPiece(p, tout);
+
+  const compte = {
+    brouillons: tout.filter((p) => p.statut === "brouillon").length,
+    factures: tout.filter((p) => p.statut === "emise" && p.type === "facture").length,
+    avoirs: tout.filter((p) => p.statut === "emise" && p.type === "avoir").length,
+    a_terminer: tout.filter((p) => ["a_envoyer", "envoi_erreur"].includes(etat(p))).length,
+  };
+  const visibles = tout.filter(
+    (p) =>
+      filtre === "tous" ||
+      (filtre === "brouillons" && p.statut === "brouillon") ||
+      (filtre === "factures" && p.statut === "emise" && p.type === "facture") ||
+      (filtre === "avoirs" && p.statut === "emise" && p.type === "avoir") ||
+      (filtre === "a_terminer" && ["a_envoyer", "envoi_erreur"].includes(etat(p)))
+  );
+
+  const exporter = () => {
+    const num = (v: number) => v.toFixed(2).replace(".", ",");
+    telechargerCsv(
+      `journal-facturation-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["N°", "Pièce", "Date d'émission", "Échéance", "Copropriété", "Jalon", "Client", "N° client", "Total HT", "TVA", "Total TTC", "État", "Payée le", "Test"],
+      visibles
+        .filter((p) => p.statut === "emise")
+        .map((p) => [
+          p.numero ?? "", libelleType(p.type), dateFr(p.date_emission), dateFr(p.date_echeance), nomCopro(p.copro_id), libelleJalon(p.jalon),
+          p.client_nom, p.client_numero ?? "", num(p.total_ht), num(p.total_tva), num(p.total_ttc), LIBELLE_ETAT_PIECE[etat(p)],
+          dateFr(p.payee_le), p.test ? "oui" : "",
+        ])
+    );
+  };
+
+  const jalonDe = (p: PieceFacture): JalonHonoraires | null => parCopro.get(p.copro_id)?.d.jalons.find((j) => j.code === p.jalon) ?? null;
+
+  return (
+    <section className="panel">
+      <div className="p-head">
+        <h3>Journal de facturation</h3>
+        {compte.brouillons > 0 && <Badge kind="blue">{plur(compte.brouillons, "brouillon")} à valider</Badge>}
+        <span style={{ flex: 1 }}></span>
+        <div className="seg" role="group" aria-label="Vue du journal">
+          <button className={vue === "pieces" ? "on" : ""} onClick={() => setVue("pieces")}>Pièces</button>
+          <button className={vue === "historique" ? "on" : ""} onClick={() => setVue("historique")}>Historique</button>
+        </div>
+        {vue === "pieces" && (
+          <button className="se-btn se-btn-secondary btn-sm" onClick={exporter} disabled={compte.factures + compte.avoirs === 0}>
+            <Icon name="download" size={14} /> Exporter
+          </button>
+        )}
+      </div>
+      <div className="p-body">
+        {parametres?.mode === "test" && (
+          <div className="fact-bandeau-test">
+            <Icon name="alert" size={16} />
+            <div>
+              <b>Facturation en mode test.</b> Les pièces sont numérotées TEST-FAC-… / TEST-AVR-… et portent « document de test,
+              sans valeur » ; les e-mails partent aux vrais destinataires avec [TEST] dans l'objet. Le passage en production efface
+              tous les essais (pièces, PDF, historique) et remet les jalons dans leur état d'avant ; la numérotation démarre alors à{" "}
+              <b>FAC{String(parametres.prochain_facture).padStart(8, "0")}</b> et <b>AVR{String(parametres.prochain_avoir).padStart(8, "0")}</b>.
+            </div>
+            {profile?.dirigeant && (
+              <button className="se-btn se-btn-secondary btn-sm" onClick={() => setProduction(true)}>
+                Passer en production
+              </button>
+            )}
+          </div>
+        )}
+
+        {vue === "pieces" ? (
+          <>
+            <div className="toolbar fact-toolbar">
+              <div className="seg" role="group" aria-label="Filtre des pièces">
+                <button className={filtre === "tous" ? "on" : ""} onClick={() => setFiltre("tous")}>Toutes · {tout.length}</button>
+                <button className={filtre === "brouillons" ? "on" : ""} onClick={() => setFiltre("brouillons")}>Brouillons · {compte.brouillons}</button>
+                <button className={filtre === "factures" ? "on" : ""} onClick={() => setFiltre("factures")}>Factures · {compte.factures}</button>
+                <button className={filtre === "avoirs" ? "on" : ""} onClick={() => setFiltre("avoirs")}>Avoirs · {compte.avoirs}</button>
+                <button className={filtre === "a_terminer" ? "on" : ""} onClick={() => setFiltre("a_terminer")} title="Émises dont le PDF ou l'e-mail n'est pas parti">
+                  Envoi à terminer · {compte.a_terminer}
+                </button>
+              </div>
+            </div>
+            <div className="tablewrap fact-tablewrap">
+              <table className="dossiers fact-table" style={{ minWidth: 820 }}>
+                <thead>
+                  <tr>
+                    <th>N°</th>
+                    <th>Date</th>
+                    <th>Copropriété</th>
+                    <th>Jalon</th>
+                    <th>Client</th>
+                    <th className="r">Total TTC</th>
+                    <th>État</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoading ? (
+                    <tr style={{ cursor: "default" }}><td colSpan={7} style={{ padding: 24, color: "var(--fg-muted)" }}>Chargement…</td></tr>
+                  ) : visibles.length === 0 ? (
+                    <tr style={{ cursor: "default" }}>
+                      <td colSpan={7} style={{ padding: 28, textAlign: "center", color: "var(--fg-muted)" }}>
+                        {tout.length === 0
+                          ? "Aucune pièce pour l'instant : cliquez sur une bulle grise de la frise ou sur « Facturer » dans l'onglet Projet d'un dossier."
+                          : "Aucune pièce ne correspond à ce filtre."}
+                      </td>
+                    </tr>
+                  ) : (
+                    visibles.map((p) => {
+                      const e = etat(p);
+                      return (
+                        <tr key={p.id} onClick={() => setOuverte(p)}>
+                          <td>
+                            <span className="fact-nom" style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>
+                              {p.numero ?? "Brouillon"}
+                            </span>
+                            <span className="fact-meta">{libelleType(p.type)}{p.test ? " · test" : ""}</span>
+                          </td>
+                          <td>
+                            {p.statut === "emise" ? dateFr(p.date_emission) : dateFr(p.cree_le.slice(0, 10))}
+                            <span className="fact-meta">{p.statut === "emise" ? `par ${nom(p.valide_par)}` : `préparé par ${nom(p.cree_par)}`}</span>
+                          </td>
+                          <td><span className="fact-nom">{nomCopro(p.copro_id)}</span></td>
+                          <td style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{libelleJalon(p.jalon)}</td>
+                          <td>
+                            <span className="fact-nom">{p.client_nom}</span>
+                            <span className="fact-meta">{p.destinataire_email ?? "sans e-mail"}</span>
+                          </td>
+                          <td className="r fact-fort">{euros(p.total_ttc)}</td>
+                          <td>
+                            <Badge kind={BADGE_PIECE[e]}>{LIBELLE_ETAT_PIECE[e]}</Badge>
+                            {p.payee_le && <span className="fact-meta">le {dateFr(p.payee_le)}</span>}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <div className="fact-historique">
+            {(evenements ?? []).length === 0 ? (
+              <p className="se-small" style={{ margin: 0 }}>Aucune action de facturation pour l'instant.</p>
+            ) : (
+              (evenements ?? []).map((ev) => (
+                <div key={ev.id} className="fh-ligne">
+                  <span className="fh-date">{new Date(ev.le).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</span>
+                  <span className={"fh-action " + ev.action}>{LIBELLE_ACTION[ev.action] ?? ev.action}</span>
+                  <span className="fh-texte">
+                    <b>{nomCopro(ev.copro_id)}</b>
+                    {ev.jalon ? ` · ${libelleJalon(ev.jalon)}` : ""} - {ev.detail}
+                    {ev.test && <span className="fz-test">Test</span>}
+                  </span>
+                  <span className="fh-qui">{nom(ev.par)}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+      {ouverte && (
+        <FenetrePieceSeule
+          piece={ouverte}
+          copro={{ id: ouverte.copro_id, name: nomCopro(ouverte.copro_id) }}
+          jalon={jalonDe(ouverte)}
+          onClose={() => setOuverte(null)}
+        />
+      )}
+      {production && (
+        <FenetreProduction
+          nbPieces={tout.filter((p) => p.test).length}
+          nbEvenements={(evenements ?? []).filter((e) => e.test).length}
+          onClose={() => setProduction(false)}
+        />
+      )}
+    </section>
+  );
+}
+
+function FenetreProduction({ nbPieces, nbEvenements, onClose }: { nbPieces: number; nbEvenements: number; onClose: () => void }) {
+  const passer = usePasserEnProduction();
+  const [compris, setCompris] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [bilan, setBilan] = useState<BilanProduction | null>(null);
+
+  const confirmer = async () => {
+    setErreur(null);
+    try {
+      setBilan(await passer.mutateAsync());
+    } catch (e) {
+      setErreur(messageErreur(e, "Le passage en production a échoué : rien n'a été effacé."));
+    }
+  };
+
+  return (
+    <Modal title="Passer la facturation en production" onClose={onClose} width={540} closeOnBackdrop={false}>
+      {bilan ? (
+        <>
+          <p className="se-small" style={{ margin: 0 }}>
+            La facturation est en production. Effacés : {plur(bilan.factures, "facture")} et {plur(bilan.avoirs, "avoir")} de test,
+            avec leurs PDF et leur historique ; {plur(bilan.jalons, "jalon remis", "jalons remis")} dans leur état d'avant les essais.
+            La prochaine facture portera le numéro FAC00000766 (ou le suivant) et le prochain avoir AVR00000073.
+          </p>
+          {bilan.fichiersRestants > 0 && (
+            <p className="fact-alerte">
+              <Icon name="alert" size={14} /> {plur(bilan.fichiersRestants, "PDF de test n'a", "PDF de test n'ont")} pas pu être retirés du stockage
+              (ils ne sont plus rattachés à aucun dossier).
+            </p>
+          )}
+          <div className="fact-modal-actions">
+            <button type="button" className="se-btn se-btn-primary btn-sm" onClick={onClose}>Fermer</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="se-small" style={{ margin: 0 }}>
+            Tout ce qui a été fait en mode test est effacé : {plur(nbPieces, "pièce")} (factures, avoirs, brouillons), leurs PDF dans
+            les fichiers des copropriétés, {plur(nbEvenements, "ligne")} d'historique et les numéros clients attribués pendant les
+            essais. Les jalons touchés reviennent à leur état d'avant (à facturer, facturé ou encaissé). Les adresses de syndic
+            saisies sont gardées. Les e-mails déjà partis ne peuvent pas être rappelés.
+          </p>
+          <label className="fz-case">
+            <input type="checkbox" checked={compris} onChange={(e) => setCompris(e.target.checked)} />
+            J'ai compris : les essais sont effacés définitivement et la vraie numérotation démarre.
+          </label>
+          {erreur && <p className="fact-erreur">{erreur}</p>}
+          <div className="fact-modal-actions">
+            <button type="button" className="se-btn se-btn-ghost btn-sm" onClick={onClose}>Annuler</button>
+            <button type="button" className="se-btn se-btn-primary btn-sm" onClick={() => void confirmer()} disabled={!compris || passer.isPending}>
+              {passer.isPending ? "Passage en production…" : "Passer en production"}
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
   );
 }
 

@@ -17,6 +17,10 @@ export const DOSSIERS = [
   "Photos chantier",
 ] as const;
 
+/** Factures et avoirs émis depuis la facturation (0115) : dossier rempli par
+ *  le logiciel, sans dépôt manuel ; les pièces émises ne se suppriment pas. */
+export const DOSSIER_FACTURATION = "Facturation";
+
 /** Quels documents vont dans quel dossier - texte de la bulle « ? » de chaque
  *  carte de l'onglet Fichiers. Modifiez librement les descriptions ci-dessous. */
 export const DOSSIER_AIDE: Record<(typeof DOSSIERS)[number], string> = {
@@ -222,9 +226,11 @@ export function useDeleteFichier(coproId: string) {
       // dossiers de montage : on défait tout avant de le supprimer.
       await delierFichierDesChecklists(f.id);
       await retirerFichierDesMontages(coproId, f.storage_path);
-      await supabase.storage.from("copro-files").remove([f.storage_path]);
+      // la ligne d'abord : la base refuse de supprimer le PDF d'une facture
+      // émise (0115), l'objet stocké ne doit alors pas disparaître
       const { error } = await supabase.from("fichiers").delete().eq("id", f.id);
       if (error) throw error;
+      await supabase.storage.from("copro-files").remove([f.storage_path]);
     },
     onSuccess: () => invaliderPieces(qc, coproId),
   });

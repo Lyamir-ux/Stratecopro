@@ -28,6 +28,7 @@ export function LegendeFacturation() {
   return (
     <div className="fact-legende">
       <span><i className="fact-sw" style={{ background: COULEUR_ETAT.encaisse }}></i>Encaissé</span>
+      <span><i className="fact-sw brouillon"></i>Brouillon à valider</span>
       <span><i className="fact-sw" style={{ background: COULEUR_ETAT.facture }}></i>Facturé, en attente de paiement</span>
       <span><i className="fact-sw" style={{ background: COULEUR_ETAT.a_facturer }}></i>Reste à facturer</span>
       <span><i className="fact-sw vide"></i>Pas de montant prévu</span>
@@ -59,25 +60,71 @@ export function JaugeHonoraires({ s, hauteur = 22 }: { s: SommesHonoraires; haut
   );
 }
 
-function Pastille({ j, copro }: { j: JalonHonoraires; copro: string }) {
+// Facturation directe (0115) : la pastille devient un bouton quand la frise
+// reçoit onJalon (bulle grise = facturer, contour orange = brouillon à
+// valider, orange = paiement pour le dirigeant, facture pour les autres).
+const ACTION_ETAT: Record<EtatJalon, string> = {
+  a_facturer: "cliquez pour facturer",
+  facture: "cliquez pour la facture ou le paiement",
+  encaisse: "cliquez pour la facture",
+};
+
+function Pastille({
+  j,
+  copro,
+  brouillon,
+  onClick,
+}: {
+  j: JalonHonoraires;
+  copro: string;
+  brouillon?: boolean;
+  onClick?: (j: JalonHonoraires) => void;
+}) {
   const sansMontant = j.montant == null || j.montant <= 0;
   const detail = sansMontant
     ? cocheSansMontant(j)
       ? "coché dans Notion, sans montant"
       : "pas de montant prévu"
-    : `${fmtEuro(j.montant)} HT - ${LIBELLE_ETAT[j.etat]}`;
-  return <span className={"fact-pas " + (sansMontant ? "vide" : j.etat)} title={`${copro} - ${libelleJalon(j.code)} : ${detail}`}></span>;
+    : `${fmtEuro(j.montant)} HT - ${brouillon ? "brouillon de facture à valider" : LIBELLE_ETAT[j.etat]}`;
+  const cls = "fact-pas " + (sansMontant ? "vide" : j.etat) + (brouillon && !sansMontant ? " brouillon" : "");
+  const titre = `${copro} - ${libelleJalon(j.code)} : ${detail}`;
+  if (onClick && !sansMontant) {
+    return (
+      <button
+        type="button"
+        className={cls + " cliquable"}
+        title={`${titre} (${brouillon ? "cliquez pour le brouillon" : ACTION_ETAT[j.etat]})`}
+        aria-label={titre}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick(j);
+        }}
+      ></button>
+    );
+  }
+  return <span className={cls} title={titre}></span>;
 }
 
 /** Les 8 jalons d'un dossier en pastilles colorées, groupées Études / Travaux / CEE. */
-export function FriseJalons({ d, copro }: { d: DossierHonoraires; copro: string }) {
+export function FriseJalons({
+  d,
+  copro,
+  brouillons,
+  onJalon,
+}: {
+  d: DossierHonoraires;
+  copro: string;
+  /** Jalons qui ont un brouillon de facture en attente de validation. */
+  brouillons?: Set<string>;
+  onJalon?: (j: JalonHonoraires) => void;
+}) {
   return (
     <span className="fact-frise">
       {GROUPES_JALONS.map((g) => (
         <span key={g.id} className="g">
           {g.codes.map((c) => {
             const j = d.jalons.find((x) => x.code === c)!;
-            return <Pastille key={c} j={j} copro={copro} />;
+            return <Pastille key={c} j={j} copro={copro} brouillon={brouillons?.has(c)} onClick={onJalon} />;
           })}
         </span>
       ))}

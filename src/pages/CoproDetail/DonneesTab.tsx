@@ -40,6 +40,7 @@ import {
 import { messageErreur } from "@/lib/erreurs";
 import type { Enums } from "@/lib/database.types";
 import { trierParNomFamille } from "@/lib/nomFamille";
+import { fmtDate } from "@/lib/format";
 import { ImportLotsDialog } from "./ImportLotsDialog";
 import { ChangementProprietaire, JournalMutations } from "@/pages/Syndic/ChangementProprietaire";
 
@@ -74,6 +75,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
     gestionnaireEmail: "",
     chefProjet: "",
     maitreOeuvre: "",
+    dateAg: "",
     nbLogements: 0,
     nbBatiments: 0,
     denomination: "batiment",
@@ -134,6 +136,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
       gestionnaireEmail: c.gestionnaire_email ?? "",
       chefProjet: c.chef_projet ?? "",
       maitreOeuvre: c.maitre_oeuvre ?? "",
+      dateAg: c.date_ag ?? "",
       nbLogements: c.nb_logements ?? 0,
       nbBatiments: batiments.length,
       denomination: c.denomination_batiments ?? "batiment",
@@ -232,6 +235,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
         gestionnaire_email: synth.gestionnaireEmail || null,
         chef_projet: synth.chefProjet || null,
         maitre_oeuvre: synth.maitreOeuvre.trim() || null,
+        date_ag: synth.dateAg || null,
         nb_logements: synth.nbLogements > 0 ? synth.nbLogements : null,
         denomination_batiments: synth.denomination,
         energy_before: synth.energyBefore || null,
@@ -662,6 +666,20 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
               </>
             ) : (
               <span className="v">{c.maitre_oeuvre ?? "-"}</span>
+            )}
+          </div>
+          {/* Date d'AG saisie à la création du dossier (idée d'Amir du 01/10/2026) */}
+          <div className="kv">
+            <span className="k">Date d'AG</span>
+            {editingSynth ? (
+              <input
+                className="edit-inp"
+                type="date"
+                value={synth.dateAg}
+                onChange={(e) => setSynth((s) => ({ ...s, dateAg: e.target.value }))}
+              />
+            ) : (
+              <span className="v">{c.date_ag ? fmtDate(c.date_ag) : "-"}</span>
             )}
           </div>
           <div className="kv" title={TITRE_LOGEMENTS}>
