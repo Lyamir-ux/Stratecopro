@@ -209,9 +209,27 @@ export default function CoproDetail() {
               <DpePair before={c.energy_before as DpeClass | null} after={c.energy_after as DpeClass | null} />
             </div>
             <h1 className="dh-title">{c.name}</h1>
+            {/* Adresse complète, puis syndic, chef de projet et maître d'œuvre (idée d'Amir du 01/10/2026) */}
             <div className="dh-loc">
               <Icon name="mapPin" size={15} />
-              {[[c.code_postal, c.city].filter(Boolean).join(" "), c.syndic_name].filter(Boolean).join(" · ") || "À compléter"}
+              {[c.adresse?.trim(), [c.code_postal, c.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") ||
+                "Adresse à compléter (onglet Données)"}
+            </div>
+            <div className="dh-equipe">
+              {c.syndic_name && (
+                <span title={c.gestionnaire_nom ? `Gestionnaire : ${c.gestionnaire_nom}` : undefined}>
+                  <Icon name="briefcase" size={14} />
+                  Syndic <b>{c.syndic_name}</b>
+                </span>
+              )}
+              <span>
+                <Icon name="user" size={14} />
+                Chef de projet {c.chef_projet?.trim() ? <b>{c.chef_projet.trim()}</b> : <i>non désigné</i>}
+              </span>
+              <span>
+                <Icon name="hammer" size={14} />
+                Maître d'œuvre {c.maitre_oeuvre?.trim() ? <b>{c.maitre_oeuvre.trim()}</b> : <i>non désigné</i>}
+              </span>
             </div>
           </div>
           <div className="dh-stats">
