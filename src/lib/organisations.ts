@@ -20,6 +20,16 @@ export function normaliserNomOrganisation(nom: string): string {
 }
 
 /**
+ * Recherche de Paramètres → Organisations (idée d'Amir du 01/10/2026) : les
+ * enseignes dont le nom contient le texte saisi, casse, accents et espaces
+ * superflus ignorés ; recherche vide = toutes, dans l'ordre reçu.
+ */
+export function filtrerOrganisations<T extends OrganisationNommee>(organisations: readonly T[], recherche: string): T[] {
+  const q = normaliserNomOrganisation(recherche);
+  return q ? organisations.filter((o) => normaliserNomOrganisation(o.nom).includes(q)) : [...organisations];
+}
+
+/**
  * L'enseigne dont le nom correspond au syndic saisi, sinon null.
  * Un nom qui ne correspond à aucune enseigne ne détache rien : l'appelant
  * conserve alors le rattachement existant (cas d'un syndic hors plateforme

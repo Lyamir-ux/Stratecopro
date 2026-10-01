@@ -29,6 +29,7 @@ import type { Tables } from "@/lib/database.types";
 import { useActiverModulePpt, useMajPptParametres, usePptParametres } from "@/api/ppt";
 import { PARAMETRES_ORG_DEFAUT, type ParametresOrg } from "@/lib/ppt/formules";
 import { messageErreur } from "@/lib/erreurs";
+import { filtrerOrganisations } from "@/lib/organisations";
 
 const ROLE_LABEL: Record<OrgRole, string> = {
   directeur: "Direction - tout le portefeuille",
@@ -475,12 +476,20 @@ export function OrganisationsPanel() {
   const [nom, setNom] = useState("");
   const [renommage, setRenommage] = useState<string | null>(null);
   const [nomEdite, setNomEdite] = useState("");
+  // Idée d'Amir du 01/10/2026 : filtrer la liste par le nom de l'enseigne
+  // (casse et accents ignorés), Entrée ouvre l'enseigne quand il n'en reste qu'une
+  const [recherche, setRecherche] = useState("");
+  const q = recherche.trim();
+  const toutes = organisations ?? [];
+  const visibles = filtrerOrganisations(toutes, recherche);
 
   const valider = () => {
     if (!nom.trim()) return;
     void creer.mutateAsync(nom).then((o) => {
       setNom("");
       setCreation(false);
+      // la nouvelle enseigne reste visible même si la recherche en cours l'aurait masquée
+      setRecherche("");
       setOpen(o.id);
     });
   };
@@ -501,6 +510,26 @@ export function OrganisationsPanel() {
       <div className="p-head">
         <Icon name="briefcase" size={18} />
         <h3>Organisations</h3>
+        {toutes.length > 0 && (
+          <div className="search" style={{ margin: 0, padding: "6px 10px", width: 260, maxWidth: "100%" }}>
+            <Icon name="search" size={15} />
+            <input
+              placeholder="Rechercher une organisation…"
+              aria-label="Rechercher une organisation"
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && visibles.length === 1) setOpen(visibles[0].id);
+                if (e.key === "Escape") setRecherche("");
+              }}
+            />
+            {recherche && (
+              <button className="icon-btn" style={{ width: 22, height: 22 }} title="Effacer la recherche" onClick={() => setRecherche("")}>
+                <Icon name="x" size={13} />
+              </button>
+            )}
+          </div>
+        )}
         <span style={{ flex: 1 }}></span>
         <button className="se-btn se-btn-secondary btn-sm" onClick={() => setCreation((v) => !v)}>
           <Icon name={creation ? "x" : "plus"} size={14} />
@@ -531,13 +560,21 @@ export function OrganisationsPanel() {
           </div>
         )}
 
-        {(organisations ?? []).length === 0 && !creation && (
+        {toutes.length === 0 && !creation && (
           <p className="se-small" style={{ color: "var(--fg-muted)" }}>
             Aucune organisation - créez-en une pour donner à une direction de cabinet la vue sur tout son portefeuille.
           </p>
         )}
 
-        {(organisations ?? []).map((o) => (
+        {q && (
+          <p className="se-small" style={{ color: "var(--fg-muted)", margin: "0 0 10px" }}>
+            {visibles.length === 0
+              ? `Aucune organisation ne correspond à « ${q} ».`
+              : `${visibles.length} organisation${visibles.length > 1 ? "s" : ""} sur ${toutes.length}`}
+          </p>
+        )}
+
+        {visibles.map((o) => (
           <div key={o.id} style={{ marginBottom: 10 }}>
             <div
               className="task-row"

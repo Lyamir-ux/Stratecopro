@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  filtrerOrganisations,
   nomOrganisationDisponible,
   nomSyndicBenevole,
   normaliserNomOrganisation,
@@ -18,6 +19,32 @@ describe("normaliserNomOrganisation", () => {
   it("ignore casse, accents et espaces multiples", () => {
     expect(normaliserNomOrganisation("  Citya   IMMO 4 ")).toBe("citya immo 4");
     expect(normaliserNomOrganisation("Résidence Été")).toBe("residence ete");
+  });
+});
+
+describe("filtrerOrganisations", () => {
+  const ids = (q: string) => filtrerOrganisations(ORGS, q).map((o) => o.id);
+
+  it("garde toutes les enseignes, dans l'ordre, pour une recherche vide", () => {
+    expect(ids("")).toEqual(["immo4", "ruhl", "immium", "laemmel", "demo"]);
+    expect(ids("   ")).toEqual(["immo4", "ruhl", "immium", "laemmel", "demo"]);
+  });
+
+  it("cherche une partie du nom, casse et espaces ignorés", () => {
+    expect(ids("citya")).toEqual(["immo4", "ruhl"]);
+    expect(ids("  LAEMMEL ")).toEqual(["laemmel"]);
+    expect(ids("immium")).toEqual(["immium", "laemmel"]);
+    expect(ids("grand   est")).toEqual(["demo"]);
+  });
+
+  it("ignore les accents de part et d'autre", () => {
+    const benevoles = [{ id: "h", nom: "Syndic Bénévole HERMITE" }];
+    expect(filtrerOrganisations(benevoles, "benevole").map((o) => o.id)).toEqual(["h"]);
+    expect(filtrerOrganisations(ORGS, "sègesca").map((o) => o.id)).toEqual(["ruhl"]);
+  });
+
+  it("renvoie une liste vide quand rien ne correspond", () => {
+    expect(ids("Foncia")).toEqual([]);
   });
 });
 
