@@ -25,6 +25,10 @@ export type CandidaturePresta = Tables<"candidatures"> & {
 };
 
 const COPRO_COLS = "id, name, adresse, city, code_postal, phase, fragile";
+// Lien candidature -> consultation : depuis 0109, consultations.analyse_candidature_id
+// relie aussi les deux tables dans l'autre sens ; sans ce nom de clé, l'API
+// refuse l'imbrication (erreur 300, « more than one relationship »).
+const LIEN_CANDIDATURE = "candidatures_consultation_id_fkey";
 
 /** Fiche entreprise du prestataire connecté (RLS : la sienne uniquement).
  *  Désactivé pour l'AMO (qui voit toutes les entreprises → choisit un aperçu). */
@@ -51,7 +55,7 @@ export function useConsultationsPresta(presta: Tables<"prestataires">) {
     queryFn: async (): Promise<ConsultationPresta[]> => {
       const { data, error } = await supabase
         .from("consultations")
-        .select(`*, coproprietes(${COPRO_COLS}), candidatures(*), consultation_docs(*), consultation_questions(*)`)
+        .select(`*, coproprietes(${COPRO_COLS}), candidatures!${LIEN_CANDIDATURE}(*), consultation_docs(*), consultation_questions(*)`)
         .order("published_at", { ascending: false });
       if (error) throw error;
       return (data ?? [])
@@ -84,7 +88,7 @@ export function useMesCandidatures(prestaId: string) {
     queryFn: async (): Promise<CandidaturePresta[]> => {
       const { data, error } = await supabase
         .from("candidatures")
-        .select(`*, consultations(*, coproprietes(${COPRO_COLS}))`)
+        .select(`*, consultations!${LIEN_CANDIDATURE}(*, coproprietes(${COPRO_COLS}))`)
         .eq("prestataire_id", prestaId)
         .order("received_at", { ascending: false });
       if (error) throw error;
@@ -507,7 +511,7 @@ export function useMesProjetsMoe(enabled: boolean, prestaId: string) {
       const [cands, designes] = await Promise.all([
         supabase
           .from("candidatures")
-          .select(`*, consultations(*, coproprietes(${COPRO_COLS}))`)
+          .select(`*, consultations!${LIEN_CANDIDATURE}(*, coproprietes(${COPRO_COLS}))`)
           .eq("prestataire_id", prestaId)
           .eq("statut", "retenue"),
         supabase.rpc("copros_moe_designe", { p_prestataire_id: prestaId }),

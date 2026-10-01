@@ -69,9 +69,11 @@ Deno.serve(async (req: Request) => {
       .not("email", "is", null);
     cibles = data ?? [];
   } else {
+    // lien explicite : depuis 0109, consultations.analyse_candidature_id relie
+    // aussi les deux tables dans l'autre sens (sinon PGRST201, aucune alerte)
     const { data } = await admin
       .from("candidatures")
-      .select("prestataires(id, raison_sociale, contact_nom, email, emails_secondaires, actif), consultations!inner(copro_id)")
+      .select("prestataires(id, raison_sociale, contact_nom, email, emails_secondaires, actif), consultations!candidatures_consultation_id_fkey!inner(copro_id)")
       .eq("statut", "retenue")
       .eq("consultations.copro_id", copro_id);
     const vus = new Set<string>();

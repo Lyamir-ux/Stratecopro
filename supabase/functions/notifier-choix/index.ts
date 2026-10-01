@@ -54,9 +54,11 @@ Deno.serve(async (req: Request) => {
   const { candidature_id } = await req.json().catch(() => ({}));
   if (!candidature_id) return json(400, { error: "candidature_id manquant" });
 
+  // lien explicite : depuis 0109, consultations.analyse_candidature_id relie aussi
+  // les deux tables dans l'autre sens (sinon l'API refuse l'imbrication, PGRST201)
   const { data: cand, error: candErr } = await admin
     .from("candidatures")
-    .select("*, consultations(*, coproprietes(name, adresse, city)), prestataires(raison_sociale, contact_nom, email, emails_secondaires)")
+    .select("*, consultations!candidatures_consultation_id_fkey(*, coproprietes(name, adresse, city)), prestataires(raison_sociale, contact_nom, email, emails_secondaires)")
     .eq("id", candidature_id)
     .maybeSingle();
   if (candErr || !cand) return json(404, { error: "Candidature introuvable" });

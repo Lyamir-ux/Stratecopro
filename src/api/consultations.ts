@@ -62,10 +62,12 @@ export function useConsultations() {
   return useQuery({
     queryKey: ["consultations"],
     queryFn: async (): Promise<Consultation[]> => {
+      // lien explicite : depuis 0109, consultations.analyse_candidature_id relie
+      // aussi les deux tables dans l'autre sens (sinon erreur 300 de l'API)
       const { data, error } = await supabase
         .from("consultations")
         .select(
-          "*, candidatures(*), coproprietes(name, city, adresse), consultation_notifications(*, prestataires(raison_sociale)), consultation_docs(*), consultation_acces(*, prestataires(raison_sociale)), consultation_questions(*, prestataires(raison_sociale))"
+          "*, candidatures!candidatures_consultation_id_fkey(*), coproprietes(name, city, adresse), consultation_notifications(*, prestataires(raison_sociale)), consultation_docs(*), consultation_acces(*, prestataires(raison_sociale)), consultation_questions(*, prestataires(raison_sociale))"
         )
         .order("published_at", { ascending: false });
       if (error) throw error;
