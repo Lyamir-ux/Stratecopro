@@ -96,6 +96,88 @@ export function useUpdatePrestataire() {
   });
 }
 
+// ---------- Accès à l'espace prestataire (0123, 01/10/2026) ----------
+// Aucune entreprise n'avait de compte : l'AMO le crée depuis la fiche, l'edge
+// function creer-espace-prestataire crée le compte, relie la fiche et envoie
+// l'e-mail d'activation (même mécanique que les espaces copropriétaires).
+
+export type EtatAccesPrestataire = "actif" | "invite" | "a_creer" | "sans_email" | "email_pris";
+
+export interface AccesPrestataire {
+  etat: EtatAccesPrestataire;
+  inviteLe: string | null;
+  /** Identifiant de connexion du compte relié (ne suit pas l'e-mail de la fiche). */
+  emailCompte: string | null;
+  /** Rôle du compte qui détient déjà l'adresse (état email_pris). */
+  roleCompte: string | null;
+  /** Entreprise déjà reliée au compte prestataire de cette adresse (état email_pris). */
+  autreFiche: string | null;
+}
+
+/** État de l'accès de chaque fiche de la Base prestataires (AMO seul). */
+export function useAccesPrestataires() {
+  return useQuery({
+    queryKey: ["prestataires", "acces"],
+    queryFn: async (): Promise<Map<string, AccesPrestataire>> => {
+      const { data, error } = await supabase.rpc("espaces_prestataires");
+      if (error) throw error;
+      return new Map(
+        (data ?? []).map((r) => [
+          r.prestataire_id,
+          {
+            etat: r.etat as EtatAccesPrestataire,
+            inviteLe: r.invite_le,
+            emailCompte: r.email_compte,
+            roleCompte: r.role_compte,
+            autreFiche: r.autre_fiche,
+          },
+        ])
+      );
+    },
+  });
+}
+
+const ROLE_COMPTE: Record<string, string> = {
+  amo: "un compte Strat Eco",
+  syndic: "un compte syndic",
+  copro: "un compte copropriétaire",
+  moe: "un compte maître d'œuvre",
+};
+
+/** Pourquoi l'adresse d'une fiche ne peut pas recevoir d'accès (état email_pris). */
+export function motifAdressePrise(acces: Pick<AccesPrestataire, "roleCompte" | "autreFiche">): string {
+  if (acces.autreFiche) return `Adresse déjà utilisée par le compte de ${acces.autreFiche}`;
+  if (!acces.roleCompte) return "Adresse déjà utilisée par un compte incomplet";
+  return `Adresse déjà utilisée par ${ROLE_COMPTE[acces.roleCompte] ?? "un autre compte"}`;
+}
+
+export interface ResultatAccesPrestataire {
+  statut: "invite" | "relie" | "renvoye" | "deja_actif" | "sans_email" | "suspendu" | "email_pris" | "erreur";
+  envoi: "envoye" | "simule" | "echec" | null;
+  email?: string;
+  detail?: string;
+}
+
+/** Crée l'accès d'une fiche (ou renvoie le lien d'activation) - l'e-mail part réellement. */
+export function useCreerAccesPrestataire() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (prestataireId: string): Promise<ResultatAccesPrestataire> => {
+      const { data, error } = await supabase.functions.invoke("creer-espace-prestataire", {
+        body: { prestataire_id: prestataireId },
+      });
+      if (error) {
+        // le corps d'erreur de l'edge function porte le message à afficher
+        const ctx = (error as { context?: Response }).context;
+        const parsed = ctx ? await ctx.json().catch(() => null) : null;
+        throw new Error(parsed?.error ?? "La création de l'accès a échoué. Réessayez.");
+      }
+      return (data as { resultat: ResultatAccesPrestataire }).resultat;
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["prestataires"] }),
+  });
+}
+
 export function useDeletePrestataire() {
   const qc = useQueryClient();
   return useMutation({

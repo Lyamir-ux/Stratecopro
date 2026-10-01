@@ -1,8 +1,7 @@
 // Base prestataires - entreprises référencées pour les consultations de
 // prestations intellectuelles (MOE, diagnostiqueur, CT, SPS…). C'est dans
 // cette base que la publication d'une consultation va chercher les adresses
-// e-mail à alerter. Le rattachement d'un compte de connexion (user_id) se
-// fait pour l'instant en SQL, comme pour les copropriétaires.
+// e-mail à alerter.
 // E-mail facultatif depuis le 27/09/2026 (0105) : les maîtres d'œuvre du
 // portefeuille ont été référencés sur leur seul nom - sans adresse, la fiche
 // n'est alertée de rien et ne peut pas recevoir de compte.
@@ -13,7 +12,11 @@
 // directe d'une fiche par /prestataires?fiche=<id> (lien du bandeau du dossier).
 // Départements et « Ne pas consulter » depuis le 01/10/2026 (0122) : réglés
 // par l'entreprise dans Mon entreprise, ou par l'équipe dans cette fiche.
-import { useEffect, useMemo, useState } from "react";
+// « Créer l'accès » depuis le 01/10/2026 (0123, question d'Amir sur la fiche
+// « Best Ryan ») : aucune entreprise n'avait de compte, le rattachement se
+// faisait en SQL. Le compte se crée seulement sur un clic dans la fiche, à
+// l'e-mail principal ; l'entreprise reçoit un lien pour choisir son mot de passe.
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
@@ -25,15 +28,20 @@ import { resumeDepartements } from "@/lib/departements";
 import { CONSULT_TYPES } from "@/api/consultations";
 import {
   emailValide,
+  motifAdressePrise,
   normaliserEmails,
+  useAccesPrestataires,
   useAddPrestataire,
+  useCreerAccesPrestataire,
   useDeletePrestataire,
   usePrestataires,
   useUpdatePrestataire,
+  type AccesPrestataire,
   type Prestataire,
+  type ResultatAccesPrestataire,
 } from "@/api/prestataires";
 import type { Tables } from "@/lib/database.types";
-import { normaliserRecherche } from "@/lib/format";
+import { fmtDate, normaliserRecherche } from "@/lib/format";
 
 type TypeConsult = Tables<"consultations">["type"];
 
@@ -67,18 +75,223 @@ function TypeChips({ types }: { types: TypeConsult[] }) {
   );
 }
 
+/** État de l'accès dans la liste (repli sur user_id tant que l'état charge). */
+function BadgeAcces({ acces, lie }: { acces: AccesPrestataire | undefined; lie: boolean }) {
+  const etat = acces?.etat ?? (lie ? "actif" : "a_creer");
+  if (etat === "actif") return <Badge kind="success" dot>Compte actif</Badge>;
+  if (etat === "invite") {
+    return (
+      <span title={`E-mail d'activation envoyé${acces?.inviteLe ? ` le ${fmtDate(acces.inviteLe)}` : ""}, lien pas encore utilisé`}>
+        <Badge kind="warn">Invitée</Badge>
+      </span>
+    );
+  }
+  if (etat === "email_pris" && acces) {
+    return (
+      <span className="badge b-error" title={motifAdressePrise(acces) + " : autre adresse principale à saisir dans la fiche"}>
+        Adresse prise
+      </span>
+    );
+  }
+  return <Badge kind="neutral">Sans compte</Badge>;
+}
+
+/** Compte rendu d'une création d'accès, en une phrase. */
+function phraseResultat(r: ResultatAccesPrestataire): string {
+  const a = r.email ? ` à ${r.email}` : "";
+  const simulation = r.envoi === "simule" ? " (simulation : clé d'envoi absente du serveur)" : "";
+  if (r.envoi === "echec") {
+    return "Le compte est prêt mais l'e-mail n'est pas parti : utilisez « Renvoyer l'e-mail ».";
+  }
+  switch (r.statut) {
+    case "invite":
+      return `Accès créé : e-mail d'activation envoyé${a}${simulation}.`;
+    case "relie":
+      return `Fiche reliée au compte existant de cette adresse : e-mail envoyé${a}${simulation}.`;
+    case "renvoye":
+      return `E-mail d'activation renvoyé${a}${simulation}.`;
+    case "deja_actif":
+      return "Accès déjà activé, rien à envoyer.";
+    case "sans_email":
+      return "Pas d'adresse e-mail principale valide sur la fiche.";
+    default:
+      return r.detail ?? "La création de l'accès a échoué.";
+  }
+}
+
+/**
+ * Accès de l'entreprise à son espace prestataire : état du compte et bouton
+ * « Créer l'accès » (ou « Renvoyer l'e-mail » tant que le lien n'a pas servi).
+ * L'e-mail part réellement, d'où la confirmation.
+ */
+function AccesEspace({
+  fiche,
+  acces,
+  emailSaisi,
+}: {
+  fiche: Prestataire;
+  acces: AccesPrestataire | undefined;
+  /** E-mail principal en cours de saisie : l'accès part de l'adresse enregistrée. */
+  emailSaisi: string;
+}) {
+  const creer = useCreerAccesPrestataire();
+  const [confirmer, setConfirmer] = useState(false);
+  const [resultat, setResultat] = useState<ResultatAccesPrestataire | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  const emailEnregistre = (fiche.email ?? "").trim().toLowerCase();
+  const etat = acces?.etat ?? (fiche.user_id ? "invite" : emailEnregistre ? "a_creer" : "sans_email");
+  const emailModifie = emailSaisi.trim().toLowerCase() !== emailEnregistre;
+  const destinataire = acces?.emailCompte ?? emailEnregistre;
+  const peutEnvoyer = fiche.actif && (etat === "invite" || (etat === "a_creer" && !emailModifie));
+
+  const lancer = () => {
+    setErreur(null);
+    creer.mutate(fiche.id, {
+      onSuccess: (r) => {
+        setResultat(r);
+        setConfirmer(false);
+      },
+      onError: (e) => setErreur(e instanceof Error ? e.message : "La création de l'accès a échoué."),
+    });
+  };
+
+  let constat: ReactNode;
+  switch (etat) {
+    case "actif":
+      constat = (
+        <>
+          <Badge kind="success" dot>Compte actif</Badge> L'entreprise s'est déjà connectée. Identifiant :{" "}
+          <b>{acces?.emailCompte}</b>.
+        </>
+      );
+      break;
+    case "invite":
+      constat = (
+        <>
+          <Badge kind="warn">Invitée</Badge> E-mail d'activation envoyé
+          {acces?.inviteLe ? ` le ${fmtDate(acces.inviteLe)}` : ""} à <b>{destinataire}</b>, lien pas encore utilisé.
+        </>
+      );
+      break;
+    case "email_pris":
+      constat = (
+        <>
+          <span className="badge b-error">Adresse prise</span> {acces ? motifAdressePrise(acces) : ""} : saisissez une
+          autre adresse principale.
+        </>
+      );
+      break;
+    case "sans_email":
+      constat = <>Renseignez l'e-mail principal et enregistrez la fiche pour pouvoir créer l'accès.</>;
+      break;
+    default:
+      constat = (
+        <>
+          <Badge kind="neutral">Sans compte</Badge> L'entreprise recevra à <b>{emailEnregistre}</b> un lien pour choisir
+          son mot de passe.
+        </>
+      );
+  }
+
+  return (
+    <div className="cs-field cs-field-full" style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+      <label>Accès à l'espace prestataire</label>
+      <p className="se-small" style={{ margin: "2px 0 0", color: "var(--fg2)", lineHeight: 1.7 }}>{constat}</p>
+      {etat === "actif" && acces?.emailCompte && acces.emailCompte !== emailEnregistre && (
+        <p className="se-small" style={{ margin: "4px 0 0", color: "var(--fg-muted)" }}>
+          L'identifiant de connexion ne suit pas l'e-mail principal de la fiche.
+        </p>
+      )}
+      {!fiche.actif && etat !== "actif" && (
+        <p className="se-small" style={{ margin: "6px 0 0", color: "var(--fg-muted)" }}>
+          Fiche suspendue : réactivez-la pour créer l'accès.
+        </p>
+      )}
+      {fiche.actif && emailModifie && (etat === "a_creer" || etat === "sans_email" || etat === "email_pris") && (
+        <p className="se-small" style={{ margin: "6px 0 0", color: "var(--fg-muted)" }}>
+          Enregistrez d'abord la nouvelle adresse : l'accès part de l'e-mail principal enregistré.
+        </p>
+      )}
+
+      {resultat && (
+        <p
+          className="se-small"
+          style={{ margin: "8px 0 0", color: resultat.envoi === "envoye" ? "var(--color-success-700)" : "var(--fg2)" }}
+        >
+          {resultat.envoi === "envoye" && (
+            <Icon name="checkCircle" size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+          )}
+          {phraseResultat(resultat)}
+        </p>
+      )}
+      {erreur && <p className="se-small" style={{ margin: "8px 0 0", color: "var(--color-error-700)" }}>{erreur}</p>}
+
+      {(etat === "a_creer" || etat === "invite") && !confirmer && (
+        <div style={{ marginTop: 10 }}>
+          <button
+            type="button"
+            className="se-btn se-btn-ghost btn-sm"
+            disabled={!peutEnvoyer || creer.isPending}
+            onClick={() => {
+              setResultat(null);
+              setConfirmer(true);
+            }}
+          >
+            <Icon name="send" size={14} />
+            {etat === "invite" ? "Renvoyer l'e-mail" : "Créer l'accès"}
+          </button>
+        </div>
+      )}
+      {confirmer && (
+        <div style={{ marginTop: 10 }}>
+          <div className="cc-next" style={{ marginTop: 0, marginBottom: 10 }}>
+            <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
+            <span>
+              {etat === "invite" ? (
+                <>Un nouvel e-mail d'activation va partir réellement à <b>{destinataire}</b>.</>
+              ) : (
+                <>Le compte va être créé et un e-mail va partir réellement à <b>{emailEnregistre}</b>.</>
+              )}
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className="se-btn se-btn-ghost btn-sm"
+              onClick={() => setConfirmer(false)}
+              disabled={creer.isPending}
+            >
+              Annuler
+            </button>
+            <button type="button" className="se-btn se-btn-primary btn-sm" onClick={lancer} disabled={creer.isPending}>
+              <Icon name="send" size={14} />
+              {creer.isPending ? "Envoi…" : "Envoyer l'e-mail"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PrestaForm({
   initial,
   busy,
   onSubmit,
   onClose,
   title,
+  fiche,
+  acces,
 }: {
   initial: typeof EMPTY;
   busy: boolean;
   onSubmit: (draft: typeof EMPTY) => void;
   onClose: () => void;
   title: string;
+  /** Fiche enregistrée (modification) : bloc d'accès à l'espace prestataire. */
+  fiche?: Prestataire;
+  acces?: AccesPrestataire;
 }) {
   const [draft, setDraft] = useState(initial);
   const set = <K extends keyof typeof EMPTY>(k: K, v: (typeof EMPTY)[K]) => setDraft((p) => ({ ...p, [k]: v }));
@@ -150,6 +363,13 @@ function PrestaForm({
             </span>
           </label>
         </div>
+        {fiche ? (
+          <AccesEspace fiche={fiche} acces={acces} emailSaisi={draft.email} />
+        ) : (
+          <p className="se-small cs-field-full" style={{ margin: 0, color: "var(--fg-muted)" }}>
+            L'accès à l'espace prestataire se crée ensuite depuis la fiche enregistrée (« Créer l'accès »).
+          </p>
+        )}
       </div>
       <button className="se-btn se-btn-primary" style={{ marginTop: 18 }} disabled={!valid || busy}
         onClick={() => onSubmit(draft)}>
@@ -163,6 +383,7 @@ function PrestaForm({
 export default function Prestataires() {
   useCrumbs([{ label: "Base prestataires" }]);
   const { data: prestas } = usePrestataires();
+  const { data: acces } = useAccesPrestataires();
   const add = useAddPrestataire();
   const update = useUpdatePrestataire();
   const del = useDeletePrestataire();
@@ -311,11 +532,7 @@ export default function Prestataires() {
                   </span>
                 )}
                 <span style={{ flex: "none", whiteSpace: "nowrap" }}>
-                  {p.user_id ? (
-                    <Badge kind="success" dot>Compte actif</Badge>
-                  ) : (
-                    <Badge kind="neutral">Sans compte</Badge>
-                  )}
+                  <BadgeAcces acces={acces?.get(p.id)} lie={!!p.user_id} />
                 </span>
                 <button
                   className="se-btn se-btn-ghost btn-sm"
@@ -369,6 +586,8 @@ export default function Prestataires() {
           busy={update.isPending}
           onClose={() => setEditing(null)}
           onSubmit={(d) => void save(d, editing.id)}
+          fiche={prestas?.find((x) => x.id === editing.id) ?? editing}
+          acces={acces?.get(editing.id)}
         />
       )}
     </div>

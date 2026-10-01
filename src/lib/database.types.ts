@@ -3927,6 +3927,8 @@ export type Database = {
           departements: string[]
           email: string | null
           emails_secondaires: string[]
+          espace_invite_le: string | null
+          espace_invite_par: string | null
           id: string
           logo_path: string | null
           ne_pas_consulter: boolean
@@ -3950,6 +3952,8 @@ export type Database = {
           departements?: string[]
           email?: string | null
           emails_secondaires?: string[]
+          espace_invite_le?: string | null
+          espace_invite_par?: string | null
           id?: string
           logo_path?: string | null
           ne_pas_consulter?: boolean
@@ -3973,6 +3977,8 @@ export type Database = {
           departements?: string[]
           email?: string | null
           emails_secondaires?: string[]
+          espace_invite_le?: string | null
+          espace_invite_par?: string | null
           id?: string
           logo_path?: string | null
           ne_pas_consulter?: boolean
@@ -4590,6 +4596,17 @@ export type Database = {
           coproprietaire_id: string
           etat: string
           invite_le: string | null
+          role_compte: Database["public"]["Enums"]["app_role"] | null
+        }[]
+      }
+      espaces_prestataires: {
+        Args: never
+        Returns: {
+          autre_fiche: string | null
+          email_compte: string | null
+          etat: string
+          invite_le: string | null
+          prestataire_id: string
           role_compte: Database["public"]["Enums"]["app_role"] | null
         }[]
       }

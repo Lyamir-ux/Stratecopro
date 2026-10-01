@@ -6,6 +6,8 @@
 // « déjà utilisé » avant le copropriétaire. Le jeton n'est vérifié qu'au clic
 // sur le bouton ; la session ouverte mène à /reinitialisation, qui fait
 // choisir le mot de passe.
+// Même page pour l'accès des prestataires depuis le 01/10/2026 (0123, edge
+// function creer-espace-prestataire) : le lien porte alors espace=prestataire.
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
@@ -15,6 +17,7 @@ export default function ActiverEspace() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const tokenHash = params.get("token_hash");
+  const espace = params.get("espace") === "prestataire" ? "Votre espace prestataire" : "Votre espace copropriétaire";
   const [busy, setBusy] = useState(false);
   const [expire, setExpire] = useState(false);
 
@@ -63,7 +66,7 @@ export default function ActiverEspace() {
   return card(
     <>
       <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 24, margin: "0 0 10px" }}>
-        Votre espace copropriétaire
+        {espace}
       </h1>
       <p className="se-body" style={{ marginTop: 0 }}>
         Bienvenue ! Pour activer votre espace, choisissez votre mot de passe. Votre identifiant de connexion sera votre
