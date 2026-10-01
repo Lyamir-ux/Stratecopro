@@ -11,6 +11,8 @@
 // Bug d'Amir du 01/10/2026 (fiche « Pierre Baumann » créée mais introuvable) :
 // recherche sur le nom, le contact, la ville et les e-mails, et ouverture
 // directe d'une fiche par /prestataires?fiche=<id> (lien du bandeau du dossier).
+// Départements et « Ne pas consulter » depuis le 01/10/2026 (0122) : réglés
+// par l'entreprise dans Mon entreprise, ou par l'équipe dans cette fiche.
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
@@ -18,6 +20,8 @@ import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
 import { Modal } from "@/components/Modal";
 import { EmailsSecondaires } from "@/components/EmailsSecondaires";
+import { DepartementsPicker, choixVersDepartements, departementsVersChoix } from "@/components/DepartementsPicker";
+import { resumeDepartements } from "@/lib/departements";
 import { CONSULT_TYPES } from "@/api/consultations";
 import {
   emailValide,
@@ -42,6 +46,9 @@ const EMPTY = {
   ville: "",
   siret: "",
   types: [] as TypeConsult[],
+  // départements où l'entreprise est consultée (0122) : null = toute la France
+  departements: null as string[] | null,
+  ne_pas_consulter: false,
 };
 
 function TypeChips({ types }: { types: TypeConsult[] }) {
@@ -78,7 +85,8 @@ function PrestaForm({
   const toggleType = (t: TypeConsult) =>
     set("types", draft.types.includes(t) ? draft.types.filter((x) => x !== t) : [...draft.types, t]);
   const emailOk = [draft.email, ...draft.emails_secondaires].every((e) => !e.trim() || emailValide(e));
-  const valid = draft.raison_sociale.trim() && emailOk && draft.types.length > 0;
+  const valid =
+    draft.raison_sociale.trim() && emailOk && draft.types.length > 0 && choixVersDepartements(draft.departements) !== null;
 
   return (
     <Modal title={title} onClose={onClose} width={620}>
@@ -129,6 +137,18 @@ function PrestaForm({
               </button>
             ))}
           </div>
+        </div>
+        <div className="cs-field cs-field-full">
+          <label>Départements <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· selon l'adresse de la copropriété consultée</span></label>
+          <DepartementsPicker valeur={draft.departements} onChange={(v) => set("departements", v)} />
+        </div>
+        <div className="cs-field cs-field-full">
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontWeight: 400 }}>
+            <input type="checkbox" checked={draft.ne_pas_consulter} onChange={(e) => set("ne_pas_consulter", e.target.checked)} />
+            <span>
+              <b>Ne pas consulter</b> · l'entreprise ne souhaite pas être consultée (aucune alerte, consultations masquées dans son espace)
+            </span>
+          </label>
         </div>
       </div>
       <button className="se-btn se-btn-primary" style={{ marginTop: 18 }} disabled={!valid || busy}
@@ -187,6 +207,8 @@ export default function Prestataires() {
       ville: draft.ville.trim() || null,
       siret: draft.siret.trim() || null,
       types: draft.types,
+      departements: choixVersDepartements(draft.departements) ?? [],
+      ne_pas_consulter: draft.ne_pas_consulter,
     };
     if (id) await update.mutateAsync({ id, patch: payload });
     else await add.mutateAsync(payload);
@@ -251,8 +273,24 @@ export default function Prestataires() {
                   <span style={{ display: "block", fontSize: 12.5, color: "var(--fg-muted)" }}>
                     {[p.contact_nom, p.ville].filter(Boolean).join(" · ") || "-"}
                   </span>
+                  {p.departements.length > 0 && (
+                    <span
+                      style={{ display: "block", fontSize: 12, color: "var(--fg3)" }}
+                      title="Départements où l'entreprise peut être consultée"
+                    >
+                      <Icon name="mapPin" size={11} /> {resumeDepartements(p.departements)}
+                    </span>
+                  )}
                 </span>
                 <TypeChips types={p.types} />
+                {p.ne_pas_consulter && (
+                  <span
+                    style={{ flex: "none", whiteSpace: "nowrap" }}
+                    title="L'entreprise ne souhaite pas être consultée : aucune alerte de consultation"
+                  >
+                    <Badge kind="warn">Ne pas consulter</Badge>
+                  </span>
+                )}
                 <span className="spacer" style={{ flex: 1 }}></span>
                 {p.email ? (
                   <span
@@ -325,6 +363,8 @@ export default function Prestataires() {
             ville: editing.ville ?? "",
             siret: editing.siret ?? "",
             types: editing.types,
+            departements: departementsVersChoix(editing.departements),
+            ne_pas_consulter: editing.ne_pas_consulter,
           }}
           busy={update.isPending}
           onClose={() => setEditing(null)}

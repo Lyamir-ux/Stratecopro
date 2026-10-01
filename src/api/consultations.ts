@@ -117,10 +117,30 @@ export function useConsultations() {
 
 export interface PublishResult {
   /** Bilan de la notification des prestataires référencés. */
-  notification: { total: number; envoyes: number; simules: number; erreurs: number; mode: string } | null;
+  notification: {
+    total: number;
+    envoyes: number;
+    simules: number;
+    erreurs: number;
+    mode: string;
+    /** Entreprises du métier écartées (0122) : « Ne pas consulter », autre département. */
+    hors_consultation?: number;
+    hors_departement?: number;
+    departement?: string | null;
+  } | null;
   notifyError: string | null;
   /** Documents dont le dépôt a échoué (la consultation reste publiée). */
   docErrors: string[];
+}
+
+/** « 2 hors de leurs départements (67) · 1 ne souhaite pas être consultée », ou "" si personne n'est écarté. */
+export function texteEcartes(n: NonNullable<PublishResult["notification"]>): string {
+  const parts: string[] = [];
+  const d = n.hors_departement ?? 0;
+  const c = n.hors_consultation ?? 0;
+  if (d) parts.push(`${d} entreprise${d > 1 ? "s" : ""} hors de ${d > 1 ? "leurs" : "ses"} départements${n.departement ? ` (copropriété en ${n.departement})` : ""}`);
+  if (c) parts.push(`${c} entreprise${c > 1 ? "s" : ""} ne souhaitant pas être consultée${c > 1 ? "s" : ""}`);
+  return parts.join(" · ");
 }
 
 export function usePublishConsultation() {

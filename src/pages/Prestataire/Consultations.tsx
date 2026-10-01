@@ -2,7 +2,7 @@
 // design-reference/project/consultations.jsx (ConsultationsMOE), généralisé à
 // tous les intervenants. Dépôt d'offre : montant + note + pièce jointe (PDF).
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Badge, PhaseBadge } from "@/components/ui";
 import { Modal } from "@/components/Modal";
@@ -614,6 +614,7 @@ export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires">
   // question - carte mise en évidence et amenée à l'écran.
   const [searchParams] = useSearchParams();
   const cibleId = searchParams.get("c");
+  const navigate = useNavigate();
 
   const open = (consultations ?? []).filter((c) => c.statut === "en_ligne");
   const applied = open.filter((c) => c.maCandidature).length;
@@ -629,7 +630,8 @@ export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires">
         <div>
           <h1 className="page-title">Consultations en cours</h1>
           <p className="page-sub">
-            Appels à candidature publiés par les AMO pour vos métiers - postulez aux opérations qui vous intéressent
+            Appels à candidature publiés par les AMO pour vos prestations et vos départements - postulez aux
+            opérations qui vous intéressent
           </p>
         </div>
         <span className="spacer"></span>
@@ -640,11 +642,43 @@ export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires">
         </div>
       </div>
 
+      {/* « Ne pas consulter » (0122) : seules restent les consultations déjà répondues */}
+      {presta.ne_pas_consulter && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+            marginBottom: 16,
+            padding: "12px 14px",
+            borderRadius: "var(--radius-md)",
+            background: "var(--color-warning-50)",
+            color: "var(--color-warning-700)",
+            fontSize: 13.5,
+          }}
+        >
+          <Icon name="bell" size={16} style={{ flex: "none" }} />
+          <span style={{ flex: "1 1 260px" }}>
+            Votre entreprise a demandé à ne pas être consultée : vous ne recevez plus d'alerte et les nouvelles
+            consultations ne s'affichent plus ici.
+          </span>
+          <button className="se-btn se-btn-secondary btn-sm" onClick={() => navigate("/prestataire/entreprise")}>
+            <Icon name="briefcase" size={14} />
+            Modifier dans Mon entreprise
+          </button>
+        </div>
+      )}
+
       {open.length === 0 && (
         <div className="placeholder-screen" style={{ minHeight: 320 }}>
           <div className="ps-ico"><Icon name="megaphone" size={30} /></div>
           <h2>Aucune consultation ouverte</h2>
-          <p>Les appels à candidature correspondant à vos métiers apparaîtront ici - vous serez alerté par e-mail.</p>
+          <p>
+            {presta.ne_pas_consulter
+              ? "Vos candidatures en cours restent visibles ici et dans Mes candidatures."
+              : "Les appels à candidature correspondant à vos prestations et à vos départements apparaîtront ici - vous serez alerté par e-mail. Réglez-les dans Mon entreprise."}
+          </p>
         </div>
       )}
 

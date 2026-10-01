@@ -5,6 +5,10 @@
 // référencés ACTIFS dont les métiers (types) couvrent la prestation consultée,
 // leur envoie un e-mail d'alerte (adresse principale + adresses en copie,
 // 0106) et journalise chaque envoi dans consultation_notifications.
+// Depuis 0122 (01/10/2026) : sont écartées les entreprises qui ont demandé à
+// ne pas être consultées et celles dont les départements ne comprennent pas
+// celui de la copropriété (liste vide = toute la France ; département
+// introuvable = pas de filtre). Même règle que src/lib/departements.ts.
 //
 // Envoi réel via Resend si le secret RESEND_API_KEY est configuré
 // (supabase secrets set RESEND_API_KEY=re_xxx [RESEND_FROM="Strat Eco <consultations@strateco.fr>"] [APP_URL=https://...]).
@@ -33,6 +37,20 @@ const SOUS_TYPE_LABELS: Record<string, string> = {
   amiante_plomb: "Diagnostic amiante et plomb avant travaux",
   etancheite: "Test d'étanchéité à l'air",
 };
+
+/** Département d'un code postal (Corse 2A / 2B, outre-mer sur 3 chiffres) - comme src/lib/departements.ts. */
+function departementDuCodePostal(cp: string | null | undefined): string | null {
+  const v = (cp ?? "").replace(/\s+/g, "");
+  if (!/^\d{5}$/.test(v)) return null;
+  const code = v.startsWith("20") ? (v < "20200" ? "2A" : "2B") : v.startsWith("97") ? v.slice(0, 3) : v.slice(0, 2);
+  // codes des 101 départements (975 Saint-Pierre-et-Miquelon, 98 Monaco / Pacifique : non)
+  return /^(0[1-9]|1[0-9]|2[1-9]|2A|2B|[3-8][0-9]|9[0-5]|97[1-46])$/.test(code) ? code : null;
+}
+
+/** Premier code postal (5 chiffres isolés) d'un texte libre. */
+function codePostalDans(texte: string | null | undefined): string | null {
+  return /(?:^|\D)(\d{5})(?!\d)/.exec(texte ?? "")?.[1] ?? null;
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -85,7 +103,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: cs, error: csErr } = await admin
     .from("consultations")
-    .select("*, coproprietes(name, adresse, city)")
+    .select("*, coproprietes(name, adresse, city, code_postal)")
     .eq("id", consultation_id)
     .maybeSingle();
   if (csErr || !cs) return json(404, { error: "Consultation introuvable" });
@@ -94,18 +112,32 @@ Deno.serve(async (req: Request) => {
   // (fiches sans e-mail exclues : e-mail facultatif depuis 0105)
   const { data: prestas, error: pErr } = await admin
     .from("prestataires")
-    .select("id, raison_sociale, contact_nom, email, emails_secondaires")
+    .select("id, raison_sociale, contact_nom, email, emails_secondaires, departements, ne_pas_consulter")
     .eq("actif", true)
     .not("email", "is", null)
     .contains("types", [cs.type]);
   if (pErr) return json(500, { error: pErr.message });
+
+  // Département de la copropriété : code postal de la fiche, sinon celui de la
+  // ville puis de l'adresse saisies pour une copropriété hors plateforme
+  const departement =
+    departementDuCodePostal(cs.coproprietes?.code_postal) ??
+    departementDuCodePostal(codePostalDans(cs.copro_externe_ville)) ??
+    departementDuCodePostal(codePostalDans(cs.copro_externe_adresse));
 
   const { data: deja } = await admin
     .from("consultation_notifications")
     .select("prestataire_id")
     .eq("consultation_id", consultation_id);
   const dejaIds = new Set((deja ?? []).map((n) => n.prestataire_id));
-  const cibles = (prestas ?? []).filter((p) => !dejaIds.has(p.id));
+  const nouveaux = (prestas ?? []).filter((p) => !dejaIds.has(p.id));
+  const horsConsultation = nouveaux.filter((p) => p.ne_pas_consulter).length;
+  const horsDepartement = nouveaux.filter(
+    (p) => !p.ne_pas_consulter && departement && (p.departements ?? []).length > 0 && !p.departements.includes(departement),
+  ).length;
+  const cibles = nouveaux.filter(
+    (p) => !p.ne_pas_consulter && (!departement || (p.departements ?? []).length === 0 || p.departements.includes(departement)),
+  );
 
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const from = Deno.env.get("RESEND_FROM") ?? "Strat Eco <onboarding@resend.dev>";
@@ -177,8 +209,9 @@ Deno.serve(async (req: Request) => {
           qui reviendra vers vous à l'issue de la consultation.</p>
           <p>Bien cordialement,<br/><strong>L'équipe Strat Eco</strong></p>
           <p style="color:#888;font-size:13px;border-top:1px solid #e5e5e5;padding-top:12px;margin-top:24px">
-            Vous recevez cet e-mail car votre entreprise est référencée « ${TYPE_LABELS[cs.type] ?? cs.type} » auprès de Strat Eco.
-            Pour ne plus recevoir ces alertes, répondez simplement à cet e-mail.
+            Vous recevez cet e-mail car votre entreprise est référencée « ${TYPE_LABELS[cs.type] ?? cs.type} » auprès de Strat Eco${departement ? ` (copropriété du département ${departement})` : ""}.
+            Vos prestations, vos départements ou le choix de ne plus être consulté se règlent dans
+            <a href="${appUrl}/prestataire/entreprise" style="color:#888">Mon entreprise</a> de votre espace prestataire.
           </p>
         </div>`;
       try {
@@ -220,6 +253,10 @@ Deno.serve(async (req: Request) => {
     envoyes,
     simules,
     erreurs,
+    // entreprises du métier écartées (0122) : « Ne pas consulter », autre département
+    hors_consultation: horsConsultation,
+    hors_departement: horsDepartement,
+    departement,
     mode: resendKey ? "resend" : "simulation",
   });
 });

@@ -2,13 +2,18 @@
 // contact principal et autant d'e-mails en copie des alertes que voulu (0106),
 // téléphone, adresse, documents de
 // certification (RGE, qualifications, assurances…) et contacts de l'entreprise
-// avec leur rôle. Les métiers couverts et le référencement restent pilotés
+// avec leur rôle. Depuis le 01/10/2026 (0122, idées d'Amir) il choisit aussi
+// les consultations qu'il reçoit : prestations couvertes, départements, et
+// « Ne pas consulter ». La raison sociale et le référencement restent pilotés
 // par l'équipe Strat Eco (verrouillé côté base).
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { EmailsSecondaires } from "@/components/EmailsSecondaires";
+import { DepartementsPicker, choixVersDepartements, departementsVersChoix } from "@/components/DepartementsPicker";
 import { fmtDate } from "@/lib/format";
+import { messageErreur } from "@/lib/erreurs";
+import { resumeDepartements } from "@/lib/departements";
 import { CONSULT_TYPES } from "@/api/consultations";
 import { emailValide, normaliserEmails } from "@/api/prestataires";
 import {
@@ -47,6 +52,23 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
   const [emailsSecondaires, setEmailsSecondaires] = useState<string[]>(presta.emails_secondaires);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // fiche rechargée (enregistrement d'un autre bloc, logo) : on reprend ses
+  // valeurs, sauf saisie en cours - un remontage effacerait cette saisie
+  useEffect(() => {
+    if (dirty) return;
+    setDraft({
+      contact_nom: presta.contact_nom ?? "",
+      email: presta.email ?? "",
+      telephone: presta.telephone ?? "",
+      adresse: presta.adresse ?? "",
+      code_postal: presta.code_postal ?? "",
+      ville: presta.ville ?? "",
+      site_web: presta.site_web ?? "",
+      siret: presta.siret ?? "",
+    });
+    setEmailsSecondaires(presta.emails_secondaires);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presta.updated_at]);
   const set = <K extends keyof typeof draft>(k: K, v: string) => {
     setDraft((p) => ({ ...p, [k]: v }));
     setDirty(true);
@@ -149,8 +171,8 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
         </div>
 
         <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12 }}>
-          <Icon name="lock" size={12} /> Les métiers couverts, la raison sociale et le référencement sont
-          gérés par l'équipe Strat Eco - contactez-la pour les faire évoluer.
+          <Icon name="lock" size={12} /> La raison sociale et le référencement sont gérés par l'équipe
+          Strat Eco - contactez-la pour les faire évoluer.
         </p>
 
         {error && (
@@ -186,6 +208,168 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
           <Icon name="check" size={14} />
           {maj.isPending ? "Enregistrement…" : dirty ? "Enregistrer la fiche" : "Enregistré"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** Ce qui décide des consultations reçues (0122) : prestations couvertes et
+ *  départements (bouton Enregistrer), « Ne pas consulter » (enregistré tout de
+ *  suite, après confirmation). Les alertes e-mail et la liste « Consultations
+ *  en cours » suivent ces choix. */
+function ConsultationsRecuesPanel({ presta }: { presta: Tables<"prestataires"> }) {
+  const maj = useMajMonPrestataire();
+  const [types, setTypes] = useState(presta.types);
+  const [departements, setDepartements] = useState<string[] | null>(departementsVersChoix(presta.departements));
+  const [dirty, setDirty] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (dirty) return;
+    setTypes(presta.types);
+    setDepartements(departementsVersChoix(presta.departements));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presta.updated_at]);
+
+  const toggleType = (t: (typeof types)[number]) => {
+    setTypes((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]));
+    setDirty(true);
+  };
+  const departementsBase = choixVersDepartements(departements);
+  const valide = types.length > 0 && departementsBase !== null;
+
+  const enregistrer = (patch: Parameters<typeof maj.mutateAsync>[0]["patch"]) => {
+    setError(null);
+    return maj.mutateAsync({ id: presta.id, patch }).catch((e: unknown) => {
+      setError(messageErreur(e, "Enregistrement impossible. Réessayez."));
+      throw e;
+    });
+  };
+
+  return (
+    <div className="panel">
+      <div className="p-head">
+        <Icon name="megaphone" size={18} />
+        <h3>Consultations reçues</h3>
+        <span style={{ flex: 1 }}></span>
+        {presta.ne_pas_consulter ? (
+          <Badge kind="warn">Ne pas consulter</Badge>
+        ) : (
+          <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{resumeDepartements(presta.departements)}</span>
+        )}
+      </div>
+      <div className="p-body">
+        {presta.ne_pas_consulter && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+              marginBottom: 16,
+              padding: "12px 14px",
+              borderRadius: "var(--radius-md)",
+              background: "var(--color-warning-50)",
+              color: "var(--color-warning-700)",
+              fontSize: 13.5,
+            }}
+          >
+            <Icon name="bell" size={16} style={{ flex: "none" }} />
+            <span style={{ flex: "1 1 260px" }}>
+              Votre entreprise ne souhaite pas être consultée
+              {presta.ne_pas_consulter_le ? ` (depuis le ${fmtDate(presta.ne_pas_consulter_le)})` : ""} : elle ne
+              reçoit plus d'alerte et les nouvelles consultations ne s'affichent plus dans votre espace.
+            </span>
+            <button
+              className="se-btn se-btn-primary btn-sm"
+              disabled={maj.isPending}
+              onClick={() => void enregistrer({ ne_pas_consulter: false }).catch(() => {})}
+            >
+              <Icon name="check" size={14} />
+              Être de nouveau consulté
+            </button>
+          </div>
+        )}
+
+        <div className="cs-field cs-field-full">
+          <label>
+            Prestations couvertes{" "}
+            <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· vous recevez les consultations de ces prestations</span>
+          </label>
+          <div className="cs-type-pick">
+            {CONSULT_TYPES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={"cs-type-opt" + (types.includes(t.id) ? " on" : "")}
+                onClick={() => toggleType(t.id)}
+              >
+                <Icon name={t.icon} size={15} />
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {types.length === 0 && (
+            <span className="se-small" style={{ color: "var(--color-warning-700)" }}>
+              Cochez au moins une prestation - pour ne plus rien recevoir, utilisez « Ne pas consulter ».
+            </span>
+          )}
+        </div>
+
+        <div className="cs-field cs-field-full" style={{ marginTop: 16 }}>
+          <label>
+            Départements où l'entreprise peut être consultée{" "}
+            <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· selon l'adresse de la copropriété</span>
+          </label>
+          <DepartementsPicker
+            valeur={departements}
+            onChange={(v) => {
+              setDepartements(v);
+              setDirty(true);
+            }}
+          />
+        </div>
+
+        {error && (
+          <p style={{ marginTop: 10, padding: "10px 14px", borderRadius: "var(--radius-md)", background: "var(--color-error-50)", color: "var(--color-error-700)", fontSize: 13.5 }}>
+            {error}
+          </p>
+        )}
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+          <button
+            className="se-btn se-btn-primary btn-sm"
+            disabled={!dirty || !valide || maj.isPending}
+            onClick={() => {
+              if (departementsBase === null) return;
+              void enregistrer({ types, departements: departementsBase })
+                .then(() => setDirty(false))
+                .catch(() => {});
+            }}
+          >
+            <Icon name="check" size={14} />
+            {maj.isPending ? "Enregistrement…" : dirty ? "Enregistrer" : "Enregistré"}
+          </button>
+          <span style={{ flex: 1 }}></span>
+          {!presta.ne_pas_consulter && (
+            <button
+              className="se-btn se-btn-ghost btn-sm"
+              disabled={maj.isPending}
+              title="Ne plus recevoir aucune consultation (réversible à tout moment)"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "Ne plus être consulté ?\n\nVotre entreprise ne recevra plus aucune alerte de consultation et les nouvelles consultations ne s'afficheront plus dans votre espace. Vos candidatures et projets en cours ne changent pas. Vous pourrez revenir sur ce choix à tout moment."
+                  )
+                )
+                  void enregistrer({ ne_pas_consulter: true }).catch(() => {});
+              }}
+            >
+              <Icon name="x" size={14} />
+              Ne pas consulter
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -361,13 +545,15 @@ export function MonEntreprise({ presta }: { presta: Tables<"prestataires"> }) {
         <div>
           <h1 className="page-title">Mon entreprise</h1>
           <p className="page-sub">
-            Logo, coordonnées, certifications et contacts - ces informations sont visibles de l'équipe Strat Eco
+            Logo, coordonnées, consultations reçues, certifications et contacts - ces informations sont visibles
+            de l'équipe Strat Eco
           </p>
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 760 }}>
-        {/* key : la fiche se réinitialise quand l'entreprise change (aperçu AMO) */}
-        <FichePanel key={presta.id + (presta.updated_at ?? "")} presta={presta} />
+        {/* key : les blocs se réinitialisent quand l'entreprise change (aperçu AMO) */}
+        <FichePanel key={presta.id} presta={presta} />
+        <ConsultationsRecuesPanel key={"c" + presta.id} presta={presta} />
         <CertificationsPanel presta={presta} />
         <ContactsPanel presta={presta} />
       </div>

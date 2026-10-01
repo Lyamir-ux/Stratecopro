@@ -31,6 +31,7 @@ import {
   useRelancerAlertes,
   useReopenConsultation,
   useRepondreQuestion,
+  texteEcartes,
   type Consultation,
   type PublishResult,
 } from "@/api/consultations";
@@ -212,12 +213,17 @@ function Card({ cs }: { cs: Consultation }) {
   const relancerAlertes = async () => {
     const n = await relance.mutateAsync(cs.id);
     if (!n) return;
+    const ecartes = texteEcartes(n);
     window.alert(
-      n.total === 0
-        ? "Tous les prestataires référencés du métier ont déjà été alertés - aucun nouvel e-mail."
+      (n.total === 0
+        ? ecartes
+          ? "Aucun nouvel e-mail."
+          : "Tous les prestataires référencés du métier ont déjà été alertés - aucun nouvel e-mail."
         : n.mode === "simulation"
           ? `${n.total} prestataire${n.total > 1 ? "s" : ""} identifié${n.total > 1 ? "s" : ""} - envoi simulé (configurez RESEND_API_KEY pour l'e-mail réel).`
-          : `Alertes envoyées : ${n.envoyes} e-mail${n.envoyes > 1 ? "s" : ""}${n.erreurs ? ` · ${n.erreurs} en erreur` : ""}.`
+          : `Alertes envoyées : ${n.envoyes} e-mail${n.envoyes > 1 ? "s" : ""}${n.erreurs ? ` · ${n.erreurs} en erreur` : ""}.`) +
+        (ecartes ? `
+Non alertées : ${ecartes}.` : "")
     );
   };
   const jr = joursRestants(cs.date_limite);
@@ -607,12 +613,16 @@ export default function Consultations() {
       setNotice("Consultation publiée, mais l'alerte e-mail a échoué : " + res.notifyError);
     } else if (res.notification) {
       const n = res.notification;
+      const ecartes = texteEcartes(n);
       setNotice(
-        n.total === 0
-          ? "Consultation publiée. Aucun prestataire référencé pour ce métier - pensez à enrichir la base prestataires."
+        (n.total === 0
+          ? ecartes
+            ? "Consultation publiée. Aucune entreprise alertée."
+            : "Consultation publiée. Aucun prestataire référencé pour ce métier - pensez à enrichir la base prestataires."
           : n.mode === "simulation"
             ? `Consultation publiée. ${n.total} prestataire${n.total > 1 ? "s" : ""} référencé${n.total > 1 ? "s" : ""} identifié${n.total > 1 ? "s" : ""} (envoi simulé : configurez RESEND_API_KEY pour l'e-mail réel).`
-            : `Consultation publiée. ${n.envoyes} e-mail${n.envoyes > 1 ? "s" : ""} envoyé${n.envoyes > 1 ? "s" : ""}${n.erreurs ? `, ${n.erreurs} en erreur` : ""}.`
+            : `Consultation publiée. ${n.envoyes} e-mail${n.envoyes > 1 ? "s" : ""} envoyé${n.envoyes > 1 ? "s" : ""}${n.erreurs ? `, ${n.erreurs} en erreur` : ""}.`) +
+          (ecartes ? ` Non alertées : ${ecartes}.` : "")
       );
     }
     if (res.docErrors.length > 0) {

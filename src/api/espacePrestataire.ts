@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthProvider";
 import type { Tables } from "@/lib/database.types";
+import { departementConsultation, entrepriseConsultee } from "@/lib/departements";
 
 export type CoproPublic = Pick<
   Tables<"coproprietes">,
@@ -45,13 +46,18 @@ export function useMonPrestataire(enabled = true) {
   });
 }
 
-/** Consultations visibles pour une entreprise : en ligne sur ses métiers
- *  + celles où elle a candidaté. Le filtre client reproduit la RLS du
- *  prestataire - nécessaire quand un AMO consulte l'espace en aperçu
- *  (sa RLS à lui renvoie tout). */
+/** Consultations visibles pour une entreprise : en ligne sur ses prestations
+ *  et ses départements, sauf si elle a demandé à ne pas être consultée (0122),
+ *  + celles où elle a candidaté. Pour les prestations, le filtre client
+ *  reproduit la RLS du prestataire - nécessaire quand un AMO consulte l'espace
+ *  en aperçu (sa RLS à lui renvoie tout) ; départements et « Ne pas
+ *  consulter » ne sont filtrés qu'ici. Filtre posé en `select` : il suit la
+ *  fiche dès qu'elle change, sans recharger la liste. */
 export function useConsultationsPresta(presta: Tables<"prestataires">) {
   return useQuery({
     queryKey: ["presta-consultations", presta.id],
+    select: (liste: ConsultationPresta[]) =>
+      liste.filter((c) => c.maCandidature || entrepriseConsultee(presta, c.type, departementConsultation(c))),
     queryFn: async (): Promise<ConsultationPresta[]> => {
       const { data, error } = await supabase
         .from("consultations")
@@ -75,8 +81,7 @@ export function useConsultationsPresta(presta: Tables<"prestataires">) {
             docs: consultation_docs ?? [],
             questions: (consultation_questions ?? []).sort((a, b) => (a.asked_at < b.asked_at ? -1 : 1)),
           };
-        })
-        .filter((c) => c.maCandidature || presta.types.includes(c.type));
+        });
     },
   });
 }
@@ -296,7 +301,8 @@ export function useConfirmerEngagement() {
 
 // ========== Fiche entreprise (section « Mon entreprise ») ==========
 
-/** Coordonnées éditables par le prestataire - les métiers, le référencement
+/** Champs éditables par le prestataire : coordonnées, et depuis 0122 ses
+ *  prestations, ses départements et « Ne pas consulter » - le référencement
  *  et la raison sociale restent pilotés par l'AMO (trigger côté base). */
 export function useMajMonPrestataire() {
   const qc = useQueryClient();
@@ -319,15 +325,20 @@ export function useMajMonPrestataire() {
           | "siret"
           | "logo_path"
           | "contact_nom"
+          | "types"
+          | "departements"
+          | "ne_pas_consulter"
         >
       >;
     }) => {
       const { error } = await supabase.from("prestataires").update(patch).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_r, { patch }) => {
       void qc.invalidateQueries({ queryKey: ["mon-prestataire"] });
       void qc.invalidateQueries({ queryKey: ["prestataires"] });
+      // nouvelle prestation : la RLS ouvre d'autres consultations, la liste se recharge
+      if (patch.types) void qc.invalidateQueries({ queryKey: ["presta-consultations"] });
     },
   });
 }

@@ -3924,10 +3924,13 @@ export type Database = {
           code_postal: string | null
           contact_nom: string | null
           created_at: string
+          departements: string[]
           email: string | null
           emails_secondaires: string[]
           id: string
           logo_path: string | null
+          ne_pas_consulter: boolean
+          ne_pas_consulter_le: string | null
           notes: string | null
           raison_sociale: string
           siret: string | null
@@ -3944,10 +3947,13 @@ export type Database = {
           code_postal?: string | null
           contact_nom?: string | null
           created_at?: string
+          departements?: string[]
           email?: string | null
           emails_secondaires?: string[]
           id?: string
           logo_path?: string | null
+          ne_pas_consulter?: boolean
+          ne_pas_consulter_le?: string | null
           notes?: string | null
           raison_sociale: string
           siret?: string | null
@@ -3964,10 +3970,13 @@ export type Database = {
           code_postal?: string | null
           contact_nom?: string | null
           created_at?: string
+          departements?: string[]
           email?: string | null
           emails_secondaires?: string[]
           id?: string
           logo_path?: string | null
+          ne_pas_consulter?: boolean
+          ne_pas_consulter_le?: string | null
           notes?: string | null
           raison_sociale?: string
           siret?: string | null
@@ -4566,6 +4575,7 @@ export type Database = {
       }
       copro_visible_presta: { Args: { p_copro_id: string }; Returns: boolean }
       copros_moe_designe: { Args: { p_prestataire_id: string }; Returns: string[] }
+      departements_valides: { Args: { d: string[] }; Returns: boolean }
       devis_amo_chef_projet: {
         Args: { p_copro_id: string }
         Returns: {
