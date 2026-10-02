@@ -1342,6 +1342,8 @@ export type Database = {
           rfr: number | null
           rfr_n2: number | null
           statut_occupation: string | null
+          transmission_email_le: string | null
+          transmission_email_statut: string | null
           updated_at: string
         }
         Insert: {
@@ -1357,6 +1359,8 @@ export type Database = {
           rfr?: number | null
           rfr_n2?: number | null
           statut_occupation?: string | null
+          transmission_email_le?: string | null
+          transmission_email_statut?: string | null
           updated_at?: string
         }
         Update: {
@@ -1372,6 +1376,8 @@ export type Database = {
           rfr?: number | null
           rfr_n2?: number | null
           statut_occupation?: string | null
+          transmission_email_le?: string | null
+          transmission_email_statut?: string | null
           updated_at?: string
         }
         Relationships: [

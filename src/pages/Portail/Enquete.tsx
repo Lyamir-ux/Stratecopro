@@ -39,9 +39,11 @@ import {
   useMaReponse,
   useMesPieces,
   useSaveMaReponse,
+  notifierEnqueteTransmise,
   type Membership,
   type PortalLot,
 } from "@/api/portail";
+import { useAuth } from "@/auth/AuthProvider";
 import { PiecesJustificatives } from "./Documents";
 import { piecesAttendues } from "@/lib/piecesSituation";
 import type { Bareme, Profil } from "@/lib/finance";
@@ -315,6 +317,9 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
   const { data: enquete, isLoading } = useEnquetePortail(membership.copro.id);
   const { data: reponse, isFetched } = useMaReponse(enquete?.id, membership.coproprietaireId);
   const save = useSaveMaReponse(enquete?.id ?? "", membership.coproprietaireId);
+  // Aperçu AMO : la transmission n'envoie pas d'e-mail au copropriétaire
+  const { profile } = useAuth();
+  const apercuAmo = profile?.role === "amo";
 
   const questions = useMemo(
     () => (enquete ? resolveQuestions(normalizeConfig(enquete.questions)) : []),
@@ -534,7 +539,17 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
           setModifie(false);
           setRestaure(false);
           if (cleSecours) ecrireSecours(cleSecours, null);
-          if (transmis) setConfirmation(new Date().toISOString());
+          if (transmis) {
+            setConfirmation(new Date().toISOString());
+            // E-mail « enquête prise en compte » (remarque d'Amir du 02/10/2026)
+            if (!apercuAmo) {
+              void notifierEnqueteTransmise({
+                enqueteId: enquete.id,
+                coproprietaireId: membership.coproprietaireId,
+                piecesManquantes: piecesManquantes.map((p) => p.type),
+              });
+            }
+          }
         },
       }
     );
@@ -947,6 +962,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
             </span>
             <p className="se-body" style={{ margin: 0 }}>
               Merci ! Vos réponses ont bien été transmises à l'équipe Strat Eco le {fmtDateHeure(confirmation)}.
+              {!apercuAmo && " Un e-mail de confirmation vous est envoyé."}
             </p>
             {piecesManquantes.length > 0 && (
               <p className="se-small" style={{ margin: 0, color: "var(--fg2)" }}>

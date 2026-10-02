@@ -371,6 +371,30 @@ export function useSaveMaReponse(enqueteId: string, coproprietaireId: string) {
   });
 }
 
+/**
+ * E-mail de confirmation au copropriétaire qui vient de transmettre son enquête
+ * complète (remarque d'Amir du 02/10/2026) : edge function
+ * notifier-enquete-transmise, qui ne fait rien pour une transmission depuis
+ * l'aperçu AMO et n'envoie qu'un e-mail par transmission. Sans effet sur
+ * l'enregistrement : une erreur d'envoi est ignorée ici (tracée en base).
+ */
+export async function notifierEnqueteTransmise(input: {
+  enqueteId: string;
+  coproprietaireId: string;
+  /** types des pièces encore à déposer, rappelées dans l'e-mail */
+  piecesManquantes: string[];
+}): Promise<void> {
+  await supabase.functions
+    .invoke("notifier-enquete-transmise", {
+      body: {
+        enquete_id: input.enqueteId,
+        coproprietaire_id: input.coproprietaireId,
+        pieces_manquantes: input.piecesManquantes,
+      },
+    })
+    .catch(() => undefined);
+}
+
 // ========== Choix de financement ==========
 
 export function useMonChoix(scenarioId: string | undefined, coproprietaireId: string | undefined) {
