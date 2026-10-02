@@ -72,6 +72,18 @@ describe("pièces partagées entre dispositifs", () => {
     expect(ciblesMontagePourType("facture").map((c) => `${c.montage}/${c.def.key}`)).toEqual(["do/cout_definitif"]);
   });
 
+  it("laisse cocher à la main les autres pièces au pluriel : attestations RGE et devis de l'éco-PTZ, avis d'imposition", () => {
+    expect(pieceACocherALaMain("eco_ptz_2024", "Attestations RGE")).toBe(true);
+    expect(pieceACocherALaMain("eco_ptz_2024", "Devis descriptifs des travaux")).toBe(true);
+    expect(labelsChecklistPourType("avis_imposition")).toEqual([]);
+    // une seule attestation RGE ou un seul devis signé reste coché au dépôt (CEE)
+    expect(labelsChecklistPourType("attestation_rge")).toEqual(["Attestation RGE de l'entreprise"]);
+    expect(labelsChecklistPourType("devis_travaux")).toEqual([
+      "Devis signé avant engagement des travaux",
+      "Pièces marchés : devis détaillés / DPGF des travaux",
+    ]);
+  });
+
   it("partage le plan de financement définitif jusqu'au dossier d'assurance", () => {
     expect(ciblesMontagePourType("pf_definitif").map((c) => c.montage).sort()).toEqual(["anah", "climaxion", "do"]);
   });

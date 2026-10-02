@@ -302,9 +302,9 @@ export const estVisualisable = (nom: string) => VISUALISABLES.test(nom);
 export interface PieceChecklist {
   label: string;
   type: string;
-  /** Pièce faite de plusieurs documents (ex. les factures de travaux) : un
-   *  dépôt ne suffit pas à la compléter, elle se coche à la main (feedback
-   *  d'Amir du 02/10/2026). */
+  /** Pièce faite de plusieurs documents (factures de travaux, attestations
+   *  RGE et devis de l'éco-PTZ, avis d'imposition) : un dépôt ne suffit pas à
+   *  la compléter, elle se coche à la main (feedbacks d'Amir du 02/10/2026). */
   manuelle?: boolean;
 }
 
@@ -350,7 +350,7 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: Pi
       piece("Déclarations d'urbanisme", "autorisation_urbanisme"),
       piece("Fiche « État de la copropriété »", "fiche_etat_anah"),
       piece("Rapport d'enquête sociale", "rapport_enquete_sociale"),
-      piece("Avis d'imposition des personnes éligibles aux aides individuelles (espace copropriétaires)", "avis_imposition"),
+      pieceManuelle("Avis d'imposition des personnes éligibles aux aides individuelles (espace copropriétaires)", "avis_imposition"),
       piece("Liste des primes individuelles", "liste_primes_individuelles"),
       piece("Attestation de mise à jour du registre de copropriété", "attestation_registre"),
       piece("Plan de financement définitif de la copropriété (Excel)", "pf_definitif"),
@@ -387,7 +387,7 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: Pi
       piece("CCTP et DPGF des lots énergétiques", "cctp_dce"),
       piece("Devis de remplacement des fenêtres", "devis_fenetres"),
       piece("Planning prévisionnel de l'opération", "planning"),
-      piece("Avis d'imposition des personnes éligibles aux aides (espace copropriétaires)", "avis_imposition"),
+      pieceManuelle("Avis d'imposition des personnes éligibles aux aides (espace copropriétaires)", "avis_imposition"),
       piece("Tableau récapitulatif des primes individuelles", "liste_primes_individuelles"),
       piece("Liste des bénéficiaires", "liste_beneficiaires"),
     ],
@@ -400,8 +400,8 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: Pi
     items: [
       piece("Formulaire emprunteur « copropriétés »", "cerfa_ecoptz_emprunteur"),
       piece("Formulaire entreprise par action de travaux", "cerfa_ecoptz_entreprise"),
-      piece("Devis descriptifs des travaux", "devis_travaux"),
-      piece("Attestations RGE", "attestation_rge"),
+      pieceManuelle("Devis descriptifs des travaux", "devis_travaux"),
+      pieceManuelle("Attestations RGE", "attestation_rge"),
       piece("PV d'AG autorisant l'emprunt collectif", "pv_ag_travaux"),
       piece("Liste des copropriétaires participants", "liste_participants_pret"),
     ],
