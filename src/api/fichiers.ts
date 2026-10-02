@@ -83,7 +83,7 @@ export const DISPOSITIFS_RECAP: { id: string; label: string; types: string[] }[]
       "pv_ag_moe", "pv_ag_lancement_amo", "plan_financement", "pf_definitif", "liste_primes_individuelles", "rib",
       "rib_compte_travaux", "accord_subvention",
       "fiche_synthetique", "attestation_registre", "attestation_composition", "reglement_copropriete",
-      "attestation_logement_decent", "contrat_amo", "mandat_delegation_depot", "offre_moe",
+      "attestation_logement_decent", "contrat_amo", "mandat_delegation_depot", "offre_moe", "contrat_moe",
       "test_etancheite", "memoire_technique", "plan", "photo", "attestation_conformite_offres",
       "rapport_conformite_offres", "cctp_dce", "planning", "avis_imposition", "liste_beneficiaires",
     ],
@@ -361,7 +361,8 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: Pi
     // Grand Est), fournie par Amir le 13/09/2026 - remplace les anciennes
     // listes « Climaxion » et « Eurométropole » (fusionnées, migration 0067).
     // La clé `dispositif` reste « climaxion » : c'est l'identifiant stocké en
-    // base. Les mêmes 25 pièces forment le dossier syndic (CLIMAXION_ETAPES).
+    // base. Les mêmes 26 pièces (25 + le contrat de MOE, 02/10/2026) forment
+    // le dossier syndic (CLIMAXION_ETAPES).
     dispositif: "climaxion",
     label: "EMS & Climaxion",
     items: [
@@ -377,6 +378,8 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: Pi
       piece("PV d'AG validant la maîtrise d'œuvre", "pv_ag_moe"),
       piece("Audit énergétique réglementaire et fichiers sources", "audit_energetique"),
       piece("Offre de la maîtrise d'œuvre", "offre_moe"),
+      // ajouté sur feedback d'Amir du 02/10/2026
+      piece("Contrat du maître d'œuvre", "contrat_moe"),
       piece("Plan de financement définitif de l'opération", "pf_definitif"),
       piece("Rapport des tests initiaux d'étanchéité à l'air", "test_etancheite"),
       piece("Mémoire technique", "memoire_technique"),

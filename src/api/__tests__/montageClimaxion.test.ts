@@ -1,5 +1,5 @@
 // Dossier EMS & Climaxion (feedback Amir 13/09/2026) : checklist commune
-// Eurométropole / Climaxion, 25 pièces, mêmes pièces côté AMO (checklist) et
+// Eurométropole / Climaxion, 26 pièces (contrat de MOE ajouté le 02/10/2026), mêmes pièces côté AMO (checklist) et
 // côté syndic (parcours), déposants fixés pièce par pièce, deux pièces
 // confidentielles. Vérifie aussi que chaque document de tous les parcours a un
 // type de dépôt connu.
@@ -20,11 +20,20 @@ describe("dossier EMS & Climaxion", () => {
     expect(PARCOURS.climaxion?.etapes).toBe(CLIMAXION_ETAPES);
   });
 
-  it("aligne les 25 pièces du parcours syndic sur la checklist AMO", () => {
+  it("aligne les 26 pièces du parcours syndic sur la checklist AMO", () => {
     const checklist = CHECKLIST_TEMPLATES.find((t) => t.dispositif === "climaxion")!;
-    expect(checklist.items).toHaveLength(25);
-    expect(docs).toHaveLength(25);
-    expect(new Set(docs.map((d) => d.key)).size).toBe(25);
+    expect(checklist.items).toHaveLength(26);
+    expect(docs).toHaveLength(26);
+    expect(new Set(docs.map((d) => d.key)).size).toBe(26);
+    // mêmes pièces, même ordre, reliées par le type de document
+    expect(docs.map((d) => d.type)).toEqual(checklist.items.map((i) => i.type));
+  });
+
+  it("attend le contrat du maître d'œuvre, versé par Strat Eco (feedback d'Amir du 02/10/2026)", () => {
+    const checklist = CHECKLIST_TEMPLATES.find((t) => t.dispositif === "climaxion")!;
+    expect(checklist.items.find((i) => i.type === "contrat_moe")?.label).toBe("Contrat du maître d'œuvre");
+    expect(docDef("climaxion", "contrat_moe")).toMatchObject({ fournisseur: "amo", type: "contrat_moe" });
+    expect(DISPOSITIFS_RECAP.find((d) => d.id === "climaxion")?.types).toContain("contrat_moe");
   });
 
   it("fixe les déposants décidés le 13/09/2026", () => {
@@ -37,7 +46,7 @@ describe("dossier EMS & Climaxion", () => {
       expect(f(k), k).toBe("syndic");
     for (const k of ["audit_reglementaire_sources", "tests_etancheite", "cctp_dpgf_energetiques", "devis_fenetres"])
       expect(f(k), k).toBe("amo_moe");
-    for (const k of ["offre_moe", "pf_definitif", "avis_imposition", "tableau_primes_individuelles", "liste_beneficiaires"])
+    for (const k of ["offre_moe", "contrat_moe", "pf_definitif", "avis_imposition", "tableau_primes_individuelles", "liste_beneficiaires"])
       expect(f(k), k).toBe("amo");
     for (const k of [
       "memoire_technique", "plans_coupes_photos", "attestation_conformite_offres",

@@ -753,7 +753,8 @@ export const ANAH_ETAPES: EtapeDef[] = [
 
 // ========== Catalogue documentaire EMS & Climaxion ==========
 // Source : checklist commune Eurométropole de Strasbourg / Climaxion fournie
-// par Amir le 13/09/2026 (25 pièces, même liste que la checklist AMO
+// par Amir le 13/09/2026 (25 pièces + le contrat de MOE ajouté le 02/10/2026,
+// même liste que la checklist AMO
 // « EMS & Climaxion » de CHECKLIST_TEMPLATES). Déposants fixés pièce par pièce.
 // Quatre pièces reposent sur un modèle à télécharger (attestation logement
 // décent, mandat de délégation de dépôt, attestation et rapport de conformité
@@ -881,6 +882,14 @@ export const CLIMAXION_ETAPES: EtapeDef[] = [
             hint: "Offre retenue lors de la consultation - déjà au dossier projet",
             fournisseur: "amo",
             type: "offre_moe",
+          },
+          {
+            // ajouté sur feedback d'Amir du 02/10/2026, même pièce que le dossier ANAH
+            key: "contrat_moe",
+            name: "Contrat du maître d'œuvre",
+            hint: "Convention de maîtrise d'œuvre signée - déjà versée au dossier projet",
+            fournisseur: "amo",
+            type: "contrat_moe",
           },
           {
             key: "pf_definitif",
@@ -1174,7 +1183,7 @@ export const PARCOURS: Partial<Record<MontageId, ParcoursDef>> = {
   climaxion: {
     titre: "EMS & Climaxion",
     intro:
-      "Aides de l'Eurométropole de Strasbourg et de la Région Grand Est (Climaxion), instruites sur un dossier commun de 25 pièces. Déposez celles qui relèvent du syndic ; les autres sont versées par Strat Eco ou la maîtrise d'œuvre et suivies ici. Quatre pièces suivent un modèle fourni par Strat Eco.",
+      "Aides de l'Eurométropole de Strasbourg et de la Région Grand Est (Climaxion), instruites sur un dossier commun de 26 pièces. Déposez celles qui relèvent du syndic ; les autres sont versées par Strat Eco ou la maîtrise d'œuvre et suivies ici. Quatre pièces suivent un modèle fourni par Strat Eco.",
     etapes: CLIMAXION_ETAPES,
   },
   do: {
