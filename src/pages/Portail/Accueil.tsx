@@ -1,13 +1,18 @@
-// Accueil du portail : salutation, timeline de phases, tuiles financières,
-// étiquette énergie visée du bâtiment, à-faire, documents partagés par l'AMO
-// (remontés ici depuis l'onglet « Mes documents » retiré le 22/09/2026).
+// Accueil du portail : salutation, timeline de phases avec le récapitulatif de
+// chaque étape (réalisé / reste à réaliser, idée d'Amir du 02/10/2026), tuiles
+// financières, étiquette énergie visée du bâtiment, à-faire, lien vers les
+// documents du projet (onglet « Documents » depuis le 02/10/2026).
+import type { CSSProperties } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge, DpeChip } from "@/components/ui";
 import { fmtDate, fmtEuro } from "@/lib/format";
 import { PHASES, PROFILS_MPR, type DpeClass } from "@/lib/referentiels";
+import { recapPhases } from "@/lib/recapPhases";
 import {
   computeIndiv,
   totalTantiemes,
+  useFichiersPartages,
+  usePortailTravaux,
   type ChoixFinancement,
   type Membership,
   type ProfilMeta,
@@ -16,7 +21,6 @@ import {
 import { readParams } from "@/api/scenarios";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Tables } from "@/lib/database.types";
-import { DocumentsProjet } from "./Documents";
 import type { SectionId } from "./index";
 
 export function Accueil({
@@ -51,6 +55,11 @@ export function Accueil({
   const phaseIdx = PHASES.findIndex((p) => p.id === copro.phase);
   const dpeAvant = (copro.energy_before as DpeClass | null) ?? null;
   const dpeApres = (copro.energy_after as DpeClass | null) ?? null;
+  // Détail des tâches seulement quand Travaux est la phase en cours
+  const { data: travaux } = usePortailTravaux(copro.id, copro.phase === "travaux");
+  const recap = recapPhases({ phase: copro.phase, energyBefore: dpeAvant, dateAg: copro.date_ag, travaux });
+  const { data: documents } = useFichiersPartages(copro.id);
+  const nbDocuments = documents?.length ?? 0;
 
   const indiv =
     scenario && bareme
@@ -124,6 +133,27 @@ export function Accueil({
               <div className="tl-sub">{i < phaseIdx ? "Terminé" : i === phaseIdx ? "En cours" : "À venir"}</div>
             </div>
           ))}
+          {PHASES.map((p, i) => {
+            const r = recap[p.id];
+            if (!r) return null;
+            const titre = r.mode === "realise" ? "réalisé" : "reste à réaliser";
+            return (
+              <div key={"recap-" + p.id} className="tl-recap" style={{ "--col": i + 1 } as CSSProperties}>
+                <div className="tl-recap-titre">
+                  <span className="tl-recap-ordi">{titre[0].toUpperCase() + titre.slice(1)}</span>
+                  <span className="tl-recap-mobile">{p.label} : {titre}</span>
+                </div>
+                <ul>
+                  {r.items.map((item) => (
+                    <li key={item}>
+                      {r.mode === "realise" ? <Icon name="check" size={13} className="ico" /> : <span className="puce"></span>}
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -234,8 +264,17 @@ export function Accueil({
         ))}
       </div>
 
-      <div style={{ marginTop: 26 }}>
-        <DocumentsProjet membership={membership} />
+      <div className="todo-card" style={{ marginTop: 26 }} onClick={() => go("documents")}>
+        <span className="tc-ico"><Icon name="fileText" size={22} /></span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="tc-title">Documents du projet</div>
+          <div className="tc-sub">
+            {nbDocuments
+              ? `${nbDocuments} document${nbDocuments > 1 ? "s" : ""} partagé${nbDocuments > 1 ? "s" : ""} par votre AMO`
+              : "Aucun document partagé pour l'instant"}
+          </div>
+        </div>
+        <Icon name="chevronRight" size={20} style={{ color: "var(--fg-muted)" }} />
       </div>
     </div>
   );

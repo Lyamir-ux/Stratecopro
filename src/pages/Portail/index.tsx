@@ -26,13 +26,23 @@ import { QuotesParts } from "./QuotesParts";
 import { Enquete } from "./Enquete";
 import { Financement } from "./Financement";
 import { PlanCopro } from "./PlanCopro";
+import { Documents } from "./Documents";
 import { Faq } from "./Faq";
 import { Messages } from "./Messages";
 
 // « Mes documents » a été retiré (feedback Amir 22/09/2026) : le seul document
 // encore attendu du copropriétaire est son avis d'imposition, qui se dépose dans
-// l'enquête sociale ; les documents partagés par l'AMO sont sur l'accueil.
-export type SectionId = "accueil" | "plan-indiv" | "enquete" | "pret" | "plan-copro" | "faq" | "messages";
+// l'enquête sociale. Les documents partagés par l'AMO ont leur onglet
+// « Documents », en lecture seule (feedback Amir 02/10/2026).
+export type SectionId =
+  | "accueil"
+  | "plan-indiv"
+  | "enquete"
+  | "pret"
+  | "plan-copro"
+  | "documents"
+  | "faq"
+  | "messages";
 
 const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
   { id: "accueil", label: "Accueil", icon: "home" },
@@ -40,6 +50,7 @@ const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
   { id: "enquete", label: "Enquête sociale", icon: "clipboard" },
   { id: "pret", label: "Mon financement", icon: "trendingUp" },
   { id: "plan-copro", label: "Plan de financement global", icon: "barChart" },
+  { id: "documents", label: "Documents", icon: "fileText" },
   { id: "faq", label: "FAQ", icon: "help" },
   // « Envoyez-nous un message » (feedback Amir 22/09/2026) : fil privé avec l'équipe AMO
   { id: "messages", label: "Nous contacter", icon: "message" },
@@ -419,6 +430,7 @@ export default function Portail() {
         {section === "enquete" && <Enquete membership={membership} bareme={bareme ?? null} />}
         {section === "pret" && <Financement {...common} choix={choix ?? null} />}
         {section === "plan-copro" && <PlanCopro membership={membership} scenarios={scenarios ?? []} bareme={bareme ?? null} />}
+        {section === "documents" && <Documents membership={membership} />}
         {section === "faq" && <Faq />}
         {section === "messages" && <Messages membership={membership} />}
       </main>

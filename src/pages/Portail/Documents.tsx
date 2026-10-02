@@ -4,7 +4,7 @@
 // et le RIB sont désormais demandés par la banque sur son propre parcours de
 // souscription. Les pièces justificatives encore attendues du copropriétaire se
 // déposent dans l'enquête sociale, sous les plafonds de l'Anah, et les documents
-// partagés par l'AMO sont sur l'accueil.
+// partagés par l'AMO ont leur onglet « Documents » (02/10/2026).
 //
 // Pièces selon la situation (feedback Marius MAZZANTE 30/09/2026) : la liste
 // suit les réponses à l'enquête (src/lib/piecesSituation.ts) - avis définitif
@@ -287,15 +287,42 @@ export function PiecesJustificatives({
   );
 }
 
+/**
+ * Onglet « Documents » (feedback Amir du 02/10/2026, 11:09) : les documents du
+ * projet partagés par l'AMO, en lecture seule. Ils étaient en bas de l'accueil,
+ * qui garde un lien vers cet onglet.
+ */
+export function Documents({ membership }: { membership: Membership }) {
+  return (
+    <div className="fade">
+      <h1 className="sec-title">Documents du projet</h1>
+      <p className="sec-sub">
+        Les documents de la rénovation que votre AMO met à votre disposition. Vous pouvez les télécharger à tout
+        moment.
+      </p>
+      <DocumentsProjet membership={membership} />
+    </div>
+  );
+}
+
 /** Documents du projet partagés par l'AMO (lecture seule). */
 export function DocumentsProjet({ membership }: { membership: Membership }) {
   const { data: fichiers } = useFichiersPartages(membership.copro.id);
+  const nb = fichiers?.length ?? 0;
 
   return (
     <div className="card-xl">
       <div className="cx-head">
         <Icon name="fileText" size={20} style={{ color: "var(--color-secondary-500)" }} />
-        <h2 style={{ fontSize: 19 }}>Documents du projet</h2>
+        <h2 style={{ fontSize: 19 }}>Partagés par votre AMO</h2>
+        {nb > 0 && (
+          <>
+            <span style={{ flex: 1 }}></span>
+            <span className="se-small" style={{ color: "var(--fg-muted)" }}>
+              {nb} document{nb > 1 ? "s" : ""}
+            </span>
+          </>
+        )}
       </div>
       <div className="cx-body" style={{ paddingTop: 6, paddingBottom: 6 }}>
         {(fichiers ?? []).map((doc) => (

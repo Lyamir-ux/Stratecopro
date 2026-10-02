@@ -5,6 +5,7 @@ import type { Tables, Enums, Json } from "@/lib/database.types";
 import { determineProfil, type Bareme, type FinanceParams, type Profil } from "@/lib/finance";
 import { readParams } from "./scenarios";
 import { libellePieceSituation } from "@/lib/piecesSituation";
+import type { TacheTravaux } from "@/lib/recapPhases";
 import { computePlanDefinitif, readPlanDefinitif, type PlanDefinitifData, type PlanDefinitifResult } from "@/lib/finance/planDefinitif";
 
 export type Copro = Tables<"coproprietes">;
@@ -696,6 +697,23 @@ export async function downloadRibBlob(storagePath: string): Promise<Blob | null>
 }
 
 // ========== Documents du projet partagés par l'AMO ==========
+
+/**
+ * Tâches de la phase Travaux du dossier, pour le « reste à réaliser » de
+ * l'accueil (RPC 0129 : le plan de tâches AMO n'est pas lisible du portail).
+ * Lues seulement quand le dossier est en phase Travaux.
+ */
+export function usePortailTravaux(coproId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ["portail", "travaux", coproId],
+    enabled: !!coproId && enabled,
+    queryFn: async (): Promise<TacheTravaux[]> => {
+      const { data, error } = await supabase.rpc("portail_travaux", { p_copro_id: coproId! });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
 
 export function useFichiersPartages(coproId: string | undefined) {
   return useQuery({
