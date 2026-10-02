@@ -20,13 +20,15 @@
 --     chez Nexity HAGUENAU, alors qu'un compte n'appartient qu'à une enseigne) ;
 --   - assistcopro1metz@rizzon.com (LES PLANTIERES, aucun nom sur la fiche).
 --
--- CG IMMO : le nom « Kamail AZFAL » est le bon (confirmé par Amir), l'adresse de la fiche
--- LE BALZAC est corrigée de kamail.afzal@ en kamail.azfal@cgimmo.com avant la création.
+-- CG IMMO : la fiche LE BALZAC portait « Kamail AZFAL » avec kamail.afzal@cgimmo.com ; le
+-- bon nom est Kamail AFZAL, comme l'adresse (précision d'Amir du 01/10). En prod, le compte
+-- avait d'abord été créé en kamail.azfal@ (premier arbitrage, retiré aussitôt) puis corrigé
+-- en SQL (auth.users, auth.identities, profil, fiche) : un seul compte, kamail.afzal@.
 
 update coproprietes
-   set gestionnaire_email = 'kamail.azfal@cgimmo.com'
+   set gestionnaire_nom = 'Kamail AFZAL', gestionnaire_email = 'kamail.afzal@cgimmo.com'
  where deleted_at is null
-   and lower(btrim(gestionnaire_email)) = 'kamail.afzal@cgimmo.com';
+   and lower(btrim(gestionnaire_email)) in ('kamail.afzal@cgimmo.com', 'kamail.azfal@cgimmo.com');
 
 with nouveaux (org_slug, full_name, email, initials) as (values
   ('agence-mercor', 'Melissa ZIMMER', 'melissa.zimmer@mercor.fr', 'MZ'),
@@ -41,7 +43,7 @@ with nouveaux (org_slug, full_name, email, initials) as (values
   ('cagim-sogedim', 'Elodie BECHARD', 'e.bechard@cagim-sogedim.fr', 'EB'),
   ('cagim-sogedim', 'Rébecca WIEDERKEHR', 'r.wiederkehr@cagim-sogedim.fr', 'RW'),
   ('cclv-immo', 'Virginie CAILLOL', 'cclvimmo@gmail.com', 'VC'),
-  ('cg-immo', 'Kamail AZFAL', 'kamail.azfal@cgimmo.com', 'KA'),
+  ('cg-immo', 'Kamail AFZAL', 'kamail.afzal@cgimmo.com', 'KA'),
   ('cg-immo', 'Nicolas LOMMELE', 'nicolas.lommele@cgimmo.com', 'NL'),
   ('citya-poirel', 'Fanny BACLET', 'fbaclet@citya.com', 'FB'),
   ('citya-poirel', 'Julien GARRIC', 'jgarric@citya.com', 'JG'),
