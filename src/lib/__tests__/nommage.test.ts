@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nomFichierSansAccents } from "@/lib/nommage";
+import { nomFichierSansAccents, nomRenomme, nomSansExtension } from "@/lib/nommage";
 
 // Feedback d'Amir du 09/09/2026 : plus d'accent ni de caractère spécial dans
 // les noms de fichiers (ils ressortaient en « %C3%A9 » au téléchargement).
@@ -23,5 +23,32 @@ describe("nomFichierSansAccents", () => {
   it("ne renvoie jamais une chaîne vide", () => {
     expect(nomFichierSansAccents("???")).toBe("-");
     expect(nomFichierSansAccents("   ")).toBe("fichier");
+  });
+});
+
+// Feedback d'Amir du 02/10/2026 : bouton « Modifier » pour renommer un fichier
+// déjà déposé dans l'onglet Fichiers.
+describe("nomRenomme", () => {
+  it("conserve l'extension d'origine, retapée ou non", () => {
+    expect(nomRenomme("PV AG lancement AMO", "ancien.pdf")).toBe("PV AG lancement AMO.pdf");
+    expect(nomRenomme("PV AG lancement AMO.PDF", "ancien.pdf")).toBe("PV AG lancement AMO.pdf");
+  });
+
+  it("enregistre le nom sans accent comme au dépôt", () => {
+    expect(nomRenomme("  Contrat maîtrise d'œuvre signé ", "x.pdf")).toBe("Contrat maitrise d-oeuvre signe.pdf");
+  });
+
+  it("refuse une saisie vide", () => {
+    expect(nomRenomme("   ", "x.pdf")).toBeNull();
+    expect(nomRenomme(".pdf", "x.pdf")).toBeNull();
+  });
+
+  it("accepte un fichier sans extension", () => {
+    expect(nomRenomme("Notes", "LISEZMOI")).toBe("Notes");
+  });
+
+  it("nomSansExtension retire seulement l'extension", () => {
+    expect(nomSansExtension("35 RUE D-ILLKIRCH - PV AG - 2026-01-19.pdf")).toBe("35 RUE D-ILLKIRCH - PV AG - 2026-01-19");
+    expect(nomSansExtension("LISEZMOI")).toBe("LISEZMOI");
   });
 });

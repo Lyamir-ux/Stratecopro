@@ -678,6 +678,19 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .task-row .t-copro { font-size: 12px; color: var(--fg-muted); }
 .task-row .spacer { flex: 1; }
 
+/* Onglet Fichiers : une ligne par fichier, « Modifier » et « Supprimer » (02/10) */
+.task-row.fichier-ligne, .task-row.fichier-ligne:last-child { padding: 9px 4px; border-bottom: 1px solid var(--border); cursor: default; gap: 10px; }
+.fichier-actions { display: flex; gap: 4px; flex: none; }
+.fichier-actions .se-btn { padding: 4px 10px; font-size: 12px; }
+.fichier-edition { flex: 1; min-width: 0; }
+.fichier-edition-champ { display: flex; align-items: center; gap: 6px; }
+.fichier-edition-champ .edit-inp { flex: 1; min-width: 0; font-size: 13px; }
+.fichier-ext { font-size: 13px; color: var(--fg-muted); flex: none; }
+.fichier-erreur { font-size: 12px; color: var(--color-error-700); margin-top: 4px; }
+@media (max-width: 760px) {
+  .task-row.fichier-ligne { flex-wrap: wrap; }
+}
+
 /* ==========================================================================
    ESPACE MAÎTRISE D'ŒUVRE
    ========================================================================== */

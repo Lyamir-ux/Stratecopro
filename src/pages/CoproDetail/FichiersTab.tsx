@@ -1,6 +1,6 @@
 // Onglet Fichiers - porté de detail.jsx (FichiersTab), branché sur Storage + checklists réelles.
 // Chaque dépôt passe par le renommage assisté (analyse documentaire + validation humaine).
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { ApercuDocument } from "@/components/ApercuDocument";
 import { DepotZipDialog, estZip } from "@/components/DepotZipDialog";
 import { Icon } from "@/components/Icon";
@@ -16,12 +16,14 @@ import {
   useChecklists,
   useDeleteFichier,
   useFichiers,
+  useRenommerFichier,
   useToggleChecklistItem,
   useTogglePartageFichier,
   useUploadFichier,
   type Fichier,
 } from "@/api/fichiers";
-import { typeDepuisNom, typeLabel } from "@/lib/nommage";
+import { messageErreur } from "@/lib/erreurs";
+import { extensionDe, nomRenomme, nomSansExtension, typeDepuisNom, typeLabel } from "@/lib/nommage";
 import type { CoproWithStats } from "@/api/copros";
 
 function fmtSize(n: number | null): string {
@@ -30,11 +32,170 @@ function fmtSize(n: number | null): string {
   return Math.max(1, Math.round(n / 1e3)) + " Ko";
 }
 
+/** Une ligne de fichier : nom, détail, aperçu, téléchargement et, hors pièces
+ *  émises par la facturation, « Modifier » (renommage sur place, extension
+ *  conservée) et « Supprimer » (feedback d'Amir du 02/10/2026). */
+function LigneFichier({
+  f,
+  detail,
+  onPartage,
+  onApercu,
+  onRenommer,
+  onSupprimer,
+}: {
+  f: Fichier;
+  detail: ReactNode;
+  /** Bouton de partage au portail - absent des dossiers récapitulatifs. */
+  onPartage?: () => void;
+  onApercu: () => void;
+  onRenommer: (name: string) => Promise<unknown>;
+  onSupprimer: () => Promise<unknown>;
+}) {
+  const [saisie, setSaisie] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const modifiable = f.dossier !== DOSSIER_FACTURATION;
+  const ext = extensionDe(f.name);
+
+  const fermer = () => {
+    setSaisie(null);
+    setErreur(null);
+  };
+
+  const enregistrer = async () => {
+    if (saisie == null || busy) return;
+    const name = nomRenomme(saisie, f.name);
+    if (!name) {
+      setErreur("Le nom ne peut pas être vide.");
+      return;
+    }
+    if (name === f.name) return fermer();
+    setBusy(true);
+    try {
+      await onRenommer(name);
+      fermer();
+    } catch (e) {
+      setErreur(messageErreur(e, "Le fichier n'a pas pu être renommé."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const supprimer = async () => {
+    if (!window.confirm(`Supprimer « ${f.name} » du dossier « ${f.dossier} » ?`)) return;
+    setBusy(true);
+    setErreur(null);
+    try {
+      await onSupprimer();
+    } catch (e) {
+      setErreur(messageErreur(e, "Le fichier n'a pas pu être supprimé."));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="task-row fichier-ligne">
+      <Icon name="fileText" size={16} style={{ color: "var(--color-secondary-500)" }} />
+      {saisie != null ? (
+        <div className="fichier-edition">
+          <div className="fichier-edition-champ">
+            <input
+              className="edit-inp"
+              autoFocus
+              value={saisie}
+              // lecture seule (et non désactivé) pendant l'envoi : le champ garde
+              // le focus, Échap et Entrée restent actifs après une erreur
+              readOnly={busy}
+              aria-label="Nouveau nom du fichier"
+              onChange={(e) => setSaisie(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void enregistrer();
+                if (e.key === "Escape") fermer();
+              }}
+            />
+            {ext && <span className="fichier-ext">.{ext}</span>}
+          </div>
+          {erreur && <div className="fichier-erreur">{erreur}</div>}
+        </div>
+      ) : (
+        <div style={{ minWidth: 0 }}>
+          <div className="t-title" style={{ fontSize: 13 }}>
+            {f.name}
+          </div>
+          <div className="t-copro">{detail}</div>
+          {erreur && <div className="fichier-erreur">{erreur}</div>}
+        </div>
+      )}
+      <span className="spacer"></span>
+      {saisie != null ? (
+        <div className="fichier-actions">
+          <button className="se-btn se-btn-primary btn-sm" disabled={busy} onClick={() => void enregistrer()}>
+            {busy ? "Enregistrement…" : "Enregistrer"}
+          </button>
+          <button className="se-btn se-btn-ghost btn-sm" disabled={busy} onClick={fermer}>
+            Annuler
+          </button>
+        </div>
+      ) : (
+        <>
+          {onPartage && modifiable && (
+            <button
+              className="icon-btn"
+              title={f.partage_copro ? "Ne plus partager aux copropriétaires" : "Partager aux copropriétaires (portail)"}
+              style={f.partage_copro ? { color: "var(--color-primary-700)" } : undefined}
+              onClick={onPartage}
+            >
+              <Icon name="share" size={16} />
+            </button>
+          )}
+          <button
+            className="icon-btn"
+            title={estVisualisable(f.name) ? "Aperçu sans téléchargement" : "Ce format ne s'affiche pas dans le navigateur"}
+            onClick={onApercu}
+          >
+            <Icon name="eye" size={16} />
+          </button>
+          <button className="icon-btn" title="Télécharger" onClick={() => void downloadFichier(f)}>
+            <Icon name="download" size={16} />
+          </button>
+          {modifiable && (
+            <div className="fichier-actions">
+              <button
+                className="se-btn se-btn-ghost btn-sm"
+                title="Modifier le nom du fichier"
+                disabled={busy}
+                onClick={() => {
+                  setSaisie(nomSansExtension(f.name));
+                  setErreur(null);
+                }}
+              >
+                <Icon name="edit" size={14} />
+                Modifier
+              </button>
+              <button
+                className="se-btn se-btn-ghost btn-sm"
+                style={{ color: "var(--color-error-700)" }}
+                title="Supprimer le fichier"
+                disabled={busy}
+                onClick={() => void supprimer()}
+              >
+                <Icon name="trash" size={14} />
+                Supprimer
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function FichiersTab({ c }: { c: CoproWithStats }) {
   const { data: fichiers } = useFichiers(c.id);
   const { data: checklists } = useChecklists(c.id);
   const upload = useUploadFichier(c.id);
   const del = useDeleteFichier(c.id);
+  const renommer = useRenommerFichier(c.id);
   const partage = useTogglePartageFichier(c.id);
   const toggle = useToggleChecklistItem(c.id);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -288,55 +449,21 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                 </p>
               ) : (
                 folderFiles.map((f) => (
-                  <div key={f.id} className="task-row" style={{ padding: "9px 4px", borderBottom: "1px solid var(--border)" }}>
-                    <Icon name="fileText" size={16} style={{ color: "var(--color-secondary-500)" }} />
-                    <div>
-                      <div className="t-title" style={{ fontSize: 13 }}>
-                        {f.name}
-                      </div>
-                      <div className="t-copro">
+                  <LigneFichier
+                    key={f.id}
+                    f={f}
+                    detail={
+                      <>
                         {fmtSize(f.size)}
                         {f.partage_copro && " · visible au portail copropriétaires"}
                         {f.confidentiel && " · réservé à l'équipe Strat Eco"}
-                      </div>
-                    </div>
-                    <span className="spacer"></span>
-                    {f.dossier !== DOSSIER_FACTURATION && (
-                      <button
-                        className="icon-btn"
-                        title={f.partage_copro ? "Ne plus partager aux copropriétaires" : "Partager aux copropriétaires (portail)"}
-                        style={f.partage_copro ? { color: "var(--color-primary-700)" } : undefined}
-                        onClick={() => void partage.mutateAsync({ id: f.id, partage: !f.partage_copro })}
-                      >
-                        <Icon name="share" size={16} />
-                      </button>
-                    )}
-                    <button
-                      className="icon-btn"
-                      title={
-                        estVisualisable(f.name)
-                          ? "Aperçu sans téléchargement"
-                          : "Ce format ne s'affiche pas dans le navigateur"
-                      }
-                      onClick={() => setApercu(f)}
-                    >
-                      <Icon name="eye" size={16} />
-                    </button>
-                    <button className="icon-btn" title="Télécharger" onClick={() => void downloadFichier(f)}>
-                      <Icon name="download" size={16} />
-                    </button>
-                    {f.dossier !== DOSSIER_FACTURATION && (
-                      <button
-                        className="icon-btn"
-                        title="Supprimer"
-                        onClick={() => {
-                          if (window.confirm(`Supprimer « ${f.name} » ?`)) void del.mutateAsync(f);
-                        }}
-                      >
-                        <Icon name="trash" size={16} />
-                      </button>
-                    )}
-                  </div>
+                      </>
+                    }
+                    onPartage={() => void partage.mutateAsync({ id: f.id, partage: !f.partage_copro })}
+                    onApercu={() => setApercu(f)}
+                    onRenommer={(name) => renommer.mutateAsync({ f, name })}
+                    onSupprimer={() => del.mutateAsync(f)}
+                  />
                 ))
               )}
               {openFolder === DOSSIER_FACTURATION && (
@@ -359,40 +486,27 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                 </p>
               ) : (
                 dispositifFiles.map((f) => (
-                  <div key={f.id} className="task-row" style={{ padding: "9px 4px", borderBottom: "1px solid var(--border)" }}>
-                    <Icon name="fileText" size={16} style={{ color: "var(--color-secondary-500)" }} />
-                    <div>
-                      <div className="t-title" style={{ fontSize: 13 }}>
-                        {f.name}
-                      </div>
-                      <div className="t-copro">
+                  <LigneFichier
+                    key={f.id}
+                    f={f}
+                    detail={
+                      <>
                         dans « {f.dossier} »{f.size != null ? ` · ${fmtSize(f.size)}` : ""}
-                      </div>
-                    </div>
-                    <span className="spacer"></span>
-                    <button
-                      className="icon-btn"
-                      title={
-                        estVisualisable(f.name)
-                          ? "Aperçu sans téléchargement"
-                          : "Ce format ne s'affiche pas dans le navigateur"
-                      }
-                      onClick={() => setApercu(f)}
-                    >
-                      <Icon name="eye" size={16} />
-                    </button>
-                    <button className="icon-btn" title="Télécharger" onClick={() => void downloadFichier(f)}>
-                      <Icon name="download" size={16} />
-                    </button>
-                  </div>
+                      </>
+                    }
+                    onApercu={() => setApercu(f)}
+                    onRenommer={(name) => renommer.mutateAsync({ f, name })}
+                    onSupprimer={() => del.mutateAsync(f)}
+                  />
                 ))
               )}
             </div>
           )}
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 14 }}>
             <Icon name="share" size={13} /> La flèche publie le fichier sur le <b>portail des copropriétaires</b> ;
-            l'œil en donne un aperçu sans le télécharger. Le syndic, lui, co-gère le dossier : il voit l'ensemble des
-            documents déposés ici, partagés ou non.
+            l'œil en donne un aperçu sans le télécharger ; « Modifier » change le nom du fichier (son extension est
+            conservée). Le syndic, lui, co-gère le dossier : il voit l'ensemble des documents déposés ici, partagés ou
+            non.
           </p>
         </div>
       </div>

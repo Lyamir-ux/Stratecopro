@@ -3,7 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { nomFichierSansAccents, typeDepuisNom } from "@/lib/nommage";
 import type { Tables } from "@/lib/database.types";
-import { delierFichierDesChecklists, propagerDocument, retirerFichierDesMontages } from "@/api/propagation";
+import {
+  delierFichierDesChecklists,
+  propagerDocument,
+  renommerFichierDansMontages,
+  retirerFichierDesMontages,
+} from "@/api/propagation";
 
 export type Fichier = Tables<"fichiers">;
 
@@ -215,6 +220,22 @@ export function useTogglePartageFichier(coproId: string) {
       if (error) throw error;
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["fichiers", coproId] }),
+  });
+}
+
+/** Renomme un fichier déjà déposé (bouton « Modifier », feedback d'Amir du
+ *  02/10/2026) : seul le nom affiché change, l'objet stocké reste en place. Le
+ *  même fichier peut figurer dans des dossiers de montage (propagation) : le
+ *  nouveau nom y est reporté pour que les deux listes concordent. */
+export function useRenommerFichier(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ f, name }: { f: Fichier; name: string }) => {
+      const { error } = await supabase.from("fichiers").update({ name }).eq("id", f.id);
+      if (error) throw error;
+      await renommerFichierDansMontages(coproId, f.storage_path, name);
+    },
+    onSuccess: () => invaliderPieces(qc, coproId),
   });
 }
 

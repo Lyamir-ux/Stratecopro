@@ -212,6 +212,23 @@ export function nomFichierSansAccents(nom: string): string {
   return propre || "fichier";
 }
 
+/** Nom d'un fichier sans son extension (champ « Modifier » de l'onglet Fichiers). */
+export function nomSansExtension(nom: string): string {
+  const ext = extensionDe(nom);
+  return ext ? nom.slice(0, -(ext.length + 1)) : nom;
+}
+
+/** Nouveau nom d'un fichier déjà déposé : l'extension d'origine est toujours
+ *  conservée (retapée ou non), le nom est enregistré sans accent comme au
+ *  dépôt. Retourne null si la saisie est vide. */
+export function nomRenomme(saisie: string, ancienNom: string): string | null {
+  const ext = extensionDe(ancienNom);
+  let base = saisie.trim();
+  if (ext && base.toLowerCase().endsWith("." + ext)) base = base.slice(0, -(ext.length + 1)).trim();
+  if (!base) return null;
+  return nomFichierSansAccents(ext ? `${base}.${ext}` : base);
+}
+
 /** Recrée un File du même contenu sous un autre nom. */
 export function renommerFile(file: File, nouveauNom: string): File {
   return new File([file], nouveauNom, { type: file.type, lastModified: file.lastModified });
