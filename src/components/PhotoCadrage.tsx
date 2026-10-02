@@ -8,12 +8,44 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import { CADRAGE_DEFAUT, ZOOM_MAX, deplacerCadrage, normaliserCadrage, stylePhoto, type Cadrage } from "@/lib/photoCadrage";
+import { urlBatimentFictif } from "@/lib/batimentFictif";
 
 /** Image cadrée qui remplit son parent (le parent doit être positionné). */
 export function PhotoCadree({ src, cadrage }: { src: string; cadrage: Cadrage }) {
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
       <img src={src} alt="" draggable={false} style={stylePhoto(cadrage)} />
+    </div>
+  );
+}
+
+/** Image fictive de bâtiment tant que le dossier n'a pas de photo (idée d'Amir
+ *  du 02/10/2026) : une illustration parmi quarante, toujours la même pour un
+ *  même dossier. Mentionnée comme illustration pour qu'on ne la prenne pas
+ *  pour l'immeuble. */
+export function PhotoFictive({ graine }: { graine: string }) {
+  return (
+    <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
+      <img
+        src={urlBatimentFictif(graine)}
+        alt=""
+        draggable={false}
+        // un peu plus de rue que de ciel quand le bandeau rogne en hauteur
+        style={stylePhoto({ x: 50, y: 70, zoom: 1 })}
+      />
+      <span
+        style={{
+          position: "absolute",
+          left: 12,
+          bottom: 9,
+          zIndex: 1,
+          fontSize: 11,
+          color: "rgba(255,255,255,0.85)",
+          textShadow: "0 1px 2px rgba(0,0,0,0.45)",
+        }}
+      >
+        Image d'illustration
+      </span>
     </div>
   );
 }

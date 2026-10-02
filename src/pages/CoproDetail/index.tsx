@@ -19,7 +19,7 @@ import {
   usePhotoUrl,
   useUploadPhoto,
 } from "@/api/copros";
-import { PhotoCadree, RecadrerPhoto, ratioBandeau } from "@/components/PhotoCadrage";
+import { PhotoCadree, PhotoFictive, RecadrerPhoto, ratioBandeau } from "@/components/PhotoCadrage";
 import { lireCadrage } from "@/lib/photoCadrage";
 import { messageErreur } from "@/lib/erreurs";
 import { useConsultations } from "@/api/consultations";
@@ -133,6 +133,8 @@ export default function CoproDetail() {
         <div className="dh-banner" style={{ position: "relative" }}>
           {photoUrl ? (
             <PhotoCadree src={photoUrl} cadrage={lireCadrage(c.photo_cadrage)} />
+          ) : !c.photo_path ? (
+            <PhotoFictive graine={c.id} />
           ) : (
             <div
               style={{

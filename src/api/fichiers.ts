@@ -302,9 +302,14 @@ export const estVisualisable = (nom: string) => VISUALISABLES.test(nom);
 export interface PieceChecklist {
   label: string;
   type: string;
+  /** Pièce faite de plusieurs documents (ex. les factures de travaux) : un
+   *  dépôt ne suffit pas à la compléter, elle se coche à la main (feedback
+   *  d'Amir du 02/10/2026). */
+  manuelle?: boolean;
 }
 
 const piece = (label: string, type: string): PieceChecklist => ({ label, type });
+const pieceManuelle = (label: string, type: string): PieceChecklist => ({ label, type, manuelle: true });
 
 export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: PieceChecklist[] }[] = [
   {
@@ -320,7 +325,7 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: Pi
       piece("Cadre contribution CEE signé", "cadre_cee"),
       piece("PV d'AG votant les travaux", "pv_ag_travaux"),
       piece("Attestation sur l'honneur (partie A)", "ah_cee_a"),
-      piece("Factures détaillées des travaux", "facture"),
+      pieceManuelle("Factures détaillées des travaux", "facture"),
       piece("Attestation sur l'honneur (partie B) signée", "ah_cee_b"),
       piece("PV de réception des travaux", "pv_reception"),
       piece("Preuves de qualification RGE à date de facture", "attestation_rge_facture"),
@@ -403,9 +408,15 @@ export const CHECKLIST_TEMPLATES: { dispositif: string; label: string; items: Pi
   },
 ];
 
-/** Libellés des pièces (toutes checklists) attendues pour un type de document. */
+/** Libellés des pièces (toutes checklists) que le dépôt d'un document de ce
+ *  type coche - les pièces à cocher à la main sont écartées. */
 export function labelsChecklistPourType(type: string): string[] {
-  return CHECKLIST_TEMPLATES.flatMap((t) => t.items.filter((i) => i.type === type).map((i) => i.label));
+  return CHECKLIST_TEMPLATES.flatMap((t) => t.items.filter((i) => i.type === type && !i.manuelle).map((i) => i.label));
+}
+
+/** La pièce de cette checklist se coche-t-elle à la main seulement ? */
+export function pieceACocherALaMain(dispositif: string, label: string): boolean {
+  return !!CHECKLIST_TEMPLATES.find((t) => t.dispositif === dispositif)?.items.find((i) => i.label === label)?.manuelle;
 }
 
 export interface ChecklistWithItems extends Tables<"checklists"> {

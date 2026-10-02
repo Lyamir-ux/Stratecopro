@@ -13,6 +13,7 @@ import {
   DOSSIER_AIDE,
   DOSSIER_FACTURATION,
   downloadFichier,
+  pieceACocherALaMain,
   useChecklists,
   useDeleteFichier,
   useFichiers,
@@ -398,23 +399,36 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                 <Progress value={cl.items.length ? (done / cl.items.length) * 100 : 0} />
                 {open && (
                   <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                    {cl.items.map((it) => (
-                      <label key={it.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={it.done}
-                          onChange={(e) => void toggle.mutateAsync({ id: it.id, done: e.target.checked })}
-                        />
-                        <span style={{ textDecoration: it.done ? "line-through" : "none", color: it.done ? "var(--fg-muted)" : "var(--fg1)" }}>
-                          {it.label}
-                        </span>
-                        {it.fichier_id && (
-                          <span title="Cochée automatiquement au dépôt du fichier" style={{ color: "var(--fg-muted)", display: "inline-flex" }}>
-                            <Icon name="link" size={12} />
+                    {cl.items.map((it) => {
+                      // plusieurs documents attendus (ex. les factures) : un dépôt ne la coche pas
+                      const aLaMain = pieceACocherALaMain(cl.dispositif, it.label);
+                      return (
+                        <label key={it.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={it.done}
+                            onChange={(e) => void toggle.mutateAsync({ id: it.id, done: e.target.checked })}
+                          />
+                          <span style={{ textDecoration: it.done ? "line-through" : "none", color: it.done ? "var(--fg-muted)" : "var(--fg1)" }}>
+                            {it.label}
+                            {aLaMain && !it.done && (
+                              <span
+                                title="Plusieurs documents attendus : le dépôt d'un fichier ne coche pas cette pièce"
+                                style={{ color: "var(--fg-muted)", fontSize: 12 }}
+                              >
+                                {" "}
+                                - à cocher à la main
+                              </span>
+                            )}
                           </span>
-                        )}
-                      </label>
-                    ))}
+                          {it.fichier_id && !aLaMain && (
+                            <span title="Cochée automatiquement au dépôt du fichier" style={{ color: "var(--fg-muted)", display: "inline-flex" }}>
+                              <Icon name="link" size={12} />
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
                   </div>
                 )}
               </div>

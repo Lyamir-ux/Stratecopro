@@ -3,7 +3,7 @@
 // attendue (checklists AMO et dossiers de la page Documents à produire), et
 // le menu des types du dépôt couvre toutes les pièces de toutes les checklists.
 import { describe, expect, it } from "vitest";
-import { CHECKLIST_TEMPLATES, labelsChecklistPourType } from "../fichiers";
+import { CHECKLIST_TEMPLATES, labelsChecklistPourType, pieceACocherALaMain } from "../fichiers";
 import { PARCOURS, docsOfEtape } from "../montage";
 import { ciblesMontagePourType } from "../propagation";
 import { TYPES_DOCUMENT } from "@/lib/nommage";
@@ -61,6 +61,15 @@ describe("pièces partagées entre dispositifs", () => {
     const travaux = ciblesMontagePourType("pv_ag_travaux").map((c) => c.montage).sort();
     expect(travaux).toEqual(["anah", "cee", "climaxion", "ecoptz"]);
     expect(labelsChecklistPourType("pv_ag_travaux")).toHaveLength(4); // CEE, MPR, EMS & Climaxion, éco-PTZ
+  });
+
+  it("ne coche jamais au dépôt les factures de travaux, à cocher à la main (feedback d'Amir du 02/10/2026)", () => {
+    // « factures » au pluriel : une facture déposée ne complète pas la pièce
+    expect(pieceACocherALaMain("cee_avant", "Factures détaillées des travaux")).toBe(true);
+    expect(labelsChecklistPourType("facture")).toEqual([]);
+    expect(pieceACocherALaMain("cee_avant", "PV de réception des travaux")).toBe(false);
+    // le fichier rejoint toujours le dossier de montage qui attend des factures
+    expect(ciblesMontagePourType("facture").map((c) => `${c.montage}/${c.def.key}`)).toEqual(["do/cout_definitif"]);
   });
 
   it("partage le plan de financement définitif jusqu'au dossier d'assurance", () => {
