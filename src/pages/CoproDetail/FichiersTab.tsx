@@ -1,9 +1,10 @@
 // Onglet Fichiers - porté de detail.jsx (FichiersTab), branché sur Storage + checklists réelles.
 // Chaque dépôt passe par le renommage assisté (analyse documentaire + validation humaine).
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState } from "react";
 import { ApercuDocument } from "@/components/ApercuDocument";
 import { DepotZipDialog, estZip } from "@/components/DepotZipDialog";
 import { Icon } from "@/components/Icon";
+import { LigneFichier } from "@/components/LigneFichier";
 import { Progress } from "@/components/ui";
 import { RenommageDialog } from "@/components/RenommageDialog";
 import {
@@ -12,7 +13,6 @@ import {
   DOSSIER_AIDE,
   DOSSIER_FACTURATION,
   downloadFichier,
-  estVisualisable,
   useChecklists,
   useDeleteFichier,
   useFichiers,
@@ -22,172 +22,13 @@ import {
   useUploadFichier,
   type Fichier,
 } from "@/api/fichiers";
-import { messageErreur } from "@/lib/erreurs";
-import { extensionDe, nomRenomme, nomSansExtension, typeDepuisNom, typeLabel } from "@/lib/nommage";
+import { typeDepuisNom, typeLabel } from "@/lib/nommage";
 import type { CoproWithStats } from "@/api/copros";
 
 function fmtSize(n: number | null): string {
   if (n == null) return "";
   if (n > 1e6) return (n / 1e6).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " Mo";
   return Math.max(1, Math.round(n / 1e3)) + " Ko";
-}
-
-/** Une ligne de fichier : nom, détail, aperçu, téléchargement et, hors pièces
- *  émises par la facturation, « Modifier » (renommage sur place, extension
- *  conservée) et « Supprimer » (feedback d'Amir du 02/10/2026). */
-function LigneFichier({
-  f,
-  detail,
-  onPartage,
-  onApercu,
-  onRenommer,
-  onSupprimer,
-}: {
-  f: Fichier;
-  detail: ReactNode;
-  /** Bouton de partage au portail - absent des dossiers récapitulatifs. */
-  onPartage?: () => void;
-  onApercu: () => void;
-  onRenommer: (name: string) => Promise<unknown>;
-  onSupprimer: () => Promise<unknown>;
-}) {
-  const [saisie, setSaisie] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [erreur, setErreur] = useState<string | null>(null);
-  const modifiable = f.dossier !== DOSSIER_FACTURATION;
-  const ext = extensionDe(f.name);
-
-  const fermer = () => {
-    setSaisie(null);
-    setErreur(null);
-  };
-
-  const enregistrer = async () => {
-    if (saisie == null || busy) return;
-    const name = nomRenomme(saisie, f.name);
-    if (!name) {
-      setErreur("Le nom ne peut pas être vide.");
-      return;
-    }
-    if (name === f.name) return fermer();
-    setBusy(true);
-    try {
-      await onRenommer(name);
-      fermer();
-    } catch (e) {
-      setErreur(messageErreur(e, "Le fichier n'a pas pu être renommé."));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const supprimer = async () => {
-    if (!window.confirm(`Supprimer « ${f.name} » du dossier « ${f.dossier} » ?`)) return;
-    setBusy(true);
-    setErreur(null);
-    try {
-      await onSupprimer();
-    } catch (e) {
-      setErreur(messageErreur(e, "Le fichier n'a pas pu être supprimé."));
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="task-row fichier-ligne">
-      <Icon name="fileText" size={16} style={{ color: "var(--color-secondary-500)" }} />
-      {saisie != null ? (
-        <div className="fichier-edition">
-          <div className="fichier-edition-champ">
-            <input
-              className="edit-inp"
-              autoFocus
-              value={saisie}
-              // lecture seule (et non désactivé) pendant l'envoi : le champ garde
-              // le focus, Échap et Entrée restent actifs après une erreur
-              readOnly={busy}
-              aria-label="Nouveau nom du fichier"
-              onChange={(e) => setSaisie(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void enregistrer();
-                if (e.key === "Escape") fermer();
-              }}
-            />
-            {ext && <span className="fichier-ext">.{ext}</span>}
-          </div>
-          {erreur && <div className="fichier-erreur">{erreur}</div>}
-        </div>
-      ) : (
-        <div style={{ minWidth: 0 }}>
-          <div className="t-title" style={{ fontSize: 13 }}>
-            {f.name}
-          </div>
-          <div className="t-copro">{detail}</div>
-          {erreur && <div className="fichier-erreur">{erreur}</div>}
-        </div>
-      )}
-      <span className="spacer"></span>
-      {saisie != null ? (
-        <div className="fichier-actions">
-          <button className="se-btn se-btn-primary btn-sm" disabled={busy} onClick={() => void enregistrer()}>
-            {busy ? "Enregistrement…" : "Enregistrer"}
-          </button>
-          <button className="se-btn se-btn-ghost btn-sm" disabled={busy} onClick={fermer}>
-            Annuler
-          </button>
-        </div>
-      ) : (
-        <>
-          {onPartage && modifiable && (
-            <button
-              className="icon-btn"
-              title={f.partage_copro ? "Ne plus partager aux copropriétaires" : "Partager aux copropriétaires (portail)"}
-              style={f.partage_copro ? { color: "var(--color-primary-700)" } : undefined}
-              onClick={onPartage}
-            >
-              <Icon name="share" size={16} />
-            </button>
-          )}
-          <button
-            className="icon-btn"
-            title={estVisualisable(f.name) ? "Aperçu sans téléchargement" : "Ce format ne s'affiche pas dans le navigateur"}
-            onClick={onApercu}
-          >
-            <Icon name="eye" size={16} />
-          </button>
-          <button className="icon-btn" title="Télécharger" onClick={() => void downloadFichier(f)}>
-            <Icon name="download" size={16} />
-          </button>
-          {modifiable && (
-            <div className="fichier-actions">
-              <button
-                className="se-btn se-btn-ghost btn-sm"
-                title="Modifier le nom du fichier"
-                disabled={busy}
-                onClick={() => {
-                  setSaisie(nomSansExtension(f.name));
-                  setErreur(null);
-                }}
-              >
-                <Icon name="edit" size={14} />
-                Modifier
-              </button>
-              <button
-                className="se-btn se-btn-ghost btn-sm"
-                style={{ color: "var(--color-error-700)" }}
-                title="Supprimer le fichier"
-                disabled={busy}
-                onClick={() => void supprimer()}
-              >
-                <Icon name="trash" size={14} />
-                Supprimer
-              </button>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
 }
 
 export function FichiersTab({ c }: { c: CoproWithStats }) {
@@ -235,6 +76,17 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
     if (zips.length) setDepotZip({ zips, autres: files.filter((f) => !estZip(f)), dossier });
     else setDepot({ files, dossier });
   };
+
+  // Factures et avoirs émis (dossier Facturation) : ni partage, ni
+  // renommage, ni suppression - un avoir annule une facture.
+  const modifiable = (f: Fichier) => f.dossier !== DOSSIER_FACTURATION;
+  const actions = (f: Fichier) => ({
+    confirmation: `Supprimer « ${f.name} » du dossier « ${f.dossier} » ?`,
+    onApercu: () => setApercu(f),
+    onTelecharger: () => void downloadFichier(f),
+    onRenommer: modifiable(f) ? (name: string) => renommer.mutateAsync({ f, name }) : undefined,
+    onSupprimer: modifiable(f) ? () => del.mutateAsync(f) : undefined,
+  });
 
   const selectFolder = (f: string) => {
     setOpenFolder(openFolder === f ? null : f);
@@ -451,7 +303,8 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                 folderFiles.map((f) => (
                   <LigneFichier
                     key={f.id}
-                    f={f}
+                    variante="amo"
+                    name={f.name}
                     detail={
                       <>
                         {fmtSize(f.size)}
@@ -459,10 +312,19 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                         {f.confidentiel && " · réservé à l'équipe Strat Eco"}
                       </>
                     }
-                    onPartage={() => void partage.mutateAsync({ id: f.id, partage: !f.partage_copro })}
-                    onApercu={() => setApercu(f)}
-                    onRenommer={(name) => renommer.mutateAsync({ f, name })}
-                    onSupprimer={() => del.mutateAsync(f)}
+                    avant={
+                      modifiable(f) && (
+                        <button
+                          className="icon-btn"
+                          title={f.partage_copro ? "Ne plus partager aux copropriétaires" : "Partager aux copropriétaires (portail)"}
+                          style={f.partage_copro ? { color: "var(--color-primary-700)" } : undefined}
+                          onClick={() => void partage.mutateAsync({ id: f.id, partage: !f.partage_copro })}
+                        >
+                          <Icon name="share" size={16} />
+                        </button>
+                      )
+                    }
+                    {...actions(f)}
                   />
                 ))
               )}
@@ -488,15 +350,14 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                 dispositifFiles.map((f) => (
                   <LigneFichier
                     key={f.id}
-                    f={f}
+                    variante="amo"
+                    name={f.name}
                     detail={
                       <>
                         dans « {f.dossier} »{f.size != null ? ` · ${fmtSize(f.size)}` : ""}
                       </>
                     }
-                    onApercu={() => setApercu(f)}
-                    onRenommer={(name) => renommer.mutateAsync({ f, name })}
-                    onSupprimer={() => del.mutateAsync(f)}
+                    {...actions(f)}
                   />
                 ))
               )}

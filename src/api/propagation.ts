@@ -112,31 +112,6 @@ export async function retirerFichierDesMontages(coproId: string, path: string): 
   }
 }
 
-/** Après le renommage d'un fichier de l'onglet Fichiers : le nouveau nom est
- *  reporté dans les documents de montage qui référencent le même chemin.
- *  Best effort, comme la propagation du dépôt : le renommage est déjà fait. */
-export async function renommerFichierDansMontages(coproId: string, path: string, name: string): Promise<void> {
-  const { data: rows, error } = await supabase.from("montage_docs").select("*").eq("copro_id", coproId);
-  if (error) {
-    console.warn("Renommage dans les montages :", error.message);
-    return;
-  }
-  const { data: session } = await supabase.auth.getSession();
-  const uid = session.session?.user.id ?? null;
-  for (const row of rows ?? []) {
-    const files = docFiles(row as MontageDoc);
-    if (!files.some((f) => f.path === path && f.name !== name)) continue;
-    const { error: eUp } = await supabase
-      .from("montage_docs")
-      .update({
-        files: files.map((f) => (f.path === path ? { ...f, name } : f)) as unknown as Json,
-        updated_by: uid,
-      })
-      .eq("id", row.id);
-    if (eUp) console.warn(`Renommage ${row.montage}/${row.doc_key} :`, eUp.message);
-  }
-}
-
 /** Avant suppression d'un fichier de l'onglet Fichiers : décoche les pièces
  *  de checklist qu'il avait cochées (RPC checklist_delier_fichier, 0068). */
 export async function delierFichierDesChecklists(fichierId: string): Promise<void> {

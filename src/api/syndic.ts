@@ -5,7 +5,13 @@
 // enquete_reponses_syndic qui exclut le RFR (donnée sensible).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { invaliderPieces, uploadFichierEtPropager, urlSigneeFichier } from "@/api/fichiers";
+import {
+  invaliderPieces,
+  renommerFichier,
+  supprimerFichier,
+  uploadFichierEtPropager,
+  urlSigneeFichier,
+} from "@/api/fichiers";
 import type { Tables } from "@/lib/database.types";
 
 export type CoproRow = Tables<"coproprietes">;
@@ -226,7 +232,8 @@ export interface DocumentSyndic {
   date: string | null;
   origine: OrigineDocument;
   /** Déposé par l'utilisateur connecté depuis l'onglet Fichiers (table fichiers) :
-   *  seul cas où il peut le retirer (policy fichiers_syndic_delete_own). */
+   *  seul cas où il peut le renommer ou le supprimer (policy
+   *  fichiers_syndic_delete_own, RPC fichier_renommer 0126). */
   mien: boolean;
 }
 
@@ -301,20 +308,30 @@ export function useUploadDocumentSyndic(coproId: string) {
   });
 }
 
-/** Retrait d'un fichier déposé par le syndic lui-même (`mien`). */
+/** Suppression d'un fichier déposé par le syndic lui-même (`mien`) : comme
+ *  côté AMO, les pièces de checklist qu'il cochait sont décochées et il est
+ *  retiré des dossiers de montage où le dépôt l'avait ajouté. */
 export function useSupprimerDocumentSyndic(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (d: DocumentSyndic) => {
-      if (!d.mien) throw new Error("Seuls vos propres dépôts peuvent être retirés.");
-      await supabase.storage.from("copro-files").remove([d.path]);
-      const { error } = await supabase.from("fichiers").delete().eq("id", d.id);
-      if (error) throw error;
+      if (!d.mien) throw new Error("Seuls vos propres dépôts peuvent être supprimés.");
+      await supprimerFichier(coproId, { id: d.id, storage_path: d.path });
     },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["syndic", "documents", coproId] });
-      void qc.invalidateQueries({ queryKey: ["fichiers", coproId] });
+    onSuccess: () => invaliderPieces(qc, coproId),
+  });
+}
+
+/** Renommage d'un fichier déposé par le syndic lui-même (`mien`, feedback
+ *  d'Amir du 02/10/2026) - RPC fichier_renommer (0126), qui le vérifie aussi. */
+export function useRenommerDocumentSyndic(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ d, name }: { d: DocumentSyndic; name: string }) => {
+      if (!d.mien) throw new Error("Seuls vos propres dépôts peuvent être renommés.");
+      await renommerFichier(d.id, name);
     },
+    onSuccess: () => invaliderPieces(qc, coproId),
   });
 }
 

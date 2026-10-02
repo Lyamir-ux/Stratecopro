@@ -4720,6 +4720,10 @@ export type Database = {
         Returns: Database["public"]["Tables"]["factures"]["Row"]
       }
       facturation_passer_en_production: { Args: never; Returns: Json }
+      fichier_renommer: {
+        Args: { p_fichier_id: string; p_name: string }
+        Returns: undefined
+      }
       honoraires_annuler_paiement: {
         Args: { p_copro_id: string; p_jalon: string }
         Returns: undefined

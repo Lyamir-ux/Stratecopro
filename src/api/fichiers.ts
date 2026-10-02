@@ -6,7 +6,6 @@ import type { Tables } from "@/lib/database.types";
 import {
   delierFichierDesChecklists,
   propagerDocument,
-  renommerFichierDansMontages,
   retirerFichierDesMontages,
 } from "@/api/propagation";
 
@@ -223,36 +222,45 @@ export function useTogglePartageFichier(coproId: string) {
   });
 }
 
-/** Renomme un fichier déjà déposé (bouton « Modifier », feedback d'Amir du
- *  02/10/2026) : seul le nom affiché change, l'objet stocké reste en place. Le
- *  même fichier peut figurer dans des dossiers de montage (propagation) : le
- *  nouveau nom y est reporté pour que les deux listes concordent. */
+/** Renomme un fichier déjà déposé (bouton « Modifier », feedbacks d'Amir du
+ *  02/10/2026) : seul le nom affiché change, l'objet stocké reste en place. La
+ *  RPC fichier_renommer (0126) vérifie les droits (AMO hors Facturation,
+ *  syndic sur ses propres dépôts) et reporte le nom dans les dossiers de
+ *  montage qui référencent le même fichier, dans la même transaction. */
+export async function renommerFichier(fichierId: string, name: string): Promise<void> {
+  const { error } = await supabase.rpc("fichier_renommer", { p_fichier_id: fichierId, p_name: name });
+  if (error) throw error;
+}
+
 export function useRenommerFichier(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ f, name }: { f: Fichier; name: string }) => {
-      const { error } = await supabase.from("fichiers").update({ name }).eq("id", f.id);
-      if (error) throw error;
-      await renommerFichierDansMontages(coproId, f.storage_path, name);
-    },
+    mutationFn: ({ f, name }: { f: Fichier; name: string }) => renommerFichier(f.id, name),
     onSuccess: () => invaliderPieces(qc, coproId),
   });
+}
+
+/** Suppression d'un fichier de l'onglet Fichiers - AMO, ou syndic sur ses
+ *  propres dépôts (policies fichiers_syndic_delete_own et
+ *  storage_files_syndic_delete_own). Le fichier a pu cocher des pièces de
+ *  checklist et être référencé par des dossiers de montage : on défait tout
+ *  avant de le supprimer. */
+export async function supprimerFichier(coproId: string, f: Pick<Fichier, "id" | "storage_path">): Promise<void> {
+  await delierFichierDesChecklists(f.id);
+  await retirerFichierDesMontages(coproId, f.storage_path);
+  // la ligne d'abord : la base refuse de supprimer le PDF d'une facture
+  // émise (0115), l'objet stocké ne doit alors pas disparaître
+  const { data, error } = await supabase.from("fichiers").delete().eq("id", f.id).select("id");
+  if (error) throw error;
+  // les policies filtrent sans erreur : aucune ligne = pas le droit
+  if (!data?.length) throw new Error("Ce fichier n'a pas pu être supprimé : seuls vos propres dépôts peuvent l'être.");
+  await supabase.storage.from("copro-files").remove([f.storage_path]);
 }
 
 export function useDeleteFichier(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (f: Fichier) => {
-      // Le fichier a pu cocher des pièces de checklist et être référencé par des
-      // dossiers de montage : on défait tout avant de le supprimer.
-      await delierFichierDesChecklists(f.id);
-      await retirerFichierDesMontages(coproId, f.storage_path);
-      // la ligne d'abord : la base refuse de supprimer le PDF d'une facture
-      // émise (0115), l'objet stocké ne doit alors pas disparaître
-      const { error } = await supabase.from("fichiers").delete().eq("id", f.id);
-      if (error) throw error;
-      await supabase.storage.from("copro-files").remove([f.storage_path]);
-    },
+    mutationFn: (f: Fichier) => supprimerFichier(coproId, f),
     onSuccess: () => invaliderPieces(qc, coproId),
   });
 }

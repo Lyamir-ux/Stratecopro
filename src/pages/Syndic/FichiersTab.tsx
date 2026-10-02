@@ -7,19 +7,22 @@
 // Dépôt (feedback du 03/09/2026) : exactement le même dispositif que l'AMO -
 // bouton « Déposer » avec sélecteur de dossier, glissé-déposé sur la zone ou
 // directement sur une carte, archives zip (extraire / conserver) et renommage
-// assisté avant envoi. Le syndic ne retire que ses propres dépôts.
+// assisté avant envoi. Le syndic ne renomme (« Modifier ») et ne supprime que
+// ses propres dépôts (feedback d'Amir du 02/10/2026).
 import { useRef, useState } from "react";
 import { ApercuDocument } from "@/components/ApercuDocument";
 import { DepotZipDialog, estZip } from "@/components/DepotZipDialog";
 import { Icon } from "@/components/Icon";
+import { LigneFichier } from "@/components/LigneFichier";
 import { Badge, type BadgeKind } from "@/components/ui";
 import { RenommageDialog } from "@/components/RenommageDialog";
 import { fmtDate } from "@/lib/format";
-import { DOSSIERS, DOSSIER_AIDE, estVisualisable } from "@/api/fichiers";
+import { DOSSIERS, DOSSIER_AIDE } from "@/api/fichiers";
 import {
   ORIGINE_LABEL,
   telechargerDocument,
   useDocumentsSyndic,
+  useRenommerDocumentSyndic,
   useSupprimerDocumentSyndic,
   useUploadDocumentSyndic,
   type DocumentSyndic,
@@ -43,6 +46,7 @@ export function FichiersTabSyndic({ c }: { c: SyndicCopro }) {
   const { data: documents, isLoading } = useDocumentsSyndic(c.id);
   const upload = useUploadDocumentSyndic(c.id);
   const supprimer = useSupprimerDocumentSyndic(c.id);
+  const renommer = useRenommerDocumentSyndic(c.id);
   const fileRef = useRef<HTMLInputElement>(null);
   const [openFolder, setOpenFolder] = useState<string | null>(null);
   const [uploadFolder, setUploadFolder] = useState<string>(DOSSIERS[0]);
@@ -218,11 +222,6 @@ export function FichiersTabSyndic({ c }: { c: SyndicCopro }) {
               Échec de l'envoi : {String((upload.error as Error)?.message ?? upload.error)}
             </p>
           )}
-          {supprimer.isError && (
-            <p className="se-small" style={{ marginTop: 8, marginBottom: 0, color: "var(--color-error-700)" }}>
-              Le retrait a échoué : {String((supprimer.error as Error)?.message ?? supprimer.error)}
-            </p>
-          )}
           {openFolder && (
             <div style={{ marginTop: 18 }}>
               <div className="se-eyebrow" style={{ marginBottom: 8, color: "var(--fg-muted)" }}>
@@ -234,43 +233,19 @@ export function FichiersTabSyndic({ c }: { c: SyndicCopro }) {
                 </p>
               ) : (
                 folderDocs.map((doc) => (
-                  <div key={doc.id} className="doc-row">
-                    <span className="d-ico">
-                      <Icon name="fileText" size={18} />
-                    </span>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="d-name">{doc.name}</div>
-                      <div className="d-sub">{[fmtSize(doc.size), fmtDate(doc.date)].filter(Boolean).join(" · ")}</div>
-                    </div>
-                    <span className="spacer"></span>
-                    <Badge kind={ORIGINE_BADGE[doc.origine]}>{ORIGINE_LABEL[doc.origine]}</Badge>
-                    <button
-                      className="icon-btn"
-                      title={
-                        estVisualisable(doc.name)
-                          ? "Aperçu sans téléchargement"
-                          : "Ce format ne s'affiche pas dans le navigateur"
-                      }
-                      onClick={() => setApercu(doc)}
-                    >
-                      <Icon name="eye" size={18} />
-                    </button>
-                    <button className="icon-btn" title="Télécharger" onClick={() => void telechargerDocument(doc)}>
-                      <Icon name="download" size={18} />
-                    </button>
-                    {doc.mien && (
-                      <button
-                        className="icon-btn"
-                        title="Retirer ce fichier (votre dépôt)"
-                        disabled={supprimer.isPending}
-                        onClick={() => {
-                          if (window.confirm(`Retirer « ${doc.name} » ?`)) void supprimer.mutateAsync(doc);
-                        }}
-                      >
-                        <Icon name="trash" size={18} />
-                      </button>
-                    )}
-                  </div>
+                  <LigneFichier
+                    key={doc.id}
+                    variante="syndic"
+                    name={doc.name}
+                    detail={[fmtSize(doc.size), fmtDate(doc.date)].filter(Boolean).join(" · ")}
+                    avant={<Badge kind={ORIGINE_BADGE[doc.origine]}>{ORIGINE_LABEL[doc.origine]}</Badge>}
+                    confirmation={`Supprimer « ${doc.name} » (votre dépôt) ?`}
+                    onApercu={() => setApercu(doc)}
+                    onTelecharger={() => void telechargerDocument(doc)}
+                    // seulement les dépôts du compte connecté
+                    onRenommer={doc.mien ? (name) => renommer.mutateAsync({ d: doc, name }) : undefined}
+                    onSupprimer={doc.mien ? () => supprimer.mutateAsync(doc) : undefined}
+                  />
                 ))
               )}
             </div>
@@ -278,7 +253,7 @@ export function FichiersTabSyndic({ c }: { c: SyndicCopro }) {
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 14, marginBottom: 0 }}>
             <Icon name="eye" size={13} /> Cliquez sur un dossier pour consulter ses pièces : l'œil en donne un aperçu
             sans les télécharger. Le badge indique qui a déposé chaque document (AMO, MOE ou votre équipe) ; vous
-            pouvez retirer vos propres dépôts.
+            pouvez modifier le nom de vos propres dépôts ou les supprimer.
           </p>
         </div>
       </div>
