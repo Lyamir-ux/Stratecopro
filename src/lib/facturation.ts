@@ -66,9 +66,12 @@ export interface SaisiesHonoraires {
   p1MontantHt: number | null;
   p1SaisiLe: string | null;
   p1SaisiPar: string | null;
+  /** Formule de la dernière saisie de la phase (0134) ; null sans saisie. */
+  p1Formule: FormuleHonoraires | null;
   p2MontantHt: number | null;
   p2SaisiLe: string | null;
   p2SaisiPar: string | null;
+  p2Formule: FormuleHonoraires | null;
   ceeKwhc: number | null;
   ceeSaisiLe: string | null;
   ceeSaisiPar: string | null;
@@ -171,6 +174,55 @@ export function repartitionP2(totalHt: number): { P2a: number; P2b: number; P2c:
   const P2a = arrondi2(total * PARTS_P2.P2a);
   const P2b = arrondi2(total * PARTS_P2.P2b);
   return { P2a, P2b, P2c: arrondi2(total - P2a - P2b) };
+}
+
+// ---------- nouvelle ou ancienne formule (0134) ----------
+// Demande d'Amir du 03/10/2026 : à la création d'un dossier, les honoraires
+// du contrat se saisissent soit en montants de phase répartis 50/25/25 et
+// 50/30/20 (nouvelle formule), soit jalon par jalon (ancienne formule, les
+// anciens contrats ayant chacun leur répartition). Même choix dans les
+// fenêtres « Saisir la P1 » et « Revaloriser la P2 ».
+
+export type FormuleHonoraires = "nouvelle" | "ancienne";
+
+export const LIBELLE_FORMULE: Record<FormuleHonoraires, { titre: string; detail: string }> = {
+  nouvelle: { titre: "Nouvelle formule", detail: "P1 et P2 réparties 50 / 25 / 25 et 50 / 30 / 20" },
+  ancienne: { titre: "Ancienne formule", detail: "jalons saisis à la main" },
+};
+
+export type PhaseContrat = "p1" | "p2";
+
+export type CodeJalonContrat = "P1a" | "P1b" | "P1c" | "P2a" | "P2b" | "P2c";
+
+export const CODES_PHASE: Record<PhaseContrat, readonly CodeJalonContrat[]> = {
+  p1: ["P1a", "P1b", "P1c"],
+  p2: ["P2a", "P2b", "P2c"],
+};
+
+/** Saisie à la main des jalons d'une phase : montants (vides et zéros écartés), total, ou les jalons illisibles. */
+export function lireJalonsPhase(
+  phase: PhaseContrat,
+  saisies: Partial<Record<CodeJalonContrat, string>>,
+  lire: (v: string) => number | null
+): { montants: Partial<Record<CodeJalonContrat, number>>; total: number; illisibles: CodeJalonContrat[] } {
+  const montants: Partial<Record<CodeJalonContrat, number>> = {};
+  const illisibles: CodeJalonContrat[] = [];
+  let total = 0;
+  for (const code of CODES_PHASE[phase]) {
+    const brut = (saisies[code] ?? "").trim();
+    if (!brut) continue;
+    const m = lire(brut);
+    if (m == null || Number.isNaN(m) || m < 0) {
+      illisibles.push(code);
+      continue;
+    }
+    const v = arrondi2(m);
+    if (v > 0) {
+      montants[code] = v;
+      total = arrondi2(total + v);
+    }
+  }
+  return { montants, total, illisibles };
 }
 
 /** Honoraires CEE : 250 € HT par GWh cumac, pour FCEE 1 et pour FCEE 2. */

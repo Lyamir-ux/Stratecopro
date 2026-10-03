@@ -7,6 +7,8 @@ import type { PhaseId } from "@/lib/referentiels";
 import { organisationIdPourSyndic, resoudreOrganisation, type ChoixOrganisation } from "@/api/organisations";
 import { creerFicheMaitreOeuvre, resoudreMaitreOeuvreEnBase } from "@/api/prestataires";
 import { messageErreur } from "@/lib/erreurs";
+import { saisirJalonsPhase } from "@/api/honoraires";
+import { CODES_PHASE, type CodeJalonContrat, type PhaseContrat } from "@/lib/facturation";
 
 export type CoproRow = Tables<"coproprietes">;
 export type CoproStats = Tables<"copro_stats">;
@@ -139,6 +141,12 @@ export interface NewCoproInput {
   honoraires_p1_ht?: number | null;
   /** Honoraires HT de la phase travaux, répartis 50 / 30 / 20 (honoraires_revaloriser_p2). */
   honoraires_p2_ht?: number | null;
+  /**
+   * Ancienne formule (demande d'Amir du 03/10/2026, 0134) : montants HT des
+   * jalons saisis à la main (honoraires_saisir_jalons). Une phase qui en a
+   * ignore son montant réparti.
+   */
+  honoraires_jalons_ht?: Partial<Record<CodeJalonContrat, number>> | null;
 }
 
 /**
@@ -245,15 +253,31 @@ export async function creerCopro(input: NewCoproInput): Promise<CoproCree> {
     }
   }
   const honoraires = [
-    { rpc: "honoraires_saisir_p1", montant: input.honoraires_p1_ht, libelle: "P1" },
-    { rpc: "honoraires_revaloriser_p2", montant: input.honoraires_p2_ht, libelle: "P2" },
+    { phase: "p1", rpc: "honoraires_saisir_p1", montant: input.honoraires_p1_ht, libelle: "P1" },
+    { phase: "p2", rpc: "honoraires_revaloriser_p2", montant: input.honoraires_p2_ht, libelle: "P2" },
   ] as const;
   for (const h of honoraires) {
-    if (h.montant == null || !(h.montant > 0)) continue;
-    const { error: eHon } = await supabase.rpc(h.rpc, { p_copro_id: copro.id, p_montant_ht: h.montant });
-    if (eHon) avertissements.push(`honoraires ${h.libelle} non enregistrés (${eHon.message})`);
+    const jalons = jalonsDeLaPhase(input.honoraires_jalons_ht, h.phase);
+    try {
+      if (jalons) await saisirJalonsPhase(copro.id, h.phase, jalons);
+      else if (h.montant != null && h.montant > 0) {
+        const { error: eHon } = await supabase.rpc(h.rpc, { p_copro_id: copro.id, p_montant_ht: h.montant });
+        if (eHon) throw eHon;
+      }
+    } catch (eHon) {
+      avertissements.push(`honoraires ${h.libelle} non enregistrés (${messageErreur(eHon, "erreur inconnue")})`);
+    }
   }
   return { ...copro, avertissements };
+}
+
+/** Jalons saisis à la main pour une phase (montants positifs), null s'il n'y en a aucun. */
+function jalonsDeLaPhase(
+  jalons: Partial<Record<CodeJalonContrat, number>> | null | undefined,
+  phase: PhaseContrat
+): Partial<Record<CodeJalonContrat, number>> | null {
+  const retenus = CODES_PHASE[phase].filter((code) => (jalons?.[code] ?? 0) > 0);
+  return retenus.length ? Object.fromEntries(retenus.map((code) => [code, jalons![code]!])) : null;
 }
 
 /** Message d'échec de la création ; le nom du dossier (slug) est unique, corbeille comprise. */

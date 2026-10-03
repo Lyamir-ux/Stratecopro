@@ -129,6 +129,33 @@ describe("analyse de l'import", () => {
     expect(cedre.organisationNouvelle).toBe("Foncia Nouvelle");
   });
 
+  it("lit les jalons saisis à la main (ancienne formule), jamais avec le montant réparti de la même phase", () => {
+    expect(reconnaitreColonnes(["P1a HT", "P1b", "Honoraires P2c HT"])).toEqual(["jalon_P1a", "jalon_P1b", "jalon_P2c"]);
+    const a = analyserImport(
+      [
+        ["Copropriété", "Honoraires P1 HT", "Honoraires P2 HT", "P1a HT", "P1b HT", "P1c HT", "P2a HT", "P2b HT", "P2c HT"],
+        ["Ancien", "", "", "2 500", "3 750,50", "", "1 000", "0", "500"],
+        ["Mixte", "", "15 000", "3 000", "3 000", "3 000", "", "", ""],
+        ["Les deux", "9 000", "", "4 500", "", "", "", "", ""],
+        ["Illisible", "", "", "", "", "", "", "deux mille", ""],
+      ],
+      ctx
+    );
+    const [ancien, mixte, deux, illisible] = a.lignes;
+    expect(ancien.input).toMatchObject({
+      honoraires_p1_ht: null,
+      honoraires_p2_ht: null,
+      honoraires_jalons_ht: { P1a: 2500, P1b: 3750.5, P2a: 1000, P2c: 500 },
+    });
+    // ancienne formule pour la P1, nouvelle pour la P2
+    expect(mixte.input).toMatchObject({ honoraires_p2_ht: 15000, honoraires_jalons_ht: { P1a: 3000, P1b: 3000, P1c: 3000 } });
+    expect(deux.input).toBeNull();
+    expect(deux.erreurs).toEqual([
+      "honoraires P1 : choisissez « Honoraires P1 HT » (nouvelle formule) ou P1a (ancienne formule), pas les deux",
+    ]);
+    expect(illisible.erreurs).toEqual(["P2b : « deux mille » n'est pas un montant"]);
+  });
+
   it("lit « Pas de MOE » comme un dossier sans maître d'œuvre", () => {
     const a = analyserImport([["Nom", "MOE"], ["A", "Pas de MOE"], ["B", "-"]], ctx);
     expect(a.lignes.map((l) => l.input?.maitre_oeuvre)).toEqual([null, null]);

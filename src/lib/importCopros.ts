@@ -9,6 +9,7 @@ import type { ChoixMaitreOeuvre, NewCoproInput } from "@/api/copros";
 import type { ChoixOrganisation } from "@/api/organisations";
 import { nomSyndicBenevole, normaliserNomOrganisation, type OrganisationNommee } from "@/lib/organisations";
 import { PHASES, type PhaseId } from "@/lib/referentiels";
+import { CODES_PHASE, type CodeJalonContrat } from "@/lib/facturation";
 
 // ---------- lecture du fichier ----------
 
@@ -86,7 +87,14 @@ export type CleImport =
   | "maitre_oeuvre"
   | "date_ag"
   | "honoraires_p1_ht"
-  | "honoraires_p2_ht";
+  | "honoraires_p2_ht"
+  // ancienne formule (demande d'Amir du 03/10/2026) : jalons saisis à la main
+  | "jalon_P1a"
+  | "jalon_P1b"
+  | "jalon_P1c"
+  | "jalon_P2a"
+  | "jalon_P2b"
+  | "jalon_P2c";
 
 /** En-tête comparable : casse, accents, ligatures, espaces et ponctuation ignorés. */
 export function cleEntete(entete: string): string {
@@ -122,6 +130,12 @@ export const COLONNES_IMPORT: { cle: CleImport; entete: string; aide: string; sy
   { cle: "date_ag", entete: "Date d'AG", aide: "JJ/MM/AAAA", synonymes: ["dateag", "datedelag", "dateassembleegenerale", "datedassembleegenerale"] },
   { cle: "honoraires_p1_ht", entete: "Honoraires P1 HT", aide: "€ HT - 50 % P1a, 25 % P1b, 25 % P1c", synonymes: ["honorairesp1", "p1", "p1ht", "honorairesphase1", "honorairesetudes"] },
   { cle: "honoraires_p2_ht", entete: "Honoraires P2 HT", aide: "€ HT - 50 % P2a, 30 % P2b, 20 % P2c", synonymes: ["honorairesp2", "p2", "p2ht", "honorairesphase2", "honorairestravaux"] },
+  ...(["P1a", "P1b", "P1c", "P2a", "P2b", "P2c"] as const).map((code) => ({
+    cle: `jalon_${code}` as CleImport,
+    entete: `${code} HT`,
+    aide: `ancienne formule - € HT saisi à la main, à la place de « Honoraires ${code.slice(0, 2)} HT »`,
+    synonymes: [code.toLowerCase(), `honoraires${code.toLowerCase()}`, `honoraires${code.toLowerCase()}ht`],
+  })),
 ];
 
 const PAR_ENTETE = new Map<string, CleImport>(
@@ -279,6 +293,19 @@ export function analyserImport(cellules: string[][], ctx: ContexteImport): Analy
     };
     const p1 = montant("honoraires_p1_ht", "honoraires P1");
     const p2 = montant("honoraires_p2_ht", "honoraires P2");
+    // Ancienne formule : jalons à la main, jamais avec le montant réparti de la même phase
+    const jalons: Partial<Record<CodeJalonContrat, number>> = {};
+    for (const [phase, total] of [["p1", p1], ["p2", p2]] as const) {
+      const saisis = CODES_PHASE[phase].filter((code) => val(`jalon_${code}`) !== "");
+      for (const code of saisis) {
+        const m = montant(`jalon_${code}`, code);
+        if (m != null) jalons[code] = m;
+      }
+      if (saisis.length > 0 && total != null) {
+        const libelle = phase.toUpperCase();
+        erreurs.push(`honoraires ${libelle} : choisissez « Honoraires ${libelle} HT » (nouvelle formule) ou ${saisis.join(", ")} (ancienne formule), pas les deux`);
+      }
+    }
     const ok = erreurs.length === 0;
 
     // Maître d'œuvre : la fiche existante (casse et accents ignorés), sinon une fiche créée
@@ -346,6 +373,7 @@ export function analyserImport(cellules: string[][], ctx: ContexteImport): Analy
             date_ag: date as string | null,
             honoraires_p1_ht: p1,
             honoraires_p2_ht: p2,
+            honoraires_jalons_ht: Object.keys(jalons).length ? jalons : null,
           }
         : null,
     };

@@ -20,6 +20,9 @@
 // Idée d'Amir du 01/10/2026 (0121) : les honoraires de la phase études se
 // saisissent à la création du dossier ; « Saisir la P1 » les corrige ensuite
 // (50 % P1a, 25 % P1b, 25 % P1c), tracés et annulables comme la P2.
+// Demande d'Amir du 03/10/2026 (0134) : « Saisir la P1 » et « Revaloriser la
+// P2 » proposent aussi l'ancienne formule, jalons saisis à la main, comme la
+// fenêtre de création ; le devis revalorisé ne suit que la nouvelle formule.
 import { useState, type FormEvent } from "react";
 import { FacturationJalon } from "@/components/FactureFenetres";
 import { useFactures } from "@/api/factures";
@@ -34,6 +37,7 @@ import {
   useRevaloriserP2,
   useSaisiesHonoraires,
   useSaisirCee,
+  useSaisirJalons,
   useSaisirP1,
   type SaisieHonoraires,
 } from "@/api/honoraires";
@@ -44,6 +48,7 @@ import {
   EUROS_HT_PAR_GWH_CUMAC,
   GROUPES_JALONS,
   LIBELLE_ETAT,
+  LIBELLE_FORMULE,
   LIBELLE_ETAT_COURT,
   PARTS_P1,
   PARTS_P2,
@@ -51,6 +56,7 @@ import {
   honorairesCee,
   jalonsOrdonnes,
   joursDepuis,
+  lireJalonsPhase,
   libelleAnciennete,
   libelleJalon,
   prochainJalon,
@@ -58,7 +64,9 @@ import {
   repartitionP2,
   sommesDossier,
   type CodeJalon,
+  type CodeJalonContrat,
   type DossierHonoraires,
+  type FormuleHonoraires,
   type JalonHonoraires,
 } from "@/lib/facturation";
 import { COULEUR_ETAT, JaugeHonoraires, dateCourte } from "@/components/HonorairesVisuels";
@@ -114,7 +122,7 @@ export function HonorairesBloc({ c }: { c: CoproWithStats }) {
           <button className="se-btn se-btn-secondary btn-sm" onClick={() => setFenetre("p2")}>
             <Icon name="edit" size={14} /> Revaloriser la P2
           </button>
-          {sa?.p2SaisiLe && sa.p2MontantHt != null && (
+          {sa?.p2SaisiLe && sa.p2MontantHt != null && sa.p2Formule !== "ancienne" && (
             <BoutonDevisRevalorise
               c={c}
               d={d}
@@ -212,7 +220,8 @@ export function HonorairesBloc({ c }: { c: CoproWithStats }) {
             {sa.p1SaisiLe && (
               <div className="fs-ligne">
                 <span>
-                  P1 saisie le {dateCourte(sa.p1SaisiLe.slice(0, 10))} par {nom(sa.p1SaisiPar)} sur {fmtEuroFull(sa.p1MontantHt)} HT.
+                  P1 saisie le {dateCourte(sa.p1SaisiLe.slice(0, 10))} par {nom(sa.p1SaisiPar)} sur {fmtEuroFull(sa.p1MontantHt)} HT
+                  {sa.p1Formule === "ancienne" ? " (ancienne formule, jalons saisis à la main)." : "."}
                 </span>
                 {derniereP1 && (
                   <button className="se-btn se-btn-ghost btn-sm" onClick={() => setFenetre("annuler-p1")} title="Annuler la dernière saisie de la P1">
@@ -224,10 +233,16 @@ export function HonorairesBloc({ c }: { c: CoproWithStats }) {
             {sa.p2SaisiLe && (
               <div className="fs-ligne">
                 <span>
-                  P2 revalorisée le {dateCourte(sa.p2SaisiLe.slice(0, 10))} par {nom(sa.p2SaisiPar)} sur {fmtEuroFull(sa.p2MontantHt)} HT.
+                  {sa.p2Formule === "ancienne"
+                    ? `P2 saisie le ${dateCourte(sa.p2SaisiLe.slice(0, 10))} par ${nom(sa.p2SaisiPar)} sur ${fmtEuroFull(sa.p2MontantHt)} HT (ancienne formule, jalons saisis à la main).`
+                    : `P2 revalorisée le ${dateCourte(sa.p2SaisiLe.slice(0, 10))} par ${nom(sa.p2SaisiPar)} sur ${fmtEuroFull(sa.p2MontantHt)} HT.`}
                 </span>
                 {derniereP2 && (
-                  <button className="se-btn se-btn-ghost btn-sm" onClick={() => setFenetre("annuler-p2")} title="Annuler la dernière revalorisation de la P2">
+                  <button
+                    className="se-btn se-btn-ghost btn-sm"
+                    onClick={() => setFenetre("annuler-p2")}
+                    title={sa.p2Formule === "ancienne" ? "Annuler la dernière saisie de la P2" : "Annuler la dernière revalorisation de la P2"}
+                  >
                     <Icon name="undo" size={14} /> Annuler
                   </button>
                 )}
@@ -259,13 +274,13 @@ export function HonorairesBloc({ c }: { c: CoproWithStats }) {
       {fenetre === "p2" && <FenetrePhase phase="p2" d={d} onClose={() => setFenetre(null)} />}
       {fenetre === "cee" && <FenetreCee d={d} onClose={() => setFenetre(null)} />}
       {fenetre === "annuler-p1" && derniereP1 && (
-        <FenetreAnnulation d={d} s={derniereP1} auteur={nom(derniereP1.saisiPar)} onClose={() => setFenetre(null)} />
+        <FenetreAnnulation d={d} s={derniereP1} formule={sa?.p1Formule ?? null} auteur={nom(derniereP1.saisiPar)} onClose={() => setFenetre(null)} />
       )}
       {fenetre === "annuler-p2" && derniereP2 && (
-        <FenetreAnnulation d={d} s={derniereP2} auteur={nom(derniereP2.saisiPar)} onClose={() => setFenetre(null)} />
+        <FenetreAnnulation d={d} s={derniereP2} formule={sa?.p2Formule ?? null} auteur={nom(derniereP2.saisiPar)} onClose={() => setFenetre(null)} />
       )}
       {fenetre === "annuler-cee" && derniereCee && (
-        <FenetreAnnulation d={d} s={derniereCee} auteur={nom(derniereCee.saisiPar)} onClose={() => setFenetre(null)} />
+        <FenetreAnnulation d={d} s={derniereCee} formule={null} auteur={nom(derniereCee.saisiPar)} onClose={() => setFenetre(null)} />
       )}
     </section>
   );
@@ -389,27 +404,44 @@ const PHASES_SAISIE = {
 function FenetrePhase({ phase, d, onClose }: { phase: "p1" | "p2"; d: DossierHonoraires; onClose: () => void }) {
   const saisirP1 = useSaisirP1();
   const revaloriser = useRevaloriserP2();
-  const enregistrer = phase === "p1" ? saisirP1 : revaloriser;
+  const saisirJalons = useSaisirJalons();
   const cfg = PHASES_SAISIE[phase];
-  const codes = cfg.codes as readonly CodeJalon[];
+  const codes = cfg.codes as readonly CodeJalonContrat[];
   const actuel = codes.reduce((x, code) => x + (jalon(d, code).montant ?? 0), 0);
   const base = phase === "p1" ? d.saisies?.p1MontantHt : d.saisies?.p2MontantHt;
+  // formule de la dernière saisie de la phase, nouvelle par défaut
+  const [formule, setFormule] = useState<FormuleHonoraires>(
+    () => (phase === "p1" ? d.saisies?.p1Formule : d.saisies?.p2Formule) ?? "nouvelle"
+  );
   const [saisie, setSaisie] = useState(() => ecrireNombre(base ?? (actuel > 0 ? actuel : null), 2));
+  const [jalonsSaisis, setJalonsSaisis] = useState<Partial<Record<CodeJalonContrat, string>>>(() =>
+    Object.fromEntries(codes.map((code) => [code, ecrireNombre(jalon(d, code).montant || null, 2)]))
+  );
   const [erreur, setErreur] = useState<string | null>(null);
+  const aLaMain = formule === "ancienne";
+  const enregistrer = aLaMain ? saisirJalons : phase === "p1" ? saisirP1 : revaloriser;
+
   const montant = lireNombre(saisie);
   const rep: Record<string, number> | null = montant != null && montant > 0 ? cfg.repartir(montant) : null;
+  const main = lireJalonsPhase(phase, jalonsSaisis, lireNombre);
   const lignes = codes.map((code) => ({
     j: jalon(d, code),
-    part: `${Math.round((cfg.parts as Record<string, number>)[code] * 100)} %`,
-    nouveau: rep ? rep[code] : null,
+    part: aLaMain ? "À la main" : `${Math.round((cfg.parts as Record<string, number>)[code] * 100)} %`,
+    nouveau: aLaMain ? (main.montants[code] ?? null) : rep ? rep[code] : null,
   }));
+  // un jalon facturé ou encaissé garde un montant (refusé aussi côté serveur)
+  const retraitsInterdits = aLaMain
+    ? lignes.filter(({ j, nouveau }) => nouveau == null && j.etat !== "a_facturer" && (j.montant ?? 0) > 0).map(({ j }) => j.code)
+    : [];
+  const pret = aLaMain ? main.total > 0 && main.illisibles.length === 0 && retraitsInterdits.length === 0 : !!rep;
 
   const valider = async (e: FormEvent) => {
     e.preventDefault();
-    if (!rep || montant == null) return;
+    if (!pret) return;
     setErreur(null);
     try {
-      await enregistrer.mutateAsync({ coproId: d.coproId, montantHt: montant });
+      if (aLaMain) await saisirJalons.mutateAsync({ coproId: d.coproId, phase, montants: main.montants });
+      else if (montant != null) await (phase === "p1" ? saisirP1 : revaloriser).mutateAsync({ coproId: d.coproId, montantHt: montant });
       onClose();
     } catch (err) {
       setErreur(messageErreur(err, cfg.echec));
@@ -419,25 +451,66 @@ function FenetrePhase({ phase, d, onClose }: { phase: "p1" | "p2"; d: DossierHon
   return (
     <Modal title={cfg.titre} onClose={onClose} width={560} closeOnBackdrop={false}>
       <form onSubmit={valider}>
-        <div className="fld">
-          <label htmlFor={`fact-${phase}-montant`}>{cfg.libelle}</label>
-          <input
-            id={`fact-${phase}-montant`}
-            inputMode="decimal"
-            autoFocus
-            value={saisie}
-            onChange={(e) => setSaisie(e.target.value)}
-            placeholder={cfg.exemple}
-          />
-          <span className="hint">{cfg.hint}</span>
+        <div className="fact-formule">
+          <div className="seg" role="group" aria-label="Formule des honoraires">
+            {(["nouvelle", "ancienne"] as const).map((f) => (
+              <button key={f} type="button" className={formule === f ? "on" : ""} aria-pressed={formule === f} onClick={() => setFormule(f)}>
+                {LIBELLE_FORMULE[f].titre}
+              </button>
+            ))}
+          </div>
+          <span className="hint">{aLaMain ? "Jalons saisis à la main, comme au contrat." : cfg.hint}</span>
         </div>
-        {saisie.trim() && montant == null && <p className="fact-erreur">Saisissez un montant en euros, par exemple 15 000 ou 12 345,67.</p>}
+        {aLaMain ? (
+          <div className="fld">
+            <label>{cfg.libelle}</label>
+            <div className="fact-jalons-main">
+              {codes.map((code, k) => (
+                <div key={code} className="fld">
+                  <label htmlFor={`fact-${phase}-${code}`} style={{ fontWeight: 500, fontSize: 12.5 }}>{libelleJalon(code)}</label>
+                  <input
+                    id={`fact-${phase}-${code}`}
+                    inputMode="decimal"
+                    autoFocus={k === 0}
+                    placeholder="-"
+                    value={jalonsSaisis[code] ?? ""}
+                    onChange={(e) => setJalonsSaisis((x) => ({ ...x, [code]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+            <span className="hint">
+              {main.total > 0 ? `Total ${fmtEuroFull(main.total)} HT. ` : ""}Un jalon laissé vide n'a pas de montant.
+            </span>
+          </div>
+        ) : (
+          <div className="fld">
+            <label htmlFor={`fact-${phase}-montant`}>{cfg.libelle}</label>
+            <input
+              id={`fact-${phase}-montant`}
+              inputMode="decimal"
+              autoFocus
+              value={saisie}
+              onChange={(e) => setSaisie(e.target.value)}
+              placeholder={cfg.exemple}
+            />
+          </div>
+        )}
+        {!aLaMain && saisie.trim() && montant == null && <p className="fact-erreur">Saisissez un montant en euros, par exemple 15 000 ou 12 345,67.</p>}
+        {aLaMain && main.illisibles.length > 0 && (
+          <p className="fact-erreur">Montant illisible pour {main.illisibles.join(", ")} : saisissez des euros, par exemple 4 500 ou 2 812,50.</p>
+        )}
         <Apercu lignes={lignes} />
         {alerteDejaFactures(lignes)}
+        {retraitsInterdits.length > 0 && (
+          <p className="fact-erreur">
+            {retraitsInterdits.join(", ")} {retraitsInterdits.length > 1 ? "sont déjà facturés : leur montant ne peut pas être retiré" : "est déjà facturé : son montant ne peut pas être retiré"}.
+          </p>
+        )}
         {erreur && <p className="fact-erreur">{erreur}</p>}
         <div className="fact-modal-actions">
           <button type="button" className="se-btn se-btn-ghost btn-sm" onClick={onClose}>Annuler</button>
-          <button type="submit" className="se-btn se-btn-primary btn-sm" disabled={!rep || enregistrer.isPending}>
+          <button type="submit" className="se-btn se-btn-primary btn-sm" disabled={!pret || enregistrer.isPending}>
             {enregistrer.isPending ? "Enregistrement…" : "Enregistrer"}
           </button>
         </div>
@@ -505,11 +578,27 @@ function FenetreCee({ d, onClose }: { d: DossierHonoraires; onClose: () => void 
 }
 
 /** Confirmation avant d'annuler la dernière saisie : montants actuels → montants rétablis. */
-function FenetreAnnulation({ d, s, auteur, onClose }: { d: DossierHonoraires; s: SaisieHonoraires; auteur: string; onClose: () => void }) {
+function FenetreAnnulation({
+  d,
+  s,
+  formule,
+  auteur,
+  onClose,
+}: {
+  d: DossierHonoraires;
+  s: SaisieHonoraires;
+  /** Formule de la phase sur le dossier, qui est celle de sa dernière saisie active. */
+  formule: FormuleHonoraires | null;
+  auteur: string;
+  onClose: () => void;
+}) {
   const annuler = useAnnulerSaisie();
   const [erreur, setErreur] = useState<string | null>(null);
-  const p2 = s.type === "p2";
-  const p1 = s.type === "p1";
+  const aLaMain = formule === "ancienne";
+  // une saisie de la P2 à la main n'est pas une revalorisation : même libellé que la P1
+  const p2 = s.type === "p2" && !aLaMain;
+  const p1 = s.type === "p1" || (s.type === "p2" && aLaMain);
+  const phaseLibelle = s.type === "p1" ? "P1" : "P2";
   const codes = Object.keys(s.avant).sort() as CodeJalon[];
   const retabli = (code: string) => {
     const a = s.avant[code];
@@ -529,14 +618,14 @@ function FenetreAnnulation({ d, s, auteur, onClose }: { d: DossierHonoraires; s:
 
   return (
     <Modal
-      title={p1 ? "Annuler la dernière saisie de la P1" : p2 ? "Annuler la dernière revalorisation de la P2" : "Annuler la dernière saisie CEE"}
+      title={p1 ? `Annuler la dernière saisie de la ${phaseLibelle}` : p2 ? "Annuler la dernière revalorisation de la P2" : "Annuler la dernière saisie CEE"}
       onClose={onClose}
       width={560}
       closeOnBackdrop={false}
     >
       <p className="se-small" style={{ margin: 0 }}>
         {p1
-          ? `Saisie du ${dateCourte(s.saisiLe.slice(0, 10))} par ${auteur} : ${fmtEuroFull(s.valeur)} HT pour la phase études.`
+          ? `Saisie${aLaMain ? " à la main" : ""} du ${dateCourte(s.saisiLe.slice(0, 10))} par ${auteur} : ${fmtEuroFull(s.valeur)} HT pour la phase ${s.type === "p1" ? "études" : "travaux"}.`
           : p2
             ? `Revalorisation du ${dateCourte(s.saisiLe.slice(0, 10))} par ${auteur} : ${fmtEuroFull(s.valeur)} HT pour la phase travaux.`
             : `Saisie du ${dateCourte(s.saisiLe.slice(0, 10))} par ${auteur} : ${ecrireNombre(s.valeur, 0)} kWh cumac.`}{" "}
@@ -569,7 +658,7 @@ function FenetreAnnulation({ d, s, auteur, onClose }: { d: DossierHonoraires; s:
       <div className="fact-modal-actions">
         <button type="button" className="se-btn se-btn-ghost btn-sm" onClick={onClose}>Garder les montants</button>
         <button type="button" className="se-btn se-btn-primary btn-sm" onClick={confirmer} disabled={annuler.isPending}>
-          <Icon name="undo" size={14} /> {annuler.isPending ? "Annulation…" : p1 ? "Annuler la saisie de la P1" : p2 ? "Annuler la revalorisation" : "Annuler la saisie CEE"}
+          <Icon name="undo" size={14} /> {annuler.isPending ? "Annulation…" : p1 ? `Annuler la saisie de la ${phaseLibelle}` : p2 ? "Annuler la revalorisation" : "Annuler la saisie CEE"}
         </button>
       </div>
     </Modal>

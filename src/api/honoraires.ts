@@ -4,11 +4,21 @@
 // SQL, seules à écrire). La facturation directe viendra dans un second temps.
 // Depuis 0121 (idée d'Amir du 01/10/2026), les honoraires de la phase études se
 // saisissent aussi, à la création du dossier ou depuis le bloc.
+// Depuis 0134 (demande d'Amir du 03/10/2026), chaque phase se saisit en
+// nouvelle formule (montant réparti) ou en ancienne formule (jalons à la main).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, toutesLesLignes } from "@/lib/supabase";
-import { jalonsOrdonnes, jalonsEnAttente, type DossierHonoraires } from "@/lib/facturation";
+import {
+  jalonsOrdonnes,
+  jalonsEnAttente,
+  type CodeJalonContrat,
+  type DossierHonoraires,
+  type FormuleHonoraires,
+  type PhaseContrat,
+} from "@/lib/facturation";
 
 const nombre = (v: number | string | null) => (v == null ? null : Number(v));
+const formule = (v: string | null | undefined): FormuleHonoraires | null => (v === "nouvelle" || v === "ancienne" ? v : null);
 
 /**
  * Lecture par pages (bug Amir 29/09, Armorial) : 8 jalons par dossier passent
@@ -33,7 +43,7 @@ export function useHonoraires() {
         supabase
           .from("honoraires_dossiers")
           .select(
-            "copro_id, derniere_facture, source, p1_montant_ht, p1_saisi_le, p1_saisi_par, p2_montant_ht, p2_saisi_le, p2_saisi_par, cee_kwhc, cee_saisi_le, cee_saisi_par"
+            "copro_id, derniere_facture, source, p1_montant_ht, p1_saisi_le, p1_saisi_par, p1_formule, p2_montant_ht, p2_saisi_le, p2_saisi_par, p2_formule, cee_kwhc, cee_saisi_le, cee_saisi_par"
           ),
       ]);
       if (e2) throw e2;
@@ -57,9 +67,11 @@ export function useHonoraires() {
             p1MontantHt: nombre(info?.p1_montant_ht ?? null),
             p1SaisiLe: info?.p1_saisi_le ?? null,
             p1SaisiPar: info?.p1_saisi_par ?? null,
+            p1Formule: formule(info?.p1_formule),
             p2MontantHt: nombre(info?.p2_montant_ht ?? null),
             p2SaisiLe: info?.p2_saisi_le ?? null,
             p2SaisiPar: info?.p2_saisi_par ?? null,
+            p2Formule: formule(info?.p2_formule),
             ceeKwhc: nombre(info?.cee_kwhc ?? null),
             ceeSaisiLe: info?.cee_saisi_le ?? null,
             ceeSaisiPar: info?.cee_saisi_par ?? null,
@@ -97,6 +109,28 @@ export function useRevaloriserP2() {
       const { error } = await supabase.rpc("honoraires_revaloriser_p2", { p_copro_id: coproId, p_montant_ht: montantHt });
       if (error) throw error;
     },
+    onSuccess: (_d, v) => invaliderHonoraires(qc, v.coproId),
+  });
+}
+
+/**
+ * Ancienne formule (0134) : les trois jalons d'une phase saisis à la main ; un
+ * jalon absent n'a pas de montant. Tracée et annulable comme une saisie répartie.
+ */
+export async function saisirJalonsPhase(
+  coproId: string,
+  phase: PhaseContrat,
+  montants: Partial<Record<CodeJalonContrat, number>>
+): Promise<void> {
+  const { error } = await supabase.rpc("honoraires_saisir_jalons", { p_copro_id: coproId, p_phase: phase, p_montants: montants });
+  if (error) throw error;
+}
+
+export function useSaisirJalons() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ coproId, phase, montants }: { coproId: string; phase: PhaseContrat; montants: Partial<Record<CodeJalonContrat, number>> }) =>
+      saisirJalonsPhase(coproId, phase, montants),
     onSuccess: (_d, v) => invaliderHonoraires(qc, v.coproId),
   });
 }

@@ -16,11 +16,13 @@ import {
   slugCopro,
   useCopros,
   useCoprosCorbeille,
+  type NewCoproInput,
 } from "@/api/copros";
 import { usePrestataires } from "@/api/prestataires";
 import { useOrganisations } from "@/api/organisations";
 import { telechargerCsv } from "@/lib/csv";
-import { fmtEuro } from "@/lib/format";
+import { fmtEuro, fmtEuroFull } from "@/lib/format";
+import { CODES_PHASE, type PhaseContrat } from "@/lib/facturation";
 import { COLONNES_IMPORT, analyserImport, decoderCsv, lireCsv, type AnalyseImport, type LigneImport } from "@/lib/importCopros";
 import { PHASES } from "@/lib/referentiels";
 
@@ -286,6 +288,24 @@ export function ImportCoprosDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** Honoraires d'une phase : montant réparti (nouvelle formule) ou total des jalons saisis à la main (ancienne formule). */
+function CelluleHonoraires({ i, phase }: { i: NewCoproInput | null; phase: PhaseContrat }) {
+  const jalons = CODES_PHASE[phase].flatMap((code) => {
+    const m = i?.honoraires_jalons_ht?.[code];
+    return m != null && m > 0 ? [{ code, m }] : [];
+  });
+  if (jalons.length > 0) {
+    return (
+      <td className="r" title={`Ancienne formule : ${jalons.map((j) => `${j.code} ${fmtEuroFull(j.m)}`).join(" · ")}`}>
+        {fmtEuro(jalons.reduce((x, j) => x + j.m, 0))}
+        <span className="imp-copros-note"> à la main</span>
+      </td>
+    );
+  }
+  const m = phase === "p1" ? i?.honoraires_p1_ht : i?.honoraires_p2_ht;
+  return <td className="r">{m ? fmtEuro(m) : "-"}</td>;
+}
+
 function LigneApercu({ l }: { l: LigneImport }) {
   const i = l.input;
   const notes = [
@@ -301,8 +321,8 @@ function LigneApercu({ l }: { l: LigneImport }) {
       <td>{i?.syndic_name || "-"}</td>
       <td>{i?.maitre_oeuvre?.nom || "-"}</td>
       <td>{i?.date_ag ? i.date_ag.split("-").reverse().join("/") : "-"}</td>
-      <td className="r">{i?.honoraires_p1_ht ? fmtEuro(i.honoraires_p1_ht) : "-"}</td>
-      <td className="r">{i?.honoraires_p2_ht ? fmtEuro(i.honoraires_p2_ht) : "-"}</td>
+      <CelluleHonoraires i={i} phase="p1" />
+      <CelluleHonoraires i={i} phase="p2" />
       <td>
         {i ? (
           <span className="imp-copros-ok">

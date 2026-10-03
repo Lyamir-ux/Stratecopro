@@ -9,6 +9,7 @@ import {
   jalonsOrdonnes,
   joursDepuis,
   libelleAnciennete,
+  lireJalonsPhase,
   pasAxeEuros,
   prochainJalon,
   repartitionP1,
@@ -18,6 +19,7 @@ import {
   trancheAnciennete,
   type DossierHonoraires,
 } from "../facturation";
+import { lireMontant } from "../importCopros";
 
 // LE TASSIGNY, extraction Notion du 28/09/2026
 const tassigny: DossierHonoraires = {
@@ -126,6 +128,16 @@ describe("facturation des jalons", () => {
     expect(repartitionP1(10000.01)).toEqual({ P1a: 5000.01, P1b: 2500, P1c: 2500 });
     const r = repartitionP1(12345.67);
     expect(r.P1a + r.P1b + r.P1c).toBeCloseTo(12345.67, 6);
+  });
+
+  it("lit les jalons saisis à la main (ancienne formule) : vides et zéros sans montant", () => {
+    expect(lireJalonsPhase("p1", { P1a: "2 500", P1b: "3750,5", P1c: "" }, lireMontant)).toEqual({
+      montants: { P1a: 2500, P1b: 3750.5 },
+      total: 6250.5,
+      illisibles: [],
+    });
+    // les jalons de l'autre phase sont ignorés
+    expect(lireJalonsPhase("p2", { P1a: "100", P2a: "0", P2c: "beaucoup" }, lireMontant)).toEqual({ montants: {}, total: 0, illisibles: ["P2c"] });
   });
 
   it("calcule FCEE 1 et FCEE 2 à 250 € HT par GWh cumac", () => {

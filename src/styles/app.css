@@ -2176,6 +2176,11 @@ table.dossiers.fact-table tfoot td { position: sticky; bottom: 0; z-index: 2; ba
 .fact-saisies { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
 .fact-saisies .fs-ligne { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--fg-muted); }
 .fact-saisies .fs-ligne .se-btn { padding: 4px 10px; font-size: 12px; }
+/* nouvelle ou ancienne formule dans « Saisir la P1 » / « Revaloriser la P2 » (0134) */
+.fact-formule { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 16px; }
+.fact-formule .hint { font-size: 12px; color: var(--fg-muted); }
+.fact-jalons-main { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.fact-jalons-main input { min-width: 0; }
 
 /* facturation directe (0115) : bulles et jalons cliquables */
 .fact-pas.cliquable { border: none; padding: 0; margin: 0; font: inherit; cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease; }

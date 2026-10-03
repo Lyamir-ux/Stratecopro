@@ -10,7 +10,18 @@ import { Badge, DpePair, PhaseBadge, Progress } from "@/components/ui";
 import { PHASES, type DpeClass, type PhaseId } from "@/lib/referentiels";
 import { fmtEuro, fmtEuroFull } from "@/lib/format";
 import { lireMontant } from "@/lib/importCopros";
-import { PARTS_P1, PARTS_P2, repartitionP1, repartitionP2 } from "@/lib/facturation";
+import {
+  CODES_PHASE,
+  LIBELLE_FORMULE,
+  PARTS_P1,
+  PARTS_P2,
+  lireJalonsPhase,
+  repartitionP1,
+  repartitionP2,
+  type CodeJalonContrat,
+  type FormuleHonoraires,
+  type PhaseContrat,
+} from "@/lib/facturation";
 import { telechargerCsv } from "@/lib/csv";
 import { useUi } from "@/stores/ui";
 import {
@@ -247,6 +258,48 @@ function apercuRepartition(saisie: string, phase: "p1" | "p2"): string {
   return Object.entries(rep).map(([code, v]) => `${code} ${fmtEuroFull(v)}`).join(" · ");
 }
 
+/** Ancienne formule : les trois jalons d'une phase saisis à la main, avec leur total. */
+function SaisieJalonsPhase({
+  phase,
+  valeurs,
+  onChange,
+}: {
+  phase: PhaseContrat;
+  valeurs: Partial<Record<CodeJalonContrat, string>>;
+  onChange: (code: CodeJalonContrat, valeur: string) => void;
+}) {
+  const { total, illisibles } = lireJalonsPhase(phase, valeurs, lireMontant);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span style={{ fontSize: 13, fontWeight: 500, color: "var(--fg2)" }}>
+        {phase === "p1" ? "Honoraires P1 - études (€ HT)" : "Honoraires P2 - travaux (€ HT)"}
+      </span>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>
+        {CODES_PHASE[phase].map((code) => (
+          <label key={code} style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 12, color: "var(--fg-muted)" }}>
+            {code}
+            <input
+              className="login-input"
+              inputMode="decimal"
+              placeholder="-"
+              aria-label={`${code} (€ HT)`}
+              value={valeurs[code] ?? ""}
+              onChange={(e) => onChange(code, e.target.value)}
+            />
+          </label>
+        ))}
+      </div>
+      <span style={{ fontSize: 12, color: illisibles.length ? "var(--color-error-700)" : "var(--fg-muted)" }}>
+        {illisibles.length
+          ? `Montant illisible : ${illisibles.join(", ")}`
+          : total > 0
+            ? `Total ${fmtEuroFull(total)} HT`
+            : "Un jalon laissé vide n'a pas de montant"}
+      </span>
+    </div>
+  );
+}
+
 function NewCoproDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateCopro();
   const { data: team } = useTeamProfiles();
@@ -272,6 +325,10 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
     honoraires_p2: "",
   });
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+  // Honoraires (demande d'Amir du 03/10/2026) : nouvelle formule = P1 et P2
+  // réparties 50/25/25 et 50/30/20 ; ancienne formule = jalons saisis à la main.
+  const [formule, setFormule] = useState<FormuleHonoraires>("nouvelle");
+  const [jalonsSaisis, setJalonsSaisis] = useState<Partial<Record<CodeJalonContrat, string>>>({});
   // Maître d'œuvre (idée d'Amir du 01/10/2026) : une fiche « Maître d'œuvre » de
   // la Base prestataires, ou un nouveau nom dont la fiche est créée avec le dossier.
   const { data: prestataires } = usePrestataires();
@@ -327,11 +384,24 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setErreurSaisie(null);
-    const p1 = lireMontant(form.honoraires_p1);
-    const p2 = lireMontant(form.honoraires_p2);
-    if ((p1 != null && Number.isNaN(p1)) || (p2 != null && Number.isNaN(p2))) {
-      setErreurSaisie("Honoraires : saisissez un montant en euros HT, par exemple 9 000 ou 12 345,67.");
-      return;
+    let p1: number | null = null;
+    let p2: number | null = null;
+    let jalonsHt: Partial<Record<CodeJalonContrat, number>> | null = null;
+    if (formule === "nouvelle") {
+      p1 = lireMontant(form.honoraires_p1);
+      p2 = lireMontant(form.honoraires_p2);
+      if ((p1 != null && Number.isNaN(p1)) || (p2 != null && Number.isNaN(p2))) {
+        setErreurSaisie("Honoraires : saisissez un montant en euros HT, par exemple 9 000 ou 12 345,67.");
+        return;
+      }
+    } else {
+      const phases = (["p1", "p2"] as const).map((ph) => lireJalonsPhase(ph, jalonsSaisis, lireMontant));
+      const illisibles = phases.flatMap((x) => x.illisibles);
+      if (illisibles.length > 0) {
+        setErreurSaisie(`Honoraires : montant illisible pour ${illisibles.join(", ")} - saisissez des euros HT, par exemple 4 500 ou 2 812,50.`);
+        return;
+      }
+      jalonsHt = { ...phases[0].montants, ...phases[1].montants };
     }
     const maitreOeuvre: ChoixMaitreOeuvre | null =
       moeChoix === MOE_NOUVEAU
@@ -358,6 +428,7 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
       date_ag: form.date_ag || null,
       honoraires_p1_ht: p1,
       honoraires_p2_ht: p2,
+      honoraires_jalons_ht: jalonsHt,
     });
     // Le chef de projet désigné à la création est alerté par e-mail
     // (edge notifier-passation) - sans bloquer la création du dossier.
@@ -670,34 +741,57 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
           <span className="se-eyebrow" style={{ color: "var(--fg-muted)" }}>
             Honoraires AMO du contrat
           </span>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            {field(
-              "Honoraires P1 - études (€ HT)",
-              <>
-                <input
-                  className="login-input"
-                  inputMode="decimal"
-                  placeholder="Par exemple 9 000"
-                  value={form.honoraires_p1}
-                  onChange={(e) => set({ honoraires_p1: e.target.value })}
-                />
-                <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>{apercuRepartition(form.honoraires_p1, "p1")}</span>
-              </>
-            )}
-            {field(
-              "Honoraires P2 - travaux (€ HT)",
-              <>
-                <input
-                  className="login-input"
-                  inputMode="decimal"
-                  placeholder="Par exemple 15 000"
-                  value={form.honoraires_p2}
-                  onChange={(e) => set({ honoraires_p2: e.target.value })}
-                />
-                <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>{apercuRepartition(form.honoraires_p2, "p2")}</span>
-              </>
-            )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div className="seg" role="group" aria-label="Formule des honoraires">
+              {(["nouvelle", "ancienne"] as const).map((f) => (
+                <button key={f} type="button" className={formule === f ? "on" : ""} aria-pressed={formule === f} onClick={() => setFormule(f)}>
+                  {LIBELLE_FORMULE[f].titre}
+                </button>
+              ))}
+            </div>
+            <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>{LIBELLE_FORMULE[formule].detail}</span>
           </div>
+          {formule === "ancienne" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {(["p1", "p2"] as const).map((ph) => (
+                <SaisieJalonsPhase
+                  key={ph}
+                  phase={ph}
+                  valeurs={jalonsSaisis}
+                  onChange={(code, v) => setJalonsSaisis((x) => ({ ...x, [code]: v }))}
+                />
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {field(
+                "Honoraires P1 - études (€ HT)",
+                <>
+                  <input
+                    className="login-input"
+                    inputMode="decimal"
+                    placeholder="Par exemple 9 000"
+                    value={form.honoraires_p1}
+                    onChange={(e) => set({ honoraires_p1: e.target.value })}
+                  />
+                  <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>{apercuRepartition(form.honoraires_p1, "p1")}</span>
+                </>
+              )}
+              {field(
+                "Honoraires P2 - travaux (€ HT)",
+                <>
+                  <input
+                    className="login-input"
+                    inputMode="decimal"
+                    placeholder="Par exemple 15 000"
+                    value={form.honoraires_p2}
+                    onChange={(e) => set({ honoraires_p2: e.target.value })}
+                  />
+                  <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>{apercuRepartition(form.honoraires_p2, "p2")}</span>
+                </>
+              )}
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <label style={{ fontSize: 13, fontWeight: 500, color: "var(--fg2)" }}>

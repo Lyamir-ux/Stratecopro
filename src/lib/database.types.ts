@@ -1930,9 +1930,11 @@ export type Database = {
           copro_id: string
           derniere_facture: string | null
           importe_le: string | null
+          p1_formule: string | null
           p1_montant_ht: number | null
           p1_saisi_le: string | null
           p1_saisi_par: string | null
+          p2_formule: string | null
           p2_montant_ht: number | null
           p2_saisi_le: string | null
           p2_saisi_par: string | null
@@ -1945,9 +1947,11 @@ export type Database = {
           copro_id: string
           derniere_facture?: string | null
           importe_le?: string | null
+          p1_formule?: string | null
           p1_montant_ht?: number | null
           p1_saisi_le?: string | null
           p1_saisi_par?: string | null
+          p2_formule?: string | null
           p2_montant_ht?: number | null
           p2_saisi_le?: string | null
           p2_saisi_par?: string | null
@@ -1960,9 +1964,11 @@ export type Database = {
           copro_id?: string
           derniere_facture?: string | null
           importe_le?: string | null
+          p1_formule?: string | null
           p1_montant_ht?: number | null
           p1_saisi_le?: string | null
           p1_saisi_par?: string | null
+          p2_formule?: string | null
           p2_montant_ht?: number | null
           p2_saisi_le?: string | null
           p2_saisi_par?: string | null
@@ -5069,6 +5075,10 @@ export type Database = {
       }
       honoraires_saisir_cee: {
         Args: { p_copro_id: string; p_kwhc: number }
+        Returns: undefined
+      }
+      honoraires_saisir_jalons: {
+        Args: { p_copro_id: string; p_montants: Json; p_phase: string }
         Returns: undefined
       }
       honoraires_saisir_p1: {
