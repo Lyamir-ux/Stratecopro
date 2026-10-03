@@ -1,7 +1,8 @@
 // Détail d'une copropriété du portefeuille syndic - hero + 6 onglets.
 // Tout est en lecture seule sauf « Documents à produire » (montage bancaire), où le syndic dépose
 // les documents du dossier de prêt. L'onglet vit dans l'URL (/syndic/copros/:id/:tab?).
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "@/auth/AuthProvider";
 import { Icon } from "@/components/Icon";
 import { Badge, DpePair, PhaseBadge, THUMB_BG } from "@/components/ui";
 import type { DpeClass } from "@/lib/referentiels";
@@ -18,6 +19,7 @@ import { FichiersTabSyndic } from "./FichiersTab";
 import { SuiviFinancierTabSyndic } from "./SuiviFinancierTab";
 import { PhotoCadree, PhotoFictive } from "@/components/PhotoCadrage";
 import { lireCadrage } from "@/lib/photoCadrage";
+import { lienVueAmo } from "@/lib/vuesCopro";
 
 const TABS = [
   { id: "projet", label: "Projet" },
@@ -71,6 +73,7 @@ export default function CoproSyndic() {
   const { id, tab: tabParam } = useParams();
   const navigate = useNavigate();
   const { data: c, isLoading } = useCoproSyndic(id);
+  const { profile } = useAuth();
   const { data: photoUrl } = usePhotoUrl(c?.photo_path ?? null);
   // Le badge de phase suit l'avancement des tâches, comme la pastille
   // « En cours » de l'onglet Projet et les vues du portefeuille (feedback 29/08).
@@ -122,6 +125,19 @@ export default function CoproSyndic() {
               </div>
             )}
             <div className="dh-overlay"></div>
+            {/* Aperçu AMO : retour au même dossier côté AMO (idée d'Amir du 03/10/2026), jamais pour un syndic */}
+            {profile?.role === "amo" && (
+              <div style={{ position: "absolute", top: 12, right: 12 }}>
+                <Link
+                  to={lienVueAmo(c.id, tab)}
+                  className="se-btn se-btn-secondary btn-sm"
+                  title="Revenir à ce dossier dans l'espace AMO"
+                >
+                  <Icon name="gauge" size={14} />
+                  Vue AMO
+                </Link>
+              </div>
+            )}
           </div>
           <div className="dh-body">
             <div>

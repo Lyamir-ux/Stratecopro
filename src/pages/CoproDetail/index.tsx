@@ -22,6 +22,7 @@ import {
 import { PhotoCadree, PhotoFictive, RecadrerPhoto, ratioBandeau } from "@/components/PhotoCadrage";
 import { lireCadrage } from "@/lib/photoCadrage";
 import { messageErreur } from "@/lib/erreurs";
+import { lienVueSyndic } from "@/lib/vuesCopro";
 import { useConsultations } from "@/api/consultations";
 import { usePrestataires } from "@/api/prestataires";
 import { normaliserNomOrganisation } from "@/lib/organisations";
@@ -154,7 +155,27 @@ export default function CoproDetail() {
             </div>
           )}
           <div className="dh-overlay"></div>
-          <div style={{ position: "absolute", top: 12, right: 12, display: "flex", gap: 8 }}>
+          <div
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              left: 12,
+              display: "flex",
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
+              gap: 8,
+            }}
+          >
+            {/* Même dossier dans l'espace syndic, sur l'onglet équivalent (idée d'Amir du 03/10/2026) */}
+            <Link
+              to={lienVueSyndic(c.id, tab)}
+              className="se-btn se-btn-secondary btn-sm"
+              title="Voir ce dossier tel que le syndic le voit dans son espace"
+            >
+              <Icon name="eye" size={14} />
+              Vue syndic
+            </Link>
             <button
               className="se-btn se-btn-secondary btn-sm"
               title="Mettre le dossier à la corbeille"
