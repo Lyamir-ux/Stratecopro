@@ -14,8 +14,11 @@ import {
 } from "@/lib/referentiels";
 import { useDonnees, useMutationsLots, useSetNbBatiments, useSetUsageLot, type LotFull } from "@/api/donnees";
 import {
+  MESSAGE_NOM_DEJA_PRIS,
   nbLogements,
+  nomDossierDejaPris,
   notifierPassation,
+  slugCopro,
   TITRE_LOGEMENTS,
   useCopros,
   useUpdateCopro,
@@ -78,6 +81,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
   const setNbBatiments = useSetNbBatiments(c.id);
   const setUsage = useSetUsageLot(c.id);
   const [synth, setSynth] = useState({
+    nom: "",
     adresse: "",
     syndic: "",
     city: "",
@@ -139,6 +143,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
 
   const startSynth = () => {
     setSynth({
+      nom: c.name,
       adresse: c.adresse ?? "",
       syndic: c.syndic_name ?? "",
       city: c.city ?? "",
@@ -174,6 +179,14 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
   // Un dossier déjà chez son syndic bénévole y reste (pas de « (2) »), et un nom
   // déjà pris rejoint l'enseigne existante.
   const orgs = organisations ?? [];
+  // Nom de la copropriété modifiable (feedback d'Amir du 03/10/2026). La clé
+  // technique (slug, unique corbeille comprise) suit le nom, sauf une clé posée
+  // à la main (dossiers de démo, retrouvés par les seeds).
+  const nomSaisi = synth.nom.trim().replace(/\s+/g, " ");
+  const nomModifie = nomSaisi !== c.name;
+  const nomIllisible = !slugCopro(nomSaisi);
+  const slugSuitLeNom = !c.slug || c.slug === slugCopro(c.name);
+  const nomDossier = nomIllisible ? c.name : nomSaisi;
   const dejaChezBenevole =
     !!c.organisation &&
     normaliserNomOrganisation(c.organisation.nom) === normaliserNomOrganisation(nomSyndicBenevole(c.name));
@@ -189,12 +202,21 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
     synth.organisationId === ORG_BENEVOLE
       ? dejaChezBenevole
         ? null
-        : nomOrganisationDisponible(nomSyndicBenevole(c.name), orgs)
+        : nomOrganisationDisponible(nomSyndicBenevole(nomDossier), orgs)
       : synth.organisationId === ORG_NOUVELLE && !nouvelleExistante
         ? synth.organisationNouvelle.trim() || null
         : null;
   const nouvelleSansNom = synth.organisationId === ORG_NOUVELLE && !synth.organisationNouvelle.trim();
   const saveSynth = async () => {
+    // Doublon parmi les dossiers actifs signalé avant toute écriture ; la base
+    // refuse aussi un nom pris par un dossier à la corbeille.
+    if (nomModifie && slugSuitLeNom) {
+      const cle = slugCopro(nomSaisi);
+      if ((tousDossiers ?? []).some((d) => d.id !== c.id && (d.slug === cle || slugCopro(d.name) === cle))) {
+        window.alert(MESSAGE_NOM_DEJA_PRIS);
+        return;
+      }
+    }
     if (synth.nbBatiments !== batiments.length) {
       // Peut échouer si on réduit alors que des bâtiments portent des lots - on reste en édition.
       try {
@@ -222,7 +244,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
       if (choixCreation) {
         let resolue: Awaited<ReturnType<typeof resoudreOrganisation>>;
         try {
-          resolue = await resoudreOrganisation(choixCreation, c.name);
+          resolue = await resoudreOrganisation(choixCreation, nomDossier);
         } catch (e) {
           window.alert(messageErreur(e, "L'organisation n'a pas pu être créée. Réessayez."));
           return;
@@ -250,6 +272,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
     try {
       await update.mutateAsync({
         ...(organisationCible !== organisationActuelle ? { organisation_id: organisationCible } : {}),
+        ...(nomModifie ? { name: nomSaisi, ...(slugSuitLeNom ? { slug: slugCopro(nomSaisi) } : {}) } : {}),
         adresse: synth.adresse || null,
         syndic_name: syndicName,
         city: synth.city || null,
@@ -266,7 +289,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
     } catch (e) {
       // Pas d'organisation orpheline si la fiche n'a pas pu être enregistrée.
       if (organisationCreee) await supprimerOrganisationCreee(organisationCreee);
-      window.alert(messageErreur(e, "Enregistrement impossible. Réessayez."));
+      window.alert(nomDossierDejaPris(e) ? MESSAGE_NOM_DEJA_PRIS : messageErreur(e, "Enregistrement impossible. Réessayez."));
       return;
     } finally {
       if (organisationCreee) refreshOrganisations();
@@ -525,8 +548,14 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
               </button>
               <button
                 className="se-btn se-btn-primary btn-sm"
-                disabled={nouvelleSansNom}
-                title={nouvelleSansNom ? "Saisissez le nom de la nouvelle organisation" : undefined}
+                disabled={nouvelleSansNom || nomIllisible}
+                title={
+                  nomIllisible
+                    ? "Saisissez le nom de la copropriété"
+                    : nouvelleSansNom
+                      ? "Saisissez le nom de la nouvelle organisation"
+                      : undefined
+                }
                 onClick={() => void saveSynth()}
               >
                 <Icon name="check" size={15} />
@@ -543,6 +572,19 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
           )}
         </div>
         <div className="p-body">
+          <div className="kv">
+            <span className="k">Nom</span>
+            {editingSynth ? (
+              <input
+                className="edit-inp"
+                value={synth.nom}
+                onChange={(e) => setSynth((s) => ({ ...s, nom: e.target.value }))}
+                title="Nom du dossier dans tous les espaces (AMO, syndic, copropriétaires, prestataires)"
+              />
+            ) : (
+              <span className="v" style={{ textAlign: "right" }}>{c.name}</span>
+            )}
+          </div>
           <div className="kv">
             <span className="k">Adresse</span>
             {editingSynth ? (

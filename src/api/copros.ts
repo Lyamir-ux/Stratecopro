@@ -280,12 +280,17 @@ function jalonsDeLaPhase(
   return retenus.length ? Object.fromEntries(retenus.map((code) => [code, jalons![code]!])) : null;
 }
 
+/** Refus de la base : un autre dossier a déjà la clé tirée de ce nom (slug unique, corbeille comprise). */
+export function nomDossierDejaPris(e: unknown): boolean {
+  return (e as { code?: string } | null)?.code === "23505" && messageErreur(e, "").includes("coproprietes_slug");
+}
+
+export const MESSAGE_NOM_DEJA_PRIS =
+  "Un dossier porte déjà ce nom (corbeille comprise) : précisez-le, par exemple avec la ville ou l'adresse.";
+
 /** Message d'échec de la création ; le nom du dossier (slug) est unique, corbeille comprise. */
 export function erreurCreation(e: unknown): string {
-  const message = messageErreur(e, "Impossible de créer le dossier. Réessayez.");
-  return (e as { code?: string } | null)?.code === "23505" && message.includes("coproprietes_slug")
-    ? "Un dossier porte déjà ce nom (corbeille comprise) : précisez-le, par exemple avec la ville ou l'adresse."
-    : message;
+  return nomDossierDejaPris(e) ? MESSAGE_NOM_DEJA_PRIS : messageErreur(e, "Impossible de créer le dossier. Réessayez.");
 }
 
 /** Rafraîchit ce qu'une création de dossier change ailleurs (listes, enseignes, honoraires, prestataires). */
