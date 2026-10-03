@@ -31,7 +31,7 @@ import { DepartementsPicker, choixVersDepartements, departementsVersChoix } from
 import { DEPARTEMENTS, GRAND_EST, couvreDepartement, nomDepartement, resumeDepartements } from "@/lib/departements";
 import { FilGeneralEntreprise } from "@/components/FilGeneralEntreprise";
 import { nonLusFilGeneral, useFilsGeneraux, useLecturesFilGeneral } from "@/api/messages";
-import { CONSULT_TYPES } from "@/api/consultations";
+import { METIERS_PRESTATAIRES } from "@/api/consultations";
 import {
   emailValide,
   motifAdressePrise,
@@ -69,7 +69,7 @@ function TypeChips({ types }: { types: TypeConsult[] }) {
   return (
     <span style={{ display: "inline-flex", gap: 5, flexWrap: "wrap" }}>
       {types.map((t) => {
-        const def = CONSULT_TYPES.find((x) => x.id === t);
+        const def = METIERS_PRESTATAIRES.find((x) => x.id === t);
         return (
           <span key={t} className="cs-type" style={{ fontSize: 11.5 }}>
             <Icon name={def?.icon ?? "briefcase"} size={12} />
@@ -347,7 +347,7 @@ function PrestaForm({
         <div className="cs-field cs-field-full">
           <label>Prestations couvertes * <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· détermine les consultations reçues</span></label>
           <div className="cs-type-pick">
-            {CONSULT_TYPES.map((t) => (
+            {METIERS_PRESTATAIRES.map((t) => (
               <button key={t.id} type="button"
                 className={"cs-type-opt" + (draft.types.includes(t.id) ? " on" : "")}
                 onClick={() => toggleType(t.id)}>
@@ -471,7 +471,7 @@ export default function Prestataires() {
         />
         <select className="edit-sel" value={filter} onChange={(e) => setFilter(e.target.value as TypeConsult | "")}>
           <option value="">Tous les métiers</option>
-          {CONSULT_TYPES.map((t) => (
+          {METIERS_PRESTATAIRES.map((t) => (
             <option key={t.id} value={t.id}>{t.label}</option>
           ))}
         </select>

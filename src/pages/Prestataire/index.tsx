@@ -17,7 +17,7 @@ import {
   useMesProjetsMoe,
   useMonPrestataire,
 } from "@/api/espacePrestataire";
-import { CONSULT_TYPES } from "@/api/consultations";
+import { libelleMetier } from "@/api/consultations";
 import { usePrestataires } from "@/api/prestataires";
 import { filtrerEntreprises } from "@/lib/prestataires";
 import { compteNonLus, nonLusFilGeneral, useFilGeneral, useFilsPresta, useLectures, useLecturesFilGeneral } from "@/api/messages";
@@ -154,7 +154,7 @@ export default function Prestataire() {
 
   if (isAmo && !presta) {
     const metiersDe = (p: Tables<"prestataires">) =>
-      p.types.map((t) => CONSULT_TYPES.find((x) => x.id === t)?.label ?? t).join(" · ");
+      p.types.map((t) => libelleMetier(t)).join(" · ");
     const q = recherche.trim();
     const liste = filtrerEntreprises(tous ?? [], recherche, metiersDe);
     return (
@@ -253,7 +253,7 @@ export default function Prestataire() {
   const section: SectionId = (sections.some((s) => s.id === sectionParam) ? sectionParam : "consultations") as SectionId;
 
   const metiers = presta.types
-    .map((t) => CONSULT_TYPES.find((x) => x.id === t)?.label ?? t)
+    .map((t) => libelleMetier(t))
     .join(" · ");
 
   const go = (s: SectionId) => {

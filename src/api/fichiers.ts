@@ -94,6 +94,7 @@ export const DISPOSITIFS_RECAP: { id: string; label: string; types: string[] }[]
     types: [
       "devis", "devis_travaux", "marche_travaux", "attestation_rge", "pv_ag", "pv_ag_travaux", "pv_ag_mandat",
       "rib_entreprises", "offre_pret", "cerfa_ecoptz_emprunteur", "cerfa_ecoptz_entreprise", "liste_participants_pret",
+      "attestation_ecoptz_individuel",
       // pièces du montage bancaire CEGEE (types ajoutés le 10/09/2026)
       "fiche_renseignements", "attestation_impayes", "fiche_synthetique", "attestation_registre",
       "avis_sirene", "annexes_comptables", "delegation_pouvoirs", "formulaire_ppe", "demande_pret",

@@ -1404,6 +1404,53 @@ export type Database = {
           },
         ]
       }
+      ecoptz_dossiers: {
+        Row: {
+          audit: Json
+          audit_saisi_le: string | null
+          audit_saisi_par: string | null
+          audit_statut: string
+          audit_valide_le: string | null
+          audit_valide_par: string | null
+          copro_id: string
+          postes: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          audit?: Json
+          audit_saisi_le?: string | null
+          audit_saisi_par?: string | null
+          audit_statut?: string
+          audit_valide_le?: string | null
+          audit_valide_par?: string | null
+          copro_id: string
+          postes?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          audit?: Json
+          audit_saisi_le?: string | null
+          audit_saisi_par?: string | null
+          audit_statut?: string
+          audit_valide_le?: string | null
+          audit_valide_par?: string | null
+          copro_id?: string
+          postes?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ecoptz_dossiers_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: true
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       enquetes: {
         Row: {
           copro_id: string
@@ -4568,6 +4615,264 @@ export type Database = {
           },
         ]
       }
+      signature_envois: {
+        Row: {
+          annule_le: string | null
+          complet_le: string | null
+          copro_id: string
+          created_at: string
+          cree_par: string | null
+          cree_par_nom: string | null
+          envoye_le: string | null
+          id: string
+          objet: string
+          statut: string
+          updated_at: string
+        }
+        Insert: {
+          annule_le?: string | null
+          complet_le?: string | null
+          copro_id: string
+          created_at?: string
+          cree_par?: string | null
+          cree_par_nom?: string | null
+          envoye_le?: string | null
+          id?: string
+          objet?: string
+          statut?: string
+          updated_at?: string
+        }
+        Update: {
+          annule_le?: string | null
+          complet_le?: string | null
+          copro_id?: string
+          created_at?: string
+          cree_par?: string | null
+          cree_par_nom?: string | null
+          envoye_le?: string | null
+          id?: string
+          objet?: string
+          statut?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_envois_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signature_participants: {
+        Row: {
+          attestation_le: string | null
+          copro_id: string
+          created_at: string
+          email: string
+          envoi_id: string
+          fait_a: string | null
+          id: string
+          lien_envoye_le: string | null
+          nb_envois: number
+          nom: string
+          ordre: number
+          prestataire_id: string | null
+          role: string
+          signe_le: string | null
+          siret: string
+          societe: string
+          statut: string
+          token_expire_le: string | null
+          updated_at: string
+        }
+        Insert: {
+          attestation_le?: string | null
+          copro_id: string
+          created_at?: string
+          email?: string
+          envoi_id: string
+          fait_a?: string | null
+          id?: string
+          lien_envoye_le?: string | null
+          nb_envois?: number
+          nom?: string
+          ordre?: number
+          prestataire_id?: string | null
+          role: string
+          signe_le?: string | null
+          siret?: string
+          societe?: string
+          statut?: string
+          token_expire_le?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attestation_le?: string | null
+          copro_id?: string
+          created_at?: string
+          email?: string
+          envoi_id?: string
+          fait_a?: string | null
+          id?: string
+          lien_envoye_le?: string | null
+          nb_envois?: number
+          nom?: string
+          ordre?: number
+          prestataire_id?: string | null
+          role?: string
+          signe_le?: string | null
+          siret?: string
+          societe?: string
+          statut?: string
+          token_expire_le?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_participants_envoi_id_fkey"
+            columns: ["envoi_id"]
+            isOneToOne: false
+            referencedRelation: "signature_envois"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_participants_prestataire_id_fkey"
+            columns: ["prestataire_id"]
+            isOneToOne: false
+            referencedRelation: "prestataires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signature_documents: {
+        Row: {
+          copro_id: string
+          coproprietaire_id: string | null
+          created_at: string
+          document_hash: string | null
+          document_path: string | null
+          document_signe_hash: string | null
+          document_signe_path: string | null
+          donnees: Json
+          envoi_id: string
+          fichier_id: string | null
+          id: string
+          libelle: string
+          lot_id: string | null
+          sceau_signature: string | null
+          scelle_le: string | null
+          statut: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          copro_id: string
+          coproprietaire_id?: string | null
+          created_at?: string
+          document_hash?: string | null
+          document_path?: string | null
+          document_signe_hash?: string | null
+          document_signe_path?: string | null
+          donnees?: Json
+          envoi_id: string
+          fichier_id?: string | null
+          id?: string
+          libelle: string
+          lot_id?: string | null
+          sceau_signature?: string | null
+          scelle_le?: string | null
+          statut?: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          copro_id?: string
+          coproprietaire_id?: string | null
+          created_at?: string
+          document_hash?: string | null
+          document_path?: string | null
+          document_signe_hash?: string | null
+          document_signe_path?: string | null
+          donnees?: Json
+          envoi_id?: string
+          fichier_id?: string | null
+          id?: string
+          libelle?: string
+          lot_id?: string | null
+          sceau_signature?: string | null
+          scelle_le?: string | null
+          statut?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_documents_envoi_id_fkey"
+            columns: ["envoi_id"]
+            isOneToOne: false
+            referencedRelation: "signature_envois"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_documents_coproprietaire_id_fkey"
+            columns: ["coproprietaire_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietaires"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_documents_lot_id_fkey"
+            columns: ["lot_id"]
+            isOneToOne: false
+            referencedRelation: "lots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signature_document_signataires: {
+        Row: {
+          document_hash: string | null
+          document_id: string
+          emplacements: Json
+          lu_le: string | null
+          participant_id: string
+          signe_le: string | null
+        }
+        Insert: {
+          document_hash?: string | null
+          document_id: string
+          emplacements?: Json
+          lu_le?: string | null
+          participant_id: string
+          signe_le?: string | null
+        }
+        Update: {
+          document_hash?: string | null
+          document_id?: string
+          emplacements?: Json
+          lu_le?: string | null
+          participant_id?: string
+          signe_le?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_document_signataires_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "signature_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_document_signataires_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "signature_participants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       copro_stats: {
@@ -4636,6 +4941,22 @@ export type Database = {
       }
     }
     Functions: {
+      ecoptz_contexte_pf: {
+        Args: { p_copro_id: string }
+        Returns: Json
+      }
+      ecoptz_role_appelant: {
+        Args: { p_copro_id: string }
+        Returns: string
+      }
+      ecoptz_saisir_audit: {
+        Args: { p_audit: Json; p_copro_id: string; p_valider?: boolean }
+        Returns: Json
+      }
+      ecoptz_saisir_postes: {
+        Args: { p_copro_id: string; p_postes: Json; p_valider?: boolean }
+        Returns: Json
+      }
       a_postule: { Args: { p_consultation_id: string }; Returns: boolean }
       appels_de_fonds_syndic: {
         Args: { p_copro_id: string }
@@ -5006,7 +5327,15 @@ export type Database = {
       statut_notification: "simule" | "envoye" | "erreur"
       statut_scenario: "brouillon" | "partage" | "importe"
       statut_tache: "todo" | "doing" | "done"
-      type_consultation: "moe" | "be" | "pppt_dpe" | "diag" | "ct" | "sps" | "autre"
+      type_consultation:
+        | "moe"
+        | "be"
+        | "pppt_dpe"
+        | "diag"
+        | "ct"
+        | "sps"
+        | "autre"
+        | "travaux"
       type_financement: "collectif" | "individuel" | "fonds"
       type_piece:
         | "avis_imposition"
@@ -5176,7 +5505,7 @@ export const Constants = {
       statut_notification: ["simule", "envoye", "erreur"],
       statut_scenario: ["brouillon", "partage", "importe"],
       statut_tache: ["todo", "doing", "done"],
-      type_consultation: ["moe", "be", "pppt_dpe", "diag", "ct", "sps", "autre"],
+      type_consultation: ["moe", "be", "pppt_dpe", "diag", "ct", "sps", "autre", "travaux"],
       type_financement: ["collectif", "individuel", "fonds"],
       type_piece: [
         "avis_imposition",

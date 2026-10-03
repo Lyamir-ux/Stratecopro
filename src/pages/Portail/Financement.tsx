@@ -1,6 +1,11 @@
 // Mon financement : fonds propres, prêt collectif (banque + durée fixées par
-// l'AMO - CEGEE/Domofinance, durée votée en AG) ou éco-PTZ individuel (durée
-// au choix du copropriétaire).
+// l'AMO - CEGEE/Domofinance, durée votée en AG) ou éco-PTZ individuel.
+//
+// Éco-PTZ individuel (Amir, 02/10/2026) : la durée n'est plus demandée (elle se
+// fixe avec la banque) ; le copropriétaire choisit ses logements (lots
+// d'habitation, annexes rattachées comprises) et Strat Eco prépare le CERFA
+// Annexe 3.1 et l'attestation des montants éligibles, signés électroniquement
+// par les entreprises, l'auditeur et le syndic, puis remis dans « Documents ».
 //
 // Adhésion au prêt collectif (feedback Amir 22/09/2026) : « Adhérer au prêt
 // collectif » enregistre le choix puis envoie le copropriétaire sur le parcours
@@ -29,6 +34,7 @@ import {
 } from "@/api/portail";
 import { readParams } from "@/api/scenarios";
 import { MentionsPrudence } from "./Mentions";
+import { DocumentsEcoPtz } from "./Documents";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Tables } from "@/lib/database.types";
 
@@ -76,10 +82,12 @@ export function Financement({
   const { data: config } = useFinancementConfig(membership.copro.id);
   const [editing, setEditing] = useState(false);
   const [type, setType] = useState<TypeFinancement>(choix?.type ?? "collectif");
-  const [yearsIndiv, setYearsIndiv] = useState(choix?.type === "individuel" ? (choix.duree_annees ?? 15) : 15);
-  const [selLots, setSelLots] = useState<string[]>(
-    choix?.lot_ids?.length ? choix.lot_ids : lots.map((l) => l.id)
-  );
+  // éco-PTZ individuel : un prêt par logement (lot d'habitation et ses annexes rattachées)
+  const logements = lots.filter((l) => l.usage === "habitation");
+  const [selLots, setSelLots] = useState<string[]>(() => {
+    const deja = (choix?.lot_ids ?? []).filter((id) => logements.some((l) => l.id === id));
+    return deja.length ? deja : logements.map((l) => l.id);
+  });
   const save = useSaveChoix(scenario?.id ?? "", membership.coproprietaireId);
 
   if (!scenario || !bareme) {
@@ -104,7 +112,6 @@ export function Financement({
   const lienBanque = config?.lien_adhesion ?? null;
   const banqueNom = config ? BANQUE_LABEL[config.banque] : "la banque partenaire";
   const mensualiteCollectif = montant / (dureeCollectif * 12);
-  const mensualiteIndiv = montant / (Math.max(1, yearsIndiv) * 12);
   // Date limite fixée par l'AMO : le jour même est encore ouvert.
   const dateLimite = config?.date_limite_choix ?? null;
   const modifiable = !dateLimite || aujourdhuiParis() <= dateLimite;
@@ -118,7 +125,7 @@ export function Financement({
     save.mutate(
       {
         type: t,
-        dureeAnnees: t === "collectif" ? dureeCollectif : t === "individuel" ? yearsIndiv : null,
+        dureeAnnees: t === "collectif" ? dureeCollectif : null,
         lotIds: t === "individuel" ? selLots : [],
       },
       { onSuccess: () => setEditing(false) }
@@ -164,10 +171,10 @@ export function Financement({
                 <span className="k">Mode de financement</span>
                 <span className="v">{LIBELLE_CHOIX[choix.type]}</span>
               </div>
-              {choix.type !== "fonds" && (
+              {choix.type === "collectif" && (
                 <div className="kv">
                   <span className="k">Durée</span>
-                  <span className="v">{choix.duree_annees ?? (choix.type === "collectif" ? dureeCollectif : yearsIndiv)} ans</span>
+                  <span className="v">{choix.duree_annees ?? dureeCollectif} ans</span>
                 </div>
               )}
               {choix.type === "individuel" && (
@@ -190,10 +197,11 @@ export function Financement({
                 <>Vous financez votre reste à charge de <b>{fmtEuro(montant)}</b> sur <b>fonds propres</b>, selon l'échéancier d'appels de fonds du syndic.</>
               ) : choix.type === "individuel" ? (
                 <>
-                  Votre demande d'<b>éco-PTZ individuel</b> sur <b>{choix.duree_annees ?? yearsIndiv} ans</b> pour{" "}
-                  {lotsChoisis.length > 1 ? "les lots " : "le lot "}
-                  {lotsChoisis.map((l) => "n°" + l.num).join(", ")} est transmise à votre AMO, qui vous accompagnera
-                  pour le dossier bancaire.
+                  Votre demande d'<b>éco-PTZ individuel</b> pour {lotsChoisis.length > 1 ? "les lots " : "le lot "}
+                  {lotsChoisis.map((l) => "n°" + l.num).join(", ")} est transmise à votre AMO. Strat Eco prépare le
+                  formulaire CERFA de l'éco-PTZ et l'attestation des montants éligibles de votre logement, signés par
+                  les entreprises, l'auditeur et votre syndic : vous les retrouverez dans l'onglet Documents, à
+                  remettre à votre banque.
                 </>
               ) : (
                 <>
@@ -272,6 +280,12 @@ export function Financement({
               </span>
             </div>
           ))}
+
+        {choix.type === "individuel" && (
+          <div style={{ marginTop: 18 }}>
+            <DocumentsEcoPtz membership={membership} />
+          </div>
+        )}
 
         <MentionsPrudence />
       </div>
@@ -364,11 +378,14 @@ export function Financement({
         <div className={"loan-opt" + (type === "individuel" ? " sel" : "")} onClick={() => setType("individuel")}>
           <div className="lo-ico"><Icon name="user" size={22} /></div>
           <h3>Éco-PTZ individuel</h3>
-          <p>Vous contractez l'éco-PTZ directement auprès de votre banque, lot par lot, et choisissez votre durée.</p>
+          <p>
+            Vous contractez l'éco-PTZ directement auprès de votre banque, logement par logement. Strat Eco vous remet le
+            formulaire CERFA et l'attestation des montants éligibles signés.
+          </p>
           <div className="loan-terms">
             {choix?.type === "individuel" && <span className="term term-actuel">Votre choix actuel</span>}
             <span className="term">Votre banque</span>
-            <span className="term">Durée au choix</span>
+            <span className="term">CERFA préparé</span>
           </div>
         </div>
         <div className={"loan-opt" + (type === "fonds" ? " sel" : "")} onClick={() => setType("fonds")}>
@@ -443,44 +460,51 @@ export function Financement({
       {type === "individuel" && (
         <div className="split" style={{ marginTop: 22 }}>
           <div className="card-xl">
-            <div className="cx-head"><Icon name="building" size={19} style={{ color: "var(--accent)" }} /><h2 style={{ fontSize: 18 }}>Lots à financer</h2></div>
+            <div className="cx-head"><Icon name="building" size={19} style={{ color: "var(--accent)" }} /><h2 style={{ fontSize: 18 }}>Logements à financer</h2></div>
             <div className="cx-body" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {lots.map((l) => (
-                <label key={l.id} className={"lot-check" + (selLots.includes(l.id) ? " on" : "")}>
-                  <input type="checkbox" checked={selLots.includes(l.id)} onChange={() => toggleLot(l.id)} />
-                  <span className="lc-main">
-                    <b>Lot n°{l.num}</b>{l.batiment ? " · Bât. " + l.batiment : ""}
-                  </span>
-                  <span className="lc-tant">
-                    {lotTantiemes(l, cle).toLocaleString("fr-FR")}/{(params.totalCle || 1000).toLocaleString("fr-FR")}
-                  </span>
-                </label>
-              ))}
+              {logements.length === 0 && (
+                <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
+                  L'éco-PTZ individuel finance un logement : aucun lot d'habitation n'est à votre nom dans cette
+                  copropriété. Écrivez à votre AMO si c'est une erreur.
+                </p>
+              )}
+              {logements.map((l) => {
+                const annexes = lots.filter((a) => a.rattacheA === l.id);
+                const t = lotTantiemes(l, cle) + annexes.reduce((n, a) => n + lotTantiemes(a, cle), 0);
+                return (
+                  <label key={l.id} className={"lot-check" + (selLots.includes(l.id) ? " on" : "")}>
+                    <input type="checkbox" checked={selLots.includes(l.id)} onChange={() => toggleLot(l.id)} />
+                    <span className="lc-main">
+                      <b>Lot n°{l.num}</b>{l.batiment ? " · Bât. " + l.batiment : ""}
+                      {annexes.length > 0 && (
+                        <span className="se-small" style={{ color: "var(--fg-muted)" }}>
+                          {" "}
+                          avec {annexes.map((a) => "n°" + a.num).join(", ")}
+                        </span>
+                      )}
+                    </span>
+                    <span className="lc-tant">
+                      {t.toLocaleString("fr-FR")}/{(params.totalCle || 1000).toLocaleString("fr-FR")}
+                    </span>
+                  </label>
+                );
+              })}
+              {lots.some((a) => a.usage !== "habitation" && !a.rattacheA) && (
+                <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
+                  Une cave ou un parking n'entre dans le montant que s'il est rattaché à votre logement (onglet « Mes
+                  quotes-parts »).
+                </p>
+              )}
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             <div className="card-xl">
-              <div className="cx-head"><Icon name="calendar" size={19} /><h2 style={{ fontSize: 18 }}>Durée de remboursement</h2></div>
+              <div className="cx-head"><Icon name="clipboard" size={19} /><h2 style={{ fontSize: 18 }}>Après votre demande</h2></div>
               <div className="cx-body">
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                  <span className="se-small">{bareme.ecoPtz.dureeMin} ans</span>
-                  <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, color: "var(--color-primary-700)" }}>
-                    {yearsIndiv} ans
-                  </span>
-                  <span className="se-small">{bareme.ecoPtz.dureeMax} ans</span>
-                </div>
-                <input
-                  className="range"
-                  type="range"
-                  min={bareme.ecoPtz.dureeMin}
-                  max={bareme.ecoPtz.dureeMax}
-                  value={yearsIndiv}
-                  onChange={(e) => setYearsIndiv(Number(e.target.value))}
-                />
-                <div className="casc-reste" style={{ marginTop: 14 }}>
-                  <span className="l">Mensualité estimée</span>
-                  <span className="v">{fmtEuro(mensualiteIndiv)}</span>
-                </div>
+                <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Strat Eco calcule le montant des travaux éligibles de votre logement</div>
+                <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Les entreprises, l'auditeur et votre syndic signent le formulaire CERFA et l'attestation</div>
+                <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />Vous les retrouvez dans l'onglet Documents, à remettre à votre banque</div>
+                <div className="afournir-row"><Icon name="check" size={15} style={{ color: "var(--color-primary-700)" }} />La durée et le montant du prêt se fixent avec votre banque</div>
               </div>
             </div>
             <button

@@ -3,9 +3,13 @@
 // en direct - {PREFIXE} - {Type} - {Objet} - {ÉMETTEUR} - {Date}[ - {état}].
 // Saisie entièrement manuelle (pas d'analyse automatique) ; « Garder le nom
 // d'origine » reste toujours possible.
+// Éco-PTZ (02/10/2026) : avec `ecoPtz`, le dépôt d'un audit, d'un devis ou d'un
+// CCTP / DPGF enchaîne sur le questionnaire des données du CERFA.
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
+import { QuestionnaireEcoPtzDialog } from "@/components/EcoPtzQuestionnaire";
+import { questionnaireEcoPtzPour } from "@/lib/ecoPtzDonnees";
 import {
   construireNomFichier,
   dossierSuggere,
@@ -42,6 +46,8 @@ interface RenommageDialogProps {
    *  pièce dans toutes les checklists et dossiers qui l'attendent. */
   onConfirm: (file: File, meta: { dossier: string | null; nameOriginal: string; type: string }) => Promise<void> | void;
   onClose: () => void;
+  /** Dossier d'une copropriété : questionnaire éco-PTZ après le dépôt d'un audit, devis ou CCTP / DPGF. */
+  ecoPtz?: { coproId: string; peutValider?: boolean };
 }
 
 export function RenommageDialog({
@@ -54,6 +60,7 @@ export function RenommageDialog({
   dossierInitial,
   onConfirm,
   onClose,
+  ecoPtz,
 }: RenommageDialogProps) {
   const [index, setIndex] = useState(0);
   const champsInitiaux = (): Champs => ({
@@ -68,6 +75,7 @@ export function RenommageDialog({
   const [dossierTouche, setDossierTouche] = useState(false);
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [questionnaire, setQuestionnaire] = useState<{ mode: "audit" | "travaux"; file: File; emetteur: string } | null>(null);
 
   const file = files[index];
 
@@ -112,18 +120,36 @@ export function RenommageDialog({
     setErreur(null);
     try {
       const propre = nomFichierSansAccents(nom);
-      await onConfirm(propre === file.name ? file : renommerFile(file, propre), {
+      const depose = propre === file.name ? file : renommerFile(file, propre);
+      await onConfirm(depose, {
         dossier: dossiers ? dossier : null,
         nameOriginal: file.name,
         type: champs.type,
       });
-      suivant();
+      const mode = ecoPtz ? questionnaireEcoPtzPour(champs.type) : null;
+      if (mode) setQuestionnaire({ mode, file: depose, emetteur: champs.emetteur });
+      else suivant();
     } catch (e) {
       setErreur(String((e as Error)?.message ?? e));
     } finally {
       setEnvoi(false);
     }
   };
+
+  if (questionnaire && ecoPtz)
+    return (
+      <QuestionnaireEcoPtzDialog
+        coproId={ecoPtz.coproId}
+        mode={questionnaire.mode}
+        fichier={questionnaire.file}
+        emetteur={questionnaire.emetteur}
+        peutValider={ecoPtz.peutValider}
+        onClose={() => {
+          setQuestionnaire(null);
+          suivant();
+        }}
+      />
+    );
 
   return (
     <Modal

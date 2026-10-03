@@ -5,8 +5,10 @@
 // projet : l'entreprise dépose devis, plannings, PV… que l'équipe Strat Eco
 // retrouve dans l'onglet Prestataires du dossier. Les autres intervenants
 // n'ont pas cette section (aucun accès aux projets en cours).
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
+import { Modal } from "@/components/Modal";
+import { QuestionnaireEcoPtzDialog } from "@/components/EcoPtzQuestionnaire";
 import { Badge, PhaseBadge, THUMB_BG } from "@/components/ui";
 import { fmtEuro, fmtDate } from "@/lib/format";
 import { messageErreur } from "@/lib/erreurs";
@@ -73,6 +75,10 @@ function ProjetDocsSection({
   const upload = useUploadProjetDoc(presta);
   const supprimer = useDeleteProjetDoc();
   const fileRef = useRef<HTMLInputElement>(null);
+  // Éco-PTZ (02/10/2026) : un audit, un devis ou un CCTP / DPGF déposé ouvre le
+  // questionnaire des données du CERFA (le dépôt du MOE n'a pas de type de document).
+  const [deposeEcoPtz, setDeposeEcoPtz] = useState<File | null>(null);
+  const [questionnaire, setQuestionnaire] = useState<{ mode: "audit" | "travaux"; file: File } | null>(null);
 
   return (
     <div style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
@@ -87,7 +93,7 @@ function ProjetDocsSection({
           style={{ display: "none" }}
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) void upload.mutateAsync({ coproId: projet.copro.id, file: f });
+            if (f) void upload.mutateAsync({ coproId: projet.copro.id, file: f }).then(() => setDeposeEcoPtz(f));
             e.target.value = "";
           }}
         />
@@ -99,6 +105,46 @@ function ProjetDocsSection({
       <p className="se-small" style={{ color: "var(--fg-muted)", margin: "6px 0 0" }}>
         Devis signés, plannings, PV de chantier… ces documents sont partagés avec l'équipe Strat Eco.
       </p>
+      {deposeEcoPtz && (
+        <Modal title="Document déposé" onClose={() => setDeposeEcoPtz(null)} width={520}>
+          <p className="se-body" style={{ marginTop: 0 }}>
+            <b>{deposeEcoPtz.name}</b> est partagé avec l'équipe Strat Eco. S'il s'agit de l'audit énergétique ou d'un
+            devis, d'un CCTP ou d'une DPGF des travaux, quelques informations suffisent pour préparer les formulaires
+            éco-PTZ des copropriétaires.
+          </p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              className="se-btn se-btn-primary"
+              onClick={() => {
+                setQuestionnaire({ mode: "audit", file: deposeEcoPtz });
+                setDeposeEcoPtz(null);
+              }}
+            >
+              Audit énergétique
+            </button>
+            <button
+              className="se-btn se-btn-primary"
+              onClick={() => {
+                setQuestionnaire({ mode: "travaux", file: deposeEcoPtz });
+                setDeposeEcoPtz(null);
+              }}
+            >
+              Devis, CCTP ou DPGF
+            </button>
+            <button className="se-btn se-btn-ghost" onClick={() => setDeposeEcoPtz(null)}>
+              Autre document
+            </button>
+          </div>
+        </Modal>
+      )}
+      {questionnaire && (
+        <QuestionnaireEcoPtzDialog
+          coproId={projet.copro.id}
+          mode={questionnaire.mode}
+          fichier={questionnaire.file}
+          onClose={() => setQuestionnaire(null)}
+        />
+      )}
       {docs.map((d) => (
         <div
           key={d.id}

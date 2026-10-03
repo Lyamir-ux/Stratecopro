@@ -468,6 +468,7 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
           onConfirm={(file, meta) =>
             upload.mutateAsync({ file, dossier: meta.dossier ?? depot.dossier, nameOriginal: meta.nameOriginal, type: meta.type })
           }
+          ecoPtz={{ coproId: c.id, peutValider: true }}
           onClose={() => setDepot(null)}
         />
       )}

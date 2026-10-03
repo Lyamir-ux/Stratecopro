@@ -23,6 +23,7 @@ import {
   type PlanDefinitifData,
 } from "@/lib/finance";
 import { readParams, useBareme, useChoixFinancementScenario, usePlansIndividuels, useScenarios } from "@/api/scenarios";
+import { EcoPtzIndividuelPanel } from "@/pages/EcoPtzIndividuel";
 import {
   estPlanEstimatif,
   groupesEstimatifs,
@@ -373,6 +374,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
             </div>
           </div>
         </div>
+        <EcoPtzIndividuelPanel coproId={c.id} />
         <SignaturesElectroniquesPanel coproId={c.id} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>

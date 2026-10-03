@@ -33,6 +33,8 @@ import {
 import { CGU_VERSION } from "@/lib/cguSignature";
 import { PIECES_SITUATION, type PieceAttendue } from "@/lib/piecesSituation";
 import { useAccepterCguDepot, useCguDepotPieces } from "@/api/signature";
+import { ouvrirDocumentSignature, useMesDocumentsEcoPtz } from "@/api/ecoPtzIndividuel";
+import { messageErreur } from "@/lib/erreurs";
 
 function fmtSize(bytes: number | null): string {
   if (bytes == null) return "";
@@ -300,7 +302,62 @@ export function Documents({ membership }: { membership: Membership }) {
         Les documents de la rénovation que votre AMO met à votre disposition. Vous pouvez les télécharger à tout
         moment.
       </p>
+      <DocumentsEcoPtz membership={membership} />
       <DocumentsProjet membership={membership} />
+    </div>
+  );
+}
+
+/**
+ * Éco-PTZ individuel (02/10/2026) : CERFA Annexe 3.1 et attestation des
+ * montants éligibles de chaque logement, à remettre à la banque. Visibles dès
+ * l'envoi en signature ; téléchargeables une fois signés par les entreprises,
+ * l'auditeur et le syndic. Rien ne s'affiche sans demande d'éco-PTZ individuel.
+ */
+export function DocumentsEcoPtz({ membership }: { membership: Membership }) {
+  const { data: docs } = useMesDocumentsEcoPtz(membership.coproprietaireId);
+  const [erreur, setErreur] = useState<string | null>(null);
+  if (!docs?.length) return null;
+  return (
+    <div className="card-xl" style={{ marginBottom: 18 }}>
+      <div className="cx-head">
+        <Icon name="fileCheck" size={20} style={{ color: "var(--accent)" }} />
+        <h2 style={{ fontSize: 19 }}>Votre éco-PTZ individuel</h2>
+      </div>
+      <div className="cx-body" style={{ paddingTop: 6, paddingBottom: 6 }}>
+        <p className="se-small" style={{ color: "var(--fg-muted)", margin: "4px 0 6px" }}>
+          Le formulaire CERFA et l'attestation des montants éligibles de votre logement, à joindre à votre demande
+          d'éco-prêt à taux zéro auprès de votre banque.
+        </p>
+        {docs.map((d) => (
+          <div key={d.id} className="doc-row">
+            <span className="d-ico"><Icon name={d.statut === "signe" ? "fileCheck" : "clock"} size={18} /></span>
+            <div style={{ minWidth: 0 }}>
+              <div className="d-name">{d.libelle}</div>
+              <div className="d-sub">
+                {d.statut === "signe"
+                  ? `Signé le ${fmtDate(d.scelle_le)}`
+                  : "En cours de signature par les entreprises, l'auditeur et le syndic"}
+              </div>
+            </div>
+            <span className="spacer"></span>
+            {d.statut === "signe" ? (
+              <button
+                className="icon-btn"
+                title="Télécharger le document signé"
+                onClick={() =>
+                  void ouvrirDocumentSignature(d.id, "signe").catch((e) => setErreur(messageErreur(e, "Téléchargement impossible.")))
+                }
+              >
+                <Icon name="download" size={18} />
+              </button>
+            ) : (
+              <Badge kind="blue">En signature</Badge>
+            )}
+          </div>
+        ))}
+        {erreur && <p className="se-small" style={{ color: "var(--color-error-700)" }}>{erreur}</p>}
+      </div>
     </div>
   );
 }

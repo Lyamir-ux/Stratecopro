@@ -78,6 +78,8 @@ export const TYPES_DOCUMENT: { id: string; label: string; dossier: string }[] = 
   { id: "attestation_rge_facture", label: "Attestation RGE à date de facture", dossier: "Marchés de travaux" },
   { id: "cerfa_ecoptz_emprunteur", label: "Formulaire éco-PTZ emprunteur", dossier: "Plans de financement" },
   { id: "cerfa_ecoptz_entreprise", label: "Formulaire éco-PTZ entreprise", dossier: "Plans de financement" },
+  // éco-PTZ individuel (02/10/2026) : attestation des montants éligibles d'un logement, signée par le syndic
+  { id: "attestation_ecoptz_individuel", label: "Attestation éco-PTZ individuel", dossier: "Plans de financement" },
   { id: "liste_participants_pret", label: "Liste des copropriétaires participant au prêt", dossier: "Plans de financement" },
   { id: "dossier_demande_aide", label: "Dossier de demande d'aide", dossier: "Plans de financement" },
   // Dossier CEE en 3 étapes (feedback Amir 13/09/2026)

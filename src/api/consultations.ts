@@ -21,6 +21,18 @@ export const CONSULT_TYPES: { id: Tables<"consultations">["type"]; label: string
   { id: "autre", label: "Autre intervenant", icon: "briefcase" },
 ];
 
+/**
+ * Métiers de la base prestataires : ceux des consultations, plus les entreprises
+ * de travaux RGE (0131, éco-PTZ individuel du 02/10/2026), saisies au dépôt
+ * d'un devis ou d'une DPGF. Une entreprise de travaux n'est jamais consultée.
+ */
+export const METIERS_PRESTATAIRES: { id: Tables<"prestataires">["types"][number]; label: string; icon: IconName }[] = [
+  ...CONSULT_TYPES,
+  { id: "travaux", label: "Entreprise de travaux", icon: "hammer" },
+];
+
+export const libelleMetier = (id: string): string => METIERS_PRESTATAIRES.find((m) => m.id === id)?.label ?? id;
+
 /** Prestations optionnelles proposées à la publication (cases à cocher).
  *  Uniquement pour une recherche de maîtrise d'œuvre - sans objet pour les autres métiers. */
 export const CONSULT_OPTIONS: { id: string; label: string }[] = [

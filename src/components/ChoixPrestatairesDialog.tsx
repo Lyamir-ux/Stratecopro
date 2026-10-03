@@ -8,13 +8,13 @@
 import { useMemo, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { Badge } from "@/components/ui";
-import { CONSULT_TYPES } from "@/api/consultations";
+import { libelleMetier as libelleMetierBase } from "@/api/consultations";
 import { usePrestataires } from "@/api/prestataires";
 import { couvreDepartement, resumeDepartements } from "@/lib/departements";
 import { filtrerEntreprises, motifNonAlertable } from "@/lib/prestataires";
 import type { Tables } from "@/lib/database.types";
 
-const libelleMetier = (t: string) => CONSULT_TYPES.find((c) => c.id === t)?.label ?? t;
+const libelleMetier = (t: string) => libelleMetierBase(t);
 const metiers = (types: readonly string[]) => types.map(libelleMetier).join(" · ");
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 

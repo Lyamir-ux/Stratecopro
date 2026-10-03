@@ -235,6 +235,7 @@ function MontageParcours({
           onConfirm={(file, meta) =>
             upload.mutateAsync({ docKey: depot.docKey, file, nameOriginal: meta.nameOriginal, type: meta.type })
           }
+          ecoPtz={{ coproId: c.id }}
           onClose={() => setDepot(null)}
         />
       )}

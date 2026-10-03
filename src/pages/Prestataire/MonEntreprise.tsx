@@ -14,7 +14,7 @@ import { DepartementsPicker, choixVersDepartements, departementsVersChoix } from
 import { fmtDate } from "@/lib/format";
 import { messageErreur } from "@/lib/erreurs";
 import { resumeDepartements } from "@/lib/departements";
-import { CONSULT_TYPES } from "@/api/consultations";
+import { CONSULT_TYPES, libelleMetier } from "@/api/consultations";
 import { emailValide, normaliserEmails } from "@/api/prestataires";
 import {
   ouvrirDocPresta,
@@ -97,7 +97,7 @@ function FichePanel({ presta }: { presta: Tables<"prestataires"> }) {
         <h3>Fiche de l'entreprise</h3>
         <span style={{ flex: 1 }}></span>
         <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
-          {presta.types.map((t) => CONSULT_TYPES.find((x) => x.id === t)?.label ?? t).join(" · ")}
+          {presta.types.map(libelleMetier).join(" · ")}
         </span>
       </div>
       <div className="p-body">

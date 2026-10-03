@@ -201,7 +201,6 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
   // saisie du mode d'un copropriétaire (le scénario partagé est requis)
   const [editId, setEditId] = useState<string | null>(null);
   const [draftType, setDraftType] = useState<TypeFinancement>("fonds");
-  const [draftDuree, setDraftDuree] = useState(15);
   const [saveError, setSaveError] = useState<string | null>(null);
   // Recherche d'un copropriétaire par son nom (feedback Amir du 15/09/2026) :
   // la liste en dessous ne garde que les noms qui correspondent.
@@ -462,21 +461,8 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                                     </option>
                                   ))}
                                 </select>
-                                {draftType === "individuel" ? (
-                                  <select
-                                    className="edit-inp"
-                                    value={draftDuree}
-                                    onChange={(e) => setDraftDuree(Number(e.target.value))}
-                                    style={{ maxWidth: 90 }}
-                                    title="Durée de l'éco-PTZ individuel"
-                                  >
-                                    {Array.from({ length: 18 }, (_, i) => i + 3).map((n) => (
-                                      <option key={n} value={n}>
-                                        {n} ans
-                                      </option>
-                                    ))}
-                                  </select>
-                                ) : draftType === "collectif" ? (
+                                {/* éco-PTZ individuel : plus de durée demandée (Amir, 02/10/2026), elle se fixe avec la banque */}
+                                {draftType === "collectif" ? (
                                   <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
                                     {(finConfig?.duree_annees ?? 15) + " ans"}
                                   </span>
@@ -495,12 +481,7 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                                       .mutateAsync({
                                         coproprietaireId: cp.id,
                                         type: draftType,
-                                        dureeAnnees:
-                                          draftType === "collectif"
-                                            ? (finConfig?.duree_annees ?? 15)
-                                            : draftType === "individuel"
-                                              ? draftDuree
-                                              : null,
+                                        dureeAnnees: draftType === "collectif" ? (finConfig?.duree_annees ?? 15) : null,
                                         lotIds: draftType === "individuel" ? (lotIdsByCp.get(cp.id) ?? []) : [],
                                         saisiPar: profile?.role === "amo" ? "amo" : "syndic",
                                       })
@@ -564,7 +545,6 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                                 onClick={() => {
                                   setEditId(cp.id);
                                   setDraftType(ch?.type ?? "fonds");
-                                  setDraftDuree(ch?.type === "individuel" ? (ch.duree_annees ?? 15) : 15);
                                   setSaveError(null);
                                 }}
                               >

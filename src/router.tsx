@@ -29,6 +29,8 @@ import FileRevue from "./pages/Ppt/FileRevue";
 import Revue from "./pages/Ppt/Revue";
 import SignaturePublique from "./pages/Signature";
 import SignatureFichePublique from "./pages/SignatureFiche";
+import SignatureDocumentsPublique from "./pages/SignatureDocuments";
+import EcoPtzIndividuelPage from "./pages/EcoPtzIndividuel";
 import CguSignature from "./pages/CguSignature";
 
 export const router = createBrowserRouter([
@@ -40,6 +42,8 @@ export const router = createBrowserRouter([
   // pages publiques : cosignataires sans compte (lien tokenisé) et CGU
   { path: "/signature/:token", element: <SignaturePublique /> },
   { path: "/signature-fiche/:token", element: <SignatureFichePublique /> },
+  // éco-PTZ individuel : entreprises, auditeur et syndic signent CERFA et attestations
+  { path: "/signature-documents/:token", element: <SignatureDocumentsPublique /> },
   { path: "/cgu-signature", element: <CguSignature /> },
   {
     element: <RequireAuth />,
@@ -53,6 +57,7 @@ export const router = createBrowserRouter([
               { path: "/", element: <Dashboard /> },
               { path: "/copros/:id/ingenierie/:scenarioId?", element: <Ingenierie /> },
               { path: "/copros/:id/plan-definitif/:planId", element: <PlanDefinitifPage /> },
+              { path: "/copros/:id/ecoptz-individuel", element: <EcoPtzIndividuelPage /> },
               { path: "/copros/:id/plan-estimatif/:groupeId", element: <PlanEstimatifPage /> },
               { path: "/copros/:id/:tab?", element: <CoproDetail /> },
               { path: "/taches", element: <MesTaches /> },
