@@ -111,15 +111,32 @@ export function sommesPortefeuille(dossiers: Pick<DossierHonoraires, "jalons">[]
 }
 
 // Idée d'Amir 29/09/2026 : la P1a, quand elle a un montant, ne compte pas
-// dans le chiffre d'affaires du chef de projet (hachurée sur la page Facturation).
-export const JALON_HORS_CA_CHEF: CodeJalon = "P1a";
+// dans le chiffre d'affaires du chef de projet (hachurée sur la page
+// Facturation) ; la P1b non plus depuis la remarque d'Amir du 03/10/2026.
+export const JALONS_HORS_CA_CHEF: readonly CodeJalon[] = ["P1a", "P1b"];
 
-/** Chiffre d'affaires d'un dossier pour son chef de projet (tous les jalons sauf la P1a) et montant de la P1a mise à part. */
+const horsCaChef = (j: JalonHonoraires) => JALONS_HORS_CA_CHEF.includes(j.code);
+
+/** Chiffre d'affaires d'un dossier pour son chef de projet (tous les jalons sauf P1a et P1b) et montant de ces jalons mis à part. */
 export function caChefProjet(d: Pick<DossierHonoraires, "jalons">): { ca: SommesHonoraires; horsCa: number } {
   return {
-    ca: sommesDossier({ jalons: d.jalons.filter((j) => j.code !== JALON_HORS_CA_CHEF) }),
-    horsCa: d.jalons.reduce((x, j) => x + (j.code === JALON_HORS_CA_CHEF ? montant(j) : 0), 0),
+    ca: sommesDossier({ jalons: d.jalons.filter((j) => !horsCaChef(j)) }),
+    horsCa: d.jalons.reduce((x, j) => x + (horsCaChef(j) ? montant(j) : 0), 0),
   };
+}
+
+const nomComparable = (v: string) =>
+  v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+/**
+ * Le dossier est-il au nom de ce collaborateur ? Le chef de projet est saisi
+ * en clair sur la fiche (« Radia ») : comparé au nom du profil ou à son
+ * prénom, casse et accents ignorés.
+ */
+export function chefProjetEst(chefProjet: string | null | undefined, nomProfil: string | null | undefined): boolean {
+  const chef = nomComparable(chefProjet ?? "");
+  const nom = nomComparable(nomProfil ?? "");
+  return !!chef && !!nom && (chef === nom || chef === nom.split(" ")[0]);
 }
 
 /** Complète les lignes lues en base pour toujours présenter les 8 jalons dans l'ordre. */

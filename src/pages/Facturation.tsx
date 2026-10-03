@@ -3,9 +3,11 @@
 // Suivi des honoraires AMO par jalon, repris du classeur Notion « AMO COPRO »
 // pour les copropriétés présentes dans le logiciel (0111). Visuels retenus sur
 // maquette : synthèse du portefeuille, frise des jalons dossier par dossier,
-// paiements à relancer et chiffre d'affaires par chef de projet, pour tous les
-// AMO (idée d'Amir 29/09/2026 : d'abord réservé au dirigeant ; la P1a en est
-// retirée, hachurée en tête de barre). Le bloc « Honoraires » de l'onglet Projet reprend la même
+// paiements à relancer et chiffre d'affaires par chef de projet (la P1a et la
+// P1b en sont retirées, hachurées en tête de barre). Remarque d'Amir du
+// 03/10/2026 : la synthèse du portefeuille et le chiffre d'affaires de tous
+// les chefs de projet sont réservés au dirigeant, chaque chef de projet ne
+// voit que le sien. Le bloc « Honoraires » de l'onglet Projet reprend la même
 // lecture pour un dossier.
 // Facturation directe (0115, demande d'Amir du 28/09/2026) : les bulles de la
 // frise sont cliquables (grise = brouillon de facture, orange = paiement pour
@@ -43,6 +45,7 @@ import {
   LIBELLE_ETAT,
   TRANCHES_ANCIENNETE,
   caChefProjet,
+  chefProjetEst,
   enSommeil,
   graduations,
   jalonsEnAttente,
@@ -89,6 +92,8 @@ interface Ligne {
 const NON_ATTRIBUE = "Non attribué";
 
 export default function Facturation() {
+  const { profile } = useAuth();
+  const dirigeant = !!profile?.dirigeant;
   const { data: copros, isLoading: l1 } = useCopros();
   const { data: honoraires, isLoading: l2, error } = useHonoraires();
 
@@ -140,11 +145,15 @@ export default function Facturation() {
         </div>
       ) : (
         <div className="fact-page">
-          <Synthese lignes={lignes} />
+          {dirigeant && <Synthese lignes={lignes} />}
           <Frise lignes={lignes} />
           <Journal lignes={lignes} />
           <Relances lignes={lignes} />
-          <ParChefProjet lignes={lignes} />
+          {dirigeant ? (
+            <ParChefProjet lignes={lignes} />
+          ) : (
+            <ParChefProjet lignes={lignes.filter((l) => chefProjetEst(l.copro.chef_projet, profile?.full_name))} perso />
+          )}
         </div>
       )}
     </div>
@@ -739,12 +748,13 @@ function Relances({ lignes }: { lignes: Ligne[] }) {
 }
 
 // ---------- F. Chiffre d'affaires par chef de projet ----------
-// Idée d'Amir 29/09/2026 : visible de tous les AMO (réservé au dirigeant
-// jusque-là). La P1a, quand elle a un montant, sort du chiffre d'affaires du
-// chef de projet : elle reste en tête de barre, hachurée, et n'entre ni dans
-// le pourcentage encaissé ni dans le reste à facturer.
+// Idée d'Amir 29/09/2026 : la P1a, quand elle a un montant, sort du chiffre
+// d'affaires du chef de projet ; la P1b aussi depuis le 03/10/2026. Elles
+// restent en tête de barre, hachurées, et n'entrent ni dans le pourcentage
+// encaissé ni dans le reste à facturer. Tous les chefs de projet pour le
+// dirigeant ; « perso » = le seul chef de projet connecté (ses dossiers).
 
-function ParChefProjet({ lignes }: { lignes: Ligne[] }) {
+function ParChefProjet({ lignes, perso = false }: { lignes: Ligne[]; perso?: boolean }) {
   const rows = useMemo(() => {
     const m = new Map<string, { chef: string; n: number; horsCa: number; ca: SommesHonoraires }>();
     for (const l of lignes) {
@@ -768,67 +778,73 @@ function ParChefProjet({ lignes }: { lignes: Ligne[] }) {
   return (
     <section className="panel">
       <div className="p-head">
-        <h3>Chiffre d'affaires par chef de projet</h3>
-        <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Montants HT, hors P1a</span>
+        <h3>{perso ? "Votre chiffre d'affaires" : "Chiffre d'affaires par chef de projet"}</h3>
+        <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Montants HT, hors P1a et P1b</span>
         <span style={{ flex: 1 }}></span>
         <div className="fact-legende">
-          <span><i className="fact-sw hors-ca"></i>P1a, hors chiffre d'affaires</span>
+          <span><i className="fact-sw hors-ca"></i>P1a et P1b, hors chiffre d'affaires</span>
         </div>
       </div>
       <div className="p-body">
-        <div className="fact-cpj">
-          {rows.map((r) => {
-            const total = r.horsCa + r.ca.contrat;
-            return (
-              <div key={r.chef} className="fact-cpj-ligne">
-                <div className="cpj-qui">
-                  {r.chef}
-                  <small>{plur(r.n, "dossier")} · {fmtKEur(r.ca.contrat)}</small>
+        {rows.length === 0 ? (
+          <p className="se-small" style={{ margin: 0 }}>
+            Aucun dossier à votre nom : le chiffre d'affaires suit le champ « Chef de projet » de l'onglet Données des dossiers.
+          </p>
+        ) : (
+          <div className="fact-cpj">
+            {rows.map((r) => {
+              const total = r.horsCa + r.ca.contrat;
+              return (
+                <div key={r.chef} className="fact-cpj-ligne">
+                  <div className="cpj-qui">
+                    {r.chef}
+                    <small>{plur(r.n, "dossier")} · {fmtKEur(r.ca.contrat)}</small>
+                  </div>
+                  <div className="cpj-piste">
+                    {ticks.map((v) => (
+                      <i key={v} className="grille" style={{ left: `${(v / max) * 100}%` }}></i>
+                    ))}
+                    {total > 0 && (
+                      <div className="cpj-barre" style={{ width: `${(total / max) * 100}%` }}>
+                        {r.horsCa > 0 && (
+                          <span
+                            className="cpj-hors-ca"
+                            style={{ width: `${(r.horsCa / total) * 100}%` }}
+                            title={`P1a et P1b : ${fmtEuro(r.horsCa)} HT, hors chiffre d'affaires`}
+                          ></span>
+                        )}
+                        {r.ca.contrat > 0 && (
+                          <div style={{ width: `${(r.ca.contrat / total) * 100}%` }}>
+                            <JaugeHonoraires s={r.ca} hauteur={18} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="cpj-tot">
+                    encaissé <b>{pourcent(r.ca.encaisse, r.ca.contrat)} %</b>
+                    <br />
+                    <b>{fmtKEur(r.ca.resteAFacturer)}</b> à facturer
+                  </div>
                 </div>
-                <div className="cpj-piste">
-                  {ticks.map((v) => (
-                    <i key={v} className="grille" style={{ left: `${(v / max) * 100}%` }}></i>
-                  ))}
-                  {total > 0 && (
-                    <div className="cpj-barre" style={{ width: `${(total / max) * 100}%` }}>
-                      {r.horsCa > 0 && (
-                        <span
-                          className="cpj-hors-ca"
-                          style={{ width: `${(r.horsCa / total) * 100}%` }}
-                          title={`P1a : ${fmtEuro(r.horsCa)} HT, hors chiffre d'affaires`}
-                        ></span>
-                      )}
-                      {r.ca.contrat > 0 && (
-                        <div style={{ width: `${(r.ca.contrat / total) * 100}%` }}>
-                          <JaugeHonoraires s={r.ca} hauteur={18} />
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="cpj-tot">
-                  encaissé <b>{pourcent(r.ca.encaisse, r.ca.contrat)} %</b>
-                  <br />
-                  <b>{fmtKEur(r.ca.resteAFacturer)}</b> à facturer
-                </div>
+              );
+            })}
+            <div className="fact-cpj-ligne axe">
+              <div></div>
+              <div className="fact-axe" style={{ marginTop: 0 }}>
+                {ticks.map((v, i) => (
+                  <span key={v} className={v === 0 ? "premier" : i === ticks.length - 1 ? "dernier" : ""} style={{ left: `${(v / max) * 100}%` }}>
+                    {axe(v)}
+                  </span>
+                ))}
               </div>
-            );
-          })}
-          <div className="fact-cpj-ligne axe">
-            <div></div>
-            <div className="fact-axe" style={{ marginTop: 0 }}>
-              {ticks.map((v, i) => (
-                <span key={v} className={v === 0 ? "premier" : i === ticks.length - 1 ? "dernier" : ""} style={{ left: `${(v / max) * 100}%` }}>
-                  {axe(v)}
-                </span>
-              ))}
+              <div></div>
             </div>
-            <div></div>
           </div>
-        </div>
+        )}
         {totalHorsCa > 0 && (
           <p className="fact-note">
-            En hachuré, la P1a des dossiers ({fmtKEur(totalHorsCa)} HT au total) : retirée du chiffre d'affaires, du
+            En hachuré, la P1a et la P1b des dossiers ({fmtKEur(totalHorsCa)} HT au total) : retirées du chiffre d'affaires, du
             pourcentage encaissé et du reste à facturer.
           </p>
         )}

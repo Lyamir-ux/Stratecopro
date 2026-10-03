@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   caChefProjet,
+  chefProjetEst,
   cocheSansMontant,
   enSommeil,
   graduations,
@@ -72,15 +73,28 @@ describe("facturation des jalons", () => {
     expect(cocheSansMontant(baldner.jalons[5])).toBe(false);
   });
 
-  it("retire la P1a du chiffre d'affaires du chef de projet", () => {
+  it("retire la P1a et la P1b du chiffre d'affaires du chef de projet", () => {
     const { ca, horsCa } = caChefProjet(tassigny);
-    expect(horsCa).toBe(6580);
-    expect(ca.contrat).toBeCloseTo(47723.84 - 6580, 2);
-    expect(ca.encaisse).toBe(33820 - 6580);
+    expect(horsCa).toBe(6580 + 9870);
+    expect(ca.contrat).toBeCloseTo(47723.84 - 6580 - 9870, 2);
+    expect(ca.encaisse).toBe(33820 - 6580 - 9870);
     expect(ca.enAttente).toBeCloseTo(7701.92, 2);
-    // sans montant de P1a, rien n'est retiré
-    const sansP1a = caChefProjet({ jalons: jalonsOrdonnes([{ jalon: "P1b", montant_ht: 5000, etat: "encaisse" }]) });
-    expect(sansP1a).toEqual({ ca: { contrat: 5000, encaisse: 5000, enAttente: 0, resteAFacturer: 0 }, horsCa: 0 });
+    expect(ca.resteAFacturer).toBeCloseTo(6201.92, 2);
+    // sans montant de P1a ni de P1b, rien n'est retiré
+    const sansP1 = caChefProjet({ jalons: jalonsOrdonnes([{ jalon: "P1c", montant_ht: 5000, etat: "encaisse" }]) });
+    expect(sansP1).toEqual({ ca: { contrat: 5000, encaisse: 5000, enAttente: 0, resteAFacturer: 0 }, horsCa: 0 });
+  });
+
+  it("reconnaît les dossiers d'un chef de projet saisi en clair", () => {
+    expect(chefProjetEst("Radia", "Radia")).toBe(true);
+    expect(chefProjetEst(" radia ", "RADIA")).toBe(true);
+    expect(chefProjetEst("Thea", "Théa")).toBe(true);
+    expect(chefProjetEst("Cyrielle", "Cyrielle MILEKIC")).toBe(true);
+    expect(chefProjetEst("Cyrielle Milekic", "Cyrielle MILEKIC")).toBe(true);
+    expect(chefProjetEst("Kawtar", "Radia")).toBe(false);
+    expect(chefProjetEst(null, "Radia")).toBe(false);
+    expect(chefProjetEst("", "")).toBe(false);
+    expect(chefProjetEst("Radia", undefined)).toBe(false);
   });
 
   it("additionne le portefeuille", () => {
