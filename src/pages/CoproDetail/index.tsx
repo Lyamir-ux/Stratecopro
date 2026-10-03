@@ -102,6 +102,7 @@ export default function CoproDetail() {
 
   if (isLoading || !c) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
   const s = c.stats;
+  const gestionnaire = c.gestionnaire_nom?.trim() ?? "";
   const moe = c.maitre_oeuvre?.trim() ?? "";
   const ficheMoe = moe
     ? ((prestataires ?? []).find((p) => normaliserNomOrganisation(p.raison_sociale) === normaliserNomOrganisation(moe)) ?? null)
@@ -227,10 +228,19 @@ export default function CoproDetail() {
                 "Adresse à compléter (onglet Données)"}
             </div>
             <div className="dh-equipe">
-              {c.syndic_name && (
-                <span title={c.gestionnaire_nom ? `Gestionnaire : ${c.gestionnaire_nom}` : undefined}>
+              {/* Nom et prénom du gestionnaire à côté du syndic (feedback d'Amir du 03/10/2026) */}
+              {(c.syndic_name?.trim() || gestionnaire) && (
+                <span title={gestionnaire && c.gestionnaire_email ? `Gestionnaire : ${gestionnaire} (${c.gestionnaire_email})` : undefined}>
                   <Icon name="briefcase" size={14} />
-                  Syndic <b>{c.syndic_name}</b>
+                  Syndic {c.syndic_name?.trim() && <b>{c.syndic_name.trim()}</b>}
+                  {c.syndic_name?.trim() && gestionnaire && " - "}
+                  {gestionnaire ? (
+                    <b>{gestionnaire}</b>
+                  ) : (
+                    <Link to={`/copros/${c.id}/donnees`} className="dh-a-completer">
+                      gestionnaire à renseigner
+                    </Link>
+                  )}
                 </span>
               )}
               <span>
