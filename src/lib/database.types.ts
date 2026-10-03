@@ -1648,9 +1648,12 @@ export type Database = {
           payee_par: string | null
           pdf_path: string | null
           reference: string
+          reference_client: string | null
+          reference_client_type: string
           sous_reference: string | null
           statut: string
           test: boolean
+          texte_libre: string | null
           total_ht: number
           total_ttc: number
           total_tva: number
@@ -1684,9 +1687,12 @@ export type Database = {
           payee_par?: string | null
           pdf_path?: string | null
           reference: string
+          reference_client?: string | null
+          reference_client_type?: string
           sous_reference?: string | null
           statut?: string
           test: boolean
+          texte_libre?: string | null
           total_ht: number
           total_ttc: number
           total_tva: number
@@ -1720,9 +1726,12 @@ export type Database = {
           payee_par?: string | null
           pdf_path?: string | null
           reference?: string
+          reference_client?: string | null
+          reference_client_type?: string
           sous_reference?: string | null
           statut?: string
           test?: boolean
+          texte_libre?: string | null
           total_ht?: number
           total_ttc?: number
           total_tva?: number
@@ -5044,7 +5053,13 @@ export type Database = {
         Returns: string
       }
       facture_modifier_brouillon: {
-        Args: { p_client_adresse: string; p_id: string }
+        Args: {
+          p_client_adresse: string
+          p_id: string
+          p_reference_client?: string
+          p_reference_client_type?: string
+          p_texte_libre?: string
+        }
         Returns: undefined
       }
       facture_supprimer_brouillon: { Args: { p_id: string }; Returns: undefined }

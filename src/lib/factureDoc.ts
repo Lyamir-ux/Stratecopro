@@ -14,6 +14,7 @@ export type TypePiece = "facture" | "avoir";
 export type NaturePiece = "amo" | "cee";
 export type StatutPiece = "brouillon" | "emise";
 export type EnvoiStatut = "envoye" | "erreur" | "simule" | "sans_email";
+export type TypeReferenceClient = "reference" | "ordre_service";
 
 export interface LigneFacture {
   code: string;
@@ -48,6 +49,11 @@ export interface PieceFacture {
   destinataire_nom: string | null;
   reference: string;
   sous_reference: string | null;
+  /** Numéro de référence ou d'ordre de service donné par le client (0135). */
+  reference_client: string | null;
+  reference_client_type: TypeReferenceClient;
+  /** Texte libre imprimé sous les articles de vente (0135). */
+  texte_libre: string | null;
   lignes: LigneFacture[];
   total_ht: number;
   total_tva: number;
@@ -214,6 +220,22 @@ export function piecesDuJalon(pieces: PieceFacture[], coproId: string, jalon: st
     ? (duJalon.find((p) => p.type === "avoir" && p.statut === "brouillon" && p.facture_origine_id === facture.id) ?? null)
     : null;
   return { brouillon, facture, avoirBrouillon };
+}
+
+// ---------- numéro du client et texte libre (0135) ----------
+
+export const LIBELLE_REFERENCE_CLIENT: Record<TypeReferenceClient, string> = {
+  reference: "N° de référence",
+  ordre_service: "N° d'ordre de service",
+};
+
+export const LONGUEUR_REFERENCE_CLIENT = 80;
+export const LONGUEUR_TEXTE_LIBRE = 600;
+
+/** « N° d'ordre de service : OS-2026-045 », imprimé sous la référence ; null sans numéro. */
+export function ligneReferenceClient(p: Pick<PieceFacture, "reference_client" | "reference_client_type">): string | null {
+  const ref = p.reference_client?.trim();
+  return ref ? `${LIBELLE_REFERENCE_CLIENT[p.reference_client_type] ?? LIBELLE_REFERENCE_CLIENT.reference} : ${ref}` : null;
 }
 
 /** Lignes du cartouche client : « P/A <SYNDIC> », l'adresse, le pays. */

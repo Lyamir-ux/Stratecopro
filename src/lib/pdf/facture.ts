@@ -7,6 +7,10 @@
 // brouillon (mention BROUILLON, sans numéro) et le PDF définitif, classé
 // dans les fichiers de la copropriété et joint à l'e-mail, sortent du même
 // code. En mode test, la pièce porte « Document de test - sans valeur ».
+//
+// Saisies du brouillon (0135, demande d'Amir du 03/10/2026) : le numéro de
+// référence ou d'ordre de service du client, sous la ligne « Réf. », et le
+// texte libre, sous les articles de vente.
 import { PDFDocument, StandardFonts, degrees, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from "pdf-lib";
 import {
   EMETTEUR,
@@ -15,6 +19,7 @@ import {
   dateFr,
   euros,
   libelleType,
+  ligneReferenceClient,
   lignesClient,
   montantEnLettres,
   quantite,
@@ -110,6 +115,81 @@ class Page {
   }
 }
 
+/** Texte saisi à la main : un caractère que Helvetica (WinAnsi) ne sait pas écrire devient « ? » au lieu de faire échouer le PDF. */
+function encodable(font: PDFFont, s: string): string {
+  return Array.from(propre(s).replace(/\t/g, " "))
+    .map((c) => {
+      if (c === "\n") return c;
+      try {
+        font.widthOfTextAtSize(c, 9);
+        return c;
+      } catch {
+        return "?";
+      }
+    })
+    .join("");
+}
+
+/** Texte coupé à la largeur : retours à la ligne de la saisie gardés, mot trop long coupé. */
+export function couperTexte(texte: string, mesure: (s: string) => number, largeur: number): string[] {
+  const lignes: string[] = [];
+  for (const paragraphe of texte.replace(/\r/g, "").split("\n")) {
+    let ligne = "";
+    for (const brut of paragraphe.split(/ +/).filter(Boolean)) {
+      let mot = brut;
+      // mot plus large que la ligne : coupé à la lettre
+      while (mesure(mot) > largeur && mot.length > 1) {
+        if (ligne) {
+          lignes.push(ligne);
+          ligne = "";
+        }
+        let n = mot.length - 1;
+        while (n > 1 && mesure(mot.slice(0, n)) > largeur) n--;
+        lignes.push(mot.slice(0, n));
+        mot = mot.slice(n);
+      }
+      const essai = ligne ? `${ligne} ${mot}` : mot;
+      if (ligne && mesure(essai) > largeur) {
+        lignes.push(ligne);
+        ligne = mot;
+      } else ligne = essai;
+    }
+    lignes.push(ligne);
+  }
+  // pas de ligne vide en tête ni en fin
+  while (lignes.length && !lignes[0]) lignes.shift();
+  while (lignes.length && !lignes[lignes.length - 1]) lignes.pop();
+  return lignes;
+}
+
+/**
+ * Texte libre sous les articles : 9 pt, réduit jusqu'à 6,5 pt pour tenir dans
+ * la hauteur disponible (au-dessus du détail de la TVA) ; au-delà, coupé
+ * avec « ... ». La saisie étant limitée à 600 caractères, la coupure ne
+ * survient qu'avec beaucoup de retours à la ligne.
+ */
+export function miseEnPageTexteLibre(
+  texte: string,
+  mesure: (s: string, taille: number) => number,
+  largeur: number,
+  hauteur: number
+): { lignes: string[]; taille: number; interligne: number; coupe: boolean } {
+  let essai = { lignes: [] as string[], taille: 9, interligne: 11.5, coupe: false };
+  for (const taille of [9, 8.5, 8, 7.5, 7, 6.5]) {
+    const interligne = Math.round(taille * 1.28 * 100) / 100;
+    const lignes = couperTexte(texte, (s) => mesure(s, taille), largeur);
+    const max = Math.max(1, Math.floor(hauteur / interligne) + 1);
+    essai = { lignes, taille, interligne, coupe: false };
+    if (lignes.length <= max) return essai;
+    if (taille === 6.5) {
+      const gardees = lignes.slice(0, max);
+      gardees[max - 1] = `${gardees[max - 1].replace(/\s*\S{0,3}$/, "")} ...`;
+      return { lignes: gardees, taille, interligne, coupe: true };
+    }
+  }
+  return essai;
+}
+
 /** Taille de police qui fait tenir le texte dans la largeur, sans passer sous le minimum. */
 function tailleQuiTient(font: PDFFont, s: string, taille: number, largeur: number, min = 7): number {
   let t = taille;
@@ -182,10 +262,21 @@ export async function genererFacturePdf(p: PieceFacture, options: OptionsFacture
     f.texte(l, 382.65, 698.36 - i * 13.5, tailleQuiTient(font, l, 9, 192), manquante ? ROUGE : GRIS);
   });
 
-  // références ; sans seconde ligne (factures CEE), le tableau remonte d'autant
+  // références : « Réf. », le numéro du client juste dessous (0135), puis la
+  // seconde ligne ; le tableau remonte ou descend d'autant
   f.texte(`Réf. : ${p.reference}`, 28.35, 575.7, tailleQuiTient(font, `Réf. : ${p.reference}`, 9, 548));
-  if (p.sous_reference) f.texte(p.sous_reference, 28.35, 553.05, tailleQuiTient(font, p.sous_reference, 9, 548));
-  const haut = p.sous_reference ? 539.96 : 562.61;
+  let yRef = 575.7;
+  const refClient = ligneReferenceClient(p);
+  if (refClient) {
+    const t = encodable(font, refClient);
+    yRef -= 13.5;
+    f.texte(t, 28.35, yRef, tailleQuiTient(font, t, 9, 548));
+  }
+  if (p.sous_reference) {
+    yRef -= 22.65;
+    f.texte(p.sous_reference, 28.35, yRef, tailleQuiTient(font, p.sous_reference, 9, 548));
+  }
+  const haut = yRef - 13.09;
 
   // tableau des lignes
   f.rect(29.1, haut - 22.68, 579.53, haut, GRIS_TETE);
@@ -211,7 +302,26 @@ export async function genererFacturePdf(p: PieceFacture, options: OptionsFacture
     }
     y = derniere - 15;
   }
-  f.texte(MENTION_TYPE_VENTE, 28.35, derniere - 30.04, 6);
+
+  // texte libre sous les articles (0135), au-dessus du séparateur beige
+  let yMention = derniere - 30.04;
+  const texteLibre = p.texte_libre?.trim() ? encodable(font, p.texte_libre.trim()) : "";
+  if (texteLibre) {
+    const premiere = derniere - 22;
+    const { lignes, taille, interligne } = miseEnPageTexteLibre(
+      texteLibre,
+      (s, t) => font.widthOfTextAtSize(s, t),
+      544,
+      premiere - 367
+    );
+    let yt = premiere;
+    for (const l of lignes) {
+      if (l) f.texte(l, 34.35, yt, taille);
+      yt -= interligne;
+    }
+    yMention = yt + interligne - 15;
+  }
+  f.texte(MENTION_TYPE_VENTE, 28.35, yMention, 6);
 
   // séparateur beige
   f.rect(28.35, 345.97, 581.1, 346.72, BEIGE);

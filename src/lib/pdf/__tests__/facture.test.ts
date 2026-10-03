@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { PDFDocument } from "pdf-lib";
-import { genererFacturePdf, type ImagesFacture } from "../facture";
+import { couperTexte, genererFacturePdf, miseEnPageTexteLibre, type ImagesFacture } from "../facture";
 import {
   avoirDe,
   dateFr,
   etatPiece,
   euros,
+  ligneReferenceClient,
   lignesClient,
   montantEnLettres,
   nombreEnLettres,
@@ -44,6 +45,9 @@ const mariano: PieceFacture = {
   destinataire_nom: null,
   reference: "SDC 3 RUE MARIANO P1b",
   sous_reference: "SDC 3 RUE MARIANO, 3 rue Mariano, 67100 Strasbourg p/a IMMIUM",
+  reference_client: null,
+  reference_client_type: "reference",
+  texte_libre: null,
   lignes: [{ code: "ART00000006", libelle: "Convention d'AMO", detail: null, quantite: 1, pu_ht: 1199.97, montant_ht: 1199.97, taux_tva: 20 }],
   total_ht: 1199.97,
   total_tva: 239.99,
@@ -137,6 +141,40 @@ describe("formats du modèle", () => {
   });
 });
 
+describe("numéro du client et texte libre (0135)", () => {
+  it("libelle le numéro selon son type, rien sans numéro", () => {
+    expect(ligneReferenceClient({ reference_client: " OS-2026-045 ", reference_client_type: "ordre_service" })).toBe(
+      "N° d'ordre de service : OS-2026-045"
+    );
+    expect(ligneReferenceClient({ reference_client: "BC 1234", reference_client_type: "reference" })).toBe("N° de référence : BC 1234");
+    expect(ligneReferenceClient({ reference_client: "  ", reference_client_type: "reference" })).toBeNull();
+    expect(ligneReferenceClient({ reference_client: null, reference_client_type: "ordre_service" })).toBeNull();
+  });
+
+  // une unité par caractère
+  const mesure = (s: string) => s.length;
+  it("coupe aux mots, garde les retours à la ligne, coupe un mot trop long", () => {
+    expect(couperTexte("un deux trois quatre", mesure, 9)).toEqual(["un deux", "trois", "quatre"]);
+    expect(couperTexte("Ligne 1\nLigne 2\r\n\nFin", mesure, 20)).toEqual(["Ligne 1", "Ligne 2", "", "Fin"]);
+    expect(couperTexte("ab abcdefghij", mesure, 4)).toEqual(["ab", "abcd", "efgh", "ij"]);
+    expect(couperTexte("\n\n  texte  \n\n", mesure, 20)).toEqual(["texte"]);
+  });
+  it("réduit la police pour tenir dans la hauteur, puis coupe avec « ... »", () => {
+    const m = (s: string, t: number) => s.length * t;
+    // 3 lignes à 9 pt (interligne 11,52) : 2 interlignes = 23,04
+    expect(miseEnPageTexteLibre("a\nb\nc", m, 100, 23.04)).toMatchObject({ taille: 9, lignes: ["a", "b", "c"], coupe: false });
+    // trop haut à 9 pt : la police descend
+    const reduit = miseEnPageTexteLibre("a\nb\nc", m, 100, 20);
+    expect(reduit.taille).toBeLessThan(9);
+    expect(reduit.coupe).toBe(false);
+    // même à 6,5 pt, 20 lignes ne tiennent pas dans 20 pt : coupé
+    const coupe = miseEnPageTexteLibre(Array.from({ length: 20 }, (_, i) => `ligne ${i}`).join("\n"), m, 1000, 20);
+    expect(coupe).toMatchObject({ taille: 6.5, coupe: true });
+    expect(coupe.lignes).toHaveLength(3);
+    expect(coupe.lignes[2].endsWith(" ...")).toBe(true);
+  });
+});
+
 describe("état des pièces d'un jalon", () => {
   const brouillon: PieceFacture = { ...mariano, id: "b1", statut: "brouillon", numero: null, jalon: "P1c" };
   const avoir: PieceFacture = { ...mariano, id: "a1", type: "avoir", numero: "AVR00000073", facture_origine_id: "f1" };
@@ -178,6 +216,48 @@ describe("PDF de la facture", () => {
         { origine: { numero: "FAC00000765", date_emission: "2026-09-25" } },
       ],
       ["test", { ...mariano, test: true, numero: "TEST-FAC-0001" }, {}],
+      [
+        "brouillon-ordre-service-texte-libre",
+        {
+          ...mariano,
+          statut: "brouillon",
+          numero: null,
+          date_emission: null,
+          date_echeance: null,
+          reference_client: "OS-2026-045",
+          reference_client_type: "ordre_service",
+          texte_libre:
+            "Mission d'assistance à maîtrise d'ouvrage - phase P1b : audit énergétique et scénarios présentés en assemblée générale du 12/09/2026.\nConformément à l'ordre de service du syndic.",
+        },
+        {},
+      ],
+      [
+        "cee-reference-texte-long",
+        {
+          ...tuileries,
+          reference_client: "Commande Hellio n° 2026/0902-01/TUILERIES-0001",
+          texte_libre: Array.from({ length: 14 }, (_, i) => `Ligne ${i + 1} du texte libre → ✓ 🙂`).join("\n"),
+        },
+        {},
+      ],
+      [
+        "avoir-avec-reference",
+        {
+          ...mariano,
+          type: "avoir",
+          numero: "AVR00000074",
+          date_echeance: null,
+          facture_origine_id: "f1",
+          reference: "Avoir sur la facture n° FAC00000765 du 25/09/2026",
+          sous_reference: "SDC 3 RUE MARIANO P1b",
+          reference_client: "BC 1234",
+          lignes: [{ ...mariano.lignes[0], pu_ht: -1199.97, montant_ht: -1199.97 }],
+          total_ht: -1199.97,
+          total_tva: -239.99,
+          total_ttc: -1439.96,
+        },
+        { origine: { numero: "FAC00000765", date_emission: "2026-09-25" } },
+      ],
     ];
     for (const [nom, piece, opts] of cas) {
       const bytes = await genererFacturePdf(piece, { ...opts, images });

@@ -4,9 +4,11 @@
 //
 // Un clic sur un jalon ouvre la bonne fenêtre :
 //   - à facturer : confirmation (contre le mauvais clic) puis brouillon ;
-//   - brouillon : aperçu PDF à vérifier, adresse du syndic, « Valider et
-//     envoyer » (numéro, PDF classé dans les fichiers, e-mail au
-//     gestionnaire ou à Hellio, chef de projet et dirigeant en copie) ;
+//   - brouillon : aperçu PDF à vérifier, adresse du syndic, numéro de
+//     référence ou d'ordre de service et texte libre sous les articles
+//     (0135), « Valider et envoyer » (numéro, PDF classé dans les fichiers,
+//     e-mail au gestionnaire ou à Hellio, chef de projet et dirigeant en
+//     copie) ;
 //   - facturé : pour le dirigeant, « Paiement reçu » (la bulle passe au vert),
 //     pour les autres, la facture ;
 //   - émise : PDF, avoir, reprise d'un envoi interrompu.
@@ -34,6 +36,9 @@ import { messageErreur } from "@/lib/erreurs";
 import { libelleJalon, type JalonHonoraires } from "@/lib/facturation";
 import {
   LIBELLE_ETAT_PIECE,
+  LIBELLE_REFERENCE_CLIENT,
+  LONGUEUR_REFERENCE_CLIENT,
+  LONGUEUR_TEXTE_LIBRE,
   avoirDe,
   dateFr,
   etatPiece,
@@ -42,6 +47,7 @@ import {
   piecesDuJalon,
   type EtatPiece,
   type PieceFacture,
+  type TypeReferenceClient,
 } from "@/lib/factureDoc";
 
 export interface CoproFacturation {
@@ -194,7 +200,9 @@ function ConfirmerFacturation({
 function useApercu(piece: PieceFacture | null, origine: PieceFacture | null) {
   const [url, setUrl] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
-  const cle = piece ? `${piece.id}|${piece.statut}|${piece.client_adresse}|${piece.pdf_path}|${piece.total_ht}` : "";
+  const cle = piece
+    ? [piece.id, piece.statut, piece.client_adresse, piece.reference_client, piece.reference_client_type, piece.texte_libre, piece.pdf_path, piece.total_ht].join("|")
+    : "";
   useEffect(() => {
     if (!piece) return;
     let annule = false;
@@ -281,6 +289,12 @@ function FenetrePiece({
             <dd>{libelleJalon(piece.jalon)}{piece.nature === "cee" ? " - honoraires CEE" : ""}</dd>
             <dt>Montant</dt>
             <dd>{euros(piece.total_ht)} HT - <b>{euros(piece.total_ttc)} TTC</b></dd>
+            {piece.statut === "emise" && piece.reference_client && (
+              <>
+                <dt>{LIBELLE_REFERENCE_CLIENT[piece.reference_client_type]}</dt>
+                <dd>{piece.reference_client}</dd>
+              </>
+            )}
             <dt>Envoyée à</dt>
             <dd>
               {piece.destinataire_email ?? <span className="fz-manque">aucun e-mail</span>}
@@ -351,11 +365,20 @@ function ActionsBrouillon({
   const supprimer = useSupprimerBrouillon();
   const valider = useValiderEtEnvoyer();
   const [adresse, setAdresse] = useState(piece.client_adresse ?? "");
+  const [refClient, setRefClient] = useState(piece.reference_client ?? "");
+  const [refType, setRefType] = useState<TypeReferenceClient>(piece.reference_client_type ?? "reference");
+  const [texte, setTexte] = useState(piece.texte_libre ?? "");
   const [confirmation, setConfirmation] = useState<"valider" | "supprimer" | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [resultat, setResultat] = useState<ResultatEmission | null>(null);
   const amo = piece.nature === "amo";
   const adresseModifiee = adresse.trim() !== (piece.client_adresse ?? "").trim();
+  const saisieModifiee =
+    adresseModifiee ||
+    refClient.trim() !== (piece.reference_client ?? "").trim() ||
+    refType !== piece.reference_client_type ||
+    texte.trim() !== (piece.texte_libre ?? "").trim();
+  const saisie = { id: piece.id, adresse, referenceClient: refClient, referenceClientType: refType, texteLibre: texte };
   const adresseManquante = amo && !adresse.trim();
   const sansEmail = !piece.destinataire_email;
   const numero = !prochain
@@ -368,19 +391,19 @@ function ActionsBrouillon({
 
   if (resultat) return <ResultatValidation r={resultat} copro={copro} onClose={onClose} />;
 
-  const enregistrerAdresse = async () => {
+  const enregistrer = async () => {
     setErreur(null);
     try {
-      await modifier.mutateAsync({ id: piece.id, adresse });
+      await modifier.mutateAsync(saisie);
     } catch (e) {
-      setErreur(messageErreur(e, "L'adresse n'a pas pu être enregistrée."));
+      setErreur(messageErreur(e, "Les modifications n'ont pas pu être enregistrées."));
     }
   };
 
   const confirmerValidation = async () => {
     setErreur(null);
     try {
-      if (adresseModifiee) await modifier.mutateAsync({ id: piece.id, adresse });
+      if (saisieModifiee) await modifier.mutateAsync(saisie);
       setResultat(await valider.mutateAsync({ id: piece.id, nomCopro: copro.name }));
     } catch (e) {
       setConfirmation(null);
@@ -411,12 +434,47 @@ function ActionsBrouillon({
             placeholder={"14 quai Mullenheim\n67083 Strasbourg"}
           />
           <span className="hint">Une ligne par ligne d'adresse, sans le pays. Gardée pour les prochaines factures de l'enseigne.</span>
-          {adresseModifiee && (
-            <button type="button" className="se-btn se-btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={() => void enregistrerAdresse()} disabled={modifier.isPending}>
-              {modifier.isPending ? "Enregistrement…" : "Mettre à jour l'aperçu"}
-            </button>
-          )}
         </div>
+      )}
+      <div className="fld" style={{ marginBottom: 0 }}>
+        <label htmlFor="fz-ref">Y a-t-il un numéro de référence ?</label>
+        <div className="fz-ref">
+          <select aria-label="Type de numéro" value={refType} onChange={(e) => setRefType(e.target.value as TypeReferenceClient)}>
+            {(Object.keys(LIBELLE_REFERENCE_CLIENT) as TypeReferenceClient[]).map((t) => (
+              <option key={t} value={t}>{LIBELLE_REFERENCE_CLIENT[t]}</option>
+            ))}
+          </select>
+          <input
+            id="fz-ref"
+            type="text"
+            value={refClient}
+            maxLength={LONGUEUR_REFERENCE_CLIENT}
+            onChange={(e) => setRefClient(e.target.value)}
+            placeholder="Facultatif"
+          />
+        </div>
+        <span className="hint">
+          Laissez vide s'il n'y en a pas. Imprimé sous la référence {piece.type === "avoir" ? "de l'avoir" : "de la facture"}.
+        </span>
+      </div>
+      <div className="fld" style={{ marginBottom: 0 }}>
+        <label htmlFor="fz-texte">Texte libre sous les articles</label>
+        <textarea
+          id="fz-texte"
+          rows={3}
+          value={texte}
+          maxLength={LONGUEUR_TEXTE_LIBRE}
+          onChange={(e) => setTexte(e.target.value)}
+          placeholder="Facultatif"
+        />
+        <span className="hint">
+          Imprimé sous les articles de vente. {texte.length} / {LONGUEUR_TEXTE_LIBRE} caractères.
+        </span>
+      </div>
+      {saisieModifiee && (
+        <button type="button" className="se-btn se-btn-secondary btn-sm" onClick={() => void enregistrer()} disabled={modifier.isPending}>
+          <Icon name="refresh" size={14} /> {modifier.isPending ? "Enregistrement…" : "Mettre à jour l'aperçu"}
+        </button>
       )}
       {sansEmail && (
         <p className="fact-alerte">

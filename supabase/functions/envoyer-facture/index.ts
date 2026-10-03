@@ -79,7 +79,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: f } = await admin
     .from("factures")
-    .select("id, type, statut, test, copro_id, jalon, nature, facture_origine_id, numero, date_emission, date_echeance, client_nom, destinataire_nom, reference, total_ttc, pdf_path")
+    .select("id, type, statut, test, copro_id, jalon, nature, facture_origine_id, numero, date_emission, date_echeance, client_nom, destinataire_nom, reference, reference_client, reference_client_type, total_ttc, pdf_path")
     .eq("id", facture_id)
     .maybeSingle();
   if (!f) return json(404, { error: "Pièce introuvable" });
@@ -137,6 +137,10 @@ Deno.serve(async (req: Request) => {
 
   const avoir = f.type === "avoir";
   const nomCopro = d.copro ?? "";
+  // numéro de référence ou d'ordre de service du client (0135), repris dans le message
+  const refClient = f.reference_client?.trim()
+    ? `${f.reference_client_type === "ordre_service" ? "N° d'ordre de service" : "N° de référence"} : ${f.reference_client.trim()}`
+    : "";
   const jalon = LIBELLE_JALON[f.jalon] ?? f.jalon;
   const piece = avoir ? "l'avoir" : "la facture";
   const objet = f.nature === "cee"
@@ -156,9 +160,9 @@ Deno.serve(async (req: Request) => {
     ? `<p>Veuillez trouver ci-joint notre avoir n° <strong>${echap(f.numero)}</strong> du ${dateFr(f.date_emission)},
        d'un montant de <strong>${euros(Math.abs(Number(f.total_ttc)))} TTC</strong>, qui annule
        ${origine?.numero ? `la facture n° ${echap(origine.numero)} du ${dateFr(origine.date_emission)}` : "la facture correspondante"}
-       (${echap(objet)}).</p>`
+       (${echap(objet)}${refClient ? ` - ${echap(refClient)}` : ""}).</p>`
     : `<p>Veuillez trouver ci-joint notre facture n° <strong>${echap(f.numero)}</strong> du ${dateFr(f.date_emission)},
-       d'un montant de <strong>${euros(Number(f.total_ttc))} TTC</strong> (${echap(f.reference)}).</p>
+       d'un montant de <strong>${euros(Number(f.total_ttc))} TTC</strong> (${echap(f.reference)}${refClient ? ` - ${echap(refClient)}` : ""}).</p>
        <p>Règlement par virement au plus tard le <strong>${dateFr(f.date_echeance)}</strong> ;
        nos coordonnées bancaires figurent sur la facture.</p>`;
 

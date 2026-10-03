@@ -7,7 +7,7 @@
 // au gestionnaire (Hellio pour les CEE), chef de projet et dirigeant en copie.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { nomFichierPiece, type EnvoiStatut, type LigneFacture, type PieceFacture } from "@/lib/factureDoc";
+import { nomFichierPiece, type EnvoiStatut, type LigneFacture, type PieceFacture, type TypeReferenceClient } from "@/lib/factureDoc";
 
 const nombre = (v: number | string | null | undefined) => (v == null ? 0 : Number(v));
 
@@ -116,12 +116,29 @@ export function useCreerBrouillon() {
   });
 }
 
-/** Adresse du syndic dans un brouillon (gardée ensuite pour toute l'enseigne). */
+export interface SaisieBrouillon {
+  id: string;
+  /** Adresse du syndic (gardée ensuite pour toute l'enseigne) ; vide = effacée. */
+  adresse: string;
+  /** Numéro de référence ou d'ordre de service du client (0135) ; vide = aucun. */
+  referenceClient: string;
+  referenceClientType: TypeReferenceClient;
+  /** Texte libre sous les articles (0135) ; vide = aucun. */
+  texteLibre: string;
+}
+
+/** Saisies d'un brouillon : adresse du syndic, numéro du client, texte libre. */
 export function useModifierBrouillon() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, adresse }: { id: string; adresse: string }) => {
-      const { error } = await supabase.rpc("facture_modifier_brouillon", { p_id: id, p_client_adresse: adresse });
+    mutationFn: async (s: SaisieBrouillon) => {
+      const { error } = await supabase.rpc("facture_modifier_brouillon", {
+        p_id: s.id,
+        p_client_adresse: s.adresse,
+        p_reference_client: s.referenceClient,
+        p_reference_client_type: s.referenceClientType,
+        p_texte_libre: s.texteLibre,
+      });
       if (error) throw error;
     },
     onSuccess: () => invalider(qc),

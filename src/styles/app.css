@@ -2223,6 +2223,7 @@ button.fact-etape:focus-visible { outline: none; box-shadow: var(--shadow-focus)
 .fz-etapes li.ko { color: var(--color-error-700); }
 .fz-case { display: flex; gap: 8px; align-items: flex-start; margin-top: 14px; font-size: 13px; color: var(--fg1); cursor: pointer; }
 .fz-case input { margin-top: 3px; }
+.fz-ref { display: flex; flex-direction: column; gap: 6px; }
 
 /* journal de facturation */
 .fact-bandeau-test { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; padding: 12px 14px; border-radius: var(--radius-md); background: var(--color-warning-50); border: 1px solid #F7D9A6; color: var(--color-warning-700); font-size: 12.5px; line-height: 1.5; }
