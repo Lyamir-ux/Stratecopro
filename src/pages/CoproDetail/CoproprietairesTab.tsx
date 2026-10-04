@@ -32,6 +32,7 @@ import {
   type ContexteExport,
 } from "@/lib/exportsCopros";
 import { useGenererRapportEnquete } from "@/api/rapportEnquete";
+import { RapportEnqueteDialog } from "./RapportEnqueteDialog";
 import type { CoproWithStats } from "@/api/copros";
 import { messageErreur } from "@/lib/erreurs";
 import { useEspacesCoproprietaires, type EspaceCoproprietaire } from "@/api/espaces";
@@ -105,6 +106,7 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
   // espaces copropriétaires (portail), ouverts sur un clic de l'AMO - feedback 30/09
   const { data: espaces } = useEspacesCoproprietaires(c.id);
   const [fenetreEspaces, setFenetreEspaces] = useState<{ cibles: CibleEspace[]; renvoi?: boolean; bilan?: boolean } | null>(null);
+  const [fenetreRapport, setFenetreRapport] = useState(false);
 
   const filtres = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -164,9 +166,9 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
           </button>
           <button
             className="se-btn se-btn-secondary btn-sm"
-            title="Rapport d'enquête sociale : synthèse, profils Anah, occupation et détail des réponses par copropriétaire et par lot - ses chiffres d'occupation alimentent la fiche État ANAH"
+            title="Rapport d'enquête sociale en PDF : synthèse, propriétaires occupants et profils Anah, tableaux détaillés, liste nominative des occupants (détail des réponses en Excel depuis la fenêtre) - ses chiffres d'occupation alimentent la fiche État ANAH"
             disabled={data.dossiers.length === 0 || !rapport.pret || rapport.enCours}
-            onClick={() => void rapport.generer()}
+            onClick={() => setFenetreRapport(true)}
           >
             <Icon name="download" size={14} />
             {rapport.enCours ? "Génération…" : "Rapport d'enquête sociale"}
@@ -182,11 +184,6 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
           </button>
         </div>
         <div className="p-body">
-          {rapport.erreur && (
-            <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 0 }}>
-              {rapport.erreur}
-            </p>
-          )}
           {data.dossiers.length === 0 ? (
             <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
               Importez d'abord les copropriétaires et leurs lots (onglet Données de la copro).
@@ -337,6 +334,8 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
           }
         />
       )}
+
+      {fenetreRapport && <RapportEnqueteDialog rapport={rapport} onClose={() => setFenetreRapport(false)} />}
 
       {fenetreEspaces && (
         <OuvrirEspacesFenetre

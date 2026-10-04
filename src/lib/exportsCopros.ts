@@ -395,7 +395,7 @@ export function exporterRapportEnquete(data: DossiersCopro, ctx: ContexteExport,
   );
   feuille(wb, used, "Détail par lot", entete(ctx, "Rapport d'enquête sociale - réponses par lot"), headLots, lots, []);
   if (occupation) feuilleOccupationFicheEtat(wb, used, ctx, occupation);
-  XLSX.writeFile(wb, nomFichier(ctx, "Rapport d'enquête sociale"));
+  XLSX.writeFile(wb, nomFichier(ctx, "Enquête sociale - détail des réponses"));
 }
 
 // ============================================================

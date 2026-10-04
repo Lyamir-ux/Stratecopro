@@ -1462,6 +1462,7 @@ export type Database = {
           email_sujet: string | null
           id: string
           questions: Json
+          rapport_observations: string | null
           sent_at: string | null
           statut: Database["public"]["Enums"]["statut_enquete"]
         }
@@ -1475,6 +1476,7 @@ export type Database = {
           email_sujet?: string | null
           id?: string
           questions?: Json
+          rapport_observations?: string | null
           sent_at?: string | null
           statut?: Database["public"]["Enums"]["statut_enquete"]
         }
@@ -1488,6 +1490,7 @@ export type Database = {
           email_sujet?: string | null
           id?: string
           questions?: Json
+          rapport_observations?: string | null
           sent_at?: string | null
           statut?: Database["public"]["Enums"]["statut_enquete"]
         }

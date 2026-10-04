@@ -28,6 +28,7 @@ import { useEspacesCoproprietaires, type EtatEspace } from "@/api/espaces";
 import { OuvrirEspacesFenetre } from "@/components/EspacesCoproprietaires";
 import { classerDestinataires, texteEmailEnquete } from "@/lib/emailEnquete";
 import { EmailEnqueteFenetre, EnvoyerEnqueteFenetre } from "./EnqueteEmail";
+import { RapportEnqueteDialog } from "./RapportEnqueteDialog";
 
 // Libellés grand public (plafonds Anah) - les couleurs MPR restent un simple repère visuel.
 const PROFIL_META: { p: Profil; label: string; color: string }[] = [
@@ -238,7 +239,9 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
   const { data: bareme } = useBareme();
   const updateEnquete = useUpdateEnquete(c.id);
   // feedback Amir du 23/09/2026 : le rapport se génère d'ici et alimente la fiche État ANAH
+  // rapport en PDF de synthèse, observations du chef de projet - demande d'Amir du 04/10/2026
   const rapport = useGenererRapportEnquete(c);
+  const [fenetreRapport, setFenetreRapport] = useState(false);
   const { data: ficheEtat } = useFicheEtat(c.id);
   const dernierRapport = ficheEtat?.data.occupation?.genereLe ?? null;
 
@@ -414,13 +417,14 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
             </span>
             <button
               className="se-btn se-btn-primary btn-sm"
-              title="Classeur Excel : synthèse, profils Anah, occupation, détail par copropriétaire et par lot - les chiffres d'occupation sont reportés dans la fiche État ANAH"
+              title="Rapport PDF : synthèse, propriétaires occupants et profils Anah, tableaux détaillés, liste nominative des occupants - les chiffres d'occupation sont reportés dans la fiche État ANAH"
               disabled={total === 0 || !rapport.pret || rapport.enCours}
-              onClick={() => void rapport.generer()}
+              onClick={() => setFenetreRapport(true)}
             >
               <Icon name="download" size={14} />
               {rapport.enCours ? "Génération…" : "Générer le rapport d'enquête sociale"}
             </button>
+            {fenetreRapport && <RapportEnqueteDialog rapport={rapport} onClose={() => setFenetreRapport(false)} />}
           </div>
           <div className="p-body">
             <p className="se-small" style={{ marginTop: 0, marginBottom: 14, color: "var(--fg-muted)" }}>
@@ -428,11 +432,6 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
                 ? `Dernier rapport généré le ${fmtDate(dernierRapport)} - ses chiffres d'occupation sont reportés dans la fiche « État de la copropriété » du dossier ANAH.`
                 : "La génération du rapport reporte aussi l'occupation (propriétaires occupants et bailleurs, tantièmes, ménages modestes) dans la fiche « État de la copropriété » du dossier ANAH."}
             </p>
-            {rapport.erreur && (
-              <p className="se-small" style={{ marginTop: 0, color: "var(--color-error-700)" }}>
-                {rapport.erreur}
-              </p>
-            )}
             {repondants === 0 ? (
               <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
                 Aucune réponse pour l'instant - saisissez les réponses ci-dessous ou lancez la campagne.
