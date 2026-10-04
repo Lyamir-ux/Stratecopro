@@ -113,6 +113,30 @@ describe("assemblerDossiers", () => {
     expect(Math.abs(total - computePlanDefinitif(data).totalOperationTtc)).toBeLessThan(0.05);
   });
 
+  it("occupation : l'enquête d'abord, sinon l'adresse postale (règle d'Amir du 04/10/2026)", () => {
+    const adresses = ["4 rue Léo Lagrange, 10600 La Chapelle Saint-Luc", "2 rue de Champagne, 10120 Saint-Germain", "2 rue Léo Lagrange"];
+    const d2 = {
+      ...donnees,
+      coproprietaires: donnees.coproprietaires.map((cp, i) => ({ ...cp, adresse: adresses[i] })),
+    };
+    const lieux = [{ adresse: "2-4 rue Léo LAGRANGE", cp: "10000" }];
+    const { dossiers } = assemblerDossiers({
+      ...base,
+      donnees: d2,
+      reponses: [reponse(3, "Rose", { statut_occupation: "bailleur" })],
+      lieux,
+    });
+    expect(dossiers.map((d) => [d.enquete.occupation, d.enquete.occupationSource])).toEqual([
+      ["Occupant", "adresse"],
+      ["Bailleur", "adresse"],
+      // la réponse de l'enquête l'emporte sur l'adresse
+      ["Bailleur", "enquete"],
+    ]);
+    // sans adresses de la copropriété : rien n'est déduit
+    const sans = assemblerDossiers({ ...base, donnees: d2 }).dossiers;
+    expect(sans.map((d) => d.enquete.occupation)).toEqual([null, null, null]);
+  });
+
   it("sans profil : prime « à déterminer », aucune prime déduite, dossier non commencé", () => {
     const { dossiers } = assemblerDossiers(base);
     const d = dossiers[0];

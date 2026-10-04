@@ -517,7 +517,12 @@ function FicheCoproprietaire({
               {kv("Personnes du ménage", d.enquete.nbPersonnes ?? "-")}
               {kv("RFR avis N-1", d.enquete.rfr != null ? fmtEuro(d.enquete.rfr) : "-")}
               {kv("RFR N-2", d.enquete.rfrN2 != null ? fmtEuro(d.enquete.rfrN2) : "-")}
-              {kv("Occupation", d.enquete.occupation ?? "-")}
+              {kv(
+                "Occupation",
+                d.enquete.occupation
+                  ? d.enquete.occupation + (d.enquete.occupationSource === "adresse" ? " (d'après l'adresse postale)" : "")
+                  : "-"
+              )}
               {kv(
                 "Questionnaire portail",
                 d.enquete.complet

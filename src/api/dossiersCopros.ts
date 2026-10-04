@@ -25,6 +25,7 @@ import { useAdhesions, useFinancementConfigAmo, type AdhesionAvecNom } from "./f
 import { useBulletinsCopro, type BulletinAvecSignataires } from "./signature";
 import type { CoproWithStats } from "./copros";
 import { trierParNomFamille } from "@/lib/nomFamille";
+import { occupationPresumee, type LieuCopro } from "@/lib/ficheEtat";
 
 export type TypePiece = Enums<"type_piece">;
 export type PieceJustificative = Tables<"pieces_justificatives">;
@@ -76,7 +77,9 @@ export interface DossierCoproprietaire {
     nbPersonnes: number | null;
     rfr: number | null;
     rfrN2: number | null;
+    /** Occupant / Bailleur / Vacant : réponse de l'enquête, à défaut déduite de l'adresse postale. */
     occupation: string | null;
+    occupationSource: "enquete" | "adresse" | null;
     reponses: ReponsesJsonAmo | null;
   };
   plan: {
@@ -161,6 +164,10 @@ export function assemblerDossiers(input: {
    *  bulletin et le mandat SEPA ne passent plus par nous, donc ils ne peuvent
    *  plus manquer dans notre dossier (22/09/2026). */
   souscriptionEnLigne?: boolean;
+  /** Adresses de la copropriété et de ses bâtiments : sans réponse à
+   *  l'enquête, un propriétaire de logement domicilié à l'une d'elles est
+   *  occupant (règle d'Amir du 04/10/2026), domicilié ailleurs bailleur. */
+  lieux?: LieuCopro[];
 }): { dossiers: DossierCoproprietaire[]; cleRef: string | null } {
   const { donnees, scenario, bareme } = input;
   const repById = new Map(input.reponses.map((r) => [r.coproprietaire_id, r]));
@@ -212,6 +219,12 @@ export function assemblerDossiers(input: {
     const reponses = (r?.reponses ?? null) as ReponsesJsonAmo | null;
     const profil = (r?.profil_mpr as Profil | null) ?? null;
     const verifie = !!r && r.profil_statut === "verifie" && !!r.profil_verifie_le;
+    // même ordre que la fiche État (calculerOccupation) : l'enquête, puis l'adresse postale
+    const occEnquete = OCCUPATION_LABEL(r?.statut_occupation);
+    const presumee =
+      !occEnquete && input.lieux && lots.some((l) => l.usage === "habitation")
+        ? occupationPresumee(cp.adresse, input.lieux)
+        : null;
     const enquete: DossierCoproprietaire["enquete"] = {
       reponse: r,
       repondu: !!r && (profil != null || !!reponses?.copro),
@@ -223,7 +236,8 @@ export function assemblerDossiers(input: {
       nbPersonnes: r?.nb_personnes ?? null,
       rfr: r?.rfr != null ? Number(r.rfr) : null,
       rfrN2: r?.rfr_n2 != null ? Number(r.rfr_n2) : null,
-      occupation: OCCUPATION_LABEL(r?.statut_occupation),
+      occupation: occEnquete ?? (presumee === "occupant" ? "Occupant" : presumee === "bailleur" ? "Bailleur" : null),
+      occupationSource: occEnquete ? "enquete" : presumee ? "adresse" : null,
       reponses,
     };
 
@@ -401,8 +415,12 @@ export function useDossiersCoproprietaires(c: CoproWithStats): DossiersCopro {
       pieces: pieces ?? [],
       bareme: bareme ?? null,
       souscriptionEnLigne: !!finConfig?.lien_adhesion,
+      lieux: [
+        { adresse: c.adresse, cp: c.code_postal },
+        ...donnees.batiments.filter((b) => b.adresse).map((b) => ({ adresse: b.adresse, cp: c.code_postal })),
+      ],
     });
-  }, [donnees, reponses, scenario, plansIndiv, choix, planValide, adhesions, bulletins, pieces, bareme, finConfig]);
+  }, [donnees, reponses, scenario, plansIndiv, choix, planValide, adhesions, bulletins, pieces, bareme, finConfig, c.adresse, c.code_postal]);
 
   return {
     dossiers: assemble.dossiers,

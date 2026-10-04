@@ -149,6 +149,12 @@ const HEAD_PRIMES = [
 const EURO_PRIMES = [6, 10, 11, 12, 13, 15, 16];
 const SOMMES_PRIMES = [10, 11, 12, 13, 15, 16];
 
+/** Occupation, avec la mention de l'adresse quand l'enquête n'a pas répondu. */
+const occupationExport = (d: DossierCoproprietaire): string =>
+  d.enquete.occupation
+    ? d.enquete.occupation + (d.enquete.occupationSource === "adresse" ? " (d'après l'adresse)" : "")
+    : "";
+
 function lignePrime(d: DossierCoproprietaire, ctx: ContexteExport): Cell[] {
   const p = d.plan;
   return [
@@ -161,7 +167,7 @@ function lignePrime(d: DossierCoproprietaire, ctx: ContexteExport): Cell[] {
     d.enquete.rfr,
     profilAnah(d.enquete.profil),
     statutProfil(d),
-    d.enquete.occupation ?? "",
+    occupationExport(d),
     p ? p.quotePart : null,
     p ? p.aidesColl : null,
     p ? p.primeCee : null,
@@ -252,7 +258,7 @@ function ligneEnquete(d: DossierCoproprietaire): Cell[] {
     d.enquete.rfrN2,
     profilAnah(d.enquete.profil),
     statutProfil(d),
-    d.enquete.occupation ?? "",
+    occupationExport(d),
     ...Q_COPRO.map((q) => reponseTexte(d, q)),
   ];
 }
