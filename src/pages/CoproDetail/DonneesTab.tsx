@@ -85,6 +85,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
     adresse: "",
     syndic: "",
     city: "",
+    codePostal: "",
     gestionnaireNom: "",
     gestionnaireEmail: "",
     chefProjet: "",
@@ -147,6 +148,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
       adresse: c.adresse ?? "",
       syndic: c.syndic_name ?? "",
       city: c.city ?? "",
+      codePostal: c.code_postal ?? "",
       gestionnaireNom: c.gestionnaire_nom ?? "",
       gestionnaireEmail: c.gestionnaire_email ?? "",
       chefProjet: c.chef_projet ?? "",
@@ -208,6 +210,11 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
         : null;
   const nouvelleSansNom = synth.organisationId === ORG_NOUVELLE && !synth.organisationNouvelle.trim();
   const saveSynth = async () => {
+    // Code postal modifiable (remarque d'Amir du 04/10/2026) : 5 chiffres ou vide.
+    if (synth.codePostal && !/^\d{5}$/.test(synth.codePostal)) {
+      window.alert("Le code postal doit comporter 5 chiffres.");
+      return;
+    }
     // Doublon parmi les dossiers actifs signalé avant toute écriture ; la base
     // refuse aussi un nom pris par un dossier à la corbeille.
     if (nomModifie && slugSuitLeNom) {
@@ -276,6 +283,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
         adresse: synth.adresse || null,
         syndic_name: syndicName,
         city: synth.city || null,
+        code_postal: synth.codePostal || null,
         gestionnaire_nom: synth.gestionnaireNom || null,
         gestionnaire_email: synth.gestionnaireEmail || null,
         chef_projet: synth.chefProjet || null,
@@ -692,6 +700,23 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
               />
             ) : (
               <span className="v" style={{ textAlign: "right", overflowWrap: "anywhere" }}>{c.gestionnaire_email ?? "-"}</span>
+            )}
+          </div>
+          <div className="kv">
+            <span className="k">Code postal</span>
+            {editingSynth ? (
+              <input
+                className="edit-inp"
+                inputMode="numeric"
+                autoComplete="postal-code"
+                maxLength={5}
+                placeholder="5 chiffres"
+                value={synth.codePostal}
+                onChange={(e) => setSynth((s) => ({ ...s, codePostal: e.target.value.replace(/\D/g, "").slice(0, 5) }))}
+                title="Sert aussi à reconnaître les copropriétaires occupants d'après leur adresse postale et figure sur les documents (fiche État, Éco-PTZ)"
+              />
+            ) : (
+              <span className="v">{c.code_postal ?? "-"}</span>
             )}
           </div>
           <div className="kv">
