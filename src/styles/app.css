@@ -403,7 +403,12 @@ table.dossiers.ppt-copros th:first-child, table.dossiers.ppt-copros td:first-chi
 .due { font-size: 12px; color: var(--fg-muted); display: inline-flex; align-items: center; gap: 4px; }
 
 /* two-column detail content */
-.detail-grid { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
+/* minmax(0, 1fr) + min-width 0 : une grande table ne force plus la colonne à
+   dépasser la fenêtre (feedback Amir 04/10, onglet Données) ; une seule colonne
+   sur fenêtre étroite */
+.detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+.detail-grid > * { min-width: 0; }
+@media (max-width: 1100px) { .detail-grid { grid-template-columns: minmax(0, 1fr); } }
 .panel { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
 /* flex-wrap : les actions passent à la ligne au lieu de déborder du panneau
    (ex. « Partager aux copropriétaires » dans la bulle Plans individuels) */

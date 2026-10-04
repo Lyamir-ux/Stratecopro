@@ -75,6 +75,7 @@ function ApercuSelect({
   onExit: () => void;
 }) {
   const [coproId, setCoproId] = useState<string | null>(null);
+  const [recherche, setRecherche] = useState("");
   const copros = useMemo(() => {
     const seen = new Map<string, { copro: Membership["copro"]; n: number }>();
     for (const m of memberships) {
@@ -84,6 +85,9 @@ function ApercuSelect({
     }
     return [...seen.values()].sort((a, b) => a.copro.name.localeCompare(b.copro.name, "fr"));
   }, [memberships]);
+  const norm = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const q = norm(recherche.trim());
+  const coprosFiltrees = copros.filter(({ copro }) => !q || norm([copro.name, copro.code_postal, copro.city].filter(Boolean).join(" ")).includes(q));
   const cps = useMemo(
     () =>
       memberships
@@ -91,6 +95,7 @@ function ApercuSelect({
         .sort((a, b) => a.nom.localeCompare(b.nom, "fr", { numeric: true })),
     [memberships, coproId]
   );
+  const cpsFiltres = cps.filter((m) => !q || norm(m.nom).includes(q));
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-soft)", display: "flex", flexDirection: "column" }}>
@@ -102,23 +107,35 @@ function ApercuSelect({
         </button>
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
-        <div style={{ maxWidth: 560, width: "100%", textAlign: "center" }}>
+        <div style={{ maxWidth: 1400, width: "100%", textAlign: "center" }}>
           <div className="se-eyebrow" style={{ justifyContent: "center" }}>Aperçu AMO</div>
           <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 30, margin: "10px 0 8px", letterSpacing: "-0.02em" }}>
             {coproId ? "Quel copropriétaire ?" : "Portail copropriétaire"}
           </h1>
-          <p className="se-body" style={{ marginTop: 0, marginBottom: 28 }}>
+          <p className="se-body" style={{ marginTop: 0, marginBottom: 20 }}>
             {coproId
               ? "Choisissez le copropriétaire dont vous voulez voir le portail."
               : "Choisissez une copropriété pour consulter le portail tel que le voient ses copropriétaires."}
           </p>
+          <div style={{ position: "relative", maxWidth: 520, margin: "0 auto 22px" }}>
+            <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: 13, color: "var(--fg-muted)" }} />
+            <input
+              className="se-input"
+              autoFocus
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+              placeholder={coproId ? "Rechercher un copropriétaire…" : "Rechercher une copropriété, une ville, un code postal…"}
+              style={{ width: "100%", paddingLeft: 38 }}
+            />
+          </div>
           {!coproId ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {copros.map(({ copro, n }) => (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 14 }}>
+              {coprosFiltrees.length === 0 && <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)" }}>Aucune copropriété ne correspond.</p>}
+              {coprosFiltrees.map(({ copro, n }) => (
                 <button
                   key={copro.id}
                   className="copro-card"
-                  onClick={() => setCoproId(copro.id)}
+                  onClick={() => { setCoproId(copro.id); setRecherche(""); }}
                   style={{ display: "flex", alignItems: "center", gap: 16, padding: 16, textAlign: "left", cursor: "pointer", border: "1px solid var(--border)" }}
                 >
                   <span style={{ width: 52, height: 52, borderRadius: "var(--radius-md)", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: THUMB_BG, color: "var(--color-primary-700)" }}>
@@ -137,8 +154,9 @@ function ApercuSelect({
             </div>
           ) : (
             <>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto", padding: 2 }}>
-                {cps.map((m) => (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 8, padding: 2 }}>
+                {cpsFiltres.length === 0 && <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)" }}>Aucun copropriétaire ne correspond.</p>}
+                {cpsFiltres.map((m) => (
                   <button
                     key={m.coproprietaireId}
                     className="copro-card"
@@ -154,7 +172,7 @@ function ApercuSelect({
                   </button>
                 ))}
               </div>
-              <button className="se-btn se-btn-ghost btn-sm" style={{ marginTop: 16 }} onClick={() => setCoproId(null)}>
+              <button className="se-btn se-btn-ghost btn-sm" style={{ marginTop: 16 }} onClick={() => { setCoproId(null); setRecherche(""); }}>
                 <Icon name="chevronLeft" size={15} />Changer de copropriété
               </button>
             </>
