@@ -13,9 +13,10 @@ export const sujetEnqueteParDefaut = (copro: string) => `Enquête sociale et tec
 
 export const messageEnqueteParDefaut = (copro: string) =>
   `Strat Eco accompagne votre copropriété ${copro} dans son projet de rénovation énergétique.\n\n` +
-  "Pour préparer le plan de financement et estimer les aides auxquelles vous pouvez prétendre, nous vous " +
-  "remercions de bien vouloir répondre à l'enquête sociale et technique dans votre espace copropriétaire. " +
-  "Vos réponses sont traitées de manière confidentielle par l'équipe Strat Eco.";
+  "Pour préparer le dépôt du dossier de financement et estimer les aides auxquelles vous pouvez prétendre, " +
+  "nous vous remercions de bien vouloir répondre à l'enquête sociale et technique dans votre espace " +
+  "copropriétaire. Vos réponses sont obligatoires et seront traitées de manière confidentielle par l'équipe " +
+  "Strat Eco.";
 
 /** Objet et message envoyés : le texte enregistré par l'AMO, sinon le texte proposé. */
 export function texteEmailEnquete(

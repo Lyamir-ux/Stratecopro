@@ -20,6 +20,8 @@ describe("texte de l'e-mail", () => {
     const t = texteEmailEnquete({ email_sujet: null, email_message: null }, "LE PARC DES CIGOGNES");
     expect(t.sujet).toBe("Enquête sociale et technique - LE PARC DES CIGOGNES");
     expect(t.message).toContain("votre copropriété LE PARC DES CIGOGNES");
+    expect(t.message).toContain("préparer le dépôt du dossier de financement");
+    expect(t.message).toContain("Vos réponses sont obligatoires et seront traitées de manière confidentielle");
     expect(t.modifie).toBe(false);
     expect(t.message).not.toContain("—");
   });
