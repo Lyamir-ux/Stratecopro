@@ -23,6 +23,7 @@ import {
   type PhaseContrat,
 } from "@/lib/facturation";
 import { telechargerCsv } from "@/lib/csv";
+import { emailsDuGestionnaire, gestionnairesConnus } from "@/lib/gestionnaires";
 import { useUi } from "@/stores/ui";
 import {
   avancementAmo,
@@ -54,6 +55,8 @@ type ColTri = "name" | "phase" | "logements" | "montant" | "progress" | "moe";
 
 /** Valeur du filtre « Sans maître d'œuvre » (hors des noms possibles). */
 const SANS_MOE = "__sans__";
+/** Filtre « Non attribués » du chef de projet (remarque d'Amir du 04/10/2026). */
+const SANS_CHEF = "__non_attribue__";
 
 const PHASE_RANK: Record<PhaseId, number> = { diagnostic: 0, etudes: 1, travaux: 2 };
 
@@ -325,6 +328,16 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
     honoraires_p2: "",
   });
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+  // Gestionnaire déjà saisi sur un dossier (idée d'Amir du 04/10/2026) : son
+  // adresse enregistrée est reprise d'office, tant que l'e-mail n'a pas été
+  // tapé à la main ; plusieurs adresses = les autres proposées en un clic.
+  const { data: dossiers } = useCopros();
+  const gestionnaires = useMemo(() => gestionnairesConnus(dossiers ?? []), [dossiers]);
+  const [emailRepris, setEmailRepris] = useState<string | null>(null);
+  const reprendreEmail = (email: string) => {
+    set({ gestionnaire_email: email });
+    setEmailRepris(email || null);
+  };
   // Honoraires (demande d'Amir du 03/10/2026) : nouvelle formule = P1 et P2
   // réparties 50/25/25 et 50/30/20 ; ancienne formule = jalons saisis à la main.
   const [formule, setFormule] = useState<FormuleHonoraires>("nouvelle");
@@ -369,6 +382,13 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
       set({ syndic_name: nouvelle.nom });
     }
     setOrgChoix(valeur);
+  };
+  const syndicSaisi = form.syndic_name.trim() || nomOrganisation;
+  const emailsEnregistres = emailsDuGestionnaire(gestionnaires, form.gestionnaire_nom, syndicSaisi);
+  const choisirGestionnaire = (nom: string) => {
+    const remplacable = !form.gestionnaire_email.trim() || form.gestionnaire_email === emailRepris;
+    set({ gestionnaire_nom: nom });
+    if (remplacable) reprendreEmail(emailsDuGestionnaire(gestionnaires, nom, syndicSaisi)[0]?.email ?? "");
   };
   // Documents de passation joints à la création - déposés dans le dossier « Passation »
   const [passation, setPassation] = useState<File[]>([]);
@@ -606,11 +626,22 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             {field(
               "Nom du gestionnaire",
-              <input
-                className="login-input"
-                value={form.gestionnaire_nom}
-                onChange={(e) => set({ gestionnaire_nom: e.target.value })}
-              />
+              <>
+                {/* Suggestions = gestionnaires déjà saisis sur un dossier, avec leur syndic */}
+                <input
+                  className="login-input"
+                  list="gestionnaires-suggestions-creation"
+                  value={form.gestionnaire_nom}
+                  onChange={(e) => choisirGestionnaire(e.target.value)}
+                />
+                <datalist id="gestionnaires-suggestions-creation">
+                  {gestionnaires.map((g) => (
+                    <option key={g.nom} value={g.nom}>
+                      {g.emails[0].syndic ?? ""}
+                    </option>
+                  ))}
+                </datalist>
+              </>
             )}
             {field(
               "Adresse mail",
@@ -618,10 +649,37 @@ function NewCoproDialog({ onClose }: { onClose: () => void }) {
                 className="login-input"
                 type="email"
                 value={form.gestionnaire_email}
-                onChange={(e) => set({ gestionnaire_email: e.target.value })}
+                onChange={(e) => {
+                  set({ gestionnaire_email: e.target.value });
+                  setEmailRepris(null);
+                }}
               />
             )}
           </div>
+          {emailsEnregistres.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--fg3)" }}>
+              {emailsEnregistres.map((e) => {
+                const detail = `${e.dossiers} dossier${e.dossiers > 1 ? "s" : ""}${e.syndic ? `, ${e.syndic}` : ""}`;
+                return e.email === form.gestionnaire_email.trim().toLowerCase() ? (
+                  <span key={e.email} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <Icon name="check" size={13} style={{ color: "var(--color-primary-700)" }} />
+                    Adresse enregistrée ({detail})
+                  </span>
+                ) : (
+                  <button
+                    key={e.email}
+                    type="button"
+                    className="se-btn se-btn-secondary btn-sm"
+                    title={`Adresse enregistrée pour ce gestionnaire (${detail})`}
+                    onClick={() => reprendreEmail(e.email)}
+                  >
+                    <Icon name="mail" size={13} />
+                    Utiliser {e.email}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {field(
@@ -1052,7 +1110,7 @@ export default function Dashboard() {
   );
   const chefsProjets = useMemo(
     () =>
-      Array.from(new Set((copros ?? []).map((c) => c.chef_projet).filter((v): v is string => !!v))).sort((a, b) =>
+      Array.from(new Set((copros ?? []).map((c) => c.chef_projet).filter((v): v is string => !!v?.trim()))).sort((a, b) =>
         a.localeCompare(b, "fr")
       ),
     [copros]
@@ -1079,7 +1137,7 @@ export default function Dashboard() {
     (c) =>
       (!phaseFilter || c.phase === phaseFilter) &&
       (!cityFilter || c.city === cityFilter) &&
-      (!chefProjetFilter || c.chef_projet === chefProjetFilter) &&
+      (!chefProjetFilter || (chefProjetFilter === SANS_CHEF ? !c.chef_projet?.trim() : c.chef_projet === chefProjetFilter)) &&
       (!gestionnaireFilter || c.gestionnaire_nom?.trim() === gestionnaireFilter) &&
       (!moeFilter || (c.maitre_oeuvre?.trim() || SANS_MOE) === moeFilter)
   );
@@ -1176,7 +1234,7 @@ export default function Dashboard() {
           title="Le filtre choisi reste appliqué par défaut à votre prochaine visite"
         >
           <option value="">Chef de projet : tous</option>
-          {chefProjetFilter && !chefsProjets.includes(chefProjetFilter) && (
+          {chefProjetFilter && chefProjetFilter !== SANS_CHEF && !chefsProjets.includes(chefProjetFilter) && (
             <option value={chefProjetFilter}>{chefProjetFilter}</option>
           )}
           {chefsProjets.map((v) => (
@@ -1184,6 +1242,7 @@ export default function Dashboard() {
               {v}
             </option>
           ))}
+          <option value={SANS_CHEF}>Non attribués</option>
         </select>
         <select
           className="chip-filter"
