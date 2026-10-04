@@ -1455,6 +1455,11 @@ export type Database = {
         Row: {
           copro_id: string
           created_at: string
+          date_limite: string | null
+          email_envoye_le: string | null
+          email_envoye_nb: number | null
+          email_message: string | null
+          email_sujet: string | null
           id: string
           questions: Json
           sent_at: string | null
@@ -1463,6 +1468,11 @@ export type Database = {
         Insert: {
           copro_id: string
           created_at?: string
+          date_limite?: string | null
+          email_envoye_le?: string | null
+          email_envoye_nb?: number | null
+          email_message?: string | null
+          email_sujet?: string | null
           id?: string
           questions?: Json
           sent_at?: string | null
@@ -1471,6 +1481,11 @@ export type Database = {
         Update: {
           copro_id?: string
           created_at?: string
+          date_limite?: string | null
+          email_envoye_le?: string | null
+          email_envoye_nb?: number | null
+          email_message?: string | null
+          email_sujet?: string | null
           id?: string
           questions?: Json
           sent_at?: string | null

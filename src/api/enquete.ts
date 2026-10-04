@@ -39,7 +39,12 @@ export function useUpdateEnquete(coproId: string) {
       id,
       questions,
       ...patch
-    }: { id: string; questions?: ConfigItem[] } & Partial<Pick<Enquete, "statut" | "sent_at">>) => {
+    }: { id: string; questions?: ConfigItem[] } & Partial<
+      Pick<
+        Enquete,
+        "statut" | "sent_at" | "date_limite" | "email_sujet" | "email_message" | "email_envoye_le" | "email_envoye_nb"
+      >
+    >) => {
       const { error } = await supabase
         .from("enquetes")
         .update({ ...patch, ...(questions ? { questions: questions as unknown as Json } : {}) })

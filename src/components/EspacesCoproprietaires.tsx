@@ -85,7 +85,7 @@ export function OuvrirEspacesFenetre({
   const lancer = () => {
     setErreur(null);
     creer.mutate(
-      { ids: cibles.map((c) => c.id), onProgres: setProgres },
+      { cibles, onProgres: setProgres },
       {
         onSuccess: setResultats,
         onError: (e) => setErreur(e instanceof Error ? e.message : "L'ouverture des espaces a échoué."),

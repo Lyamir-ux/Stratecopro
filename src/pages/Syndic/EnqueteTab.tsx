@@ -167,11 +167,19 @@ export function EnqueteTabSyndic({ c }: { c: SyndicCopro }) {
                 </Badge>
               </span>
             </div>
-            {sent && enquete?.sent_at && (
+            {enquete?.email_envoye_le ? (
               <div className="kv">
-                <span className="k">Préparée le</span>
-                <span className="v">{fmtDate(enquete.sent_at)}</span>
+                <span className="k">Envoyée le</span>
+                <span className="v">{fmtDate(enquete.email_envoye_le)}</span>
               </div>
+            ) : (
+              sent &&
+              enquete?.sent_at && (
+                <div className="kv">
+                  <span className="k">Préparée le</span>
+                  <span className="v">{fmtDate(enquete.sent_at)}</span>
+                </div>
+              )
             )}
             <div className="kv">
               <span className="k">Réponses reçues</span>

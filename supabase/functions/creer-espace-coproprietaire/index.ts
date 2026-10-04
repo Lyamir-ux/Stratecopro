@@ -19,6 +19,14 @@
 // qui ouvrent les liens pour les analyser ne le consomment pas. L'écran appelle
 // la fonction par paquets de quelques fiches : Resend limite le débit, les
 // envois sont espacés.
+//
+// Mode enquête (idée d'Amir du 04/10/2026, migration 0136) : avec `enquete`
+// ({ sujet, message, date_limite }), chaque fiche reçoit le questionnaire
+// d'enquête, objet et message relus et modifiés par l'AMO dans l'onglet
+// Enquête. Même traitement des comptes que ci-dessus ; l'e-mail porte le lien
+// pour choisir son mot de passe si l'espace n'a jamais servi, sinon un lien
+// vers l'enquête du portail (une fiche à l'espace déjà activé reçoit donc aussi
+// l'e-mail). Une adresse partagée par plusieurs fiches ne reçoit qu'un e-mail.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const cors = {
@@ -46,6 +54,48 @@ const esc = (v: string) => v.replace(/[&<>"]/g, (ch) => ENTITES[ch] ?? ch);
 
 const EMAIL_VALIDE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_FICHES = 25;
+const MAX_SUJET = 150;
+const MAX_MESSAGE = 4000;
+
+const MOIS = [
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+];
+/** « 2026-10-15 » -> « 15 octobre 2026 » (même écriture que src/lib/emailEnquete.ts). */
+function dateEnLettres(iso: unknown): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(typeof iso === "string" ? iso : "");
+  if (!m) return null;
+  const mois = MOIS[Number(m[2]) - 1];
+  if (!mois) return null;
+  const jour = Number(m[3]);
+  return `${jour === 1 ? "1er" : jour} ${mois} ${m[1]}`;
+}
+
+// Fins de ligne écrites sans séquence d'échappement (antislash suivi d'une
+// lettre) : l'outil de déploiement en ferait de vrais sauts de ligne.
+const NL = String.fromCharCode(10);
+const CR = String.fromCharCode(13);
+
+/**
+ * Message de l'AMO en HTML : une ligne vide (ou faite d'espaces) sépare deux
+ * paragraphes, les autres retours à la ligne sont gardés (même découpage que
+ * paragraphes() dans src/lib/emailEnquete.ts).
+ */
+function messageHtml(message: string): string {
+  const paragraphes: string[][] = [];
+  let courant: string[] = [];
+  for (const ligne of message.split(CR + NL).join(NL).split(CR).join(NL).split(NL)) {
+    if (ligne.trim() === "") {
+      if (courant.length > 0) paragraphes.push(courant);
+      courant = [];
+    } else {
+      courant.push(ligne.trimEnd());
+    }
+  }
+  if (courant.length > 0) paragraphes.push(courant);
+  return paragraphes.map((lignes) => `<p>${lignes.map(esc).join("<br/>")}</p>`).join(NL);
+}
+
 /** Écart minimal entre deux envois Resend (débit limité à 2 par seconde). */
 const ECART_ENVOIS_MS = 600;
 
@@ -88,12 +138,26 @@ Deno.serve(async (req: Request) => {
     return json(403, { error: "Réservé à l'équipe Strat Eco" });
   }
 
-  const { coproprietaire_ids } = await req.json().catch(() => ({}));
+  const { coproprietaire_ids, enquete: enqueteBrute } = await req.json().catch(() => ({}));
   if (!Array.isArray(coproprietaire_ids) || coproprietaire_ids.length === 0) {
     return json(400, { error: "coproprietaire_ids attendu" });
   }
   if (coproprietaire_ids.length > MAX_FICHES) {
     return json(400, { error: `${MAX_FICHES} fiches au plus par appel` });
+  }
+
+  // --- Mode enquête : objet et message de l'AMO ---
+  let enquete: { sujet: string; message: string; dateLimite: string | null } | null = null;
+  if (enqueteBrute != null) {
+    const sujet = typeof enqueteBrute.sujet === "string" ? enqueteBrute.sujet.replace(/\s+/g, " ").trim() : "";
+    const message = typeof enqueteBrute.message === "string" ? enqueteBrute.message.trim() : "";
+    if (!sujet || sujet.length > MAX_SUJET) {
+      return json(400, { error: `Objet de l'e-mail vide ou trop long (${MAX_SUJET} caractères au plus)` });
+    }
+    if (!message || message.length > MAX_MESSAGE) {
+      return json(400, { error: `Message de l'e-mail vide ou trop long (${MAX_MESSAGE} caractères au plus)` });
+    }
+    enquete = { sujet, message, dateLimite: dateEnLettres(enqueteBrute.date_limite) };
   }
 
   const { data: fiches, error: fichesErr } = await admin
@@ -141,6 +205,17 @@ Deno.serve(async (req: Request) => {
       </a>
     </p>`;
 
+  const lienExpire = (email: string) => `
+      <p style="color:#5c6470;font-size:13px">Ce lien est personnel et valable pour une durée limitée. S'il a expiré,
+      rendez-vous sur <a href="${appUrl}/mot-de-passe-oublie">${appUrl}/mot-de-passe-oublie</a> et saisissez
+      cette adresse (${esc(email)}) : vous recevrez un nouveau lien.</p>`;
+  /** Début de l'e-mail du questionnaire : message de l'AMO, puis la date limite. */
+  const corpsEnquete = () =>
+    enquete
+      ? messageHtml(enquete.message) +
+        (enquete.dateLimite ? `<p>Merci de répondre avant le <strong>${esc(enquete.dateLimite)}</strong>.</p>` : "")
+      : "";
+
   /** E-mail d'activation : lien vers /activer-espace pour choisir son mot de passe. */
   const envoyerActivation = async (email: string, nom: string, copro: string): Promise<Envoi> => {
     const { data: lien, error } = await admin.auth.admin.generateLink({ type: "recovery", email });
@@ -150,6 +225,18 @@ Deno.serve(async (req: Request) => {
       return "echec";
     }
     const actionLink = `${appUrl}/activer-espace?token_hash=${encodeURIComponent(jeton)}`;
+    if (enquete) {
+      const html = gabarit(
+        nom,
+        `${corpsEnquete()}
+        <p>Votre espace copropriétaire est ouvert : pour y accéder, choisissez votre mot de passe.</p>
+        ${bouton(actionLink, "Choisir mon mot de passe")}
+        <p>Votre identifiant de connexion est votre adresse e-mail : <strong>${esc(email)}</strong>. Une fois votre
+        mot de passe choisi, l'enquête vous attend dans la rubrique « Enquête sociale » de votre espace.</p>
+        ${lienExpire(email)}`,
+      );
+      return envoyer(email, enquete.sujet, html);
+    }
     const html = gabarit(
       nom,
       `<p>Strat Eco accompagne votre copropriété <strong>${esc(copro)}</strong> dans son projet de rénovation
@@ -165,8 +252,23 @@ Deno.serve(async (req: Request) => {
     return envoyer(email, `Votre espace copropriétaire - ${copro}`, html);
   };
 
+  /** E-mail du questionnaire à un espace déjà activé : lien vers l'enquête du portail. */
+  const envoyerEnqueteActif = (email: string, nom: string): Promise<Envoi> => {
+    const html = gabarit(
+      nom,
+      `${corpsEnquete()}
+      ${bouton(`${appUrl}/portail/enquete`, "Répondre à l'enquête")}
+      <p>Connectez-vous avec votre adresse e-mail (<strong>${esc(email)}</strong>) et votre mot de passe habituel.</p>
+      <p style="color:#5c6470;font-size:13px">Mot de passe oublié ? Rendez-vous sur
+      <a href="${appUrl}/mot-de-passe-oublie">${appUrl}/mot-de-passe-oublie</a> : vous recevrez un lien pour en
+      choisir un nouveau.</p>`,
+    );
+    return envoyer(email, enquete!.sujet, html);
+  };
+
   /** E-mail d'information : un compte déjà actif gagne une copropriété. */
   const envoyerAjout = (email: string, nom: string, copro: string): Promise<Envoi> => {
+    if (enquete) return envoyerEnqueteActif(email, nom);
     const html = gabarit(
       nom,
       `<p>Votre copropriété <strong>${esc(copro)}</strong> a été ajoutée à votre espace copropriétaire Strat Eco.
@@ -220,13 +322,21 @@ Deno.serve(async (req: Request) => {
           r.detail = "Compte relié introuvable";
           continue;
         }
-        if (u.user.last_sign_in_at) {
-          r.statut = "deja_actif";
+        const actif = !!u.user.last_sign_in_at;
+        r.statut = actif ? "deja_actif" : "renvoye";
+        if (actif && !enquete) continue;
+        const adresse = emailCompte.toLowerCase();
+        if (adressesEcrites.has(adresse)) {
+          r.detail = "Même adresse qu'une autre fiche : un seul e-mail envoyé";
           continue;
         }
-        r.statut = "renvoye";
-        r.envoi = await envoyerActivation(emailCompte, f.nom, copro);
-        if (r.envoi === "envoye") await tracerEnvoi(id);
+        adressesEcrites.add(adresse);
+        if (actif) {
+          r.envoi = await envoyerEnqueteActif(emailCompte, f.nom);
+        } else {
+          r.envoi = await envoyerActivation(emailCompte, f.nom, copro);
+          if (r.envoi === "envoye") await tracerEnvoi(id);
+        }
         continue;
       }
 
@@ -301,8 +411,12 @@ Deno.serve(async (req: Request) => {
         continue;
       }
       adressesEcrites.add(email);
-      r.envoi = dejaConnecte ? await envoyerAjout(email, f.nom, copro) : await envoyerActivation(email, f.nom, copro);
-      if (r.envoi === "envoye") await tracerEnvoi(id);
+      if (dejaConnecte) {
+        r.envoi = await envoyerAjout(email, f.nom, copro);
+      } else {
+        r.envoi = await envoyerActivation(email, f.nom, copro);
+        if (r.envoi === "envoye") await tracerEnvoi(id);
+      }
     } catch (e) {
       console.error("Espace copropriétaire", id, e);
       r.statut = "erreur";

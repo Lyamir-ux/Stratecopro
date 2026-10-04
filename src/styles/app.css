@@ -549,6 +549,43 @@ table.dossiers .edit-inp.sm { width: 74px; }
   color: var(--color-success-700); font-size: 13.5px; font-weight: 600;
 }
 .send-ok .so-sub { display: block; font-weight: 500; color: var(--fg2); font-size: 12.5px; margin-top: 2px; }
+/* e-mail du questionnaire : ligne de résumé, saisie et aperçu (idée d'Amir du 04/10/2026) */
+.mail-ligne {
+  display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 12px; font-size: 13px; color: var(--fg);
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg); overflow-wrap: anywhere;
+}
+.mail-ligne .se-btn { flex: none; }
+.mail-ligne-pied {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px;
+  font-size: 12px; color: var(--fg-muted);
+}
+.mail-ligne-pied .se-btn { margin-right: -4px; }
+.mail-champ { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.mail-champ label { font-size: 13px; font-weight: 600; color: var(--fg2); }
+.mail-champ .hint { font-size: 12px; color: var(--fg-muted); }
+.mail-champ input, .mail-champ textarea {
+  font-family: var(--font-body); font-size: 14px; line-height: 1.5; padding: 10px 12px; color: var(--fg);
+  border: 1px solid var(--color-neutral-300); border-radius: var(--radius-md); background: var(--bg); outline: none;
+}
+.mail-champ textarea { resize: vertical; min-height: 120px; }
+.mail-champ input:focus, .mail-champ textarea:focus { border-color: var(--accent); box-shadow: var(--shadow-focus); }
+.mail-fiche { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+.mail-entete {
+  display: grid; gap: 3px; padding: 10px 14px; font-size: 12.5px; color: var(--fg2);
+  background: var(--bg-soft); border-bottom: 1px solid var(--border); overflow-wrap: anywhere;
+}
+.mail-entete b { color: var(--fg); font-weight: 600; }
+/* corps sur fond blanc dans les deux thèmes, comme dans une messagerie */
+.mail-corps {
+  padding: 16px 18px; background: #fff; color: #1a1a1a; font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px; line-height: 1.55; overflow-wrap: anywhere;
+}
+.mail-corps p { margin: 0 0 12px; }
+.mail-bouton {
+  display: inline-block; margin: 6px 0 16px; padding: 10px 20px; border-radius: 6px;
+  background: #355717; color: #fff; font-weight: bold; cursor: default;
+}
+.mail-corps .mail-note { color: #5c6470; font-size: 12.5px; }
 
 /* file grid */
 .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }

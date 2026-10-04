@@ -26,6 +26,8 @@ import { useGenererRapportEnquete } from "@/api/rapportEnquete";
 import { useFicheEtat } from "@/api/ficheEtat";
 import { useEspacesCoproprietaires, type EtatEspace } from "@/api/espaces";
 import { OuvrirEspacesFenetre } from "@/components/EspacesCoproprietaires";
+import { classerDestinataires, texteEmailEnquete } from "@/lib/emailEnquete";
+import { EmailEnqueteFenetre, EnvoyerEnqueteFenetre } from "./EnqueteEmail";
 
 // Libellés grand public (plafonds Anah) - les couleurs MPR restent un simple repère visuel.
 const PROFIL_META: { p: Profil; label: string; color: string }[] = [
@@ -138,6 +140,27 @@ function ReponseRow({
   );
 }
 
+/**
+ * Date limite de réponse, enregistrée dès qu'elle change (0136) : elle est
+ * rappelée dans l'e-mail du questionnaire.
+ */
+function DateLimiteChamp({ enqueteId, coproId, valeur }: { enqueteId: string; coproId: string; valeur: string | null }) {
+  const update = useUpdateEnquete(coproId);
+  const [date, setDate] = useState(valeur ?? "");
+  return (
+    <input
+      className="edit-inp"
+      type="date"
+      value={date}
+      onChange={(e) => {
+        const v = e.target.value;
+        setDate(v);
+        if (v === "" || /^\d{4}-\d{2}-\d{2}$/.test(v)) update.mutate({ id: enqueteId, date_limite: v || null });
+      }}
+    />
+  );
+}
+
 /** Ligne de question dans l'écran de configuration (calquée sur la maquette). */
 function ConfigRow({
   q,
@@ -222,8 +245,9 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
   const [configuring, setConfiguring] = useState(false);
   const [draft, setDraft] = useState<ConfigItem[] | null>(null);
   const [cible, setCible] = useState<"tous" | "nonrep">("nonrep");
-  const [parEmail, setParEmail] = useState(true);
-  const [dateLimite, setDateLimite] = useState("");
+  // e-mail du questionnaire vérifié et modifiable avant l'envoi - idée d'Amir du 04/10/2026
+  const [fenetreEmail, setFenetreEmail] = useState(false);
+  const [fenetreEnvoi, setFenetreEnvoi] = useState(false);
   // espaces copropriétaires (portail) - feedback d'Amir du 30/09/2026
   const { data: espaces } = useEspacesCoproprietaires(c.id);
   const [fenetreEspaces, setFenetreEspaces] = useState(false);
@@ -237,9 +261,12 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
     [reponses]
   );
   const repondants = (reponses ?? []).filter((r) => r.profil_mpr != null).length;
-  const nonRep = Math.max(0, total - repondants);
-  const destCount = cible === "tous" ? total : nonRep;
   const sent = enquete?.statut === "envoyee";
+  const aRepondu = (id: string) => repondus.get(id)?.profil_mpr != null;
+  const presents = coproprietaires.filter((cp) => !cp.sortant_le);
+  const nonRep = presents.filter((cp) => !aRepondu(cp.id)).length;
+  const classement = classerDestinataires(coproprietaires, espaces, cible, aRepondu);
+  const destCount = classement.envoyables.length;
 
   const config: ConfigItem[] = draft ?? normalizeConfig(enquete?.questions);
   const resolved = resolveQuestions(config);
@@ -276,12 +303,22 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
     setDraft(null);
   };
 
-  const doSend = async () => {
-    if (!enquete) return;
-    await updateEnquete.mutateAsync({ id: enquete.id, statut: "envoyee", sent_at: new Date().toISOString() });
-  };
-
   if (!enquete) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
+
+  const texteEmail = texteEmailEnquete(enquete, c.name);
+  const laisses = classement.sansEmail + classement.emailPris;
+  const resumeEnvoi =
+    classement.retenues === 0
+      ? cible === "nonrep"
+        ? "Tous les copropriétaires ont répondu."
+        : "Aucun copropriétaire dans ce dossier."
+      : [
+          classement.avecEspace > 0 && `${classement.avecEspace} avec un espace activé : lien vers l'enquête`,
+          classement.sansEspace > 0 && `${classement.sansEspace} sans espace activé : lien pour choisir leur mot de passe`,
+          laisses > 0 && `${laisses} sans adresse utilisable, laissé${laisses > 1 ? "s" : ""} de côté`,
+        ]
+          .filter(Boolean)
+          .join(" · ") + ".";
 
   // ===== Mode configuration : écran pleine largeur =====
   if (configuring) {
@@ -516,20 +553,34 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
             <h3>Envoi des questionnaires</h3>
           </div>
           <div className="p-body">
-            {sent && (
+            {enquete.email_envoye_le ? (
               <div className="send-ok">
                 <Icon name="checkCircle" size={18} />
                 <div>
-                  Campagne préparée le {fmtDate(enquete.sent_at)}
-                  <span className="so-sub">L'envoi d'e-mails réel sera activé avec le portail copropriétaire.</span>
+                  Questionnaire envoyé le {fmtDate(enquete.email_envoye_le)}
+                  <span className="so-sub">
+                    {enquete.email_envoye_nb ?? 0} e-mail{(enquete.email_envoye_nb ?? 0) > 1 ? "s" : ""} parti
+                    {(enquete.email_envoye_nb ?? 0) > 1 ? "s" : ""} lors du dernier envoi. Relancez les non-répondants au
+                    besoin.
+                  </span>
                 </div>
               </div>
+            ) : (
+              sent && (
+                <div className="send-ok">
+                  <Icon name="checkCircle" size={18} />
+                  <div>
+                    Campagne préparée le {fmtDate(enquete.sent_at)}
+                    <span className="so-sub">Aucun e-mail n'est encore parti vers les copropriétaires.</span>
+                  </div>
+                </div>
+              )
             )}
             <div className="send-field">
               <label>Destinataires</label>
               <div className="opt-mini">
                 <button className={cible === "tous" ? "on" : ""} onClick={() => setCible("tous")}>
-                  Tous · {total}
+                  Tous · {presents.length}
                 </button>
                 <button className={cible === "nonrep" ? "on" : ""} onClick={() => setCible("nonrep")}>
                   Non-répondants · {nonRep}
@@ -538,24 +589,59 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
             </div>
             <div className="send-field">
               <label>Date limite de réponse</label>
-              <input className="edit-inp" type="date" value={dateLimite} onChange={(e) => setDateLimite(e.target.value)} />
+              <DateLimiteChamp enqueteId={enquete.id} coproId={c.id} valeur={enquete.date_limite} />
             </div>
-            <label className="send-check">
-              <input type="checkbox" checked={parEmail} onChange={(e) => setParEmail(e.target.checked)} />
-              <span>Notifier aussi par e-mail (en plus du portail)</span>
-            </label>
+            <div className="send-field">
+              <label>E-mail aux copropriétaires</label>
+              <div className="mail-ligne" style={{ alignItems: "flex-start" }}>
+                <Icon name="mail" size={16} style={{ color: "var(--accent)", flex: "none", marginTop: 2 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600 }}>{texteEmail.sujet}</div>
+                  <div className="mail-ligne-pied">
+                    <span>{texteEmail.modifie ? "Texte modifié" : "Texte proposé"}</span>
+                    <button
+                      className="se-btn se-btn-ghost btn-sm"
+                      onClick={() => setFenetreEmail(true)}
+                      title="Relire l'e-mail envoyé aux copropriétaires et le modifier si nécessaire"
+                    >
+                      <Icon name="eye" size={14} />
+                      Vérifier l'e-mail
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
             <button
               className="se-btn se-btn-primary"
-              style={{ width: "100%", marginTop: 16, justifyContent: "center" }}
-              onClick={() => void doSend()}
-              disabled={total === 0 || updateEnquete.isPending}
+              style={{ width: "100%", marginTop: 4, justifyContent: "center" }}
+              onClick={() => setFenetreEnvoi(true)}
+              disabled={destCount === 0 || !espaces}
             >
               <Icon name="send" size={16} />
-              {sent ? `Repréparer pour ${destCount} destinataires` : `Préparer l'envoi à ${destCount} copropriétaire${destCount > 1 ? "s" : ""}`}
+              {`Envoyer à ${destCount} copropriétaire${destCount > 1 ? "s" : ""}`}
             </button>
-            <p className="se-small" style={{ marginTop: 10, color: "var(--fg-muted)" }}>
-              Mode préparation : la campagne est enregistrée mais aucun e-mail n'est envoyé en V1.
+            <p className="se-small" style={{ marginTop: 10, marginBottom: 0, color: "var(--fg-muted)" }}>
+              {resumeEnvoi}
             </p>
+            {fenetreEnvoi && (
+              <EnvoyerEnqueteFenetre
+                enquete={enquete}
+                copro={c.name}
+                coproId={c.id}
+                classement={classement}
+                onVerifier={() => setFenetreEmail(true)}
+                onClose={() => setFenetreEnvoi(false)}
+              />
+            )}
+            {fenetreEmail && (
+              <EmailEnqueteFenetre
+                enquete={enquete}
+                copro={c.name}
+                coproId={c.id}
+                exemples={classement.envoyables}
+                onClose={() => setFenetreEmail(false)}
+              />
+            )}
           </div>
         </div>
 
@@ -593,9 +679,11 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
               <span className="v">{repondants}</span>
             </div>
             <div className="kv">
-              <span className="k">Recensement</span>
+              <span className="k">Questionnaire</span>
               <span className="v">
-                <Badge kind={sent ? "success" : "warn"}>{sent ? "Préparé" : "À préparer"}</Badge>
+                <Badge kind={enquete.email_envoye_le ? "success" : "warn"}>
+                  {enquete.email_envoye_le ? "Envoyé" : sent ? "Préparé" : "À envoyer"}
+                </Badge>
               </span>
             </div>
             <button
