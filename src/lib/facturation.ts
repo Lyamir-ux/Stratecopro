@@ -125,20 +125,6 @@ export function caChefProjet(d: Pick<DossierHonoraires, "jalons">): { ca: Sommes
   };
 }
 
-const nomComparable = (v: string) =>
-  v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
-
-/**
- * Le dossier est-il au nom de ce collaborateur ? Le chef de projet est saisi
- * en clair sur la fiche (« Radia ») : comparé au nom du profil ou à son
- * prénom, casse et accents ignorés.
- */
-export function chefProjetEst(chefProjet: string | null | undefined, nomProfil: string | null | undefined): boolean {
-  const chef = nomComparable(chefProjet ?? "");
-  const nom = nomComparable(nomProfil ?? "");
-  return !!chef && !!nom && (chef === nom || chef === nom.split(" ")[0]);
-}
-
 /** Complète les lignes lues en base pour toujours présenter les 8 jalons dans l'ordre. */
 export function jalonsOrdonnes(lignes: { jalon: string; montant_ht: number | null; etat: string }[]): JalonHonoraires[] {
   return JALONS_HONORAIRES.map(({ code }) => {

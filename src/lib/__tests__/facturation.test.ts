@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   caChefProjet,
-  chefProjetEst,
   cocheSansMontant,
   enSommeil,
   graduations,
@@ -83,18 +82,6 @@ describe("facturation des jalons", () => {
     // sans montant de P1a ni de P1b, rien n'est retiré
     const sansP1 = caChefProjet({ jalons: jalonsOrdonnes([{ jalon: "P1c", montant_ht: 5000, etat: "encaisse" }]) });
     expect(sansP1).toEqual({ ca: { contrat: 5000, encaisse: 5000, enAttente: 0, resteAFacturer: 0 }, horsCa: 0 });
-  });
-
-  it("reconnaît les dossiers d'un chef de projet saisi en clair", () => {
-    expect(chefProjetEst("Radia", "Radia")).toBe(true);
-    expect(chefProjetEst(" radia ", "RADIA")).toBe(true);
-    expect(chefProjetEst("Thea", "Théa")).toBe(true);
-    expect(chefProjetEst("Cyrielle", "Cyrielle MILEKIC")).toBe(true);
-    expect(chefProjetEst("Cyrielle Milekic", "Cyrielle MILEKIC")).toBe(true);
-    expect(chefProjetEst("Kawtar", "Radia")).toBe(false);
-    expect(chefProjetEst(null, "Radia")).toBe(false);
-    expect(chefProjetEst("", "")).toBe(false);
-    expect(chefProjetEst("Radia", undefined)).toBe(false);
   });
 
   it("additionne le portefeuille", () => {

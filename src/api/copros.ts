@@ -308,11 +308,14 @@ export function useCreateCopro() {
   });
 }
 
-/** Nombre de tâches actionnables (phase courante, non terminées) tous dossiers. */
-export function useTasksCount() {
+/**
+ * Nombre de tâches actionnables (phase courante, non terminées) par dossier ;
+ * la pastille « Vos tâches » additionne les dossiers de son périmètre.
+ */
+export function useTachesOuvertesParDossier() {
   return useQuery({
     queryKey: ["tasks-count"],
-    queryFn: async () => {
+    queryFn: async (): Promise<Map<string, number>> => {
       const [{ data: copros, error: e1 }, taches] = await Promise.all([
         supabase.from("coproprietes").select("id, phase").is("deleted_at", null),
         // par pages : plus de 2 000 tâches ouvertes tous dossiers (29/09), l'API en renvoie 1 000
@@ -322,7 +325,11 @@ export function useTasksCount() {
       ]);
       if (e1) throw e1;
       const phaseById = new Map((copros ?? []).map((c) => [c.id, c.phase]));
-      return taches.filter((t) => phaseById.get(t.copro_id) === t.phase).length;
+      const parDossier = new Map<string, number>();
+      for (const t of taches) {
+        if (phaseById.get(t.copro_id) === t.phase) parDossier.set(t.copro_id, (parDossier.get(t.copro_id) ?? 0) + 1);
+      }
+      return parDossier;
     },
   });
 }

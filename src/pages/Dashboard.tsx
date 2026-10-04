@@ -24,6 +24,7 @@ import {
 } from "@/lib/facturation";
 import { telechargerCsv } from "@/lib/csv";
 import { emailsDuGestionnaire, gestionnairesConnus } from "@/lib/gestionnaires";
+import { CHEF_NON_ATTRIBUE, dansPerimetre, perimetreTaches } from "@/lib/perimetreChef";
 import { useUi } from "@/stores/ui";
 import {
   avancementAmo,
@@ -55,8 +56,6 @@ type ColTri = "name" | "phase" | "logements" | "montant" | "progress" | "moe";
 
 /** Valeur du filtre « Sans maître d'œuvre » (hors des noms possibles). */
 const SANS_MOE = "__sans__";
-/** Filtre « Non attribués » du chef de projet (remarque d'Amir du 04/10/2026). */
-const SANS_CHEF = "__non_attribue__";
 
 const PHASE_RANK: Record<PhaseId, number> = { diagnostic: 0, etudes: 1, travaux: 2 };
 
@@ -1137,7 +1136,7 @@ export default function Dashboard() {
     (c) =>
       (!phaseFilter || c.phase === phaseFilter) &&
       (!cityFilter || c.city === cityFilter) &&
-      (!chefProjetFilter || (chefProjetFilter === SANS_CHEF ? !c.chef_projet?.trim() : c.chef_projet === chefProjetFilter)) &&
+      (!chefProjetFilter || dansPerimetre(perimetreTaches(chefProjetFilter, null), c.chef_projet)) &&
       (!gestionnaireFilter || c.gestionnaire_nom?.trim() === gestionnaireFilter) &&
       (!moeFilter || (c.maitre_oeuvre?.trim() || SANS_MOE) === moeFilter)
   );
@@ -1234,7 +1233,7 @@ export default function Dashboard() {
           title="Le filtre choisi reste appliqué par défaut à votre prochaine visite"
         >
           <option value="">Chef de projet : tous</option>
-          {chefProjetFilter && chefProjetFilter !== SANS_CHEF && !chefsProjets.includes(chefProjetFilter) && (
+          {chefProjetFilter && chefProjetFilter !== CHEF_NON_ATTRIBUE && !chefsProjets.includes(chefProjetFilter) && (
             <option value={chefProjetFilter}>{chefProjetFilter}</option>
           )}
           {chefsProjets.map((v) => (
@@ -1242,7 +1241,7 @@ export default function Dashboard() {
               {v}
             </option>
           ))}
-          <option value={SANS_CHEF}>Non attribués</option>
+          <option value={CHEF_NON_ATTRIBUE}>Non attribués</option>
         </select>
         <select
           className="chip-filter"

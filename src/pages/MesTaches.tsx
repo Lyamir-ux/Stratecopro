@@ -1,13 +1,18 @@
 // Vos tâches - agrégation cross-dossiers des tâches actionnables de la phase courante
 // (porté de login.jsx MyTasks, branché sur les vraies tables).
+// Bug d'Amir du 04/10/2026 : la page et la pastille du menu se limitent aux
+// dossiers du chef de projet choisi sur le tableau de bord, à défaut à ceux
+// du compte connecté (tâches et pièces justificatives à vérifier).
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge, PhaseBadge } from "@/components/ui";
 import { supabase, toutesLesLignes } from "@/lib/supabase";
 import type { Tables } from "@/lib/database.types";
 import { useCopros } from "@/api/copros";
+import { usePerimetreTaches } from "@/api/taches";
+import { dansPerimetre, libellePerimetre } from "@/lib/perimetreChef";
 import { nomPiece, urlSigneePiece, usePiecesAVerifier } from "@/api/portail";
 import { VerificationPiece } from "@/components/VerificationPiece";
 import { StatusDot } from "./CoproDetail/ProjetTab";
@@ -41,16 +46,21 @@ const PHASE_RANK = { diagnostic: 0, etudes: 1, travaux: 2 } as const;
 export default function MesTaches() {
   useCrumbs([{ label: "Vos tâches" }]);
   const navigate = useNavigate();
-  const { data: copros } = useCopros();
+  const perimetre = usePerimetreTaches();
+  const { data: tousLesDossiers } = useCopros();
+  const copros = (tousLesDossiers ?? []).filter((c) => dansPerimetre(perimetre, c.chef_projet));
+  const idsPerimetre = new Set(copros.map((c) => c.id));
   const { data: tasks } = useAllOpenTasks();
   // pièces justificatives déposées au portail par les copropriétaires, en
   // attente de vérification par l'équipe (feedback Amir 10/09)
-  const { data: piecesAVerifier } = usePiecesAVerifier();
+  const { data: toutesLesPieces } = usePiecesAVerifier();
+  const piecesAVerifier = (toutesLesPieces ?? []).filter((p) => idsPerimetre.has(p.copro_id));
+  const portee = libellePerimetre(perimetre);
   const ouvrirPiece = (path: string) => {
     void urlSigneePiece(path).then((url) => window.open(url, "_blank", "noopener")).catch(() => undefined);
   };
 
-  const groups = (copros ?? [])
+  const groups = copros
     .map((c) => ({
       c,
       tasks: (tasks ?? [])
@@ -68,7 +78,14 @@ export default function MesTaches() {
       <div className="page-head">
         <div>
           <h1 className="page-title">Vos tâches</h1>
-          <p className="page-sub">Actions à mener sur vos dossiers, par copropriété et phase d'avancement</p>
+          <p className="page-sub">
+            Actions à mener sur {portee}, par copropriété et phase d'avancement
+            {perimetre.type !== "moi" && (
+              <>
+                {" "}- choix du filtre « Chef de projet » du <Link to="/">tableau de bord</Link>
+              </>
+            )}
+          </p>
         </div>
         <span className="spacer"></span>
         <div className="mt-tally">
@@ -82,14 +99,14 @@ export default function MesTaches() {
         </div>
       </div>
 
-      {(piecesAVerifier ?? []).length > 0 && (
+      {piecesAVerifier.length > 0 && (
         <div className="panel" style={{ marginBottom: 18 }}>
           <div className="p-head">
             <Icon name="folder" size={18} />
             <h3>Pièces justificatives à vérifier</h3>
             <span style={{ flex: 1 }}></span>
             <Badge kind="warn" dot>
-              {piecesAVerifier!.length} pièce{piecesAVerifier!.length > 1 ? "s" : ""}
+              {piecesAVerifier.length} pièce{piecesAVerifier.length > 1 ? "s" : ""}
             </Badge>
           </div>
           <div className="p-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -98,7 +115,7 @@ export default function MesTaches() {
               année, puis qualifiez-la : « Conforme » la valide ; tout autre choix la refuse et envoie aussitôt un
               e-mail au copropriétaire avec le motif.
             </p>
-            {piecesAVerifier!.map((p) => (
+            {piecesAVerifier.map((p) => (
               <div key={p.id} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 12px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   <span style={{ fontWeight: 600 }}>{nomPiece(p.type)}</span>
@@ -131,8 +148,20 @@ export default function MesTaches() {
           <div className="ps-ico">
             <Icon name="checkCircle" size={30} />
           </div>
-          <h2>Tout est à jour</h2>
-          <p>Aucune tâche en attente sur la phase courante de vos dossiers.</p>
+          {perimetre.type === "moi" && tousLesDossiers && copros.length === 0 ? (
+            <>
+              <h2>Aucun dossier à votre nom</h2>
+              <p>
+                Vos tâches suivent le champ « Chef de projet » des dossiers. Pour voir celles d'un autre chef de projet,
+                choisissez-le dans le filtre du <Link to="/">tableau de bord</Link>.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2>Tout est à jour</h2>
+              <p>Aucune tâche en attente sur la phase courante de {portee}.</p>
+            </>
+          )}
         </div>
       )}
 

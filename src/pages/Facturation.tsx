@@ -45,7 +45,6 @@ import {
   LIBELLE_ETAT,
   TRANCHES_ANCIENNETE,
   caChefProjet,
-  chefProjetEst,
   enSommeil,
   graduations,
   jalonsEnAttente,
@@ -62,6 +61,7 @@ import {
   type SommesHonoraires,
   type TrancheAnciennete,
 } from "@/lib/facturation";
+import { chefProjetEst } from "@/lib/perimetreChef";
 
 // ---------- repères ----------
 

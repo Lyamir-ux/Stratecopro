@@ -4,10 +4,12 @@ import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { useUi, type Accent } from "@/stores/ui";
 import { useAuth } from "@/auth/AuthProvider";
-import { useCopros, useTasksCount } from "@/api/copros";
+import { useCopros, useTachesOuvertesParDossier } from "@/api/copros";
 import { useQuestionsEnAttenteCount } from "@/api/consultations";
 import { usePptRapportsRevue } from "@/api/ppt";
-import { usePiecesAVerifierCount } from "@/api/portail";
+import { usePiecesAVerifierParDossier } from "@/api/portail";
+import { usePerimetreTaches } from "@/api/taches";
+import { dansPerimetre } from "@/lib/perimetreChef";
 import { compteNouvelles, useDemandesAmo } from "@/api/demandesAmo";
 import { compteEnAttente, useHonoraires } from "@/api/honoraires";
 import { declencherRappelAgrements } from "@/api/prestataires";
@@ -46,11 +48,18 @@ export function Layout() {
     void declencherSignatureCron();
   }, []);
   const { data: copros } = useCopros();
-  const { data: tasksCount } = useTasksCount();
-  // pièces justificatives déposées au portail en attente de vérification :
-  // elles s'ajoutent à la pastille « Vos tâches », où la file est affichée en tête
-  const { data: piecesCount } = usePiecesAVerifierCount();
-  const tachesEtPieces = (tasksCount ?? 0) + (piecesCount ?? 0);
+  // Pastille « Vos tâches » (bug d'Amir du 04/10/2026) : dossiers du chef de
+  // projet choisi sur le tableau de bord, à défaut ceux du compte connecté.
+  // Les pièces justificatives déposées au portail en attente de vérification
+  // s'y ajoutent, la file étant affichée en tête de la page.
+  const perimetre = usePerimetreTaches();
+  const { data: tachesParDossier } = useTachesOuvertesParDossier();
+  const { data: piecesParDossier } = usePiecesAVerifierParDossier();
+  const dossiersPerimetre = (copros ?? []).filter((c) => dansPerimetre(perimetre, c.chef_projet));
+  const tachesEtPieces = dossiersPerimetre.reduce(
+    (n, c) => n + (tachesParDossier?.get(c.id) ?? 0) + (piecesParDossier?.get(c.id) ?? 0),
+    0
+  );
   // alerte du menu « Consulter un intervenant » : questions de prestataires sans réponse
   const { data: questionsCount } = useQuestionsEnAttenteCount();
   // alerte du menu « Suivi PPT » : rapports déposés ou analysés en attente de revue
@@ -79,7 +88,7 @@ export function Layout() {
     <div className={"app" + (collapsed ? " collapsed" : "")}>
       <Sidebar
         recents={recents}
-        tasksCount={tasksCount == null && piecesCount == null ? null : tachesEtPieces}
+        tasksCount={!copros || (tachesParDossier == null && piecesParDossier == null) ? null : tachesEtPieces}
         questionsCount={questionsCount || null}
         pptCount={pptCount || null}
         demandesCount={demandesCount || null}

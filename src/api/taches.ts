@@ -1,6 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Tables } from "@/lib/database.types";
+import { useAuth } from "@/auth/AuthProvider";
+import { useUi } from "@/stores/ui";
+import { perimetreTaches, type PerimetreChef } from "@/lib/perimetreChef";
+
+/** Périmètre de « Vos tâches » : chef de projet choisi sur le tableau de bord, à défaut le compte connecté. */
+export function usePerimetreTaches(): PerimetreChef {
+  const filtre = useUi((s) => s.chefProjetFilter);
+  const { profile } = useAuth();
+  return perimetreTaches(filtre, profile?.full_name);
+}
 
 export type Tache = Tables<"taches"> & {
   assignee: { initials: string; full_name: string } | null;

@@ -627,17 +627,16 @@ export function usePiecesAVerifier() {
   });
 }
 
-/** Nombre de pièces à vérifier - pastille du menu AMO. */
-export function usePiecesAVerifierCount() {
+/** Nombre de pièces à vérifier par dossier - pastille « Vos tâches », limitée à son périmètre. */
+export function usePiecesAVerifierParDossier() {
   return useQuery({
     queryKey: ["pieces-a-verifier", "count"],
-    queryFn: async (): Promise<number> => {
-      const { count, error } = await supabase
-        .from("pieces_justificatives")
-        .select("id", { count: "exact", head: true })
-        .eq("statut", "a_verifier");
+    queryFn: async (): Promise<Map<string, number>> => {
+      const { data, error } = await supabase.from("pieces_justificatives").select("copro_id").eq("statut", "a_verifier");
       if (error) throw error;
-      return count ?? 0;
+      const parDossier = new Map<string, number>();
+      for (const p of data ?? []) parDossier.set(p.copro_id, (parDossier.get(p.copro_id) ?? 0) + 1);
+      return parDossier;
     },
     refetchInterval: 120_000,
   });
