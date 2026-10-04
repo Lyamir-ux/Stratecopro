@@ -141,10 +141,24 @@ describe("adresses", () => {
     expect(occupationPresumee("14 rue de la Zorn 67300 SCHILTIGHEIM", lieux)).toBe("occupant");
     expect(occupationPresumee("Appt 5, 16 R. DE LA ZORN", lieux)).toBe("occupant");
   });
-  it("autre numéro, autre code postal ou autre voie : bailleur", () => {
+  it("autre numéro, autre département ou autre voie : bailleur", () => {
     expect(occupationPresumee("18 rue de la Zorn 67300 Schiltigheim", lieux)).toBe("bailleur");
-    expect(occupationPresumee("14 rue de la Zorn 67000 Strasbourg", lieux)).toBe("bailleur");
+    expect(occupationPresumee("14 rue de la Zorn 68000 Colmar", lieux)).toBe("bailleur");
     expect(occupationPresumee("5 place Kléber 67000 Strasbourg", lieux)).toBe("bailleur");
+  });
+  it("même adresse avec un autre code postal du département : occupant (règle d'Amir du 04/10/2026)", () => {
+    // 2-4 rue Léo LAGRANGE saisi en 10000, copropriétaires en 10600 La Chapelle-Saint-Luc
+    const lagrange = [{ adresse: "2-4 rue Léo LAGRANGE", cp: "10000" }];
+    expect(occupationPresumee("4 rue Léo Lagrange, 10600 La Chapelle Saint-Luc", lagrange)).toBe("occupant");
+    expect(occupationPresumee("2 rue Léo Lagrange, 10600 La Chapelle Saint-Luc", lagrange)).toBe("occupant");
+    expect(occupationPresumee("4 rue Léo Lagrange, Appt 4, 10600 La Chapelle Saint Luc", lagrange)).toBe("occupant");
+    expect(occupationPresumee("5 rue Maréchal Leclerc, 10600 La Chapelle Saint Luc", lagrange)).toBe("bailleur");
+    expect(occupationPresumee("2 rue de Champagne, 10120 Saint-Germain", lagrange)).toBe("bailleur");
+    expect(occupationPresumee("6 rue Léo Lagrange, 10600 La Chapelle Saint-Luc", lagrange)).toBe("bailleur");
+    expect(occupationPresumee("4 rue Léo Lagrange, 69100 Villeurbanne", lagrange)).toBe("bailleur");
+    expect(occupationPresumee("14 rue de la Zorn 67000 Strasbourg", lieux)).toBe("occupant");
+    // outre-mer : le département tient sur 3 chiffres
+    expect(occupationPresumee("3 rue Schoelcher 97200 Fort-de-France", [{ adresse: "3 rue Schoelcher", cp: "97100" }])).toBe("bailleur");
   });
   it("adresse absente : inconnu", () => {
     expect(occupationPresumee(null, lieux)).toBeNull();

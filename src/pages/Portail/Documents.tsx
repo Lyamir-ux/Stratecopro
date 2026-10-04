@@ -25,7 +25,9 @@ import { downloadFichier } from "@/api/fichiers";
 import {
   libelleQualification,
   useFichiersPartages,
+  urlSigneePiece,
   useMesPieces,
+  useSupprimerPiece,
   useUploadPiece,
   type Membership,
   type PieceJustificative,
@@ -58,6 +60,9 @@ function DepotPiece({
   const [depot, setDepot] = useState<File | null>(null);
   // Nom du fichier qui vient d'être transmis (fenêtre de confirmation)
   const [transmis, setTransmis] = useState<string | null>(null);
+  const supprimer = useSupprimerPiece(membership.coproprietaireId);
+  const [confirmerSuppr, setConfirmerSuppr] = useState(false);
+  const [erreurPiece, setErreurPiece] = useState<string | null>(null);
 
   // Encadré : vert une fois validé par Strat Eco, orange en attente de
   // vérification, rouge si refusé (feedback Amir 10/09).
@@ -121,6 +126,46 @@ function DepotPiece({
         <p className="se-small" style={{ color: "var(--color-error-700)", margin: 0 }}>
           Le téléversement a échoué. Vérifiez le fichier (PDF ou image) et réessayez.
         </p>
+      )}
+      {piece && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: -6 }}>
+          <button
+            className="se-btn se-btn-ghost btn-sm"
+            onClick={() => void urlSigneePiece(piece.storage_path).then((u) => window.open(u, "_blank", "noopener")).catch((e) => setErreurPiece(messageErreur(e, "Ouverture impossible.")))}
+          >
+            <Icon name="eye" size={13} />
+            Voir mon fichier
+          </button>
+          {piece.statut !== "valide" && (
+            <button className="se-btn se-btn-ghost btn-sm" disabled={supprimer.isPending} onClick={() => setConfirmerSuppr(true)}>
+              <Icon name="trash" size={13} />
+              Supprimer
+            </button>
+          )}
+          {erreurPiece && <span className="se-small" style={{ color: "var(--color-error-700)" }}>{erreurPiece}</span>}
+        </div>
+      )}
+      {confirmerSuppr && piece && (
+        <Modal title="Supprimer cette pièce ?" onClose={() => setConfirmerSuppr(false)} width={480}>
+          <p className="se-body" style={{ marginTop: 0, overflowWrap: "anywhere" }}>
+            Le fichier « {piece.name} » sera retiré de votre dossier. Vous pourrez en déposer un autre à tout moment.
+          </p>
+          <div className="eq-confirm-actions">
+            <button className="se-btn se-btn-secondary" onClick={() => setConfirmerSuppr(false)}>Annuler</button>
+            <button
+              className="se-btn se-btn-primary"
+              disabled={supprimer.isPending}
+              onClick={() =>
+                supprimer.mutate(piece, {
+                  onSuccess: () => setConfirmerSuppr(false),
+                  onError: (e) => { setConfirmerSuppr(false); setErreurPiece(messageErreur(e, "Suppression impossible.")); },
+                })
+              }
+            >
+              {supprimer.isPending ? "Suppression…" : "Supprimer"}
+            </button>
+          </div>
+        </Modal>
       )}
 
       {depot && (

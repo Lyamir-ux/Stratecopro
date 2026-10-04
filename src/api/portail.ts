@@ -570,6 +570,27 @@ export function useUploadPiece(coproId: string, coproprietaireId: string) {
   });
 }
 
+/**
+ * Retire une pièce déposée par erreur (feedback Amir 04/10). Une pièce déjà
+ * validée par Strat Eco ne s'efface pas : elle se remplace.
+ */
+export function useSupprimerPiece(coproprietaireId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (piece: Pick<PieceJustificative, "id" | "storage_path" | "statut">) => {
+      if (piece.statut === "valide") throw new Error("Une pièce validée ne peut pas être supprimée : déposez-en une nouvelle version.");
+      const { error } = await supabase.from("pieces_justificatives").delete().eq("id", piece.id);
+      if (error) throw error;
+      // objet Storage : au mieux, la ligne a déjà disparu
+      await supabase.storage.from("pieces-copro").remove([piece.storage_path]).catch(() => undefined);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["portail", "pieces", coproprietaireId] });
+      void qc.invalidateQueries({ queryKey: ["pieces-a-verifier"] });
+    },
+  });
+}
+
 // ---------- Vérification des pièces par l'équipe Strat Eco (feedback Amir 10/09) ----------
 // Toute pièce déposée est « à vérifier » (trigger 0079 : dépositaire et date
 // tracés). L'administratif la qualifie depuis l'app ; un refus déclenche un

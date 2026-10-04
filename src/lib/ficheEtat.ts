@@ -365,11 +365,17 @@ export interface LieuCopro {
   cp?: string | null;
 }
 
+/** Département d'un code postal (3 chiffres outre-mer). */
+const departementDe = (cp: string) => (/^9[78]/.test(cp) ? cp.slice(0, 3) : cp.slice(0, 2));
+
 /**
  * Occupation présumée d'un copropriétaire d'après son adresse postale : même
- * voie (et même numéro, même code postal quand ils sont connus) que la
- * copropriété ou l'un de ses bâtiments = occupant ; autre adresse = bailleur ;
- * adresse absente ou illisible = inconnu (null).
+ * voie (et même numéro quand il est connu) que la copropriété ou l'un de ses
+ * bâtiments = occupant ; autre adresse = bailleur ; adresse absente ou
+ * illisible = inconnu (null). Règle d'Amir du 04/10/2026 : une adresse postale
+ * identique à l'une des adresses de la copropriété vaut occupant, même si le
+ * code postal diffère (2-4 rue Léo LAGRANGE saisi en 10000, copropriétaires en
+ * 10600) ; seul un code postal d'un autre département écarte la correspondance.
  */
 export function occupationPresumee(
   adresseCoproprietaire: string | null | undefined,
@@ -381,7 +387,7 @@ export function occupationPresumee(
   if (refs.length === 0) return null;
   const correspond = refs.some((r) => {
     if (!contientSuite(a.voie, r.voie) && !contientSuite(r.voie, a.voie)) return false;
-    if (a.cp && r.cp && a.cp !== r.cp) return false;
+    if (a.cp && r.cp && departementDe(a.cp) !== departementDe(r.cp)) return false;
     if (a.numeros.length && r.numeros.length && !a.numeros.some((n) => r.numeros.includes(n))) return false;
     return true;
   });
