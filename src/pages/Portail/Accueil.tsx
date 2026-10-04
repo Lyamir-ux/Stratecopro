@@ -118,7 +118,8 @@ export function Accueil({
   return (
     <div className="fade">
       <div className="greet">
-        <h1>Bonjour {userName.split(" ")[0]}</h1>
+        {/* nom et prénom complets (bug d'Amir du 04/10/2026 : seul le premier mot restait) */}
+        <h1>Bonjour {userName.trim()}</h1>
         <p>
           Voici le suivi de la rénovation énergétique de la copropriété <b>{copro.name}</b>. Le projet est en
           phase <b>{PHASES[phaseIdx]?.label ?? copro.phase}</b> : retrouvez ici votre plan de financement,

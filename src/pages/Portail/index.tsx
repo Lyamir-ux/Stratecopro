@@ -199,7 +199,7 @@ function CoproSelect({
         <div className="portal-choix-in">
           <div className="se-eyebrow" style={{ justifyContent: "center" }}>Votre espace</div>
           <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 34, margin: "10px 0 8px", letterSpacing: "-0.02em" }}>
-            Bonjour {userName.split(" ")[0]}
+            Bonjour {userName.trim()}
           </h1>
           <p className="se-body" style={{ marginTop: 0, marginBottom: 28 }}>
             Sélectionnez votre copropriété pour accéder au suivi de votre projet de rénovation.
