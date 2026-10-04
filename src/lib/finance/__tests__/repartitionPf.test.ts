@@ -20,6 +20,47 @@ const copros: CoproTantiemes[] = [
 
 const totauxCles = { GEN: 1000, CHAUF: 1000 };
 
+describe("aides et fonds travaux avec leur propre clé", () => {
+  const cleParItem = { "lot:1": "GEN", "lot:2": "GEN", "moe:0": "GEN" };
+  // lot « Habitat social » hors de la clé SANS : Dupont 600, Martin 400, Hlm 0 (total SANS = 1000)
+  const coprosHlm: CoproTantiemes[] = [
+    ...copros.map((c) => ({ ...c, tantiemes: { ...c.tantiemes, SANS: c.tantiemes.GEN } })),
+    { coproprietaireId: "h", nom: "Hlm", tantiemes: { GEN: 0, SANS: 0 } },
+  ];
+  const base = { items, cleParItem, copros: coprosHlm, totauxCles: { GEN: 1000, SANS: 1000 }, totalAides: 0, totalOperationTtc: 160000 };
+
+  it("déduit une aide des seuls copropriétaires de sa clé", () => {
+    const { plans } = computePlansIndividuelsPf({
+      ...base,
+      aides: [{ montant: 16000, cle: "SANS" }],
+      fondsTravaux: 0,
+    });
+    const dupont = plans.find((p) => p.nom === "Dupont")!;
+    const martin = plans.find((p) => p.nom === "Martin")!;
+    expect(dupont.aidesEtFonds).toBeCloseTo(9600, 2); // 60 % de l'aide
+    expect(martin.aidesEtFonds).toBeCloseTo(6400, 2);
+    expect(dupont.reste).toBeCloseTo(96000 - 9600, 2);
+  });
+
+  it("sans clé : au prorata de la quote-part, prime CEE isolée", () => {
+    const { plans } = computePlansIndividuelsPf({
+      ...base,
+      aides: [{ montant: 16000 }, { montant: 8000, prive: true }],
+      fondsTravaux: 0,
+    });
+    const dupont = plans.find((p) => p.nom === "Dupont")!;
+    expect(dupont.aidesEtFonds).toBeCloseTo(0.6 * 24000, 2);
+    expect(dupont.primeCee).toBeCloseTo(0.6 * 8000, 2);
+  });
+
+  it("clé du fonds travaux et repli sans détail d'aides", () => {
+    const avecCle = computePlansIndividuelsPf({ ...base, aides: [], fondsTravaux: 10000, cleFondsTravaux: "SANS" });
+    expect(avecCle.plans.find((p) => p.nom === "Martin")!.aidesEtFonds).toBeCloseTo(4000, 2);
+    const ancien = computePlansIndividuelsPf({ ...base, totalAides: 16000, primeCee: 0, fondsTravaux: 0 });
+    expect(ancien.plans.find((p) => p.nom === "Dupont")!.aidesEtFonds).toBeCloseTo(9600, 2);
+  });
+});
+
 describe("computePlansIndividuelsPf", () => {
   it("répartit tout suivant une clé unique", () => {
     const cleParItem = { "lot:1": "GEN", "lot:2": "GEN", "moe:0": "GEN" };

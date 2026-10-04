@@ -52,6 +52,24 @@ export function itemsARepartirPf(data: PlanDefinitifData, r: PlanDefinitifResult
   return items;
 }
 
+/** Aide (ou fonds travaux) à déduire des quotes-parts, avec sa clé de répartition éventuelle. */
+export interface DeductionPf {
+  montant: number;
+  /** Prime privée (CEE) : versée en fin de chantier, isolée dans `primeCee`. */
+  prive?: boolean;
+  /** Clé (code) de l'aide : déduite des seuls copropriétaires de cette clé. Absente : au prorata de la quote-part. */
+  cle?: string;
+}
+
+/** Aides du PF avec leur clé, dans l'ordre du plan (les montants viennent du résultat calculé). */
+export function aidesARepartirPf(data: PlanDefinitifData, r: PlanDefinitifResult): DeductionPf[] {
+  return data.aides.map((a, i) => ({
+    montant: r.aides[i]?.montant ?? 0,
+    prive: !a.publique,
+    cle: a.cleRepartition,
+  }));
+}
+
 /** Tantièmes d'un copropriétaire par code de clé (sommés sur ses lots). */
 export interface CoproTantiemes {
   coproprietaireId: string;
@@ -79,7 +97,8 @@ export interface PlanIndividuelPf {
  * Répartit chaque ligne suivant sa clé : part du copropriétaire =
  * tantièmes(copro, clé) / total(clé). La clé d'une ligne est `cleParItem`
  * (prioritaire - cas de la clé unique) puis la clé portée par la ligne.
- * Les aides et le fonds travaux sont déduits au prorata de la quote-part.
+ * Les aides et le fonds travaux sont déduits suivant leur propre clé quand
+ * elle est renseignée, sinon au prorata de la quote-part.
  * Retourne aussi les lignes sans clé exploitable (clé non choisie ou total
  * de clé nul) - le plan n'est complet que si `manquants` est vide.
  */
@@ -94,7 +113,15 @@ export function computePlansIndividuelsPf(input: {
   totalAides: number;
   /** Prime CEE comprise dans `totalAides` (0 si absente). */
   primeCee?: number;
+  /**
+   * Aides détaillées avec leur clé : chacune est déduite suivant sa clé
+   * (tantièmes du copropriétaire / total de la clé). Absent, ou aide sans clé :
+   * déduction au prorata de la quote-part (`totalAides` ne sert alors que sans ce détail).
+   */
+  aides?: DeductionPf[];
   fondsTravaux: number;
+  /** Clé du fonds travaux (absente : au prorata de la quote-part). */
+  cleFondsTravaux?: string;
   totalOperationTtc: number;
 }): { plans: PlanIndividuelPf[]; manquants: ItemRepartitionPf[] } {
   const { items, cleParItem, copros, totauxCles, totalAides, fondsTravaux, totalOperationTtc } = input;
@@ -116,19 +143,37 @@ export function computePlansIndividuelsPf(input: {
     }
   }
 
-  const tauxDeduction = totalOperationTtc > 0 ? (totalAides + fondsTravaux) / totalOperationTtc : 0;
-  const tauxCee = totalOperationTtc > 0 ? primeCee / totalOperationTtc : 0;
+  const deductions: DeductionPf[] = [
+    ...(input.aides ?? [
+      { montant: totalAides - primeCee },
+      { montant: primeCee, prive: true },
+    ]),
+    { montant: fondsTravaux, cle: input.cleFondsTravaux },
+  ];
   const plans = copros
     .filter((co) => (parts.get(co.coproprietaireId) ?? 0) > 0)
     .map((co): PlanIndividuelPf => {
       const quotePartAvant = parts.get(co.coproprietaireId) ?? 0;
-      const aidesEtFonds = quotePartAvant * tauxDeduction;
+      let aidesEtFonds = 0;
+      let cee = 0;
+      for (const d of deductions) {
+        // clé inconnue ou de total nul : repli au prorata de la quote-part
+        const total = d.cle ? totauxCles[d.cle] : 0;
+        const part =
+          d.cle && total > 0
+            ? ((co.tantiemes[d.cle] ?? 0) / total) * d.montant
+            : totalOperationTtc > 0
+              ? (quotePartAvant / totalOperationTtc) * d.montant
+              : 0;
+        aidesEtFonds += part;
+        if (d.prive) cee += part;
+      }
       return {
         coproprietaireId: co.coproprietaireId,
         nom: co.nom,
         quotePartAvant: round2(quotePartAvant),
         aidesEtFonds: round2(aidesEtFonds),
-        primeCee: round2(quotePartAvant * tauxCee),
+        primeCee: round2(cee),
         reste: round2(quotePartAvant - aidesEtFonds),
       };
     })
@@ -193,7 +238,9 @@ export function repartirPfDepuisLots(
     totauxCles,
     totalAides: r.totalAides,
     primeCee: r.primeCee,
+    aides: aidesARepartirPf(data, r),
     fondsTravaux: data.params.fondsTravaux,
+    cleFondsTravaux: data.params.cleFondsTravaux,
     totalOperationTtc: r.totalOperationTtc,
   });
   const cleRef = cleUnique ?? cles.find((k) => k.is_default)?.code ?? cles[0]?.code ?? null;

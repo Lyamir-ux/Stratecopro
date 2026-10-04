@@ -30,7 +30,8 @@ export function exportPlanDefinitif(data: PlanDefinitifData): WorkBook {
   // (colonne dédiée) - elle pilote les plans individuels dans le logiciel.
   const avecCles =
     data.lots.some((lot) => lot.lignes.some((l) => l.cleRepartition)) ||
-    data.moe.some((l) => l.cleRepartition);
+    data.moe.some((l) => l.cleRepartition) ||
+    data.aides.some((a) => a.cleRepartition);
 
   const lotSheetNames = new Map<number, string>();
 
@@ -120,12 +121,12 @@ export function exportPlanDefinitif(data: PlanDefinitifData): WorkBook {
     push(null);
 
     // Aides mobilisables
-    push(null, "Aides mobilisables", null, "Scénario 1", "Commentaires");
+    push(null, "Aides mobilisables", null, "Scénario 1", "Commentaires", avecCles ? "Clé de répartition" : null);
     let dernierGroupe = "";
-    for (const a of r.aides) {
-      push(a.groupe !== dernierGroupe ? a.groupe : null, a.libelle, null, a.montant, a.commentaire ?? null);
+    r.aides.forEach((a, i) => {
+      push(a.groupe !== dernierGroupe ? a.groupe : null, a.libelle, null, a.montant, a.commentaire ?? null, avecCles ? data.aides[i]?.cleRepartition ?? null : null);
       dernierGroupe = a.groupe;
-    }
+    });
     push(null, "Total Aides NET", null, r.totalAides);
     push(null, "Total aides publiques", null, r.totalAidesPubliques);
     if (variante === "individuel") {

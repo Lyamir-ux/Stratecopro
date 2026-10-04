@@ -15,11 +15,9 @@ import { useScenariosPartages, useFinancementConfig, useSaveChoixGestionnaire } 
 import { usePlansDefinitifs, type PlanDefinitif } from "@/api/planDefinitif";
 import {
   computePlanDefinitif,
-  computePlansIndividuelsPf,
-  itemsARepartirPf,
   readPlanDefinitif,
   regrouperAnnexes,
-  type CoproTantiemes,
+  repartirPfDepuisLots,
   type PlanDefinitifResult,
 } from "@/lib/finance";
 import type { Enums } from "@/lib/database.types";
@@ -238,32 +236,7 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
   const appelsDeFonds = useMemo(() => {
     const inscrits = appelsInscrits?.length ? appelsDepuisInscrits(appelsInscrits) : null;
     if (!pf || !donnees) return inscrits;
-    const items = itemsARepartirPf(pf.data, pf.pv);
-    const totauxCles: Record<string, number> = {};
-    const parCopro = new Map<string, CoproTantiemes>();
-    for (const lot of donnees.lots) {
-      for (const [code, t] of Object.entries(lot.tantiemes)) totauxCles[code] = (totauxCles[code] ?? 0) + t;
-      if (!lot.coproprietaire_id) continue;
-      const co =
-        parCopro.get(lot.coproprietaire_id) ??
-        { coproprietaireId: lot.coproprietaire_id, nom: lot.coproprietaire?.nom ?? "-", tantiemes: {} };
-      for (const [code, t] of Object.entries(lot.tantiemes)) co.tantiemes[code] = (co.tantiemes[code] ?? 0) + t;
-      parCopro.set(lot.coproprietaire_id, co);
-    }
-    const cleUnique = donnees.cles.length === 1 ? donnees.cles[0].code : null;
-    const cleParItem: Record<string, string> = cleUnique
-      ? Object.fromEntries(items.map((it) => [it.id, cleUnique]))
-      : {};
-    const { plans, manquants } = computePlansIndividuelsPf({
-      items,
-      cleParItem,
-      copros: [...parCopro.values()],
-      totauxCles,
-      totalAides: pf.pv.totalAides,
-      primeCee: pf.pv.primeCee,
-      fondsTravaux: pf.data.params.fondsTravaux,
-      totalOperationTtc: pf.pv.totalOperationTtc,
-    });
+    const { plans, manquants } = repartirPfDepuisLots(pf.data, pf.pv, donnees.lots, donnees.cles);
     // Répartition incomplète (clé manquante sur une ligne) : montants inscrits
     // s'il y en a, sinon rien plutôt que des montants faux.
     if (manquants.length > 0) return inscrits;

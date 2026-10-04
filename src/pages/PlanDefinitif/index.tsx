@@ -90,10 +90,13 @@ function CleSelect({
   cles,
   value,
   onChange,
+  vide = "- choisir -",
 }: {
   cles: CleCopro[];
   value: string | undefined;
   onChange: (code: string | undefined) => void;
+  /** Libellé de l'option sans clé. */
+  vide?: string;
 }) {
   return (
     <select
@@ -102,7 +105,7 @@ function CleSelect({
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value || undefined)}
     >
-      <option value="">- choisir -</option>
+      <option value="">{vide}</option>
       {cles.map((k) => (
         <option key={k.code} value={k.code}>
           {k.code}
@@ -870,6 +873,11 @@ export default function PlanDefinitifPage() {
                     Publique
                   </th>
                   <th style={{ ...thR, width: 120 }}>Montant</th>
+                  {multiCles && (
+                    <th style={{ width: 190 }} title="Clé qui répartit l'aide entre copropriétaires (sans clé : au prorata de la quote-part)">
+                      Clé de répartition
+                    </th>
+                  )}
                   <th style={{ width: 36 }}></th>
                 </tr>
               </thead>
@@ -908,6 +916,16 @@ export default function PlanDefinitifPage() {
                     <td className="mono" style={tdR}>
                       {r.aides[i]?.montant == null ? "-" : fmtEuroFull(r.aides[i].montant)}
                     </td>
+                    {multiCles && (
+                      <td>
+                        <CleSelect
+                          cles={cles}
+                          value={a.cleRepartition}
+                          vide="Au prorata de la quote-part"
+                          onChange={(code) => edit((d) => ((d.aides[i].cleRepartition = code), d))}
+                        />
+                      </td>
+                    )}
                     <td>
                       <button className="icon-btn" title="Supprimer" onClick={() => edit((d) => (d.aides.splice(i, 1), d))}>
                         <Icon name="x" size={14} />
@@ -973,6 +991,17 @@ export default function PlanDefinitifPage() {
               onChange={(e) => edit((d) => ((d.params.commentaireFondsTravaux = e.target.value || undefined), d))}
             />
           </label>
+          {multiCles && (
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: "var(--fg2)" }}>
+              Clé du fonds travaux
+              <CleSelect
+                cles={cles}
+                value={data.params.cleFondsTravaux}
+                vide="Au prorata de la quote-part"
+                onChange={(code) => edit((d) => ((d.params.cleFondsTravaux = code), d))}
+              />
+            </label>
+          )}
         </div>
       </div>
 

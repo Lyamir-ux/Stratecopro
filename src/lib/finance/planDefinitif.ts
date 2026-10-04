@@ -112,6 +112,12 @@ export interface AideDef {
   calcul: ModeAide;
   /** false pour la prime CEE (aide privée) - exclue du « Total aides publiques ». */
   publique: boolean;
+  /**
+   * Code de la clé de répartition de l'aide : elle n'est déduite que des
+   * copropriétaires de cette clé (ex. aide MPR sur « Clé sans HLM »). Absent :
+   * déduite au prorata de la quote-part de l'opération.
+   */
+  cleRepartition?: string;
   commentaire?: string;
 }
 
@@ -153,6 +159,8 @@ export interface ParamsFinancement {
   /** Fonds travaux (loi ALUR) mobilisé. */
   fondsTravaux: number;
   commentaireFondsTravaux?: string;
+  /** Clé de répartition du fonds travaux (absent : au prorata de la quote-part). */
+  cleFondsTravaux?: string;
   /** Total de tantièmes de la copropriété (base des quotes-parts). */
   totalTantiemes: number;
   /** Tantièmes des lots donnés en exemple dans le plan. */
