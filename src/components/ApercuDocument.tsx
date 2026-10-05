@@ -29,11 +29,18 @@ export function ApercuDocument({
   useEffect(() => {
     if (!affichable) return;
     let vivant = true;
+    let blobUrl: string | null = null;
     urlSignee(path)
-      .then((u) => vivant && setUrl(u))
+      .then((u) => {
+        // lien « blob: » (document récupéré en mémoire) : libéré à la fermeture
+        if (u.startsWith("blob:")) blobUrl = u;
+        if (vivant) setUrl(u);
+        else if (blobUrl) URL.revokeObjectURL(blobUrl);
+      })
       .catch(() => vivant && setErreur(true));
     return () => {
       vivant = false;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
     };
   }, [path, affichable, urlSignee]);
 

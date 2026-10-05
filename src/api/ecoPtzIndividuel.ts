@@ -244,6 +244,17 @@ export async function urlDocumentSignature(documentId: string, version: "origina
   return String(r.url ?? "");
 }
 
+/**
+ * Aperçu sans téléchargement (feedback d'Amir du 05/10/2026) : le lien court
+ * est servi en pièce jointe, on récupère donc le PDF en mémoire et on l'affiche
+ * par un lien « blob: » (libéré à la fermeture de l'aperçu).
+ */
+export async function urlApercuDocumentSignature(documentId: string): Promise<string> {
+  const r = await fetch(await urlDocumentSignature(documentId, "signe"));
+  if (!r.ok) throw new Error("Document indisponible");
+  return URL.createObjectURL(new Blob([await r.blob()], { type: "application/pdf" }));
+}
+
 export async function ouvrirDocumentSignature(documentId: string, version: "original" | "signe") {
   // fenêtre ouverte avant l'appel : sinon le bloqueur de fenêtres la refuse
   const w = window.open("", "_blank");

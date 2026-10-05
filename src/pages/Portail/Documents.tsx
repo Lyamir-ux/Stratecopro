@@ -19,9 +19,10 @@ import { useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import { RenommageDialog } from "@/components/RenommageDialog";
+import { ApercuDocument } from "@/components/ApercuDocument";
 import { Badge } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
-import { downloadFichier } from "@/api/fichiers";
+import { downloadFichier, estVisualisable, type Fichier } from "@/api/fichiers";
 import {
   libelleQualification,
   useFichiersPartages,
@@ -35,7 +36,7 @@ import {
 import { CGU_VERSION } from "@/lib/cguSignature";
 import { PIECES_SITUATION, type PieceAttendue } from "@/lib/piecesSituation";
 import { useAccepterCguDepot, useCguDepotPieces } from "@/api/signature";
-import { ouvrirDocumentSignature, useMesDocumentsEcoPtz } from "@/api/ecoPtzIndividuel";
+import { ouvrirDocumentSignature, urlApercuDocumentSignature, useMesDocumentsEcoPtz } from "@/api/ecoPtzIndividuel";
 import { messageErreur } from "@/lib/erreurs";
 
 function fmtSize(bytes: number | null): string {
@@ -344,8 +345,8 @@ export function Documents({ membership }: { membership: Membership }) {
     <div className="fade">
       <h1 className="sec-title">Documents du projet</h1>
       <p className="sec-sub">
-        Les documents de la rénovation que votre AMO met à votre disposition. Vous pouvez les télécharger à tout
-        moment.
+        Les documents de la rénovation que votre AMO met à votre disposition. Vous pouvez les consulter à l'écran
+        (l'œil) ou les télécharger à tout moment.
       </p>
       <DocumentsEcoPtz membership={membership} />
       <DocumentsProjet membership={membership} />
@@ -362,6 +363,7 @@ export function Documents({ membership }: { membership: Membership }) {
 export function DocumentsEcoPtz({ membership }: { membership: Membership }) {
   const { data: docs } = useMesDocumentsEcoPtz(membership.coproprietaireId);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [apercu, setApercu] = useState<{ id: string; nom: string } | null>(null);
   if (!docs?.length) return null;
   return (
     <div className="card-xl" style={{ marginBottom: 18 }}>
@@ -387,15 +389,24 @@ export function DocumentsEcoPtz({ membership }: { membership: Membership }) {
             </div>
             <span className="spacer"></span>
             {d.statut === "signe" ? (
-              <button
-                className="icon-btn"
-                title="Télécharger le document signé"
-                onClick={() =>
-                  void ouvrirDocumentSignature(d.id, "signe").catch((e) => setErreur(messageErreur(e, "Téléchargement impossible.")))
-                }
-              >
-                <Icon name="download" size={18} />
-              </button>
+              <>
+                <button
+                  className="icon-btn"
+                  title="Aperçu sans téléchargement"
+                  onClick={() => setApercu({ id: d.id, nom: `${d.libelle}.pdf` })}
+                >
+                  <Icon name="eye" size={18} />
+                </button>
+                <button
+                  className="icon-btn"
+                  title="Télécharger le document signé"
+                  onClick={() =>
+                    void ouvrirDocumentSignature(d.id, "signe").catch((e) => setErreur(messageErreur(e, "Téléchargement impossible.")))
+                  }
+                >
+                  <Icon name="download" size={18} />
+                </button>
+              </>
             ) : (
               <Badge kind="blue">En signature</Badge>
             )}
@@ -403,6 +414,17 @@ export function DocumentsEcoPtz({ membership }: { membership: Membership }) {
         ))}
         {erreur && <p className="se-small" style={{ color: "var(--color-error-700)" }}>{erreur}</p>}
       </div>
+      {apercu && (
+        <ApercuDocument
+          name={apercu.nom}
+          path={apercu.id}
+          urlSignee={urlApercuDocumentSignature}
+          onClose={() => setApercu(null)}
+          onTelecharger={() =>
+            void ouvrirDocumentSignature(apercu.id, "signe").catch((e) => setErreur(messageErreur(e, "Téléchargement impossible.")))
+          }
+        />
+      )}
     </div>
   );
 }
@@ -410,6 +432,7 @@ export function DocumentsEcoPtz({ membership }: { membership: Membership }) {
 /** Documents du projet partagés par l'AMO (lecture seule). */
 export function DocumentsProjet({ membership }: { membership: Membership }) {
   const { data: fichiers } = useFichiersPartages(membership.copro.id);
+  const [apercu, setApercu] = useState<Fichier | null>(null);
   const nb = fichiers?.length ?? 0;
 
   return (
@@ -437,6 +460,13 @@ export function DocumentsProjet({ membership }: { membership: Membership }) {
               </div>
             </div>
             <span className="spacer"></span>
+            <button
+              className="icon-btn"
+              title={estVisualisable(doc.name) ? "Aperçu sans téléchargement" : "Ce format ne s'affiche pas dans le navigateur"}
+              onClick={() => setApercu(doc)}
+            >
+              <Icon name="eye" size={18} />
+            </button>
             <button className="icon-btn" title="Télécharger" onClick={() => void downloadFichier(doc)}>
               <Icon name="download" size={18} />
             </button>
@@ -448,6 +478,14 @@ export function DocumentsProjet({ membership }: { membership: Membership }) {
           </p>
         )}
       </div>
+      {apercu && (
+        <ApercuDocument
+          name={apercu.name}
+          path={apercu.storage_path}
+          onClose={() => setApercu(null)}
+          onTelecharger={() => void downloadFichier(apercu)}
+        />
+      )}
     </div>
   );
 }
