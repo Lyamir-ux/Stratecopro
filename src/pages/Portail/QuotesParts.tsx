@@ -24,6 +24,7 @@ import type { SectionId } from "./index";
 import { MentionsPrudence } from "./Mentions";
 import { telechargerPlanIndividuelPdf } from "./planPdf";
 import { ecoPtzPossible, MOTIF_SANS_ECO_PTZ } from "@/lib/financement";
+import { noteResteAFinancer } from "@/lib/specificitesCopro";
 
 export function QuotesParts({
   membership,
@@ -73,6 +74,8 @@ export function QuotesParts({
 
   const indiv = computeIndiv(scn, bareme, plan ?? null, lotT, profil);
   const totalIndiv = computeIndiv(scn, bareme, plan ?? null, totalT, profil);
+  // Rappel propre à certains dossiers (Armorial : hors vente des combles), sans calcul
+  const noteReste = noteResteAFinancer(membership.copro.id);
 
   const telechargerPdf = async () => {
     setPdfBusy(true);
@@ -152,6 +155,12 @@ export function QuotesParts({
                 v: indiv.resteAvantTravaux,
               }}
             />
+            {noteReste && (
+              <div className="cc-next" style={{ marginTop: 14 }}>
+                <Icon name="alert" size={15} className="ico" />
+                <span>{noteReste}</span>
+              </div>
+            )}
             <div className="apres-chantier">
               <div className="ac-head">
                 <Icon name="leaf" size={15} />

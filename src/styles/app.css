@@ -1704,8 +1704,23 @@ table.dossiers.sf-table tfoot td:first-child { text-align: left; }
   background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm); padding: 20px 24px;
 }
-.dpe-vise .dv-chips { display: flex; align-items: center; gap: 12px; flex: none; }
-.dpe-vise .dv-chips .dpe { width: 46px; height: 46px; display: inline-flex; align-items: center; justify-content: center; }
+/* graduation DPE classique avec flèches avant / après (accueil du portail) */
+.echelle-dpe { flex: none; max-width: 100%; display: flex; flex-direction: column; gap: 3px; }
+.echelle-dpe .ed-ligne { display: flex; align-items: center; gap: 8px; }
+.echelle-dpe .ed-barre {
+  display: flex; align-items: center; justify-content: flex-end; box-sizing: border-box; flex: none;
+  height: 24px; padding: 0 9px; border-radius: 3px 12px 12px 3px;
+  font-family: var(--font-display); font-weight: 800; font-size: 14px; color: #1a1a1a;
+  opacity: 0.62;
+}
+.echelle-dpe .ed-barre.dark { color: #fff; }
+.echelle-dpe .ed-concernee .ed-barre { height: 30px; font-size: 17px; opacity: 1; }
+.echelle-dpe .ed-marques { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.echelle-dpe .ed-marque {
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  font-size: 12.5px; font-weight: 700; color: var(--fg2);
+}
+.echelle-dpe .ed-marque.ed-apres { color: var(--accent); }
 .dpe-vise .dv-title { font-family: var(--font-display); font-weight: 800; font-size: 18px; margin-bottom: 4px; }
 .dpe-vise .dv-sub { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--fg2); max-width: 640px; }
 

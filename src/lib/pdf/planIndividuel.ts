@@ -4,6 +4,7 @@
 // Généré de zéro avec pdf-lib (pas de gabarit), charte Strat Eco.
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb, type RGB } from "pdf-lib";
 import { DPE, libellesBatiments, PROFILS_MPR, USAGE_LOT_LABEL, type DpeClass } from "@/lib/referentiels";
+import { noteResteAFinancer, texteEtiquetteVisee } from "@/lib/specificitesCopro";
 import { MENTIONS_PRUDENCE } from "@/pages/Portail/Mentions";
 import type { IndivBreakdown, Membership } from "@/api/portail";
 import type { Bareme, FinanceParams, Profil } from "@/lib/finance";
@@ -308,10 +309,7 @@ export async function genererPlanIndividuelPdf(input: PlanIndividuelPdfInput): P
     f.page.drawText("->", { x: MARGE + 34, y: f.y - 18, size: 12, font: bold, color: GRIS });
     carre(apres, MARGE + 54);
     f.y -= 34;
-    f.paragraphe(
-      "Il s'agit de l'étiquette visée pour l'ensemble du bâtiment après travaux (DPE collectif de la copropriété) - et non de l'étiquette individuelle de votre logement, qui peut différer selon son étage, son exposition ou ses équipements.",
-      { size: 9, color: GRIS }
-    );
+    f.paragraphe(texteEtiquetteVisee(copro.id), { size: 9, color: GRIS });
   }
 
   // ----- plan personnel -----
@@ -330,6 +328,8 @@ export async function genererPlanIndividuelPdf(input: PlanIndividuelPdfInput): P
     euro(indiv.resteAvantTravaux),
     true
   );
+  const noteReste = noteResteAFinancer(copro.id);
+  if (noteReste) f.paragraphe(noteReste, { size: 9, color: GRIS });
   f.paragraphe(
     `Après le chantier : vos CEE (${euro(indiv.cee)}) sont versés une fois les travaux réceptionnés. Ils ne réduisent pas le montant à financer avant travaux, mais viendront en déduction une fois perçus.`,
     { size: 9, color: GRIS }

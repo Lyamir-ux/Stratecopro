@@ -4,8 +4,10 @@
 // documents du projet (onglet « Documents » depuis le 02/10/2026).
 import { useState, type CSSProperties } from "react";
 import { Icon } from "@/components/Icon";
-import { Badge, DpeChip } from "@/components/ui";
+import { Badge } from "@/components/ui";
+import { EchelleDpe } from "@/components/EchelleDpe";
 import { fmtDate, fmtEuro } from "@/lib/format";
+import { noteResteAFinancer, texteEtiquetteVisee } from "@/lib/specificitesCopro";
 import { PHASES, PROFILS_MPR, type DpeClass } from "@/lib/referentiels";
 import { recapPhases } from "@/lib/recapPhases";
 import {
@@ -82,6 +84,8 @@ export function Accueil({
   // - contradiction avec l'enquête à 0/15).
   const aideCollectivePublique = indiv ? Math.max(0, indiv.subvColl - indiv.fondsPart) : null;
   const planPublieLe = scenario?.updated_at ?? null;
+  // Rappel propre à certains dossiers (Armorial : hors vente des combles), sans calcul
+  const noteReste = noteResteAFinancer(copro.id);
 
   // Plan de financement individuel en PDF, directement depuis l'accueil (idée
   // d'Amir du 05/10/2026) : même document que « Mes quotes-parts », sur
@@ -261,6 +265,12 @@ export function Accueil({
               </div>
             </div>
           </div>
+          {noteReste && (
+            <div className="cc-next" style={{ margin: "-12px 0 14px" }}>
+              <Icon name="alert" size={15} className="ico" />
+              <span>{noteReste}</span>
+            </div>
+          )}
           {indiv.cee > 0.5 && (
             <div className="c2e-box" style={{ marginBottom: 14 }}>
               <span className="c2e-ico"><Icon name="leaf" size={20} /></span>
@@ -311,18 +321,10 @@ export function Accueil({
 
       {(dpeAvant || dpeApres) && (
         <div className="dpe-vise" style={{ marginBottom: 26 }}>
-          <div className="dv-chips">
-            <DpeChip cls={dpeAvant} size={22} />
-            <Icon name="arrowRight" size={22} style={{ color: "var(--fg-muted)" }} />
-            <DpeChip cls={dpeApres} size={22} />
-          </div>
+          <EchelleDpe avant={dpeAvant} apres={dpeApres} />
           <div>
             <div className="dv-title">Un changement d'étiquette énergie pour votre immeuble</div>
-            <p className="dv-sub">
-              Il s'agit de l'étiquette <b>visée pour l'ensemble du bâtiment</b> après travaux (DPE collectif de
-              la copropriété) - et non de l'étiquette individuelle de votre logement, qui peut différer selon
-              son étage, son exposition ou ses équipements.
-            </p>
+            <p className="dv-sub">{texteEtiquetteVisee(copro.id)}</p>
           </div>
         </div>
       )}
