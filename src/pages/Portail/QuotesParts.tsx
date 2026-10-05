@@ -141,6 +141,12 @@ export function QuotesParts({
             <h2>{lot ? `Lot n°${lot.num} - de votre quote-part à votre reste à charge` : "Votre quote-part"}</h2>
           </div>
           <div className="cx-body">
+            {noteReste && (
+              <div className="note-attention" role="note">
+                <Icon name="alert" size={22} className="ico" />
+                <span>{noteReste}</span>
+              </div>
+            )}
             <Cascade
               total={{ l: lot ? "Quote-part de travaux du lot n°" + lot.num : "Quote-part de travaux", v: indiv.quotePart }}
               rows={[
@@ -155,12 +161,6 @@ export function QuotesParts({
                 v: indiv.resteAvantTravaux,
               }}
             />
-            {noteReste && (
-              <div className="cc-next" style={{ marginTop: 14 }}>
-                <Icon name="alert" size={15} className="ico" />
-                <span>{noteReste}</span>
-              </div>
-            )}
             <div className="apres-chantier">
               <div className="ac-head">
                 <Icon name="leaf" size={15} />

@@ -14,6 +14,7 @@ import {
   computeIndiv,
   totalTantiemes,
   useFichiersPartages,
+  usePlanDefinitifPartage,
   usePortailTaches,
   type ChoixFinancement,
   type Membership,
@@ -60,6 +61,12 @@ export function Accueil({
   const phaseIdx = PHASES.findIndex((p) => p.id === copro.phase);
   const dpeAvant = (copro.energy_before as DpeClass | null) ?? null;
   const dpeApres = (copro.energy_after as DpeClass | null) ?? null;
+  // Consommations du PF définitif partagé (kWhep/m².an) : elles placent les
+  // flèches avant / après au bon endroit de la graduation (même requête que
+  // « Plan de financement global », donc mise en cache)
+  const { data: pfPartage } = usePlanDefinitifPartage(scenario?.plan_definitif_id ?? null);
+  const cepAvant = pfPartage?.data.infos.cepInitial ?? null;
+  const cepApres = pfPartage?.data.infos.cepProjet ?? null;
   // Tâches du dossier : ce qui est en cours et ce qui reste, sous l'étape courante
   const { data: taches } = usePortailTaches(copro.id);
   const recap = recapPhases({ phase: copro.phase, energyBefore: dpeAvant, dateAg: copro.date_ag, taches });
@@ -219,6 +226,12 @@ export function Accueil({
 
       {indiv ? (
         <>
+          {noteReste && (
+            <div className="note-attention" role="note">
+              <Icon name="alert" size={22} className="ico" />
+              <span>{noteReste}</span>
+            </div>
+          )}
           <div className="tiles tiles-4" style={{ marginBottom: 26 }}>
             <div className="tile">
               <div className="t-lbl"><Icon name="euro" size={16} />Votre quote-part de travaux</div>
@@ -265,12 +278,6 @@ export function Accueil({
               </div>
             </div>
           </div>
-          {noteReste && (
-            <div className="cc-next" style={{ margin: "-12px 0 14px" }}>
-              <Icon name="alert" size={15} className="ico" />
-              <span>{noteReste}</span>
-            </div>
-          )}
           {indiv.cee > 0.5 && (
             <div className="c2e-box" style={{ marginBottom: 14 }}>
               <span className="c2e-ico"><Icon name="leaf" size={20} /></span>
@@ -321,7 +328,7 @@ export function Accueil({
 
       {(dpeAvant || dpeApres) && (
         <div className="dpe-vise" style={{ marginBottom: 26 }}>
-          <EchelleDpe avant={dpeAvant} apres={dpeApres} />
+          <EchelleDpe avant={dpeAvant} apres={dpeApres} cepAvant={cepAvant} cepApres={cepApres} />
           <div>
             <div className="dv-title">Un changement d'étiquette énergie pour votre immeuble</div>
             <p className="dv-sub">{texteEtiquetteVisee(copro.id)}</p>
