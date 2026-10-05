@@ -22,6 +22,7 @@ import { libellesBatiments, PROFILS_MPR, USAGE_LOT_LABEL as USAGE_LABEL } from "
 import type { Bareme, Profil } from "@/lib/finance";
 import type { SectionId } from "./index";
 import { MentionsPrudence } from "./Mentions";
+import { telechargerPlanIndividuelPdf } from "./planPdf";
 
 export function QuotesParts({
   membership,
@@ -75,8 +76,7 @@ export function QuotesParts({
   const telechargerPdf = async () => {
     setPdfBusy(true);
     try {
-      const { genererPlanIndividuelPdf, telechargerPdfBytes } = await import("@/lib/pdf/planIndividuel");
-      const bytes = await genererPlanIndividuelPdf({
+      await telechargerPlanIndividuelPdf({
         membership,
         scenarioName: scn.name,
         params,
@@ -85,7 +85,6 @@ export function QuotesParts({
         profil,
         cle,
       });
-      telechargerPdfBytes(bytes, `Plan de financement - ${membership.nom} - ${membership.copro.name}.pdf`);
     } finally {
       setPdfBusy(false);
     }

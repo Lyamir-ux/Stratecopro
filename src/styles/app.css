@@ -1243,6 +1243,8 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .tiles.tiles-4 { grid-template-columns: repeat(4, 1fr); }
 .tile .t-val.indetermine { font-size: 20px; color: var(--fg3); font-weight: 700; padding-top: 6px; }
 .portail-source { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: -14px 0 26px; font-size: 12.5px; color: var(--fg3); }
+/* bouton « Télécharger mon plan de financement individuel » sous la ligne de source (accueil, 05/10) */
+.portail-telecharger { margin: -12px 0 26px; }
 .anah-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .anah-table th {
   text-align: right; font-weight: 700; color: var(--fg-muted); padding: 5px 6px;
@@ -1777,6 +1779,8 @@ table.dossiers.sf-table tfoot td:first-child { text-align: left; }
   .tile { padding: 16px 18px; }
   .tile .t-val { font-size: 26px; margin-top: 6px; }
   .portail-source { margin: -6px 0 20px; }
+  .portail-telecharger { margin: -6px 0 20px; }
+  .portail-telecharger .se-btn { width: 100%; justify-content: center; }
   .dpe-vise { gap: 14px; padding: 16px 18px; }
   .todo-card { gap: 12px; padding: 14px; }
   .todo-card .tc-ico { width: 40px; height: 40px; }

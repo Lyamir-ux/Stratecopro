@@ -2,7 +2,7 @@
 // chaque étape (réalisé / reste à réaliser, idée d'Amir du 02/10/2026), tuiles
 // financières, étiquette énergie visée du bâtiment, à-faire, lien vers les
 // documents du projet (onglet « Documents » depuis le 02/10/2026).
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge, DpeChip } from "@/components/ui";
 import { fmtDate, fmtEuro } from "@/lib/format";
@@ -21,7 +21,9 @@ import {
 import { readParams } from "@/api/scenarios";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Tables } from "@/lib/database.types";
+import { messageErreur } from "@/lib/erreurs";
 import type { SectionId } from "./index";
+import { telechargerPlanIndividuelPdf } from "./planPdf";
 
 export function Accueil({
   membership,
@@ -79,6 +81,33 @@ export function Accueil({
   // - contradiction avec l'enquête à 0/15).
   const aideCollectivePublique = indiv ? Math.max(0, indiv.subvColl - indiv.fondsPart) : null;
   const planPublieLe = scenario?.updated_at ?? null;
+
+  // Plan de financement individuel en PDF, directement depuis l'accueil (idée
+  // d'Amir du 05/10/2026) : même document que « Mes quotes-parts », sur
+  // l'ensemble des lots du copropriétaire.
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfErreur, setPdfErreur] = useState<string | null>(null);
+  const telechargerPlan = async () => {
+    if (!indiv || !scenario || !bareme) return;
+    setPdfBusy(true);
+    setPdfErreur(null);
+    try {
+      const params = readParams(scenario.params, bareme);
+      await telechargerPlanIndividuelPdf({
+        membership,
+        scenarioName: scenario.name,
+        params,
+        bareme,
+        indiv,
+        profil,
+        cle: params.cle,
+      });
+    } catch (e) {
+      setPdfErreur(messageErreur(e, "Le téléchargement du plan a échoué"));
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   const todos: { id: SectionId; done: boolean; ico: string; title: string; sub: string }[] = [
     {
@@ -256,6 +285,13 @@ export function Accueil({
                 <Badge kind="neutral">Non renseigné</Badge>
               )}
             </span>
+          </div>
+          <div className="portail-telecharger">
+            <button className="se-btn se-btn-secondary" onClick={() => void telechargerPlan()} disabled={pdfBusy}>
+              <Icon name="download" size={17} />
+              {pdfBusy ? "Génération du PDF…" : "Télécharger mon plan de financement individuel"}
+            </button>
+            {pdfErreur && <p className="se-small" style={{ color: "var(--color-error-700)", margin: "8px 0 0" }}>{pdfErreur}</p>}
           </div>
         </>
       ) : (
