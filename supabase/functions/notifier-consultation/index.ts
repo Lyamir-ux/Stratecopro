@@ -13,6 +13,13 @@
 // n'alerte que les entreprises choisies par l'équipe, relances comprises ; ce
 // choix passe outre leurs départements, jamais leur « Ne pas consulter ».
 //
+// Depuis 0139 (05/10/2026, idée de Louis) : pour une entreprise, l'équipe peut
+// avoir choisi à quelles adresses envoyer (consultation_destinataires : adresse
+// principale, copies ou adresses de ses contacts). Sans choix, comme avant :
+// principale + copies. Le choix est recoupé avec la fiche au moment de l'envoi
+// (une adresse retirée depuis ne reçoit rien) ; s'il ne reste rien, retour à
+// l'envoi d'office.
+//
 // Envoi réel via Resend si le secret RESEND_API_KEY est configuré
 // (supabase secrets set RESEND_API_KEY=re_xxx [RESEND_FROM="Strat Eco <consultations@strateco.fr>"] [APP_URL=https://...]).
 // Sans clé : chaque notification est journalisée avec le statut 'simule'
@@ -53,6 +60,36 @@ function departementDuCodePostal(cp: string | null | undefined): string | null {
 /** Premier code postal (5 chiffres isolés) d'un texte libre. */
 function codePostalDans(texte: string | null | undefined): string | null {
   return /(?:^|\D)(\d{5})(?!\d)/.exec(texte ?? "")?.[1] ?? null;
+}
+
+const ADRESSE_VALIDE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Adresses qui reçoivent la consultation pour une entreprise, et nom à qui
+ * s'adresse le message. Sans choix : principale + copies (0106) et le contact de
+ * la fiche. Avec choix : les adresses choisies encore connues de l'entreprise
+ * (fiche ou contacts) ; si elles ne désignent qu'un seul contact, le message lui
+ * est adressé.
+ */
+function destinatairesDe(
+  p: { email: string; emails_secondaires: string[] | null; contact_nom: string | null },
+  choisies: string[] | undefined,
+  contacts: { nom: string | null; email: string | null }[],
+): { adresses: string[]; nom: string | null } {
+  const parDefaut = { adresses: [p.email, ...(p.emails_secondaires ?? [])], nom: p.contact_nom };
+  if (!choisies || choisies.length === 0) return parDefaut;
+  // adresse (minuscules) -> nom du contact, null pour une adresse de la fiche
+  const connues = new Map<string, string | null>();
+  for (const e of parDefaut.adresses) connues.set(e.trim().toLowerCase(), null);
+  for (const c of contacts) {
+    const e = (c.email ?? "").trim().toLowerCase();
+    if (e && ADRESSE_VALIDE.test(e) && !connues.has(e)) connues.set(e, c.nom?.trim() || null);
+  }
+  const retenues = [...new Set(choisies.map((e) => e.trim().toLowerCase()))].filter((e) => connues.has(e));
+  if (retenues.length === 0) return parDefaut;
+  const noms = retenues.map((e) => connues.get(e) ?? null);
+  const unSeulContact = noms.every((n) => n) && new Set(noms).size === 1;
+  return { adresses: retenues, nom: unSeulContact ? noms[0] : p.contact_nom };
 }
 
 const cors = {
@@ -163,12 +200,29 @@ Deno.serve(async (req: Request) => {
     .select("*", { count: "exact", head: true })
     .eq("consultation_id", consultation_id);
 
+  // adresses choisies par l'équipe pour certaines entreprises (0139), et contacts de celles-ci
+  const { data: choixAdresses } = await admin
+    .from("consultation_destinataires")
+    .select("prestataire_id, emails")
+    .eq("consultation_id", consultation_id);
+  const adressesChoisies = new Map<string, string[]>(
+    (choixAdresses ?? []).map((r: { prestataire_id: string; emails: string[] }) => [r.prestataire_id, r.emails]),
+  );
+  const idsAvecChoix = cibles.filter((p) => adressesChoisies.has(p.id)).map((p) => p.id);
+  const { data: contactsChoix } = idsAvecChoix.length
+    ? await admin.from("prestataire_contacts").select("prestataire_id, nom, email").in("prestataire_id", idsAvecChoix)
+    : { data: [] as { prestataire_id: string; nom: string | null; email: string | null }[] };
+
   let envoyes = 0, simules = 0, erreurs = 0;
 
   for (const p of cibles) {
     let statut: "simule" | "envoye" | "erreur" = "simule";
     let erreur: string | null = null;
-    const destinataires: string[] = [p.email, ...(p.emails_secondaires ?? [])];
+    const { adresses: destinataires, nom: salutation } = destinatairesDe(
+      p,
+      adressesChoisies.get(p.id),
+      (contactsChoix ?? []).filter((c: { prestataire_id: string }) => c.prestataire_id === p.id),
+    );
 
     if (resendKey) {
       // lien profond : ouvre l'espace prestataire directement sur la consultation
@@ -177,7 +231,7 @@ Deno.serve(async (req: Request) => {
         `<tr><td style="padding:4px 14px 4px 0;color:#666;white-space:nowrap;vertical-align:top">${label}</td><td style="padding:4px 0;color:#1a1a1a">${valeur}</td></tr>`;
       const html = `
         <div style="font-family:Arial,Helvetica,sans-serif;font-size:14.5px;line-height:1.55;color:#1a1a1a;max-width:620px">
-          <p>Bonjour${p.contact_nom ? " " + p.contact_nom : ""},</p>
+          <p>Bonjour${salutation ? " " + salutation : ""},</p>
           <p><strong>Strat Eco</strong>, assistant à maîtrise d'ouvrage, lance une consultation${demandePpt?.syndic_name ? ` pour le compte du syndic <strong>${demandePpt.syndic_name}</strong>` : ""}
           ${choisis ? "à laquelle votre entreprise est invitée à répondre :" : "pour laquelle votre entreprise est référencée :"}</p>
           <table style="border-collapse:collapse;margin:14px 0;font-size:14.5px">

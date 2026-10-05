@@ -702,6 +702,42 @@ export type Database = {
           },
         ]
       }
+      consultation_destinataires: {
+        Row: {
+          consultation_id: string
+          created_at: string
+          emails: string[]
+          prestataire_id: string
+        }
+        Insert: {
+          consultation_id: string
+          created_at?: string
+          emails: string[]
+          prestataire_id: string
+        }
+        Update: {
+          consultation_id?: string
+          created_at?: string
+          emails?: string[]
+          prestataire_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultation_destinataires_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "consultations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultation_destinataires_prestataire_id_fkey"
+            columns: ["prestataire_id"]
+            isOneToOne: false
+            referencedRelation: "prestataires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consultation_docs: {
         Row: {
           consultation_id: string

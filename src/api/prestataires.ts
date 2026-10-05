@@ -74,6 +74,25 @@ export function usePrestataires() {
   });
 }
 
+export type ContactAvecEmail = Pick<Tables<"prestataire_contacts">, "prestataire_id" | "nom" | "role" | "email">;
+
+/** Contacts de toutes les entreprises qui ont une adresse e-mail (AMO) - adresses
+ *  proposées en plus de celles de la fiche pour l'envoi d'une consultation. */
+export function useContactsAvecEmail() {
+  return useQuery({
+    queryKey: ["prestataires", "contacts-email"],
+    queryFn: async (): Promise<ContactAvecEmail[]> => {
+      const { data, error } = await supabase
+        .from("prestataire_contacts")
+        .select("prestataire_id, nom, role, email")
+        .not("email", "is", null)
+        .order("created_at");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
 export function useAddPrestataire() {
   const qc = useQueryClient();
   return useMutation({

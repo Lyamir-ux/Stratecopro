@@ -14,6 +14,7 @@ import {
   useCreerOrganisation,
   useMajRoleMembre,
   useMembresOrganisation,
+  useModifierEmailMembre,
   useOrganisations,
   useProfilsSyndicLibres,
   useRattacherCopro,
@@ -238,6 +239,7 @@ function Membres({ org }: { org: Organisation }) {
   const majRole = useMajRoleMembre();
   const retirer = useRetirerMembre();
   const renommer = useRenommerMembre();
+  const changerEmail = useModifierEmailMembre();
   // renommage en ligne d'un membre : clic sur le nom, Entrée ou sortie du champ enregistre
   const [renommage, setRenommage] = useState<string | null>(null);
   const [nomEdite, setNomEdite] = useState("");
@@ -245,6 +247,43 @@ function Membres({ org }: { org: Organisation }) {
     const propre = nomEdite.trim();
     if (propre.length > 1 && propre !== m.full_name) void renommer.mutateAsync({ user_id: m.user_id, full_name: propre });
     setRenommage(null);
+  };
+  // e-mail d'un membre (feedback d'Amir du 05/10/2026) : visible de l'équipe, modifiable en
+  // direct par le dirigeant seul. C'est l'identifiant de connexion : enregistrement explicite
+  // (Entrée ou coche, jamais à la sortie du champ) après confirmation.
+  const [emailEdite, setEmailEdite] = useState<{ user_id: string; valeur: string } | null>(null);
+  const [retourEmail, setRetourEmail] = useState<{ user_id: string; texte: string; erreur: boolean } | null>(null);
+  const validerEmail = async (m: MembreOrganisation) => {
+    if (!emailEdite || changerEmail.isPending) return;
+    const adresse = emailEdite.valeur.trim().toLowerCase();
+    if (adresse === (m.email ?? "").toLowerCase()) {
+      setEmailEdite(null);
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(adresse)) {
+      setRetourEmail({ user_id: m.user_id, texte: "Adresse e-mail invalide.", erreur: true });
+      return;
+    }
+    if (
+      !window.confirm(
+        `Changer l'adresse de connexion de ${m.full_name} ?\n\n${m.email ?? "(aucune)"} → ${adresse}\n\n` +
+          "Son mot de passe reste le même ; il se connectera désormais avec la nouvelle adresse. " +
+          "Les dossiers dont il est le gestionnaire désigné suivent automatiquement. Aucun e-mail n'est envoyé."
+      )
+    )
+      return;
+    try {
+      const res = await changerEmail.mutateAsync({ user_id: m.user_id, email: adresse });
+      const dossiers = res.copros + res.ppt;
+      setEmailEdite(null);
+      setRetourEmail({
+        user_id: m.user_id,
+        texte: dossiers > 0 ? `Adresse modifiée · ${dossiers} dossier${dossiers > 1 ? "s" : ""} mis à jour.` : "Adresse modifiée.",
+        erreur: false,
+      });
+    } catch (e) {
+      setRetourEmail({ user_id: m.user_id, texte: messageErreur(e, "La modification de l'adresse a échoué. Réessayez."), erreur: true });
+    }
   };
 
   return (
@@ -302,6 +341,79 @@ function Membres({ org }: { org: Organisation }) {
                   </>
                 )}
               </div>
+              {emailEdite?.user_id === m.user_id ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
+                  <input
+                    className="edit-inp sm"
+                    type="email"
+                    style={{ width: 280, maxWidth: "100%" }}
+                    autoFocus
+                    aria-label={`Adresse e-mail de ${m.full_name}`}
+                    value={emailEdite.valeur}
+                    disabled={changerEmail.isPending}
+                    onChange={(e) => {
+                      setEmailEdite({ user_id: m.user_id, valeur: e.target.value });
+                      setRetourEmail(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void validerEmail(m);
+                      if (e.key === "Escape") setEmailEdite(null);
+                    }}
+                  />
+                  <button
+                    className="icon-btn"
+                    style={{ width: 28, height: 28 }}
+                    title="Enregistrer la nouvelle adresse"
+                    disabled={changerEmail.isPending}
+                    onClick={() => void validerEmail(m)}
+                  >
+                    <Icon name="check" size={15} />
+                  </button>
+                  <button
+                    className="icon-btn"
+                    style={{ width: 28, height: 28 }}
+                    title="Annuler"
+                    disabled={changerEmail.isPending}
+                    onClick={() => {
+                      setEmailEdite(null);
+                      setRetourEmail(null);
+                    }}
+                  >
+                    <Icon name="x" size={15} />
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, fontSize: 12.5 }}>
+                  <Icon name="mail" size={12} style={{ color: "var(--fg-muted)", flex: "none" }} />
+                  {me?.dirigeant ? (
+                    <span
+                      style={{ cursor: "text", overflowWrap: "anywhere", color: m.email ? undefined : "var(--color-error-700)" }}
+                      title="Cliquer pour modifier l'adresse e-mail (identifiant de connexion)"
+                      onClick={() => {
+                        setEmailEdite({ user_id: m.user_id, valeur: m.email ?? "" });
+                        setRetourEmail(null);
+                      }}
+                    >
+                      {m.email ?? "Adresse à renseigner"}
+                    </span>
+                  ) : (
+                    <span
+                      style={{ overflowWrap: "anywhere", color: m.email ? undefined : "var(--fg-muted)" }}
+                      title="Seul le dirigeant peut modifier l'adresse e-mail d'un compte"
+                    >
+                      {m.email ?? "-"}
+                    </span>
+                  )}
+                </div>
+              )}
+              {retourEmail?.user_id === m.user_id && (
+                <div
+                  className="se-small"
+                  style={{ marginTop: 2, color: retourEmail.erreur ? "var(--color-error-700)" : "var(--color-success-700)" }}
+                >
+                  {retourEmail.texte}
+                </div>
+              )}
             </div>
             <span className="spacer"></span>
             <SelectRole

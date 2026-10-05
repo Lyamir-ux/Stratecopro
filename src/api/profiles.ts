@@ -53,6 +53,32 @@ export async function creerCompte(body: {
   return data as CollaborateurCree;
 }
 
+export interface EmailCompteModifie {
+  user_id: string;
+  email: string;
+  /** L'adresse était déjà celle du compte : rien n'a bougé. */
+  inchange: boolean;
+  /** Dossiers de rénovation et suivis PPT où l'adresse de gestionnaire a suivi. */
+  copros: number;
+  ppt: number;
+}
+
+/**
+ * Appel de l'edge function modifier-email-compte (réservée au dirigeant) : change
+ * l'identifiant de connexion d'un compte syndic et reporte la nouvelle adresse
+ * sur les dossiers dont il est le gestionnaire désigné. Mot de passe inchangé.
+ */
+export async function modifierEmailCompte(body: { user_id: string; email: string }): Promise<EmailCompteModifie> {
+  const { data, error } = await supabase.functions.invoke("modifier-email-compte", { body });
+  if (error) {
+    const ctx = (error as { context?: Response }).context;
+    const parsed = ctx ? await ctx.json().catch(() => null) : null;
+    throw new Error(parsed?.error ?? "La modification de l'adresse a échoué. Réessayez.");
+  }
+  if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+  return data as EmailCompteModifie;
+}
+
 /** Création d'un compte collaborateur AMO (edge function, réservée au dirigeant). */
 export function useCreerCollaborateur() {
   const qc = useQueryClient();

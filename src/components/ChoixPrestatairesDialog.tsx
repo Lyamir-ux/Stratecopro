@@ -5,13 +5,23 @@
 // Ne peuvent pas être cochées : fiche suspendue, sans e-mail, « Ne pas
 // consulter » (même règle que notifier-consultation). Une entreprise hors de
 // ses départements peut l'être : le choix de l'équipe passe outre.
+// Idée de Louis du 05/10/2026 : une entreprise cochée qui a plusieurs adresses
+// (principale, copies, contacts) permet de choisir celles qui reçoivent la
+// consultation ; par défaut, la principale et les copies comme avant (0139).
 import { useMemo, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { Badge } from "@/components/ui";
-import { libelleMetier as libelleMetierBase } from "@/api/consultations";
-import { usePrestataires } from "@/api/prestataires";
+import { libelleMetier as libelleMetierBase, type DestinatairesChoisis } from "@/api/consultations";
+import { useContactsAvecEmail, usePrestataires } from "@/api/prestataires";
 import { couvreDepartement, resumeDepartements } from "@/lib/departements";
-import { filtrerEntreprises, motifNonAlertable } from "@/lib/prestataires";
+import {
+  adressesEntreprise,
+  adressesParDefaut,
+  estChoixParDefaut,
+  filtrerEntreprises,
+  motifNonAlertable,
+  type AdresseEntreprise,
+} from "@/lib/prestataires";
 import type { Tables } from "@/lib/database.types";
 
 const libelleMetier = (t: string) => libelleMetierBase(t);
@@ -38,11 +48,16 @@ export function ChoixPrestatairesDialog({
   libelleValider: (n: number) => string;
   enCours: boolean;
   erreur?: string | null;
-  onValider: (ids: string[]) => void;
+  /** Entreprises cochées, et adresses choisies pour celles dont le choix diffère de l'envoi d'office. */
+  onValider: (ids: string[], destinataires: DestinatairesChoisis) => void;
   onClose: () => void;
 }) {
   const { data: prestataires, isLoading, error } = usePrestataires();
+  // contacts : adresses en plus, facultatives - sans eux, la fiche suffit
+  const { data: contacts } = useContactsAvecEmail();
   const [coches, setCoches] = useState<Set<string>>(() => new Set());
+  // adresses choisies par entreprise ; absent = principale + copies
+  const [adressesChoisies, setAdressesChoisies] = useState<Record<string, Set<string>>>({});
   const [recherche, setRecherche] = useState("");
   const verrou = useMemo(() => new Set(verrouilles), [verrouilles]);
 
@@ -54,6 +69,42 @@ export function ChoixPrestatairesDialog({
   const visibles = filtrerEntreprises(duMetier, recherche, (p) => metiers(p.types));
   const cochables = visibles.filter((p) => !motifNonAlertable(p) && !verrou.has(p.id));
   const toutCoche = cochables.length > 0 && cochables.every((p) => coches.has(p.id));
+
+  // adresses proposées pour chaque entreprise : principale, copies, puis contacts
+  const adressesDe = useMemo(() => {
+    const parPresta = new Map<string, AdresseEntreprise[]>();
+    for (const p of duMetier) {
+      parPresta.set(
+        p.id,
+        adressesEntreprise(
+          p,
+          (contacts ?? []).filter((c) => c.prestataire_id === p.id)
+        )
+      );
+    }
+    return parPresta;
+  }, [duMetier, contacts]);
+  const selectionDe = (id: string): Set<string> =>
+    adressesChoisies[id] ?? new Set(adressesParDefaut(adressesDe.get(id) ?? []));
+  // une adresse de plus ou de moins ; la dernière ne se décoche pas (l'entreprise doit rester joignable)
+  const basculerAdresse = (id: string, email: string) =>
+    setAdressesChoisies((prev) => {
+      const n = new Set(prev[id] ?? adressesParDefaut(adressesDe.get(id) ?? []));
+      if (n.has(email)) {
+        if (n.size > 1) n.delete(email);
+      } else n.add(email);
+      return { ...prev, [id]: n };
+    });
+  // seules les entreprises cochées, et seulement si le choix diffère de l'envoi d'office
+  const destinatairesChoisis = (): DestinatairesChoisis => {
+    const res: DestinatairesChoisis = {};
+    for (const id of coches) {
+      const sel = adressesChoisies[id];
+      if (sel && sel.size > 0 && !estChoixParDefaut(sel, adressesDe.get(id) ?? [])) res[id] = [...sel];
+    }
+    return res;
+  };
+  const nbAdressesChoisies = Object.keys(destinatairesChoisis()).length;
 
   const basculer = (id: string) =>
     setCoches((prev) => {
@@ -77,7 +128,8 @@ export function ChoixPrestatairesDialog({
     <Modal title={titre} onClose={enCours ? () => {} : onClose} width={680} closeOnBackdrop={coches.size === 0 && !enCours}>
       <p className="se-small" style={{ margin: "-6px 0 14px", color: "var(--fg2)" }}>
         Entreprises référencées « {libelleMetier(type)} » dans la Base prestataires. Seules les entreprises cochées
-        reçoivent l'e-mail et voient la consultation dans leur espace prestataire.
+        reçoivent l'e-mail et voient la consultation dans leur espace prestataire. Pour une entreprise qui a
+        plusieurs adresses, vous choisissez celles qui reçoivent l'e-mail.
       </p>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
         <input
@@ -122,45 +174,103 @@ export function ChoixPrestatairesDialog({
           const deja = verrou.has(p.id);
           const horsZone = !couvreDepartement(p.departements, departement);
           const coche = deja || coches.has(p.id);
+          const adresses = adressesDe.get(p.id) ?? [];
+          const plusieurs = !motif && !deja && adresses.length > 1;
+          const sel = selectionDe(p.id);
           return (
-            <label
+            <div
               key={p.id}
               style={{
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: "6px 12px",
-                padding: "9px 12px",
                 borderBottom: "1px solid var(--border)",
-                cursor: motif || deja || enCours ? "default" : "pointer",
                 opacity: motif ? 0.55 : 1,
                 background: coche && !deja ? "var(--bg-soft)" : undefined,
               }}
             >
-              <input
-                type="checkbox"
-                checked={coche}
-                disabled={!!motif || deja || enCours}
-                onChange={() => basculer(p.id)}
-                style={{ accentColor: "var(--accent)", width: 16, height: 16, flex: "none" }}
-              />
-              {/* sur téléphone, les pastilles passent sous le nom */}
-              <span style={{ flex: "1 1 200px", minWidth: 0 }}>
-                <span style={{ display: "block", fontWeight: 600, fontSize: 13.5 }}>{p.raison_sociale}</span>
-                <span style={{ display: "block", fontSize: 12.5, color: "var(--fg-muted)", overflowWrap: "anywhere" }}>
-                  {[p.contact_nom, p.ville, p.email].filter(Boolean).join(" · ") || "Coordonnées à compléter"}
-                </span>
-              </span>
-              <span style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", marginLeft: "auto" }}>
-                {deja && <Badge kind="success">Déjà choisie</Badge>}
-                {motif && <Badge kind="neutral">{motif}</Badge>}
-                {!motif && horsZone && (
-                  <span title="L'entreprise n'a pas coché ce département dans Mon entreprise : votre choix passe outre">
-                    <Badge kind="warn">Hors de ses départements ({resumeDepartements(p.departements)})</Badge>
+              <label
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: "6px 12px",
+                  padding: "9px 12px",
+                  cursor: motif || deja || enCours ? "default" : "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={coche}
+                  disabled={!!motif || deja || enCours}
+                  onChange={() => basculer(p.id)}
+                  style={{ accentColor: "var(--accent)", width: 16, height: 16, flex: "none" }}
+                />
+                {/* sur téléphone, les pastilles passent sous le nom */}
+                <span style={{ flex: "1 1 200px", minWidth: 0 }}>
+                  <span style={{ display: "block", fontWeight: 600, fontSize: 13.5 }}>{p.raison_sociale}</span>
+                  <span style={{ display: "block", fontSize: 12.5, color: "var(--fg-muted)", overflowWrap: "anywhere" }}>
+                    {[p.contact_nom, p.ville, p.email].filter(Boolean).join(" · ") || "Coordonnées à compléter"}
                   </span>
-                )}
-              </span>
-            </label>
+                </span>
+                <span style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", marginLeft: "auto" }}>
+                  {deja && <Badge kind="success">Déjà choisie</Badge>}
+                  {motif && <Badge kind="neutral">{motif}</Badge>}
+                  {plusieurs && !coche && (
+                    <span title="Cochez l'entreprise pour choisir l'adresse à laquelle la consultation est envoyée">
+                      <Badge kind="neutral">{adresses.length} adresses</Badge>
+                    </span>
+                  )}
+                  {!motif && horsZone && (
+                    <span title="L'entreprise n'a pas coché ce département dans Mon entreprise : votre choix passe outre">
+                      <Badge kind="warn">Hors de ses départements ({resumeDepartements(p.departements)})</Badge>
+                    </span>
+                  )}
+                </span>
+              </label>
+              {plusieurs && coche && (
+                <div
+                  role="group"
+                  aria-label={`Adresses de ${p.raison_sociale}`}
+                  style={{ display: "flex", flexDirection: "column", gap: 5, padding: "0 12px 10px 40px" }}
+                >
+                  <span className="se-small" style={{ color: "var(--fg2)" }}>
+                    Envoyer la consultation à :
+                  </span>
+                  {adresses.map((a) => {
+                    const cochee = sel.has(a.email);
+                    const derniere = cochee && sel.size === 1;
+                    return (
+                      <label
+                        key={a.email}
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          alignItems: "center",
+                          gap: "2px 8px",
+                          fontSize: 13,
+                          cursor: enCours || derniere ? "default" : "pointer",
+                        }}
+                        title={derniere ? "Au moins une adresse doit recevoir la consultation" : undefined}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={cochee}
+                          disabled={enCours || derniere}
+                          onChange={() => basculerAdresse(p.id, a.email)}
+                          style={{ accentColor: "var(--accent)", width: 15, height: 15, flex: "none" }}
+                        />
+                        <span style={{ overflowWrap: "anywhere" }}>{a.email}</span>
+                        <span style={{ color: "var(--fg-muted)", fontSize: 12 }}>
+                          {a.origine === "principale"
+                            ? "adresse principale"
+                            : a.origine === "copie"
+                              ? "en copie"
+                              : (a.libelle ?? "contact")}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
@@ -181,7 +291,10 @@ export function ChoixPrestatairesDialog({
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
         <span className="se-small" style={{ color: "var(--fg2)" }}>
-          {coches.size === 0 ? "Aucune entreprise cochée" : `${pluriel(coches.size, "entreprise")} cochée${coches.size > 1 ? "s" : ""}`}
+          {coches.size === 0
+            ? "Aucune entreprise cochée"
+            : `${pluriel(coches.size, "entreprise")} cochée${coches.size > 1 ? "s" : ""}` +
+              (nbAdressesChoisies > 0 ? ` · adresses choisies pour ${nbAdressesChoisies}` : "")}
         </span>
         <span style={{ flex: 1 }}></span>
         <button className="se-btn se-btn-ghost" onClick={onClose} disabled={enCours}>
@@ -190,7 +303,7 @@ export function ChoixPrestatairesDialog({
         <button
           className="se-btn se-btn-primary"
           disabled={coches.size === 0 || enCours}
-          onClick={() => onValider([...coches])}
+          onClick={() => onValider([...coches], destinatairesChoisis())}
         >
           {enCours ? "Envoi…" : coches.size === 0 ? "Cochez au moins une entreprise" : libelleValider(coches.size)}
         </button>

@@ -4,7 +4,7 @@
 // organisations_amo_all / org_membres_amo_all autorisent ces écritures.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { creerCompte, type CollaborateurCree } from "@/api/profiles";
+import { creerCompte, modifierEmailCompte, type CollaborateurCree } from "@/api/profiles";
 import {
   nomOrganisationDisponible,
   nomSyndicBenevole,
@@ -26,6 +26,8 @@ export interface MembreOrganisation {
   full_name: string;
   initials: string;
   job_title: string | null;
+  /** Identifiant de connexion du compte (auth.users, lu par la RPC org_equipe). */
+  email: string | null;
   /** Dossiers que le membre peut ouvrir (copro_members 'syndic') - la direction
    *  ouvre tout le portefeuille sans rattachement. */
   copros: number;
@@ -145,15 +147,19 @@ export function useMembresOrganisation(orgId: string | undefined) {
     queryKey: ["organisation-membres", orgId],
     enabled: !!orgId,
     queryFn: async (): Promise<MembreOrganisation[]> => {
-      const [{ data, error }, { data: rattachements, error: e2 }] = await Promise.all([
+      const [{ data, error }, { data: rattachements, error: e2 }, { data: equipe, error: e3 }] = await Promise.all([
         supabase
           .from("organisation_membres")
           .select("user_id, org_role, profiles(full_name, initials, job_title)")
           .eq("organisation_id", orgId!),
         supabase.from("copro_members").select("user_id, coproprietes!inner(organisation_id, deleted_at)").eq("member_role", "syndic"),
+        // les e-mails vivent dans auth.users : seule la RPC org_equipe (AMO ou direction) les expose
+        supabase.rpc("org_equipe", { p_org: orgId! }),
       ]);
       if (error) throw error;
       if (e2) throw e2;
+      if (e3) throw e3;
+      const emails = new Map((equipe ?? []).map((m) => [m.user_id, m.email]));
       const nbCopros = new Map<string, number>();
       for (const r of rattachements ?? []) {
         if (r.coproprietes?.organisation_id !== orgId || r.coproprietes?.deleted_at) continue;
@@ -166,6 +172,7 @@ export function useMembresOrganisation(orgId: string | undefined) {
           full_name: m.profiles?.full_name ?? "-",
           initials: m.profiles?.initials ?? "?",
           job_title: m.profiles?.job_title ?? null,
+          email: emails.get(m.user_id) ?? null,
           copros: nbCopros.get(m.user_id) ?? 0,
         }))
         .sort((a, b) => {
@@ -314,6 +321,25 @@ export function useRenommerMembre() {
     onSuccess: () => {
       refresh();
       void qc.invalidateQueries({ queryKey: ["team-profiles"] });
+    },
+  });
+}
+
+/**
+ * Change l'e-mail d'un membre (feedback d'Amir du 05/10/2026 : « les mails de
+ * chaque gestionnaire et autres, modifiables en direct »). C'est son
+ * identifiant de connexion : edge function réservée au dirigeant, qui reporte
+ * aussi l'adresse sur les dossiers dont il est le gestionnaire désigné.
+ */
+export function useModifierEmailMembre() {
+  const refresh = useRefreshOrganisations();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: modifierEmailCompte,
+    onSuccess: () => {
+      refresh();
+      void qc.invalidateQueries({ queryKey: ["syndic"] });
+      void qc.invalidateQueries({ queryKey: ["ppt"] });
     },
   });
 }

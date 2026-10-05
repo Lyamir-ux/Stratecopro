@@ -160,11 +160,31 @@ export function texteEcartes(n: NonNullable<PublishResult["notification"]>): str
   return parts.join(" · ");
 }
 
+/**
+ * Adresses choisies par l'équipe pour certaines entreprises (0139, idée de Louis
+ * du 05/10/2026) : prestataire_id -> adresses à qui la consultation est envoyée.
+ * Une entreprise absente reçoit l'alerte à son adresse principale et en copie.
+ */
+export type DestinatairesChoisis = Record<string, string[]>;
+
+/** Enregistre le choix avant l'alerte : notifier-consultation le lit au moment de l'envoi. */
+async function enregistrerDestinataires(consultationId: string, destinataires: DestinatairesChoisis | undefined) {
+  const lignes = Object.entries(destinataires ?? {})
+    .filter(([, emails]) => emails.length > 0)
+    .map(([prestataire_id, emails]) => ({ consultation_id: consultationId, prestataire_id, emails }));
+  if (lignes.length === 0) return;
+  const { error } = await supabase
+    .from("consultation_destinataires")
+    .upsert(lignes, { onConflict: "consultation_id,prestataire_id" });
+  if (error) throw error;
+}
+
 export function usePublishConsultation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
       files,
+      destinataires,
       ...input
     }: {
       type: Tables<"consultations">["type"];
@@ -182,6 +202,8 @@ export function usePublishConsultation() {
       options: string[];
       /** Entreprises choisies (0125) ; null = toutes les entreprises du métier. */
       prestataires_choisis: string[] | null;
+      /** Adresses choisies par entreprise (0139) ; absent = principale + copies. */
+      destinataires?: DestinatairesChoisis;
       files: File[];
     }): Promise<PublishResult> => {
       const { data, error } = await supabase.from("consultations").insert(input).select("id").single();
@@ -200,6 +222,21 @@ export function usePublishConsultation() {
           .from("consultation_docs")
           .insert({ consultation_id: data.id, path, name: file.name, size: file.size });
         if (rowErr) docErrors.push(file.name);
+      }
+
+      // Adresses choisies : enregistrées AVANT l'alerte. Si l'écriture échoue, aucun e-mail
+      // ne part - l'alerte irait sinon à des adresses que l'équipe a voulu écarter.
+      try {
+        await enregistrerDestinataires(data.id, destinataires);
+      } catch (e) {
+        return {
+          notification: null,
+          notifyError:
+            "le choix des adresses n'a pas pu être enregistré (" +
+            String((e as Error).message ?? e) +
+            "), aucun e-mail n'est parti. « Relancer les alertes » les enverra à l'adresse principale de chaque entreprise.",
+          docErrors,
+        };
       }
 
       // Alerte e-mail des prestataires référencés du métier - la consultation
@@ -249,10 +286,13 @@ export function useAjouterPrestatairesChoisis() {
       consultationId,
       dejaChoisis,
       ajouts,
+      destinataires,
     }: {
       consultationId: string;
       dejaChoisis: string[];
       ajouts: string[];
+      /** Adresses choisies pour les entreprises ajoutées (0139) ; absent = principale + copies. */
+      destinataires?: DestinatairesChoisis;
     }): Promise<PublishResult["notification"]> => {
       const choisis = [...new Set([...dejaChoisis, ...ajouts])];
       const { error } = await supabase
@@ -260,6 +300,15 @@ export function useAjouterPrestatairesChoisis() {
         .update({ prestataires_choisis: choisis })
         .eq("id", consultationId);
       if (error) throw error;
+      try {
+        await enregistrerDestinataires(consultationId, destinataires);
+      } catch (e) {
+        throw new Error(
+          "Entreprises ajoutées, mais le choix des adresses n'a pas pu être enregistré (" +
+            String((e as Error).message ?? e) +
+            ") : aucun e-mail n'est parti."
+        );
+      }
       const { data, error: fnErr } = await supabase.functions.invoke("notifier-consultation", {
         body: { consultation_id: consultationId },
       });

@@ -41,6 +41,7 @@ import {
   useRepondreQuestion,
   texteEcartes,
   type Consultation,
+  type DestinatairesChoisis,
   type PublishResult,
 } from "@/api/consultations";
 import { CandidatureActions } from "@/components/CandidatureActions";
@@ -244,10 +245,10 @@ Non alertées : ${ecartes}.` : "")
     const n = await relance.mutateAsync(cs.id);
     if (n) bilanAlertes(n);
   };
-  const ajouterChoisis = async (ids: string[]) => {
+  const ajouterChoisis = async (ids: string[], destinataires: DestinatairesChoisis) => {
     setAjoutErreur(null);
     try {
-      const n = await ajouter.mutateAsync({ consultationId: cs.id, dejaChoisis: choisis ?? [], ajouts: ids });
+      const n = await ajouter.mutateAsync({ consultationId: cs.id, dejaChoisis: choisis ?? [], ajouts: ids, destinataires });
       setAjout(false);
       if (n) bilanAlertes(n);
     } catch (e) {
@@ -446,7 +447,7 @@ Non alertées : ${ecartes}.` : "")
           libelleValider={(k) => `Ajouter et alerter ${k} prestataire${k > 1 ? "s" : ""}`}
           enCours={ajouter.isPending}
           erreur={ajoutErreur}
-          onValider={(ids) => void ajouterChoisis(ids)}
+          onValider={(ids, destinataires) => void ajouterChoisis(ids, destinataires)}
           onClose={() => setAjout(false)}
         />
       )}
@@ -624,7 +625,7 @@ export default function Consultations() {
 
   /** Publie la consultation : ouverte à tout le métier (choisis = null) ou
    *  réservée aux entreprises choisies (0125). */
-  const doPublish = async (choisis: string[] | null) => {
+  const doPublish = async (choisis: string[] | null, destinataires?: DestinatairesChoisis) => {
     if (!formulaireValide()) return;
     const externe = draft.cible === "externe";
     // nombres de logements et de bâtiments figés sur la consultation (les
@@ -659,6 +660,7 @@ export default function Consultations() {
         // options réservées à la maîtrise d'œuvre - jamais publiées pour les autres métiers
         options: draft.type === "moe" ? draft.options : [],
         prestataires_choisis: choisis && choisis.length > 0 ? choisis : null,
+        destinataires,
         files,
       });
     } catch (e) {
@@ -1035,8 +1037,8 @@ export default function Consultations() {
                 departement={departementDraft}
                 libelleValider={(k) => `Mettre en ligne et alerter ${k} prestataire${k > 1 ? "s" : ""}`}
                 enCours={publish.isPending}
-                onValider={(ids) =>
-                  void doPublish(ids).finally(() => setChoix(false))
+                onValider={(ids, destinataires) =>
+                  void doPublish(ids, destinataires).finally(() => setChoix(false))
                 }
                 onClose={() => setChoix(false)}
               />
