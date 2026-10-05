@@ -19,8 +19,10 @@ import {
   itemsARepartirPf,
   readPlanDefinitif,
   repartirPfDepuisLots,
+  tableauDepuisRepartition,
   type FinanceResult,
   type PlanDefinitifData,
+  type VarianteTableauCopros,
 } from "@/lib/finance";
 import { readParams, useBareme, useChoixFinancementScenario, usePlansIndividuels, useScenarios } from "@/api/scenarios";
 import { EcoPtzIndividuelPanel } from "@/pages/EcoPtzIndividuel";
@@ -122,7 +124,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
               <PanelCoutOperationPf plan={planValide} pv={pv} />
               <PanelIngenieriePf pv={pv} fondsTravaux={pvData.params.fondsTravaux} onOpen={openPfValide} />
             </div>
-            <PlansIndividuelsPfPanel coproId={c.id} plan={planValide} pv={pv} pvData={pvData} />
+            <PlansIndividuelsPfPanel coproId={c.id} coproNom={c.name} plan={planValide} pv={pv} pvData={pvData} />
           </div>
         ) : (
           <div className="placeholder-screen">
@@ -417,7 +419,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
           </div>
         </div>
         {planValide && pv && pvData ? (
-          <PlansIndividuelsPfPanel coproId={c.id} plan={planValide} pv={pv} pvData={pvData} />
+          <PlansIndividuelsPfPanel coproId={c.id} coproNom={c.name} plan={planValide} pv={pv} pvData={pvData} />
         ) : (
         <div className="panel">
           <div className="p-head">
@@ -803,11 +805,13 @@ function PanelIngenieriePf({
  */
 function PlansIndividuelsPfPanel({
   coproId,
+  coproNom,
   plan,
   pv,
   pvData,
 }: {
   coproId: string;
+  coproNom: string;
   plan: PlanDefinitif;
   pv: PlanDefinitifResult;
   pvData: PlanDefinitifData;
@@ -820,16 +824,35 @@ function PlansIndividuelsPfPanel({
   const update = useUpdatePlanDefinitif(coproId);
   const partagerMut = usePartagerPfCopros(coproId);
   const [configOpen, setConfigOpen] = useState(false);
+  const [tableauEnCours, setTableauEnCours] = useState<VarianteTableauCopros | null>(null);
+  const [erreurTableau, setErreurTableau] = useState<string | null>(null);
 
   const cles = donnees?.cles ?? [];
   // Même répartition que la vue Copropriétaires et les exports (une seule
   // fonction) : tantièmes par copropriétaire, clé unique ou clé par ligne.
-  const { plans, manquants, items, cleUnique, cleRef, totauxCles, parCopro } = repartirPfDepuisLots(
-    pvData,
-    pv,
-    donnees?.lots ?? [],
-    cles
-  );
+  const repartition = repartirPfDepuisLots(pvData, pv, donnees?.lots ?? [], cles);
+  const { plans, manquants, items, cleUnique, cleRef, totauxCles, parCopro } = repartition;
+
+  // Tableau PDF de tous les copropriétaires (feedback Amir 05/10/2026) : une
+  // ligne par copropriétaire, prêt collectif ou éco-PTZ individuel.
+  const extraireTableau = async (variante: VarianteTableauCopros) => {
+    setTableauEnCours(variante);
+    setErreurTableau(null);
+    try {
+      const [{ genererTableauCoproprietairesPdf, nomFichierTableauCoproprietaires }, { telechargerPdfBytes }] =
+        await Promise.all([import("@/lib/pdf/tableauCoproprietaires"), import("@/lib/pdf/planIndividuel")]);
+      const bytes = await genererTableauCoproprietairesPdf({
+        coproNom,
+        planNom: plan.nom,
+        tableau: tableauDepuisRepartition(variante, pvData, repartition),
+      });
+      telechargerPdfBytes(bytes, nomFichierTableauCoproprietaires(coproNom, variante));
+    } catch (e) {
+      setErreurTableau(messageErreur(e, "Export du tableau impossible"));
+    } finally {
+      setTableauEnCours(null);
+    }
+  };
   // Copropriétaires dont le profil de ressources n'est pas renseigné : leur
   // aide individuelle s'affichera « à déterminer » au portail (feedback Théa).
   const sansProfil = plans.filter((p) => !profils?.has(p.coproprietaireId));
@@ -994,6 +1017,36 @@ function PlansIndividuelsPfPanel({
                 <Icon name="arrowRight" size={16} style={{ color: "var(--accent)" }} />
               </div>
             ))}
+            <div
+              style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 14, display: "flex", flexDirection: "column", gap: 8 }}
+            >
+              <div className="se-small" style={{ color: "var(--fg-muted)" }}>
+                Tous les copropriétaires dans un seul tableau PDF, classés par nom.
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  className="se-btn se-btn-secondary btn-sm"
+                  disabled={tableauEnCours !== null}
+                  onClick={() => extraireTableau("collectif")}
+                  title="Nom, tantièmes, quote-part avant aides, reste à financer, mensualité, coût du prêt avance de subvention, prime C2E et prix de revient (éco-PTZ collectif)"
+                >
+                  <Icon name="download" size={14} />
+                  {tableauEnCours === "collectif" ? "Génération…" : "Tableau PDF - prêt collectif"}
+                </button>
+                <button
+                  className="se-btn se-btn-secondary btn-sm"
+                  disabled={tableauEnCours !== null}
+                  onClick={() => extraireTableau("individuel")}
+                  title="Nom, tantièmes, quote-part avant aides, appels de fonds, mensualité, aides remboursées en fin de chantier, prime C2E et prix de revient (éco-PTZ individuel)"
+                >
+                  <Icon name="download" size={14} />
+                  {tableauEnCours === "individuel" ? "Génération…" : "Tableau PDF - éco-PTZ individuel"}
+                </button>
+              </div>
+              {erreurTableau && (
+                <p className="se-small" style={{ color: "var(--color-error-700)", margin: 0 }}>{erreurTableau}</p>
+              )}
+            </div>
           </>
         )}
       </div>

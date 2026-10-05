@@ -6,6 +6,7 @@ export * from "./exportPlanDefinitif";
 export * from "./profil";
 export * from "./repartition";
 export * from "./repartitionPf";
+export * from "./tableauFinancementCopros";
 export * from "./missionsAnnexes";
 export * from "./round";
 export { BAREME_2024_HORS_IDF } from "./bareme2024";

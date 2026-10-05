@@ -89,6 +89,10 @@ export interface PlanIndividuelPf {
    * ne réduit pas le montant à financer avant travaux (feedback du 03/09/2026).
    */
   primeCee: number;
+  /** Part des aides publiques dans `aidesEtFonds` (base du coût du prêt d'avance de subventions). */
+  aidesPubliques: number;
+  /** Part du fonds travaux dans `aidesEtFonds`. */
+  fondsTravaux: number;
   /** Reste à charge après aides et fonds travaux. */
   reste: number;
 }
@@ -156,7 +160,9 @@ export function computePlansIndividuelsPf(input: {
       const quotePartAvant = parts.get(co.coproprietaireId) ?? 0;
       let aidesEtFonds = 0;
       let cee = 0;
-      for (const d of deductions) {
+      let publiques = 0;
+      let fonds = 0;
+      for (const [i, d] of deductions.entries()) {
         // clé inconnue ou de total nul : repli au prorata de la quote-part
         const total = d.cle ? totauxCles[d.cle] : 0;
         const part =
@@ -166,7 +172,10 @@ export function computePlansIndividuelsPf(input: {
               ? (quotePartAvant / totalOperationTtc) * d.montant
               : 0;
         aidesEtFonds += part;
-        if (d.prive) cee += part;
+        // le fonds travaux est la dernière déduction
+        if (i === deductions.length - 1) fonds += part;
+        else if (d.prive) cee += part;
+        else publiques += part;
       }
       return {
         coproprietaireId: co.coproprietaireId,
@@ -174,6 +183,8 @@ export function computePlansIndividuelsPf(input: {
         quotePartAvant: round2(quotePartAvant),
         aidesEtFonds: round2(aidesEtFonds),
         primeCee: round2(cee),
+        aidesPubliques: round2(publiques),
+        fondsTravaux: round2(fonds),
         reste: round2(quotePartAvant - aidesEtFonds),
       };
     })
