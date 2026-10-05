@@ -12,7 +12,7 @@ import {
   computeIndiv,
   totalTantiemes,
   useFichiersPartages,
-  usePortailTravaux,
+  usePortailTaches,
   type ChoixFinancement,
   type Membership,
   type ProfilMeta,
@@ -55,9 +55,9 @@ export function Accueil({
   const phaseIdx = PHASES.findIndex((p) => p.id === copro.phase);
   const dpeAvant = (copro.energy_before as DpeClass | null) ?? null;
   const dpeApres = (copro.energy_after as DpeClass | null) ?? null;
-  // Détail des tâches seulement quand Travaux est la phase en cours
-  const { data: travaux } = usePortailTravaux(copro.id, copro.phase === "travaux");
-  const recap = recapPhases({ phase: copro.phase, energyBefore: dpeAvant, dateAg: copro.date_ag, travaux });
+  // Tâches du dossier : ce qui est en cours et ce qui reste, sous l'étape courante
+  const { data: taches } = usePortailTaches(copro.id);
+  const recap = recapPhases({ phase: copro.phase, energyBefore: dpeAvant, dateAg: copro.date_ag, taches });
   const { data: documents } = useFichiersPartages(copro.id);
   const nbDocuments = documents?.length ?? 0;
 
@@ -71,11 +71,13 @@ export function Accueil({
           profil
         )
       : null;
-  // Aides collectives (MPR Copro + fonds travaux + CEE, prorata des tantièmes)
-  // et aide individuelle (profil de ressources) sont présentées séparément :
-  // sans profil, l'aide individuelle est « à déterminer », jamais un montant
-  // présumé (feedback Théa 03/09/2026 - contradiction avec l'enquête à 0/15).
-  const aidesCollectives = indiv ? indiv.cee + indiv.subvColl : null;
+  // Aide collective publique (MPR Copro et aides locales, prorata des
+  // tantièmes) : sans les CEE, versés en fin de chantier, ni le fonds travaux
+  // (feedback d'Amir du 05/10/2026), et aide individuelle (profil de
+  // ressources) sont présentées séparément : sans profil, l'aide individuelle
+  // est « à déterminer », jamais un montant présumé (feedback Théa 03/09/2026
+  // - contradiction avec l'enquête à 0/15).
+  const aideCollectivePublique = indiv ? Math.max(0, indiv.subvColl - indiv.fondsPart) : null;
   const planPublieLe = scenario?.updated_at ?? null;
 
   const todos: { id: SectionId; done: boolean; ico: string; title: string; sub: string }[] = [
@@ -137,7 +139,7 @@ export function Accueil({
           {PHASES.map((p, i) => {
             const r = recap[p.id];
             if (!r) return null;
-            const titre = r.mode === "realise" ? "réalisé" : "reste à réaliser";
+            const titre = r.mode === "realise" ? "réalisé" : r.mode === "encours" ? "en cours" : "reste à réaliser";
             return (
               <div key={"recap-" + p.id} className="tl-recap" style={{ "--col": i + 1 } as CSSProperties}>
                 <div className="tl-recap-titre">
@@ -147,11 +149,30 @@ export function Accueil({
                 <ul>
                   {r.items.map((item) => (
                     <li key={item}>
-                      {r.mode === "realise" ? <Icon name="check" size={13} className="ico" /> : <span className="puce"></span>}
+                      {r.mode === "realise" ? (
+                        <Icon name="check" size={13} className="ico" />
+                      ) : r.mode === "encours" ? (
+                        <span className="puce puce-encours"></span>
+                      ) : (
+                        <span className="puce"></span>
+                      )}
                       {item}
                     </li>
                   ))}
                 </ul>
+                {r.suite && (
+                  <>
+                    <div className="tl-recap-titre tl-recap-suite">Reste à réaliser</div>
+                    <ul>
+                      {r.suite.map((item) => (
+                        <li key={item}>
+                          <span className="puce"></span>
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </div>
             );
           })}
@@ -170,9 +191,9 @@ export function Accueil({
               </div>
             </div>
             <div className="tile">
-              <div className="t-lbl"><Icon name="leaf" size={16} />Aides collectives affectées à vos lots</div>
-              <div className="t-val accent">{fmtEuro(aidesCollectives)}</div>
-              <div className="t-foot">MaPrimeRénov' Copropriété + fonds travaux + CEE, au prorata de vos tantièmes</div>
+              <div className="t-lbl"><Icon name="leaf" size={16} />Aide collective publique</div>
+              <div className="t-val accent">{fmtEuro(aideCollectivePublique)}</div>
+              <div className="t-foot">MaPrimeRénov' Copropriété et aides locales, hors CEE, au prorata de vos tantièmes</div>
             </div>
             <div className="tile">
               <div className="t-lbl"><Icon name="user" size={16} />Votre aide individuelle</div>
@@ -199,11 +220,26 @@ export function Accueil({
               <div className="t-lbl"><Icon name="trendingUp" size={16} />À financer avant travaux</div>
               <div className="t-val">{fmtEuro(indiv.resteAvantTravaux)}</div>
               <div className="t-foot">
-                Hors CEE (versés à la fin du chantier)
-                {indiv.mprIndetermine ? " et hors aide individuelle" : ""}
+                Reste à financer, appels de fonds déduits
+                {indiv.fondsPart > 0.5 ? ` (${fmtEuro(indiv.fondsPart)} de fonds travaux)` : ""}
+                {indiv.mprIndetermine ? ", hors aide individuelle" : ""}
+                {indiv.cee > 0.5 ? ` · CEE de ${fmtEuro(indiv.cee)} versés à la fin du chantier` : ""}
               </div>
             </div>
           </div>
+          {indiv.cee > 0.5 && (
+            <div className="c2e-box" style={{ marginBottom: 14 }}>
+              <span className="c2e-ico"><Icon name="leaf" size={20} /></span>
+              <div>
+                <div className="c2e-titre">C2E (CEE) à percevoir en fin de chantier</div>
+                <div className="c2e-val">{fmtEuro(indiv.cee)}</div>
+                <div className="c2e-sub">
+                  Prime des certificats d'économies d'énergie affectée à vos lots : elle vous est versée une fois
+                  le chantier terminé, elle n'est donc pas déduite du montant à financer avant travaux.
+                </div>
+              </div>
+            </div>
+          )}
           <div className="portail-source">
             <span>
               <Icon name="fileCheck" size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />

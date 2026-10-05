@@ -5199,6 +5199,15 @@ export type Database = {
         }[]
       }
       peut_postuler: { Args: { p_consultation_id: string }; Returns: boolean }
+      portail_taches: {
+        Args: { p_copro_id: string }
+        Returns: {
+          en_cours: boolean
+          fait: boolean
+          phase: string
+          titre: string
+        }[]
+      }
       portail_travaux: {
         Args: { p_copro_id: string }
         Returns: {

@@ -1083,6 +1083,8 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .tl-recap li { display: flex; align-items: flex-start; gap: 6px; line-height: 1.35; }
 .tl-recap li .ico { flex: none; margin-top: 2px; color: var(--accent); }
 .tl-recap .puce { flex: none; width: 9px; height: 9px; margin: 4px 2px 0; border-radius: 50%; border: 2px solid var(--border-strong); }
+.tl-recap .puce-encours { border-color: var(--accent); background: var(--accent); }
+.tl-recap .tl-recap-suite { margin-top: 10px; margin-bottom: 6px; }
 
 /* stat tiles */
 .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
@@ -1690,6 +1692,11 @@ table.dossiers.sf-table tfoot td:first-child { text-align: left; }
 .mentions-prudence .mp-credit { font-weight: 700; color: var(--fg3); }
 
 /* Portail - étiquette énergie visée du bâtiment (accueil) */
+.c2e-box { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; background: var(--bg-soft); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: var(--radius-md); }
+.c2e-box .c2e-ico { flex: none; color: var(--accent); margin-top: 2px; }
+.c2e-box .c2e-titre { font-family: var(--font-display); font-weight: 700; font-size: 13.5px; color: var(--fg); }
+.c2e-box .c2e-val { font-family: var(--font-display); font-weight: 800; font-size: 22px; color: var(--accent); margin: 2px 0; }
+.c2e-box .c2e-sub { font-size: 12.5px; color: var(--fg2); line-height: 1.4; }
 .dpe-vise {
   display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
   background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg);
