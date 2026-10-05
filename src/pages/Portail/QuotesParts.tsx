@@ -23,6 +23,7 @@ import type { Bareme, Profil } from "@/lib/finance";
 import type { SectionId } from "./index";
 import { MentionsPrudence } from "./Mentions";
 import { telechargerPlanIndividuelPdf } from "./planPdf";
+import { ecoPtzPossible, MOTIF_SANS_ECO_PTZ } from "@/lib/financement";
 
 export function QuotesParts({
   membership,
@@ -281,7 +282,7 @@ export function QuotesParts({
                   ) : lotsHab.length === 0 ? (
                     <p className="se-body" style={{ margin: 0 }}>
                       Ce lot ne peut être rattaché qu'à un lot d'habitation vous appartenant - aucun n'est
-                      relié à votre compte. Contactez votre AMO.
+                      relié à votre compte. {MOTIF_SANS_ECO_PTZ} En cas d'erreur, contactez votre AMO.
                     </p>
                   ) : (
                     <>
@@ -325,7 +326,8 @@ export function QuotesParts({
             );
           })()}
           <button className="se-btn se-btn-secondary" onClick={() => go("pret")}>
-            <Icon name="trendingUp" size={17} />Financer mon reste à charge
+            <Icon name="trendingUp" size={17} />
+            {ecoPtzPossible(lots) ? "Financer mon reste à charge" : "Financer mon reste à charge (fonds propres)"}
           </button>
           <button className="se-btn se-btn-ghost" onClick={() => void telechargerPdf()} disabled={pdfBusy}>
             <Icon name="download" size={17} />

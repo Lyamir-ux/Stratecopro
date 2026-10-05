@@ -23,6 +23,7 @@ import {
 import type { Enums } from "@/lib/database.types";
 import { appelsDepuisInscrits, useAppelsDeFondsInscrits, type SyndicCopro } from "@/api/syndic";
 import { round2 } from "@/lib/finance";
+import { ecoPtzPossible } from "@/lib/financement";
 
 type TypeFinancement = Enums<"type_financement">;
 
@@ -268,6 +269,14 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
     return m;
   }, [lots]);
 
+  // éco-PTZ fermé aux copropriétaires sans lot d'habitation (garages, caves…) :
+  // fonds propres seulement (bug d'Amir du 05/10/2026)
+  const ecoPtzParCp = useMemo(() => {
+    const m = new Map<string, boolean>();
+    for (const cp of coproprietaires) m.set(cp.id, ecoPtzPossible(lots.filter((l) => l.coproprietaire_id === cp.id)));
+    return m;
+  }, [coproprietaires, lots]);
+
   const choixByCp = useMemo(
     () => new Map((choix ?? []).map((ch) => [ch.coproprietaire_id, ch])),
     [choix]
@@ -428,7 +437,9 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                                   onChange={(e) => setDraftType(e.target.value as TypeFinancement)}
                                   style={{ maxWidth: 180 }}
                                 >
-                                  {(Object.keys(TYPE_META) as TypeFinancement[]).map((t) => (
+                                  {(Object.keys(TYPE_META) as TypeFinancement[])
+                                    .filter((t) => t === "fonds" || ecoPtzParCp.get(cp.id))
+                                    .map((t) => (
                                     <option key={t} value={t}>
                                       {TYPE_META[t].label}
                                     </option>
@@ -453,9 +464,9 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                                     saveChoix
                                       .mutateAsync({
                                         coproprietaireId: cp.id,
-                                        type: draftType,
-                                        dureeAnnees: draftType === "collectif" ? (finConfig?.duree_annees ?? 15) : null,
-                                        lotIds: draftType === "individuel" ? (lotIdsByCp.get(cp.id) ?? []) : [],
+                                        type: ecoPtzParCp.get(cp.id) ? draftType : "fonds",
+                                        dureeAnnees: draftType === "collectif" && ecoPtzParCp.get(cp.id) ? (finConfig?.duree_annees ?? 15) : null,
+                                        lotIds: draftType === "individuel" && ecoPtzParCp.get(cp.id) ? (lotIdsByCp.get(cp.id) ?? []) : [],
                                         saisiPar: profile?.role === "amo" ? "amo" : "syndic",
                                       })
                                       .then(() => setEditId(null))
@@ -517,7 +528,7 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                                 }
                                 onClick={() => {
                                   setEditId(cp.id);
-                                  setDraftType(ch?.type ?? "fonds");
+                                  setDraftType(ecoPtzParCp.get(cp.id) ? (ch?.type ?? "fonds") : "fonds");
                                   setSaveError(null);
                                 }}
                               >

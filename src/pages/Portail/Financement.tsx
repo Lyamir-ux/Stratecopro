@@ -33,6 +33,7 @@ import {
   type TypeFinancement,
 } from "@/api/portail";
 import { readParams } from "@/api/scenarios";
+import { ecoPtzPossible, MOTIF_SANS_ECO_PTZ } from "@/lib/financement";
 import { MentionsPrudence } from "./Mentions";
 import { DocumentsEcoPtz } from "./Documents";
 import type { Bareme, Profil } from "@/lib/finance";
@@ -81,7 +82,11 @@ export function Financement({
   const lots = membership.lots;
   const { data: config } = useFinancementConfig(membership.copro.id);
   const [editing, setEditing] = useState(false);
-  const [type, setType] = useState<TypeFinancement>(choix?.type ?? "collectif");
+  // Garages, caves et autres lots sans lot d'habitation : l'éco-PTZ (collectif
+  // comme individuel) leur est fermé, les fonds propres sont le seul choix
+  // (bug d'Amir du 05/10/2026).
+  const ecoPtz = ecoPtzPossible(lots);
+  const [type, setType] = useState<TypeFinancement>(ecoPtz ? (choix?.type ?? "collectif") : "fonds");
   // éco-PTZ individuel : un prêt par logement (lot d'habitation et ses annexes rattachées)
   const logements = lots.filter((l) => l.usage === "habitation");
   const [selLots, setSelLots] = useState<string[]>(() => {
@@ -119,6 +124,7 @@ export function Financement({
     setSelLots((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   const transmit = (t: TypeFinancement) => {
+    if (!ecoPtz && t !== "fonds") return;
     // Adhésion au prêt collectif : on enregistre le choix (le suivi AMO en vit)
     // et on envoie aussitôt vers la banque, qui instruit le dossier de prêt.
     if (t === "collectif" && lienBanque) ouvrirBanque(lienBanque);
@@ -212,6 +218,15 @@ export function Financement({
                 </>
               )}
             </p>
+            {!ecoPtz && choix.type !== "fonds" && (
+              <div className="cc-next" style={{ textAlign: "left", maxWidth: 520, margin: "0 auto 16px" }}>
+                <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
+                <span>
+                  {MOTIF_SANS_ECO_PTZ} Ce choix ne peut donc pas être maintenu
+                  {modifiable ? " : cliquez sur « Modifier mon choix » pour confirmer les fonds propres." : ". Écrivez à votre AMO."}
+                </span>
+              </div>
+            )}
             {modifiable ? (
               <>
                 <button className="se-btn se-btn-secondary" onClick={() => setEditing(true)}>
@@ -344,9 +359,23 @@ export function Financement({
         </div>
       )}
       <p className="sec-sub">
-        Choisissez comment financer votre reste à charge de <b>{fmtEuro(montant)}</b> : prêt collectif, éco-PTZ
-        individuel ou fonds propres.
+        {ecoPtz ? (
+          <>
+            Choisissez comment financer votre reste à charge de <b>{fmtEuro(montant)}</b> : prêt collectif, éco-PTZ
+            individuel ou fonds propres.
+          </>
+        ) : (
+          <>
+            Votre reste à charge est de <b>{fmtEuro(montant)}</b>.
+          </>
+        )}
       </p>
+      {!ecoPtz && (
+        <div className="cc-next" style={{ marginBottom: 18 }}>
+          <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
+          <span>{MOTIF_SANS_ECO_PTZ}</span>
+        </div>
+      )}
       {indiv.cee > 0 && (
         <div className="cc-next" style={{ marginBottom: 18 }}>
           <Icon name="leaf" size={15} className="ico" style={{ color: "var(--color-primary-600)" }} />
@@ -358,6 +387,7 @@ export function Financement({
         </div>
       )}
 
+      {ecoPtz && (
       <div className="loan-opts loan-opts-3">
         <div className={"loan-opt" + (type === "collectif" ? " sel" : "")} onClick={() => setType("collectif")}>
           <div className="lo-ico"><Icon name="users" size={22} /></div>
@@ -398,6 +428,7 @@ export function Financement({
           </div>
         </div>
       </div>
+      )}
 
       {type === "collectif" && (
         <div className="split" style={{ marginTop: 22 }}>

@@ -22,6 +22,7 @@ import { readParams } from "@/api/scenarios";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Tables } from "@/lib/database.types";
 import { messageErreur } from "@/lib/erreurs";
+import { ecoPtzPossible } from "@/lib/financement";
 import type { SectionId } from "./index";
 import { telechargerPlanIndividuelPdf } from "./planPdf";
 
@@ -142,7 +143,11 @@ export function Accueil({
       done: !!choix,
       ico: "trendingUp",
       title: "Choisir votre financement",
-      sub: choix ? "Choix transmis" : "Prêt collectif, individuel ou fonds propres",
+      sub: choix
+        ? "Choix transmis"
+        : ecoPtzPossible(membership.lots)
+          ? "Prêt collectif, individuel ou fonds propres"
+          : "Fonds propres : le seul mode de financement ouvert à vos lots",
     },
   ];
 
