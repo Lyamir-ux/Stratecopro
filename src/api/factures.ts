@@ -7,7 +7,17 @@
 // au gestionnaire (Hellio pour les CEE), chef de projet et dirigeant en copie.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { nomFichierPiece, type EnvoiStatut, type LigneFacture, type PieceFacture, type TypeReferenceClient } from "@/lib/factureDoc";
+import type { ImagesFacture } from "@/lib/pdf/facture";
+import {
+  nomArchiveFactures,
+  nomFichierPiece,
+  nomsUniques,
+  piecesExportables,
+  type EnvoiStatut,
+  type LigneFacture,
+  type PieceFacture,
+  type TypeReferenceClient,
+} from "@/lib/factureDoc";
 
 const nombre = (v: number | string | null | undefined) => (v == null ? 0 : Number(v));
 
@@ -316,4 +326,82 @@ export async function urlPdfPiece(p: PieceFacture): Promise<string | null> {
   if (!p.pdf_path) return null;
   const { data } = await supabase.storage.from("copro-files").createSignedUrl(p.pdf_path, 600);
   return data?.signedUrl ?? null;
+}
+
+// ---------- export des PDF (demande d'Amir du 06/10/2026) ----------
+
+function telechargerBlob(blob: Blob, nom: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nom;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+/**
+ * Octets du PDF d'une pièce émise : le PDF classé dans les fichiers fait foi ; une pièce dont le
+ * PDF n'est pas encore classé (envoi à terminer) est générée à la volée, son contenu étant figé.
+ */
+async function octetsPdfPiece(p: PieceFacture, pieces: PieceFacture[], images?: ImagesFacture): Promise<Uint8Array> {
+  if (p.pdf_path) {
+    const { data, error } = await supabase.storage.from("copro-files").download(p.pdf_path);
+    if (!error && data) return new Uint8Array(await data.arrayBuffer());
+  }
+  const { genererFacturePdf } = await import("@/lib/pdf/facture");
+  const origine = p.facture_origine_id ? pieces.find((x) => x.id === p.facture_origine_id) : null;
+  return genererFacturePdf(p, { origine: origine ? { numero: origine.numero, date_emission: origine.date_emission } : null, images });
+}
+
+/** Télécharge le PDF d'une facture ou d'un avoir émis, sous le nom « Facture FAC… - copropriété - jalon.pdf ». */
+export async function telechargerPdfPiece(p: PieceFacture, pieces: PieceFacture[], nomCopro: string): Promise<void> {
+  const bytes = await octetsPdfPiece(p, pieces);
+  telechargerBlob(new Blob([bytes as BlobPart], { type: "application/pdf" }), nomFichierPiece(p, nomCopro));
+}
+
+/**
+ * Archive ZIP des PDF de toutes les pièces émises de la liste, un fichier par facture ou avoir.
+ * Tout ou rien : si un PDF manque, l'export s'arrête avec le numéro concerné plutôt que de
+ * livrer une archive incomplète sans le dire. Renvoie le nombre de PDF archivés.
+ */
+export async function telechargerFacturesZip(
+  liste: PieceFacture[],
+  pieces: PieceFacture[],
+  nomCopro: (coproId: string) => string,
+  aujourdhui: string,
+  progression?: (faits: number, total: number) => void
+): Promise<number> {
+  const aExporter = piecesExportables(liste).sort(
+    (a, b) => (a.date_emission ?? "").localeCompare(b.date_emission ?? "") || (a.numero ?? "").localeCompare(b.numero ?? "")
+  );
+  if (aExporter.length === 0) throw new Error("Aucune facture émise à exporter.");
+
+  const [{ default: JSZip }, { chargerImagesFacture }] = await Promise.all([import("jszip"), import("@/lib/pdf/facture")]);
+  const images = await chargerImagesFacture();
+  const noms = nomsUniques(aExporter.map((p) => nomFichierPiece(p, nomCopro(p.copro_id))));
+  const contenus: Uint8Array[] = new Array(aExporter.length);
+
+  // quatre téléchargements à la fois : assez vite sans saturer le stockage
+  let suivant = 0;
+  let faits = 0;
+  progression?.(0, aExporter.length);
+  const travailleur = async () => {
+    while (suivant < aExporter.length) {
+      const i = suivant++;
+      try {
+        contenus[i] = await octetsPdfPiece(aExporter[i], pieces, images);
+      } catch (e) {
+        const detail = e instanceof Error && e.message ? ` (${e.message})` : "";
+        throw new Error(`Le PDF ${aExporter[i].numero} n'a pas pu être récupéré${detail} : aucune archive n'a été créée.`);
+      }
+      progression?.(++faits, aExporter.length);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, aExporter.length) }, travailleur));
+
+  const zip = new JSZip();
+  noms.forEach((nom, i) => zip.file(nom, contenus[i]));
+  const archive = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+  telechargerBlob(archive, nomArchiveFactures(aujourdhui));
+  return aExporter.length;
 }

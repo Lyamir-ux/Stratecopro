@@ -18,6 +18,7 @@ import { Modal } from "@/components/Modal";
 import { Badge, type BadgeKind } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
 import {
+  telechargerPdfPiece,
   urlPdfPiece,
   useAnnulerPaiement,
   useCreerAvoir,
@@ -593,6 +594,7 @@ function ActionsEmise({
   const annulerPaiement = useAnnulerPaiement();
   const [erreur, setErreur] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [telechargement, setTelechargement] = useState(false);
   const etat = etatPiece(piece, pieces);
   const avoir = piece.type === "facture" ? avoirDe(piece, pieces) : null;
   const avoirBrouillon = pieces.find((p) => p.type === "avoir" && p.statut === "brouillon" && p.facture_origine_id === piece.id) ?? null;
@@ -603,6 +605,19 @@ function ActionsEmise({
       onOuvrir(await creerAvoir.mutateAsync(piece.id));
     } catch (e) {
       setErreur(messageErreur(e, "L'avoir n'a pas pu être préparé."));
+    }
+  };
+
+  const telecharger = async () => {
+    setErreur(null);
+    setMessage(null);
+    setTelechargement(true);
+    try {
+      await telechargerPdfPiece(piece, pieces, copro.name);
+    } catch (e) {
+      setErreur(messageErreur(e, "Le PDF n'a pas pu être téléchargé."));
+    } finally {
+      setTelechargement(false);
     }
   };
 
@@ -625,9 +640,12 @@ function ActionsEmise({
       <div className="fz-boutons colonne">
         {url && (
           <a className="se-btn se-btn-secondary btn-sm" href={url} target="_blank" rel="noreferrer">
-            <Icon name="download" size={14} /> Ouvrir le PDF
+            <Icon name="eye" size={14} /> Ouvrir le PDF
           </a>
         )}
+        <button type="button" className="se-btn se-btn-secondary btn-sm" onClick={() => void telecharger()} disabled={telechargement}>
+          <Icon name="download" size={14} /> {telechargement ? "Téléchargement…" : "Télécharger le PDF"}
+        </button>
         {(etat === "a_envoyer" || etat === "envoi_erreur") && (
           <button type="button" className="se-btn se-btn-primary btn-sm" onClick={() => void reprendre()} disabled={terminer.isPending}>
             <Icon name="send" size={14} /> {terminer.isPending ? "Envoi…" : "Terminer l'envoi"}

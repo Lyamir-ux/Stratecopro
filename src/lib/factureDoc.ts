@@ -184,6 +184,28 @@ export function nomFichierPiece(p: Pick<PieceFacture, "type" | "numero" | "jalon
   return nomFichierSansAccents(`${libelleType(p.type)} ${p.numero ?? "brouillon"} - ${nomCopro} - ${libelleJalon(p.jalon)}.pdf`);
 }
 
+/** Nom de l'archive de l'export groupé : « factures-strat-eco-2026-10-06.zip » (date locale AAAA-MM-JJ). */
+export const nomArchiveFactures = (aujourdhui: string): string => `factures-strat-eco-${aujourdhui}.zip`;
+
+/**
+ * Noms de fichiers distincts pour une même archive : un nom déjà pris reçoit « (2) », « (3) »…
+ * avant l'extension (deux pièces ne partagent jamais un numéro, mais un nom de dossier peut se répéter).
+ */
+export function nomsUniques(noms: string[]): string[] {
+  const vus = new Map<string, number>();
+  return noms.map((nom) => {
+    const cle = nom.toLowerCase();
+    const n = (vus.get(cle) ?? 0) + 1;
+    vus.set(cle, n);
+    if (n === 1) return nom;
+    const point = nom.lastIndexOf(".");
+    return point > 0 ? `${nom.slice(0, point)} (${n})${nom.slice(point)}` : `${nom} (${n})`;
+  });
+}
+
+/** Pièces dont le PDF s'exporte : les factures et avoirs émis (un brouillon n'a ni numéro ni PDF définitif). */
+export const piecesExportables = (pieces: PieceFacture[]): PieceFacture[] => pieces.filter((p) => p.statut === "emise" && !!p.numero);
+
 /** Avoir émis qui annule cette facture, s'il y en a un. */
 export const avoirDe = (f: PieceFacture, pieces: PieceFacture[]): PieceFacture | null =>
   pieces.find((a) => a.type === "avoir" && a.statut === "emise" && a.facture_origine_id === f.id) ?? null;

@@ -21,7 +21,15 @@ import { Badge, type BadgeKind } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCopros, type CoproWithStats } from "@/api/copros";
 import { useHonoraires } from "@/api/honoraires";
-import { useFactures, useJournalFacturation, useParametresFacturation, usePasserEnProduction, type BilanProduction } from "@/api/factures";
+import {
+  telechargerFacturesZip,
+  telechargerPdfPiece,
+  useFactures,
+  useJournalFacturation,
+  useParametresFacturation,
+  usePasserEnProduction,
+  type BilanProduction,
+} from "@/api/factures";
 import { useTeamProfiles } from "@/api/profiles";
 import { FacturationJalon, FenetrePieceSeule } from "@/components/FactureFenetres";
 import { messageErreur } from "@/lib/erreurs";
@@ -31,6 +39,7 @@ import {
   etatPiece,
   euros,
   libelleType,
+  piecesExportables,
   type EtatPiece,
   type PieceFacture,
 } from "@/lib/factureDoc";
@@ -422,6 +431,10 @@ function Journal({ lignes }: { lignes: Ligne[] }) {
   const [filtre, setFiltre] = useState<FiltreJournal>("tous");
   const [ouverte, setOuverte] = useState<PieceFacture | null>(null);
   const [production, setProduction] = useState(false);
+  // export des PDF : archive complète (progression) ou une pièce (son identifiant)
+  const [archive, setArchive] = useState<{ faits: number; total: number } | null>(null);
+  const [pdfEnCours, setPdfEnCours] = useState<string | null>(null);
+  const [exportMessage, setExportMessage] = useState<{ ok: boolean; texte: string } | null>(null);
 
   const parCopro = useMemo(() => new Map(lignes.map((l) => [l.copro.id, l])), [lignes]);
   const nomCopro = (id: string) => parCopro.get(id)?.copro.name ?? "Dossier";
@@ -459,6 +472,38 @@ function Journal({ lignes }: { lignes: Ligne[] }) {
     );
   };
 
+  const aExporter = piecesExportables(visibles);
+
+  const dateDuJour = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  const exporterPdfZip = async () => {
+    setExportMessage(null);
+    setArchive({ faits: 0, total: aExporter.length });
+    try {
+      const n = await telechargerFacturesZip(visibles, tout, nomCopro, dateDuJour(), (faits, total) => setArchive({ faits, total }));
+      setExportMessage({ ok: true, texte: `${plur(n, "PDF")} dans l'archive téléchargée.` });
+    } catch (e) {
+      setExportMessage({ ok: false, texte: messageErreur(e, "L'archive n'a pas pu être créée.") });
+    } finally {
+      setArchive(null);
+    }
+  };
+
+  const telechargerPdf = async (p: PieceFacture) => {
+    setExportMessage(null);
+    setPdfEnCours(p.id);
+    try {
+      await telechargerPdfPiece(p, tout, nomCopro(p.copro_id));
+    } catch (e) {
+      setExportMessage({ ok: false, texte: messageErreur(e, `Le PDF ${p.numero ?? ""} n'a pas pu être téléchargé.`) });
+    } finally {
+      setPdfEnCours(null);
+    }
+  };
+
   const jalonDe = (p: PieceFacture): JalonHonoraires | null => parCopro.get(p.copro_id)?.d.jalons.find((j) => j.code === p.jalon) ?? null;
 
   return (
@@ -472,9 +517,20 @@ function Journal({ lignes }: { lignes: Ligne[] }) {
           <button className={vue === "historique" ? "on" : ""} onClick={() => setVue("historique")}>Historique</button>
         </div>
         {vue === "pieces" && (
-          <button className="se-btn se-btn-secondary btn-sm" onClick={exporter} disabled={compte.factures + compte.avoirs === 0}>
-            <Icon name="download" size={14} /> Exporter
-          </button>
+          <>
+            <button className="se-btn se-btn-secondary btn-sm" onClick={exporter} disabled={compte.factures + compte.avoirs === 0}>
+              <Icon name="download" size={14} /> Exporter en CSV
+            </button>
+            <button
+              className="se-btn se-btn-secondary btn-sm"
+              onClick={() => void exporterPdfZip()}
+              disabled={aExporter.length === 0 || archive !== null}
+              title="Un PDF par facture ou avoir émis de la liste affichée, réunis dans une archive ZIP"
+            >
+              <Icon name="download" size={14} />{" "}
+              {archive ? `Préparation ${archive.faits} / ${archive.total}…` : `Exporter en PDF (${aExporter.length})`}
+            </button>
+          </>
         )}
       </div>
       <div className="p-body">
@@ -508,6 +564,11 @@ function Journal({ lignes }: { lignes: Ligne[] }) {
                 </button>
               </div>
             </div>
+            {exportMessage && (
+              <p className={exportMessage.ok ? "fact-note" : "fact-erreur"} role="status" style={{ marginTop: 0, marginBottom: 12 }}>
+                {exportMessage.texte}
+              </p>
+            )}
             <div className="tablewrap fact-tablewrap">
               <table className="dossiers fact-table" style={{ minWidth: 820 }}>
                 <thead>
@@ -519,14 +580,15 @@ function Journal({ lignes }: { lignes: Ligne[] }) {
                     <th>Client</th>
                     <th className="r">Total TTC</th>
                     <th>État</th>
+                    <th aria-label="PDF"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {isLoading ? (
-                    <tr style={{ cursor: "default" }}><td colSpan={7} style={{ padding: 24, color: "var(--fg-muted)" }}>Chargement…</td></tr>
+                    <tr style={{ cursor: "default" }}><td colSpan={8} style={{ padding: 24, color: "var(--fg-muted)" }}>Chargement…</td></tr>
                   ) : visibles.length === 0 ? (
                     <tr style={{ cursor: "default" }}>
-                      <td colSpan={7} style={{ padding: 28, textAlign: "center", color: "var(--fg-muted)" }}>
+                      <td colSpan={8} style={{ padding: 28, textAlign: "center", color: "var(--fg-muted)" }}>
                         {tout.length === 0
                           ? "Aucune pièce pour l'instant : cliquez sur une bulle grise de la frise ou sur « Facturer » dans l'onglet Projet d'un dossier."
                           : "Aucune pièce ne correspond à ce filtre."}
@@ -557,6 +619,23 @@ function Journal({ lignes }: { lignes: Ligne[] }) {
                           <td>
                             <Badge kind={BADGE_PIECE[e]}>{LIBELLE_ETAT_PIECE[e]}</Badge>
                             {p.payee_le && <span className="fact-meta">le {dateFr(p.payee_le)}</span>}
+                          </td>
+                          <td className="r">
+                            {p.statut === "emise" && p.numero && (
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                title={`Télécharger le PDF ${p.numero}`}
+                                aria-label={`Télécharger le PDF ${p.numero}`}
+                                disabled={pdfEnCours === p.id || archive !== null}
+                                onClick={(ev) => {
+                                  ev.stopPropagation();
+                                  void telechargerPdf(p);
+                                }}
+                              >
+                                <Icon name={pdfEnCours === p.id ? "refresh" : "download"} size={15} />
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );
