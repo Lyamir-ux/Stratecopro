@@ -434,6 +434,20 @@ table.dossiers.ppt-copros th:first-child, table.dossiers.ppt-copros td:first-chi
 .edit-inp.sm { max-width: 84px; }
 .edit-inp:focus { border-color: var(--accent); box-shadow: var(--shadow-focus); }
 table.dossiers .edit-inp.sm { width: 74px; }
+/* nom d'un copropriétaire corrigeable en un clic (Données de la copro, 06/10/2026) */
+.nom-editable {
+  display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 2px 5px; margin: -2px -5px;
+  border-radius: var(--radius-sm); font: inherit; color: inherit; text-align: left; cursor: text;
+}
+.nom-editable svg { flex: none; opacity: 0; color: var(--fg-muted); transition: opacity 120ms; }
+.nom-editable:hover, .nom-editable:focus-visible { background: var(--bg-soft); }
+.nom-editable:hover svg, .nom-editable:focus-visible svg { opacity: 1; }
+@media (hover: none) { .nom-editable svg { opacity: 0.6; } }
+.nom-edition { display: flex; flex-direction: column; gap: 4px; }
+.nom-edition .ne-champ { display: flex; align-items: center; gap: 4px; }
+.nom-edition .edit-inp { min-width: 170px; font-size: 13px; padding: 5px 8px; }
+.nom-edition .icon-btn { width: 26px; height: 26px; flex: none; }
+.nom-edition .ne-erreur { font-size: 12px; color: var(--color-error-700); }
 .edit-total {
   display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding: 11px 13px;
   background: var(--accent-soft); border: 1px solid var(--color-primary-200); border-radius: var(--radius-md); font-size: 14px;

@@ -9,18 +9,23 @@
 // (« Bâtiment 01 » et non « 01 », pris pour un numéro de lot), la colonne
 // Bâtiment du tableau disparaît au profit du copropriétaire, et les
 // copropriétaires sont classés par nom de famille (useDonnees).
+// Idée d'Amir du 06/10/2026 : un clic sur le nom d'un copropriétaire le
+// corrige (faute de frappe), comme côté AMO ; le clic sur le reste de la
+// ligne garde son rôle (vente, succession).
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { libellesBatiments, USAGE_LOT_LABEL } from "@/lib/referentiels";
-import { useDonnees, useMutationsLots, type LotFull } from "@/api/donnees";
+import { useDonnees, useMutationsLots, useRenommerCoproprietaire, type LotFull } from "@/api/donnees";
 import type { SyndicCopro } from "@/api/syndic";
 import { normaliserRecherche } from "@/lib/format";
+import { NomCoproprietaire } from "@/components/NomCoproprietaire";
 import { ChangementProprietaire, JournalMutations } from "./ChangementProprietaire";
 
 export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
   const { data: donnees, isLoading } = useDonnees(c.id);
   const { data: mutations } = useMutationsLots(c.id);
+  const renommer = useRenommerCoproprietaire(c.id);
   const [lotEdite, setLotEdite] = useState<LotFull | null>(null);
   // bâtiment affiché (null : tous, la vue par défaut) et recherche en cours
   const [bat, setBat] = useState<string | null>(null);
@@ -141,7 +146,16 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
                       >
                         <td style={{ fontWeight: 600 }}>{l.num}</td>
                         <td>{USAGE_LOT_LABEL[l.usage] ?? l.usage}</td>
-                        <td>{l.coproprietaire?.nom ?? "-"}</td>
+                        <td>
+                          {l.coproprietaire && l.coproprietaire_id ? (
+                            <NomCoproprietaire
+                              nom={l.coproprietaire.nom}
+                              onRenommer={(nom) => renommer.mutateAsync({ id: l.coproprietaire_id!, nom })}
+                            />
+                          ) : (
+                            "-"
+                          )}
+                        </td>
                         <td style={{ textAlign: "right" }}>
                           {cleDefaut != null && l.tantiemes[cleDefaut] != null
                             ? l.tantiemes[cleDefaut].toLocaleString("fr-FR")
@@ -159,7 +173,8 @@ export function DonneesTabSyndic({ c }: { c: SyndicCopro }) {
             {lots.length > 0 && (
               <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10, marginBottom: 0 }}>
                 Vente ou succession : cliquez la ligne du lot pour enregistrer son nouveau propriétaire.
-                Les tantièmes et les lots rattachés suivent.
+                Les tantièmes et les lots rattachés suivent. Faute d'orthographe dans un nom : cliquez directement sur le nom
+                pour le corriger.
               </p>
             )}
           </div>

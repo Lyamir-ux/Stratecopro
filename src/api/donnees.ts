@@ -133,6 +133,30 @@ export function useSetUsageLot(coproId: string) {
   });
 }
 
+/**
+ * Corrige le nom d'un copropriétaire (faute de frappe, lettre à changer) : même personne, même
+ * fiche, tous ses lots suivent. Fonction SQL coproprietaire_renommer (0143), ouverte à l'équipe AMO
+ * et au syndic du dossier : le nom est nettoyé côté base et le compte du portail, s'il en a un,
+ * prend aussi le nouveau nom (sauf si l'équipe l'avait déjà personnalisé). Les écrans qui affichent
+ * le nom (enquête, financement, messages, pièces) se rechargent.
+ */
+export function useRenommerCoproprietaire(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, nom }: { id: string; nom: string }): Promise<string> => {
+      const { data, error } = await supabase.rpc("coproprietaire_renommer", { p_id: id, p_nom: nom });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => {
+      invalidateDonnees(qc, coproId);
+      for (const cle of ["enquete", "choix-financement", "scenarios", "messages", "pieces-a-verifier", "pieces-copro", "mutations-lots", "syndic", "portail"]) {
+        void qc.invalidateQueries({ queryKey: [cle] });
+      }
+    },
+  });
+}
+
 function invalidateDonnees(qc: ReturnType<typeof useQueryClient>, coproId: string) {
   void qc.invalidateQueries({ queryKey: ["donnees", coproId] });
   void qc.invalidateQueries({ queryKey: ["copro", coproId] });

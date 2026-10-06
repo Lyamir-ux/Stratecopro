@@ -5184,6 +5184,8 @@ export type Database = {
         }
         Returns: string
       }
+      // retouche manuelle (0143) : correction du nom d'un copropriétaire (AMO ou syndic du dossier)
+      coproprietaire_renommer: { Args: { p_id: string; p_nom: string }; Returns: string }
       my_coproprietaire_ids_of: { Args: { p_copro_id: string }; Returns: string[] }
       my_lot_ids: { Args: never; Returns: string[] }
       my_presta_types: {
