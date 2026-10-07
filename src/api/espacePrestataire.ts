@@ -674,23 +674,38 @@ export function useProjetDocs(prestaId: string) {
   });
 }
 
+/** Dépose un document de projet ; renvoie la ligne créée (la vérification RGE s'y rattache). */
+export async function deposerProjetDoc(
+  presta: Tables<"prestataires">,
+  sessionUid: string,
+  coproId: string,
+  file: File
+): Promise<{ id: string }> {
+  const path = `${dossierPresta(presta, sessionUid)}/projet-${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
+  const { error: upErr } = await supabase.storage.from("presta-docs").upload(path, file);
+  if (upErr) throw upErr;
+  const { data, error } = await supabase
+    .from("projet_docs")
+    .insert({
+      copro_id: coproId,
+      prestataire_id: presta.id,
+      path,
+      name: file.name,
+      size: file.size,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export function useUploadProjetDoc(presta: Tables<"prestataires">) {
   const qc = useQueryClient();
   const { session } = useAuth();
   return useMutation({
     mutationFn: async ({ coproId, file }: { coproId: string; file: File }) => {
       if (!session) throw new Error("Session expirée");
-      const path = `${dossierPresta(presta, session.user.id)}/projet-${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
-      const { error: upErr } = await supabase.storage.from("presta-docs").upload(path, file);
-      if (upErr) throw upErr;
-      const { error } = await supabase.from("projet_docs").insert({
-        copro_id: coproId,
-        prestataire_id: presta.id,
-        path,
-        name: file.name,
-        size: file.size,
-      });
-      if (error) throw error;
+      return deposerProjetDoc(presta, session.user.id, coproId, file);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["projet-docs"] });

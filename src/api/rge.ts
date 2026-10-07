@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Json, Tables } from "@/lib/database.types";
 import { invaliderPieces, uploadFichierEtPropager } from "@/api/fichiers";
+import { deposerProjetDoc } from "@/api/espacePrestataire";
 import { construireNomFichier, nomFichierSansAccents } from "@/lib/nommage";
 import { extraireTextePdf, trouverSiret } from "@/lib/pdf/extraitDonnees";
 import {
@@ -83,10 +84,11 @@ export async function rechercherEntreprisesRge(nom: string, codePostalCopro?: st
   return etablissements(lignes, codePostalCopro);
 }
 
-/** SIRET annoncé dans un PDF déjà déposé (devis vérifié après coup). */
-export async function siretDuFichier(storagePath: string): Promise<string | null> {
+/** SIRET annoncé dans un PDF déjà déposé (devis vérifié après coup) : fichier du
+ *  dossier, ou document de projet du maître d'œuvre (bucket presta-docs). */
+export async function siretDuFichier(storagePath: string, bucket: "copro-files" | "presta-docs" = "copro-files"): Promise<string | null> {
   if (!/\.pdf$/i.test(storagePath)) return null;
-  const { data, error } = await supabase.storage.from("copro-files").download(storagePath);
+  const { data, error } = await supabase.storage.from(bucket).download(storagePath);
   if (error || !data) return null;
   return trouverSiret(await extraireTextePdf(data, 6));
 }
@@ -109,10 +111,33 @@ export function useVerificationsRge(coproId: string | undefined) {
   });
 }
 
-/** Dernière vérification de chaque document. */
-export function derniereParFichier(verifs: VerificationRge[] | undefined): Map<string, VerificationRge> {
+/** Maître d'œuvre : ses vérifications, tous projets confondus (la RLS ne lui
+ *  montre que celles de ses documents de projet, 0147). */
+export function useVerificationsRgeMoe(prestaId: string) {
+  return useQuery({
+    queryKey: ["verifications-rge", "moe", prestaId],
+    queryFn: async (): Promise<VerificationRge[]> => {
+      const { data, error } = await supabase
+        .from("verifications_rge")
+        .select("*")
+        .not("projet_doc_id", "is", null)
+        .order("verifie_le", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/** Dernière vérification de chaque document : fichier du dossier, ou document de projet du MOE. */
+export function derniereParFichier(
+  verifs: VerificationRge[] | undefined,
+  cle: "fichier_id" | "projet_doc_id" = "fichier_id"
+): Map<string, VerificationRge> {
   const m = new Map<string, VerificationRge>();
-  for (const v of verifs ?? []) if (v.fichier_id && !m.has(v.fichier_id)) m.set(v.fichier_id, v);
+  for (const v of verifs ?? []) {
+    const id = v[cle];
+    if (id && !m.has(id)) m.set(id, v);
+  }
   return m;
 }
 
@@ -121,6 +146,7 @@ export function useEnregistrerVerificationRge(coproId: string) {
   return useMutation({
     mutationFn: async (v: {
       fichierId: string | null;
+      projetDocId: string | null;
       resultat: ResultatRge | null;
       siret: string;
       objet: string | null;
@@ -130,6 +156,7 @@ export function useEnregistrerVerificationRge(coproId: string) {
       const { error } = await supabase.from("verifications_rge").insert({
         copro_id: coproId,
         fichier_id: v.fichierId,
+        projet_doc_id: v.projetDocId,
         siret: chiffres(v.siret),
         entreprise: v.resultat?.entreprise || null,
         objet: v.objet?.trim() || null,
@@ -141,7 +168,7 @@ export function useEnregistrerVerificationRge(coproId: string) {
       });
       if (error) throw error;
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["verifications-rge", coproId] }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["verifications-rge"] }),
   });
 }
 
@@ -162,23 +189,54 @@ export async function telechargerCertificatRge(siret: string, url: string): Prom
 
 export const DOSSIER_ATTESTATION_RGE = "Marchés de travaux";
 
-/** Archive le certificat dans les fichiers du dossier (type « Attestation RGE »). */
+interface ArchivageRge {
+  siret: string;
+  entreprise: string;
+  certificat: CertificatRge;
+}
+
+/** Certificat rapatrié, nommé selon la nomenclature des fichiers (« Attestation RGE »). */
+async function fichierCertificat(prefixe: string | null, { siret, entreprise, certificat }: ArchivageRge): Promise<File> {
+  if (!certificat.url) throw new Error("Pas de lien de certificat pour cet organisme.");
+  const blob = await telechargerCertificatRge(siret, certificat.url);
+  const nom = nomFichierSansAccents(
+    construireNomFichier(
+      { prefixe, type: "attestation_rge", objet: certificat.organisme, emetteur: entreprise || null, date: aujourdhui(), etat: null },
+      "pdf"
+    )
+  );
+  return new File([blob], nom, { type: "application/pdf" });
+}
+
+/** Équipe AMO : archive le certificat dans les fichiers du dossier (type « Attestation RGE »). */
 export function useArchiverCertificatRge(coproId: string, prefixe: string | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ siret, entreprise, certificat }: { siret: string; entreprise: string; certificat: CertificatRge }) => {
-      if (!certificat.url) throw new Error("Pas de lien de certificat pour cet organisme.");
-      const blob = await telechargerCertificatRge(siret, certificat.url);
-      const nom = nomFichierSansAccents(
-        construireNomFichier(
-          { prefixe, type: "attestation_rge", objet: certificat.organisme, emetteur: entreprise || null, date: aujourdhui(), etat: null },
-          "pdf"
-        )
-      );
-      const file = new File([blob], nom, { type: "application/pdf" });
+    mutationFn: async (a: ArchivageRge) => {
+      const file = await fichierCertificat(prefixe, a);
       await uploadFichierEtPropager(coproId, file, DOSSIER_ATTESTATION_RGE, undefined, "attestation_rge");
-      return nom;
+      return file.name;
     },
     onSuccess: () => invaliderPieces(qc, coproId),
+  });
+}
+
+/** Maître d'œuvre : archive le certificat dans ses documents de projet, partagés
+ *  avec l'équipe Strat Eco (onglet Prestataires du dossier). */
+export function useArchiverCertificatRgeProjet(presta: Tables<"prestataires"> | undefined, coproId: string, prefixe: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: ArchivageRge) => {
+      if (!presta) throw new Error("Entreprise inconnue.");
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) throw new Error("Session expirée");
+      const file = await fichierCertificat(prefixe, a);
+      await deposerProjetDoc(presta, session.session.user.id, coproId, file);
+      return file.name;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["projet-docs"] });
+      void qc.invalidateQueries({ queryKey: ["projet-docs-copro"] });
+    },
   });
 }

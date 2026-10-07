@@ -6,6 +6,8 @@
 // certificat ; compare les domaines à l'objet du document (lot ou prestation)
 // et à sa date. Dans un dossier, chaque lecture est tracée (0146) et le
 // certificat PDF s'archive dans « Marchés de travaux » en un clic.
+// Maître d'œuvre (0147) : depuis « Mes projets », la trace se rattache à son
+// document de projet et le certificat rejoint ses documents de projet.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
@@ -13,10 +15,13 @@ import { Badge } from "@/components/ui";
 import {
   rechercherEntreprisesRge,
   useArchiverCertificatRge,
+  useArchiverCertificatRgeProjet,
   useEnregistrerVerificationRge,
   useLectureRge,
+  type VerificationRge,
 } from "@/api/rge";
 import { messageErreur } from "@/lib/erreurs";
+import type { Tables } from "@/lib/database.types";
 import {
   analyserLignesRge,
   aujourdhui,
@@ -27,6 +32,7 @@ import {
   enCours,
   formaterSiret,
   memeDomaine,
+  normaliserTexte,
   situationADate,
   siretValide,
   type CertificatRge,
@@ -38,8 +44,13 @@ export interface ContexteDossierRge {
   coproId: string;
   /** Préfixe du nom des fichiers (nom court de la copropriété). */
   prefixe: string | null;
-  /** Document vérifié (devis, DPGF) : la trace lui est rattachée. */
-  fichierId: string | null;
+  /** Document vérifié (devis, DPGF) : la trace lui est rattachée - fichier du dossier… */
+  fichierId?: string | null;
+  /** … ou document de projet déposé par le maître d'œuvre. */
+  projetDocId?: string | null;
+  /** Maître d'œuvre connecté : le certificat s'archive dans ses documents de
+   *  projet (partagés avec Strat Eco) au lieu des fichiers du dossier. */
+  presta?: Tables<"prestataires">;
 }
 
 interface PanneauProps {
@@ -48,6 +59,8 @@ interface PanneauProps {
   nomInitial?: string | null;
   /** Lot ou prestation du document : domaines RGE attendus. */
   objet?: string | null;
+  /** Le lot se saisit dans la fenêtre (dépôt du MOE, sans champ « Objet »). */
+  objetModifiable?: boolean;
   /** Date du document (AAAA-MM-JJ). */
   dateDocument?: string | null;
   /** Code postal de la copropriété : établissements du département d'abord. */
@@ -103,7 +116,8 @@ function Encadre({ ton, children }: { ton: "ok" | "alerte" | "erreur" | "neutre"
 export function PanneauVerificationRge({
   siretInitial,
   nomInitial,
-  objet,
+  objet: objetInitial,
+  objetModifiable,
   dateDocument,
   codePostalCopro,
   dossier,
@@ -120,6 +134,7 @@ export function PanneauVerificationRge({
   const [archives, setArchives] = useState<Record<string, string>>({});
   const [erreursArchive, setErreursArchive] = useState<Record<string, string>>({});
   const [archivage, setArchivage] = useState<string | null>(null);
+  const [objet, setObjet] = useState(objetInitial ?? "");
 
   // SIRET lu dans le PDF après l'ouverture (lecture asynchrone) : vérification lancée d'office
   useEffect(() => {
@@ -138,22 +153,35 @@ export function PanneauVerificationRge({
   const couverture = useMemo(() => couvertureDomaines(resultat, attendus), [resultat, attendus]);
   const situation = useMemo(() => situationADate(resultat, dateDocument), [resultat, dateDocument]);
 
-  // Trace de chaque établissement vérifié sur un document du dossier (une fois par ouverture)
+  // Lot saisi dans la fenêtre : pris en compte une fois la frappe terminée
+  const [objetStable, setObjetStable] = useState(objet);
+  useEffect(() => {
+    const t = setTimeout(() => setObjetStable(objet), objetModifiable ? 1200 : 0);
+    return () => clearTimeout(t);
+  }, [objet, objetModifiable]);
+
+  // Trace de chaque établissement vérifié sur un document du dossier (une fois
+  // par établissement et par lot saisi, pendant l'ouverture de la fenêtre)
   const enregistrer = useEnregistrerVerificationRge(dossier?.coproId ?? "");
   const traces = useRef(new Set<string>());
   useEffect(() => {
-    if (!dossier || !lecture.data || traces.current.has(lecture.data.siret)) return;
-    traces.current.add(lecture.data.siret);
+    if (!dossier || !lecture.data) return;
+    const cle = `${lecture.data.siret}|${normaliserTexte(objetStable)}`;
+    if (traces.current.has(cle)) return;
+    traces.current.add(cle);
     enregistrer.mutate({
-      fichierId: dossier.fichierId,
+      fichierId: dossier.fichierId ?? null,
+      projetDocId: dossier.projetDocId ?? null,
       resultat,
       siret: lecture.data.siret,
-      objet: objet ?? null,
+      objet: objetStable.trim() || null,
       dateDocument: dateDocument ?? null,
-      domainesManquants: couverture.filter((c) => !c.couvert).map((c) => c.domaine),
+      domainesManquants: couvertureDomaines(resultat, domainesAttendus(objetStable))
+        .filter((c) => !c.couvert)
+        .map((c) => c.domaine),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lecture.data, resultat]);
+  }, [lecture.data, resultat, objetStable]);
 
   const lancer = async () => {
     setErreurRecherche(null);
@@ -192,7 +220,11 @@ export function PanneauVerificationRge({
     setSiret(e.siret);
   };
 
-  const archiver = useArchiverCertificatRge(dossier?.coproId ?? "", dossier?.prefixe ?? null);
+  const archiverDossier = useArchiverCertificatRge(dossier?.coproId ?? "", dossier?.prefixe ?? null);
+  const archiverProjet = useArchiverCertificatRgeProjet(dossier?.presta, dossier?.coproId ?? "", dossier?.prefixe ?? null);
+  const archiver = dossier?.presta ? archiverProjet : archiverDossier;
+  const libelleArchive = dossier?.presta ? "Archiver dans les documents du projet" : "Archiver dans le dossier";
+  const libelleArchiveFait = dossier?.presta ? "Archivé dans les documents du projet" : "Archivé dans « Marchés de travaux »";
   const archiverCertificat = async (c: CertificatRge) => {
     if (!dossier || !c.url || !resultat) return;
     setArchivage(c.url);
@@ -260,6 +292,22 @@ export function PanneauVerificationRge({
           </button>
         </div>
       </div>
+
+      {objetModifiable && (
+        <div className="cs-field" style={{ marginTop: 10 }}>
+          <label>
+            Lot ou travaux du devis{" "}
+            <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· pour comparer aux domaines RGE de l'entreprise</span>
+          </label>
+          <input
+            className="edit-inp"
+            style={{ maxWidth: "none", width: "100%" }}
+            value={objet}
+            placeholder="Isolation ITE, menuiseries, VMC…"
+            onChange={(e) => setObjet(e.target.value)}
+          />
+        </div>
+      )}
 
       {erreurRecherche && <Encadre ton="erreur">{erreurRecherche}</Encadre>}
 
@@ -335,7 +383,7 @@ export function PanneauVerificationRge({
             )}
           </Encadre>
 
-          {objet && objet.trim() && (
+          {objet.trim() && (
             <Encadre ton={couverture.length === 0 ? "neutre" : couverture.every((c) => c.couvert) ? "ok" : "alerte"}>
               Objet du document : <b>« {objet.trim()} »</b>
               {couverture.length === 0 ? (
@@ -388,7 +436,7 @@ export function PanneauVerificationRge({
                     {dossier && c.url && c.pdf && enCours(c.etat) && (
                       archives[c.url] ? (
                         <span className="se-small" style={{ color: "var(--color-success-700)" }} title={archives[c.url]}>
-                          <Icon name="check" size={13} /> Archivé dans « Marchés de travaux »
+                          <Icon name="check" size={13} /> {libelleArchiveFait}
                         </span>
                       ) : (
                         <button
@@ -398,7 +446,7 @@ export function PanneauVerificationRge({
                           onClick={() => void archiverCertificat(c)}
                         >
                           <Icon name="download" size={13} />
-                          {archivage === c.url ? "Archivage…" : "Archiver dans le dossier"}
+                          {archivage === c.url ? "Archivage…" : libelleArchive}
                         </button>
                       )
                     )}
@@ -533,5 +581,40 @@ export function StatutRgeCompact({ siret, objet }: { siret: string | null | unde
       {couverts.length > 0 ? ` - ${couverts.join(", ")}` : ""}
       {manquants.length > 0 ? ` - pas de qualification en cours pour « ${manquants.map((m) => m.domaine).join(" », « ")} »` : ""}
     </p>
+  );
+}
+
+/** Bulle de la pastille RGE d'un document : dernière vérification. */
+export function resumeVerificationRge(v: VerificationRge): string {
+  const quand = dateFr(v.verifie_le.slice(0, 10));
+  const qui = `${v.entreprise ?? "Entreprise"} (SIRET ${formaterSiret(v.siret)})`;
+  if (!v.rge) return `${qui} : aucune qualification RGE en cours - vérifié le ${quand}`;
+  const manque = v.domaines_manquants.length ? ` - non couvert : ${v.domaines_manquants.join(", ")}` : "";
+  return `${qui} : RGE ${v.domaines_valides.join(", ")}${manque} - vérifié le ${quand}`;
+}
+
+/** Pastille RGE d'un devis (RGE, RGE partiel, Non RGE), ou bouton « Vérifier RGE » s'il n'a pas été vérifié. */
+export function BoutonRge({ verification: v, onClick }: { verification: VerificationRge | undefined; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="se-btn se-btn-ghost btn-sm"
+      style={{ flex: "none", whiteSpace: "nowrap" }}
+      title={v ? resumeVerificationRge(v) : "Vérifier que l'entreprise est RGE, pour quels domaines, et archiver son certificat"}
+      onClick={onClick}
+    >
+      {!v ? (
+        <>
+          <Icon name="search" size={13} />
+          Vérifier RGE
+        </>
+      ) : !v.rge ? (
+        <Badge kind="warn">Non RGE</Badge>
+      ) : v.domaines_manquants.length ? (
+        <Badge kind="warn">RGE partiel</Badge>
+      ) : (
+        <Badge kind="success">RGE</Badge>
+      )}
+    </button>
   );
 }

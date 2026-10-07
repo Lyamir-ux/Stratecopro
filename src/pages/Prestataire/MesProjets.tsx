@@ -5,10 +5,16 @@
 // projet : l'entreprise dépose devis, plannings, PV… que l'équipe Strat Eco
 // retrouve dans l'onglet Prestataires du dossier. Les autres intervenants
 // n'ont pas cette section (aucun accès aux projets en cours).
+// RGE (07/10/2026, 0147) : un devis ou une DPGF d'entreprise déposé ouvre la
+// vérification RGE de l'entreprise ; pastille RGE sur les documents vérifiés.
 import { useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import { QuestionnaireEcoPtzDialog } from "@/components/EcoPtzQuestionnaire";
+import { BoutonRge, VerificationRgeDialog } from "@/components/VerificationRge";
+import { derniereParFichier, siretDuFichier, useVerificationsRgeMoe, type VerificationRge } from "@/api/rge";
+import { extraireTextePdf, trouverSiret } from "@/lib/pdf/extraitDonnees";
+import { lotDepuisNomFichier } from "@/lib/rge";
 import { Badge, PhaseBadge, THUMB_BG } from "@/components/ui";
 import { fmtEuro, fmtDate } from "@/lib/format";
 import { messageErreur } from "@/lib/erreurs";
@@ -67,18 +73,29 @@ function ProjetDocsSection({
   presta,
   projet,
   docs,
+  verifsRge,
 }: {
   presta: Tables<"prestataires">;
   projet: ProjetMoe;
   docs: Tables<"projet_docs">[];
+  /** Dernière vérification RGE de chaque document de projet. */
+  verifsRge: Map<string, VerificationRge>;
 }) {
   const upload = useUploadProjetDoc(presta);
   const supprimer = useDeleteProjetDoc();
   const fileRef = useRef<HTMLInputElement>(null);
   // Éco-PTZ (02/10/2026) : un audit, un devis ou un CCTP / DPGF déposé ouvre le
   // questionnaire des données du CERFA (le dépôt du MOE n'a pas de type de document).
-  const [deposeEcoPtz, setDeposeEcoPtz] = useState<File | null>(null);
+  const [deposeEcoPtz, setDeposeEcoPtz] = useState<{ file: File; id: string } | null>(null);
   const [questionnaire, setQuestionnaire] = useState<{ mode: "audit" | "travaux"; file: File } | null>(null);
+  // RGE (07/10/2026) : devis ou DPGF d'entreprise déposé (puis questionnaire éco-PTZ), ou document déjà déposé
+  const [verifRge, setVerifRge] = useState<{
+    nom: string;
+    projetDocId: string;
+    lireSiret: () => Promise<string | null>;
+    verification?: VerificationRge;
+    ensuite?: File;
+  } | null>(null);
 
   return (
     <div style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
@@ -93,7 +110,7 @@ function ProjetDocsSection({
           style={{ display: "none" }}
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) void upload.mutateAsync({ coproId: projet.copro.id, file: f }).then(() => setDeposeEcoPtz(f));
+            if (f) void upload.mutateAsync({ coproId: projet.copro.id, file: f }).then(({ id }) => setDeposeEcoPtz({ file: f, id }));
             e.target.value = "";
           }}
         />
@@ -106,17 +123,18 @@ function ProjetDocsSection({
         Devis signés, plannings, PV de chantier… ces documents sont partagés avec l'équipe Strat Eco.
       </p>
       {deposeEcoPtz && (
-        <Modal title="Document déposé" onClose={() => setDeposeEcoPtz(null)} width={520}>
+        <Modal title="Document déposé" onClose={() => setDeposeEcoPtz(null)} width={560}>
           <p className="se-body" style={{ marginTop: 0 }}>
-            <b>{deposeEcoPtz.name}</b> est partagé avec l'équipe Strat Eco. S'il s'agit de l'audit énergétique ou d'un
+            <b>{deposeEcoPtz.file.name}</b> est partagé avec l'équipe Strat Eco. S'il s'agit de l'audit énergétique ou d'un
             devis, d'un CCTP ou d'une DPGF des travaux, quelques informations suffisent pour préparer les formulaires
-            éco-PTZ des copropriétaires.
+            éco-PTZ des copropriétaires. Pour un devis ou une DPGF d'entreprise, la qualification RGE de l'entreprise est
+            vérifiée d'abord.
           </p>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
               className="se-btn se-btn-primary"
               onClick={() => {
-                setQuestionnaire({ mode: "audit", file: deposeEcoPtz });
+                setQuestionnaire({ mode: "audit", file: deposeEcoPtz.file });
                 setDeposeEcoPtz(null);
               }}
             >
@@ -125,17 +143,50 @@ function ProjetDocsSection({
             <button
               className="se-btn se-btn-primary"
               onClick={() => {
-                setQuestionnaire({ mode: "travaux", file: deposeEcoPtz });
+                const { file, id } = deposeEcoPtz;
+                setVerifRge({
+                  nom: file.name,
+                  projetDocId: id,
+                  lireSiret: async () => (/pdf$/i.test(file.type || file.name) ? trouverSiret(await extraireTextePdf(file, 6)) : null),
+                  ensuite: file,
+                });
                 setDeposeEcoPtz(null);
               }}
             >
-              Devis, CCTP ou DPGF
+              Devis ou DPGF d'une entreprise
+            </button>
+            <button
+              className="se-btn se-btn-secondary"
+              onClick={() => {
+                setQuestionnaire({ mode: "travaux", file: deposeEcoPtz.file });
+                setDeposeEcoPtz(null);
+              }}
+            >
+              CCTP
             </button>
             <button className="se-btn se-btn-ghost" onClick={() => setDeposeEcoPtz(null)}>
               Autre document
             </button>
           </div>
         </Modal>
+      )}
+      {verifRge && (
+        <VerificationRgeDialog
+          nomFichier={verifRge.nom}
+          siretInitial={verifRge.verification?.siret ?? null}
+          lireSiret={verifRge.lireSiret}
+          nomInitial={verifRge.verification?.entreprise ?? null}
+          objet={verifRge.verification?.objet ?? lotDepuisNomFichier(verifRge.nom)}
+          objetModifiable
+          codePostalCopro={projet.copro.code_postal}
+          dossier={{ coproId: projet.copro.id, prefixe: projet.copro.name, projetDocId: verifRge.projetDocId, presta }}
+          libelleFermer={verifRge.ensuite ? "Continuer" : "Fermer"}
+          onClose={() => {
+            const suite = verifRge.ensuite;
+            setVerifRge(null);
+            if (suite) setQuestionnaire({ mode: "travaux", file: suite });
+          }}
+        />
       )}
       {questionnaire && (
         <QuestionnaireEcoPtzDialog
@@ -160,6 +211,19 @@ function ProjetDocsSection({
           </button>
           <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>{fmtTaille(d.size)}</span>
           <span className="spacer" style={{ flex: 1 }}></span>
+          {(verifsRge.has(d.id) || /\.pdf$/i.test(d.name)) && (
+            <BoutonRge
+              verification={verifsRge.get(d.id)}
+              onClick={() =>
+                setVerifRge({
+                  nom: d.name,
+                  projetDocId: d.id,
+                  lireSiret: () => siretDuFichier(d.path, "presta-docs"),
+                  verification: verifsRge.get(d.id),
+                })
+              }
+            />
+          )}
           <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>déposé le {fmtDate(d.uploaded_at)}</span>
           <button
             className="icon-btn"
@@ -180,6 +244,8 @@ function ProjetDocsSection({
 export function MesProjets({ presta }: { presta: Tables<"prestataires"> }) {
   const { data: projets, error: erreurProjets } = useMesProjetsMoe(true, presta.id);
   const { data: projetDocs } = useProjetDocs(presta.id);
+  const { data: verifsRge } = useVerificationsRgeMoe(presta.id);
+  const derniereRge = derniereParFichier(verifsRge, "projet_doc_id");
   // une candidature retenue n'entre dans « Mes projets » qu'une fois
   // l'engagement confirmé (bouton « Je m'engage » de Mes candidatures) ; un
   // dossier où l'entreprise est le maître d'œuvre saisi y figure d'office
@@ -287,6 +353,7 @@ export function MesProjets({ presta }: { presta: Tables<"prestataires"> }) {
                 presta={presta}
                 projet={p}
                 docs={(projetDocs ?? []).filter((d) => d.copro_id === p.copro.id)}
+                verifsRge={derniereRge}
               />
             </div>
           </div>

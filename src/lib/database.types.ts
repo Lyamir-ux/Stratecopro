@@ -4962,6 +4962,7 @@ export type Database = {
           fichier_id: string | null
           id: string
           objet: string | null
+          projet_doc_id: string | null
           rge: boolean
           siret: string
           verifie_le: string
@@ -4977,6 +4978,7 @@ export type Database = {
           fichier_id?: string | null
           id?: string
           objet?: string | null
+          projet_doc_id?: string | null
           rge: boolean
           siret: string
           verifie_le?: string
@@ -4992,6 +4994,7 @@ export type Database = {
           fichier_id?: string | null
           id?: string
           objet?: string | null
+          projet_doc_id?: string | null
           rge?: boolean
           siret?: string
           verifie_le?: string
@@ -5010,6 +5013,13 @@ export type Database = {
             columns: ["fichier_id"]
             isOneToOne: false
             referencedRelation: "fichiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verifications_rge_projet_doc_id_fkey"
+            columns: ["projet_doc_id"]
+            isOneToOne: false
+            referencedRelation: "projet_docs"
             referencedColumns: ["id"]
           },
         ]

@@ -5,7 +5,11 @@
 // lui-même : les sites des organismes n'autorisent pas les appels d'une autre
 // origine.
 //
-// Garde-fous : équipe AMO active seulement ; le lien demandé doit figurer dans
+// v2 (07/10/2026, 0147) : ouverte aussi au maître d'œuvre connecté (fiche
+// entreprise active, métier MOE), qui archive le certificat dans ses documents
+// de projet depuis « Mes projets ».
+//
+// Garde-fous : équipe AMO ou maître d'œuvre actifs ; le lien demandé doit figurer dans
 // la liste officielle des entreprises RGE de l'ADEME pour CE SIRET (la fonction
 // ne sert jamais de relais vers une adresse quelconque) ; PDF de 15 Mo au plus.
 // Lien vers une page web (OPQIBI, AFNOR) : 422, le chef de projet ouvre le lien.
@@ -35,7 +39,7 @@ Deno.serve(async (req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  // --- Appelant : équipe AMO active uniquement ---
+  // --- Appelant : équipe AMO, ou maître d'œuvre (v2) ---
   const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
   const { data: userData, error: userErr } = await admin.auth.getUser(jwt);
   if (userErr || !userData.user) return json(401, { error: "Session invalide" });
@@ -44,7 +48,18 @@ Deno.serve(async (req: Request) => {
     .select("role, active")
     .eq("user_id", userData.user.id)
     .maybeSingle();
-  if (!profile || !profile.active || profile.role !== "amo") return json(403, { error: "Réservé à l'équipe Strat Eco" });
+  if (!profile || !profile.active) return json(403, { error: "Compte inactif" });
+  if (profile.role !== "amo") {
+    // v2 (0147) : maître d'œuvre connecté à sa fiche entreprise active
+    const { data: moe } = await admin
+      .from("prestataires")
+      .select("id")
+      .eq("user_id", userData.user.id)
+      .eq("actif", true)
+      .contains("types", ["moe"])
+      .maybeSingle();
+    if (profile.role !== "presta" || !moe) return json(403, { error: "Réservé à l'équipe Strat Eco et aux maîtres d'œuvre" });
+  }
 
   const body = await req.json().catch(() => ({}));
   const siret = String(body?.siret ?? "").replace(/\D/g, "");

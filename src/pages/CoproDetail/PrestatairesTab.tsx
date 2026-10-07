@@ -2,6 +2,7 @@
 // et des candidatures reçues, piloté depuis le dashboard de la copropriété :
 // valider / refuser une offre (e-mail automatique au prestataire), suivre
 // l'engagement du prestataire retenu, répondre aux questions des candidats.
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
@@ -13,7 +14,10 @@ import {
   useReopenConsultation,
   type Consultation,
 } from "@/api/consultations";
-import { ouvrirDocPresta, useProjetDocsCopro } from "@/api/espacePrestataire";
+import { ouvrirDocPresta, useProjetDocsCopro, type ProjetDocCopro } from "@/api/espacePrestataire";
+import { derniereParFichier, siretDuFichier, useVerificationsRge } from "@/api/rge";
+import { BoutonRge, VerificationRgeDialog } from "@/components/VerificationRge";
+import { lotDepuisNomFichier } from "@/lib/rge";
 import { CandidatureActions } from "@/components/CandidatureActions";
 import { QuestionsPanel } from "@/pages/Consultations";
 import type { CoproWithStats } from "@/api/copros";
@@ -113,9 +117,14 @@ function ConsultationPanel({ cs }: { cs: Consultation }) {
 }
 
 /** Documents déposés par les prestataires retenus du projet (devis, plannings,
- *  PV…) depuis leur section « Mes projets ». */
+ *  PV…) depuis leur section « Mes projets ». Pastille RGE sur les devis vérifiés
+ *  par le maître d'œuvre (0147) ; l'équipe peut vérifier à son tour et archiver
+ *  le certificat dans les fichiers du dossier. */
 function ProjetDocsPanel({ c }: { c: CoproWithStats }) {
   const { data: docs } = useProjetDocsCopro(c.id);
+  const { data: verifs } = useVerificationsRge(c.id);
+  const derniereRge = derniereParFichier(verifs, "projet_doc_id");
+  const [rgeDe, setRgeDe] = useState<ProjetDocCopro | null>(null);
   if (!docs || docs.length === 0) return null;
   return (
     <div className="panel">
@@ -141,10 +150,26 @@ function ProjetDocsPanel({ c }: { c: CoproWithStats }) {
             </button>
             <Badge kind="neutral">{d.prestataire?.raison_sociale ?? "-"}</Badge>
             <span className="spacer" style={{ flex: 1 }}></span>
+            {(derniereRge.has(d.id) || /\.pdf$/i.test(d.name)) && (
+              <BoutonRge verification={derniereRge.get(d.id)} onClick={() => setRgeDe(d)} />
+            )}
             <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>déposé le {fmtDate(d.uploaded_at)}</span>
           </div>
         ))}
       </div>
+      {rgeDe && (
+        <VerificationRgeDialog
+          nomFichier={rgeDe.name}
+          siretInitial={derniereRge.get(rgeDe.id)?.siret ?? null}
+          lireSiret={() => siretDuFichier(rgeDe.path, "presta-docs")}
+          nomInitial={derniereRge.get(rgeDe.id)?.entreprise ?? null}
+          objet={derniereRge.get(rgeDe.id)?.objet ?? lotDepuisNomFichier(rgeDe.name)}
+          objetModifiable
+          codePostalCopro={c.code_postal}
+          dossier={{ coproId: c.id, prefixe: c.name, projetDocId: rgeDe.id }}
+          onClose={() => setRgeDe(null)}
+        />
+      )}
     </div>
   );
 }

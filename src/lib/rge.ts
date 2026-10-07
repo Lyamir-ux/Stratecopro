@@ -359,3 +359,14 @@ export const dateFr = (s: string | null | undefined) => {
 /** Types de document qui déclenchent la vérification RGE au dépôt (devis et DPGF de travaux). */
 export const TYPES_DEVIS_RGE = ["devis", "devis_travaux", "devis_fenetres", "marche_travaux"];
 export const verificationRgePour = (type: string | null | undefined) => !!type && TYPES_DEVIS_RGE.includes(type);
+
+/** Lot deviné d'après le nom d'un fichier déposé sans champ « Objet » (« Devis_ITE_Soprema.pdf »
+ *  -> « Devis ITE Soprema ») ; vide s'il ne cite aucun travaux connus. */
+export function lotDepuisNomFichier(nom: string): string {
+  const base = nom
+    .replace(/\.[a-zA-Z0-9]{1,8}$/, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return domainesAttendus(base).length ? base : "";
+}

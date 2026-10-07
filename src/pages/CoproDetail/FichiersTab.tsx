@@ -5,9 +5,9 @@ import { ApercuDocument } from "@/components/ApercuDocument";
 import { DepotZipDialog, estZip } from "@/components/DepotZipDialog";
 import { Icon } from "@/components/Icon";
 import { LigneFichier } from "@/components/LigneFichier";
-import { Badge, Progress } from "@/components/ui";
+import { Progress } from "@/components/ui";
 import { RenommageDialog } from "@/components/RenommageDialog";
-import { VerificationRgeDialog } from "@/components/VerificationRge";
+import { BoutonRge, VerificationRgeDialog } from "@/components/VerificationRge";
 import {
   DISPOSITIFS_RECAP,
   DOSSIERS,
@@ -24,9 +24,9 @@ import {
   useUploadFichier,
   type Fichier,
 } from "@/api/fichiers";
-import { derniereParFichier, siretDuFichier, useVerificationsRge, type VerificationRge } from "@/api/rge";
+import { derniereParFichier, siretDuFichier, useVerificationsRge } from "@/api/rge";
 import { champsDepuisNom, typeDepuisNom, typeLabel } from "@/lib/nommage";
-import { dateFr, formaterSiret, verificationRgePour } from "@/lib/rge";
+import { verificationRgePour } from "@/lib/rge";
 import type { CoproWithStats } from "@/api/copros";
 
 function fmtSize(n: number | null): string {
@@ -97,31 +97,8 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
   });
 
   // Devis et DPGF de travaux : état RGE de l'entreprise (dernière vérification), ou bouton pour vérifier
-  const boutonRge = (f: Fichier) => {
-    if (!verificationRgePour(typeDepuisNom(f.name))) return null;
-    const v = derniereRge.get(f.id);
-    return (
-      <button
-        className="se-btn se-btn-ghost btn-sm"
-        style={{ flex: "none", whiteSpace: "nowrap" }}
-        title={v ? resumeRge(v) : "Vérifier que l'entreprise est RGE, pour quels domaines, et archiver son certificat"}
-        onClick={() => setRgeDe(f)}
-      >
-        {!v ? (
-          <>
-            <Icon name="search" size={13} />
-            Vérifier RGE
-          </>
-        ) : !v.rge ? (
-          <Badge kind="warn">Non RGE</Badge>
-        ) : v.domaines_manquants.length ? (
-          <Badge kind="warn">RGE partiel</Badge>
-        ) : (
-          <Badge kind="success">RGE</Badge>
-        )}
-      </button>
-    );
-  };
+  const boutonRge = (f: Fichier) =>
+    verificationRgePour(typeDepuisNom(f.name)) ? <BoutonRge verification={derniereRge.get(f.id)} onClick={() => setRgeDe(f)} /> : null;
 
   const selectFolder = (f: string) => {
     setOpenFolder(openFolder === f ? null : f);
@@ -531,13 +508,4 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
       })()}
     </div>
   );
-}
-
-/** Bulle de la pastille RGE d'un devis : dernière vérification. */
-function resumeRge(v: VerificationRge): string {
-  const quand = dateFr(v.verifie_le.slice(0, 10));
-  const qui = `${v.entreprise ?? "Entreprise"} (SIRET ${formaterSiret(v.siret)})`;
-  if (!v.rge) return `${qui} : aucune qualification RGE en cours - vérifié le ${quand}`;
-  const manque = v.domaines_manquants.length ? ` - non couvert : ${v.domaines_manquants.join(", ")}` : "";
-  return `${qui} : RGE ${v.domaines_valides.join(", ")}${manque} - vérifié le ${quand}`;
 }

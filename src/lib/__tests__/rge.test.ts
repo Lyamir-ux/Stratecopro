@@ -8,6 +8,7 @@ import {
   etablissements,
   etatValidite,
   formaterSiret,
+  lotDepuisNomFichier,
   nomOrganisme,
   situationADate,
   verificationRgePour,
@@ -168,5 +169,13 @@ describe("petits utilitaires", () => {
     expect(verificationRgePour("devis_travaux")).toBe(true);
     expect(verificationRgePour("cctp_dce")).toBe(false);
     expect(verificationRgePour(null)).toBe(false);
+  });
+});
+
+describe("lotDepuisNomFichier", () => {
+  it("garde le nom s'il cite des travaux connus, sinon rien", () => {
+    expect(lotDepuisNomFichier("Devis_ITE_Soprema.pdf")).toBe("Devis ITE Soprema");
+    expect(lotDepuisNomFichier("DPGF-menuiseries-v2.pdf")).toBe("DPGF menuiseries v2");
+    expect(lotDepuisNomFichier("planning_chantier.pdf")).toBe("");
   });
 });
