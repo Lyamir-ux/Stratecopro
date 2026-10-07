@@ -4951,6 +4951,69 @@ export type Database = {
           },
         ]
       }
+      verifications_rge: {
+        Row: {
+          certificats: Json
+          copro_id: string
+          date_document: string | null
+          domaines_manquants: string[]
+          domaines_valides: string[]
+          entreprise: string | null
+          fichier_id: string | null
+          id: string
+          objet: string | null
+          rge: boolean
+          siret: string
+          verifie_le: string
+          verifie_par: string | null
+        }
+        Insert: {
+          certificats?: Json
+          copro_id: string
+          date_document?: string | null
+          domaines_manquants?: string[]
+          domaines_valides?: string[]
+          entreprise?: string | null
+          fichier_id?: string | null
+          id?: string
+          objet?: string | null
+          rge: boolean
+          siret: string
+          verifie_le?: string
+          verifie_par?: string | null
+        }
+        Update: {
+          certificats?: Json
+          copro_id?: string
+          date_document?: string | null
+          domaines_manquants?: string[]
+          domaines_valides?: string[]
+          entreprise?: string | null
+          fichier_id?: string | null
+          id?: string
+          objet?: string | null
+          rge?: boolean
+          siret?: string
+          verifie_le?: string
+          verifie_par?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verifications_rge_copro_id_fkey"
+            columns: ["copro_id"]
+            isOneToOne: false
+            referencedRelation: "coproprietes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verifications_rge_fichier_id_fkey"
+            columns: ["fichier_id"]
+            isOneToOne: false
+            referencedRelation: "fichiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       copro_stats: {

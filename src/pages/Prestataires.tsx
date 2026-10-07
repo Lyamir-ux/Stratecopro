@@ -30,6 +30,8 @@ import { EmailsSecondaires } from "@/components/EmailsSecondaires";
 import { DepartementsPicker, choixVersDepartements, departementsVersChoix } from "@/components/DepartementsPicker";
 import { DEPARTEMENTS, GRAND_EST, couvreDepartement, nomDepartement, resumeDepartements } from "@/lib/departements";
 import { FilGeneralEntreprise } from "@/components/FilGeneralEntreprise";
+import { PanneauVerificationRge } from "@/components/VerificationRge";
+import { chiffres, formaterSiret, siretValide } from "@/lib/rge";
 import { nonLusFilGeneral, useFilsGeneraux, useLecturesFilGeneral } from "@/api/messages";
 import { METIERS_PRESTATAIRES } from "@/api/consultations";
 import {
@@ -300,6 +302,7 @@ function PrestaForm({
   acces?: AccesPrestataire;
 }) {
   const [draft, setDraft] = useState(initial);
+  const [voirRge, setVoirRge] = useState(false);
   const set = <K extends keyof typeof EMPTY>(k: K, v: (typeof EMPTY)[K]) => setDraft((p) => ({ ...p, [k]: v }));
   const toggleType = (t: TypeConsult) =>
     set("types", draft.types.includes(t) ? draft.types.filter((x) => x !== t) : [...draft.types, t]);
@@ -343,6 +346,37 @@ function PrestaForm({
           <label>SIRET</label>
           <input className="edit-inp" style={{ maxWidth: "none" }} value={draft.siret}
             onChange={(e) => set("siret", e.target.value)} placeholder="123 456 789 00012" />
+        </div>
+        <div className="cs-field cs-field-full">
+          {voirRge ? (
+            <div className="panel" style={{ padding: "10px 12px" }}>
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+                <b style={{ fontSize: 14 }}>Qualification RGE</b>
+                <span style={{ flex: 1 }}></span>
+                <button type="button" className="se-btn se-btn-ghost btn-sm" onClick={() => setVoirRge(false)}>
+                  Masquer
+                </button>
+              </div>
+              <PanneauVerificationRge
+                key={chiffres(draft.siret)}
+                siretInitial={draft.siret}
+                nomInitial={draft.raison_sociale}
+                reprendreSiret={(s) => set("siret", formaterSiret(s))}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="se-btn se-btn-ghost btn-sm"
+              style={{ alignSelf: "flex-start" }}
+              disabled={!siretValide(draft.siret) && draft.raison_sociale.trim().length < 2}
+              title="Liste officielle des entreprises RGE (ADEME) : domaines de travaux, validité, certificat"
+              onClick={() => setVoirRge(true)}
+            >
+              <Icon name="search" size={14} />
+              Vérifier la qualification RGE
+            </button>
+          )}
         </div>
         <div className="cs-field cs-field-full">
           <label>Prestations couvertes * <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· détermine les consultations reçues</span></label>

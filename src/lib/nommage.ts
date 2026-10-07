@@ -231,6 +231,40 @@ export function nomRenomme(saisie: string, ancienNom: string): string | null {
   return nomFichierSansAccents(ext ? `${base}.${ext}` : base);
 }
 
+/** Relit les champs d'un nom normalisé ({COPRO} - {Type} - {Objet} - {ÉMETTEUR} - {Date}) :
+ *  sert à vérifier après coup un devis déjà déposé (vérification RGE, 07/10/2026).
+ *  L'émetteur est le segment en majuscules qui précède la date ; null si absent. */
+export function champsDepuisNom(name: string): { type: string | null; objet: string | null; emetteur: string | null; date: string | null } {
+  const vide = { type: null, objet: null, emetteur: null, date: null };
+  const segs = nomSansExtension(name)
+    .split(" - ")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const egal = (a: string, b: string) => a.localeCompare(b, "fr", { sensitivity: "base" }) === 0;
+  // libellé à « / » coupé en deux au dépôt (« Devis / DPGF des travaux » -> « Devis - DPGF des travaux »)
+  let type: string | null = null;
+  let suite = -1;
+  for (let i = 0; i < Math.min(2, segs.length) && !type; i++) {
+    const double = segs[i + 1] ? TYPES_DOCUMENT.find((t) => egal(nomFichierSansAccents(t.label), `${segs[i]} - ${segs[i + 1]}`)) : undefined;
+    const simple = TYPES_DOCUMENT.find((t) => egal(t.label, segs[i]));
+    if (double) [type, suite] = [double.id, i + 2];
+    else if (simple) [type, suite] = [simple.id, i + 1];
+  }
+  if (!type) return vide;
+  const reste = segs.slice(suite);
+  const iDate = reste.findIndex((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
+  const avant = iDate >= 0 ? reste.slice(0, iDate) : reste;
+  const majuscules = (s: string) => s === s.toUpperCase() && /[A-Z]/.test(s);
+  let objet: string | null = null;
+  let emetteur: string | null = null;
+  if (avant.length >= 2 && majuscules(avant[avant.length - 1])) {
+    emetteur = avant[avant.length - 1];
+    objet = avant.slice(0, -1).join(" - ");
+  } else if (avant.length === 1 && majuscules(avant[0])) emetteur = avant[0];
+  else if (avant.length) objet = avant.join(" - ");
+  return { type, objet, emetteur, date: iDate >= 0 ? reste[iDate] : null };
+}
+
 /** Recrée un File du même contenu sous un autre nom. */
 export function renommerFile(file: File, nouveauNom: string): File {
   return new File([file], nouveauNom, { type: file.type, lastModified: file.lastModified });

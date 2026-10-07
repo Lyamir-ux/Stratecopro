@@ -5,8 +5,9 @@ import { ApercuDocument } from "@/components/ApercuDocument";
 import { DepotZipDialog, estZip } from "@/components/DepotZipDialog";
 import { Icon } from "@/components/Icon";
 import { LigneFichier } from "@/components/LigneFichier";
-import { Progress } from "@/components/ui";
+import { Badge, Progress } from "@/components/ui";
 import { RenommageDialog } from "@/components/RenommageDialog";
+import { VerificationRgeDialog } from "@/components/VerificationRge";
 import {
   DISPOSITIFS_RECAP,
   DOSSIERS,
@@ -23,7 +24,9 @@ import {
   useUploadFichier,
   type Fichier,
 } from "@/api/fichiers";
-import { typeDepuisNom, typeLabel } from "@/lib/nommage";
+import { derniereParFichier, siretDuFichier, useVerificationsRge, type VerificationRge } from "@/api/rge";
+import { champsDepuisNom, typeDepuisNom, typeLabel } from "@/lib/nommage";
+import { dateFr, formaterSiret, verificationRgePour } from "@/lib/rge";
 import type { CoproWithStats } from "@/api/copros";
 
 function fmtSize(n: number | null): string {
@@ -47,6 +50,10 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
   const [uploadFolder, setUploadFolder] = useState<string>(DOSSIERS[0]);
   const [openChecklist, setOpenChecklist] = useState<string | null>(null);
   const [apercu, setApercu] = useState<Fichier | null>(null);
+  // Vérification RGE d'un devis déjà déposé (07/10/2026)
+  const [rgeDe, setRgeDe] = useState<Fichier | null>(null);
+  const { data: verifsRge } = useVerificationsRge(c.id);
+  const derniereRge = derniereParFichier(verifsRge);
   // Glissé-déposé : "panel" = zone générale, sinon nom du dossier survolé
   const [dragOver, setDragOver] = useState<string | null>(null);
   // Fichiers en attente de renommage assisté avant dépôt
@@ -88,6 +95,33 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
     onRenommer: modifiable(f) ? (name: string) => renommer.mutateAsync({ f, name }) : undefined,
     onSupprimer: modifiable(f) ? () => del.mutateAsync(f) : undefined,
   });
+
+  // Devis et DPGF de travaux : état RGE de l'entreprise (dernière vérification), ou bouton pour vérifier
+  const boutonRge = (f: Fichier) => {
+    if (!verificationRgePour(typeDepuisNom(f.name))) return null;
+    const v = derniereRge.get(f.id);
+    return (
+      <button
+        className="se-btn se-btn-ghost btn-sm"
+        style={{ flex: "none", whiteSpace: "nowrap" }}
+        title={v ? resumeRge(v) : "Vérifier que l'entreprise est RGE, pour quels domaines, et archiver son certificat"}
+        onClick={() => setRgeDe(f)}
+      >
+        {!v ? (
+          <>
+            <Icon name="search" size={13} />
+            Vérifier RGE
+          </>
+        ) : !v.rge ? (
+          <Badge kind="warn">Non RGE</Badge>
+        ) : v.domaines_manquants.length ? (
+          <Badge kind="warn">RGE partiel</Badge>
+        ) : (
+          <Badge kind="success">RGE</Badge>
+        )}
+      </button>
+    );
+  };
 
   const selectFolder = (f: string) => {
     setOpenFolder(openFolder === f ? null : f);
@@ -314,16 +348,19 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                       </>
                     }
                     avant={
-                      modifiable(f) && (
-                        <button
-                          className="icon-btn"
-                          title={f.partage_copro ? "Ne plus partager aux copropriétaires" : "Partager aux copropriétaires (portail)"}
-                          style={f.partage_copro ? { color: "var(--color-primary-700)" } : undefined}
-                          onClick={() => void partage.mutateAsync({ id: f.id, partage: !f.partage_copro })}
-                        >
-                          <Icon name="share" size={16} />
-                        </button>
-                      )
+                      <>
+                        {boutonRge(f)}
+                        {modifiable(f) && (
+                          <button
+                            className="icon-btn"
+                            title={f.partage_copro ? "Ne plus partager aux copropriétaires" : "Partager aux copropriétaires (portail)"}
+                            style={f.partage_copro ? { color: "var(--color-primary-700)" } : undefined}
+                            onClick={() => void partage.mutateAsync({ id: f.id, partage: !f.partage_copro })}
+                          >
+                            <Icon name="share" size={16} />
+                          </button>
+                        )}
+                      </>
                     }
                     {...actions(f)}
                   />
@@ -358,6 +395,7 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
                         dans « {f.dossier} »{f.size != null ? ` · ${fmtSize(f.size)}` : ""}
                       </>
                     }
+                    avant={boutonRge(f)}
                     {...actions(f)}
                   />
                 ))
@@ -469,9 +507,37 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
             upload.mutateAsync({ file, dossier: meta.dossier ?? depot.dossier, nameOriginal: meta.nameOriginal, type: meta.type })
           }
           ecoPtz={{ coproId: c.id, peutValider: true }}
+          rge={{ coproId: c.id, codePostal: c.code_postal }}
           onClose={() => setDepot(null)}
         />
       )}
+
+      {rgeDe && (() => {
+        const v = derniereRge.get(rgeDe.id);
+        const lu = champsDepuisNom(rgeDe.name);
+        return (
+          <VerificationRgeDialog
+            nomFichier={rgeDe.name}
+            siretInitial={v?.siret ?? null}
+            lireSiret={() => siretDuFichier(rgeDe.storage_path)}
+            nomInitial={v?.entreprise ?? lu.emetteur}
+            objet={v?.objet ?? lu.objet}
+            dateDocument={v?.date_document ?? lu.date}
+            codePostalCopro={c.code_postal}
+            dossier={{ coproId: c.id, prefixe: c.name, fichierId: rgeDe.id }}
+            onClose={() => setRgeDe(null)}
+          />
+        );
+      })()}
     </div>
   );
+}
+
+/** Bulle de la pastille RGE d'un devis : dernière vérification. */
+function resumeRge(v: VerificationRge): string {
+  const quand = dateFr(v.verifie_le.slice(0, 10));
+  const qui = `${v.entreprise ?? "Entreprise"} (SIRET ${formaterSiret(v.siret)})`;
+  if (!v.rge) return `${qui} : aucune qualification RGE en cours - vérifié le ${quand}`;
+  const manque = v.domaines_manquants.length ? ` - non couvert : ${v.domaines_manquants.join(", ")}` : "";
+  return `${qui} : RGE ${v.domaines_valides.join(", ")}${manque} - vérifié le ${quand}`;
 }

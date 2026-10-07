@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nomFichierSansAccents, nomRenomme, nomSansExtension } from "@/lib/nommage";
+import { champsDepuisNom, nomFichierSansAccents, nomRenomme, nomSansExtension } from "@/lib/nommage";
 
 // Feedback d'Amir du 09/09/2026 : plus d'accent ni de caractère spécial dans
 // les noms de fichiers (ils ressortaient en « %C3%A9 » au téléchargement).
@@ -50,5 +50,28 @@ describe("nomRenomme", () => {
   it("nomSansExtension retire seulement l'extension", () => {
     expect(nomSansExtension("35 RUE D-ILLKIRCH - PV AG - 2026-01-19.pdf")).toBe("35 RUE D-ILLKIRCH - PV AG - 2026-01-19");
     expect(nomSansExtension("LISEZMOI")).toBe("LISEZMOI");
+  });
+});
+
+describe("champsDepuisNom", () => {
+  it("relit objet, émetteur et date d'un nom normalisé", () => {
+    expect(champsDepuisNom("RENAISSANCE - Devis - Isolation ITE - SOPREMA - 2026-09-12.pdf")).toEqual({
+      type: "devis",
+      objet: "Isolation ITE",
+      emetteur: "SOPREMA",
+      date: "2026-09-12",
+    });
+  });
+
+  it("libellé à « / » coupé au dépôt, segments absents", () => {
+    expect(champsDepuisNom("LE FORUM - Devis - DPGF des travaux - Menuiseries - RCP - 2026-10-01 - signe.pdf")).toEqual({
+      type: "devis_travaux",
+      objet: "Menuiseries",
+      emetteur: "RCP",
+      date: "2026-10-01",
+    });
+    expect(champsDepuisNom("LE FORUM - Devis - RCP.pdf")).toEqual({ type: "devis", objet: null, emetteur: "RCP", date: null });
+    expect(champsDepuisNom("LE FORUM - Devis - Ventilation.pdf")).toEqual({ type: "devis", objet: "Ventilation", emetteur: null, date: null });
+    expect(champsDepuisNom("scan_0042.pdf")).toEqual({ type: null, objet: null, emetteur: null, date: null });
   });
 });

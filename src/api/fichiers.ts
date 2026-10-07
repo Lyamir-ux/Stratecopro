@@ -204,9 +204,7 @@ export function useUploadFichier(coproId: string) {
       dossier: string;
       nameOriginal?: string;
       type?: string | null;
-    }) => {
-      await uploadFichierEtPropager(coproId, file, dossier, nameOriginal, type);
-    },
+    }) => uploadFichierEtPropager(coproId, file, dossier, nameOriginal, type),
     onSuccess: () => invaliderPieces(qc, coproId),
   });
 }

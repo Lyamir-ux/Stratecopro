@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
+import { StatutRgeCompact } from "@/components/VerificationRge";
 import {
   manquantsAudit,
   useContextePfEcoPtz,
@@ -234,6 +235,7 @@ function QuestionnaireAudit({ coproId, fichier, peutValider, onClose }: Props) {
         <Champ label="Téléphone" value={a.contact_telephone ?? ""} onChange={set("contact_telephone")} facultatif />
         <Champ label="Ville (« Fait à »)" value={a.ville ?? ""} onChange={set("ville")} placeholder="Entzheim" facultatif />
       </div>
+      <StatutRgeCompact siret={a.siret} objet="audit" />
       {manque.length > 0 && (
         <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--color-warning-700)" }}>
           <Icon name="alert" size={13} /> Encore à compléter : {manque.join(", ")}. Vous pouvez enregistrer et compléter plus tard.
@@ -373,6 +375,7 @@ function QuestionnaireTravaux({ coproId, fichier, emetteur, peutValider, toutCoc
                     />
                   </div>
                 )}
+                {l.coche && <StatutRgeCompact siret={l.siret} objet={`${l.titre ?? ""} ${l.designation ?? ""}`} />}
               </div>
             ))}
           </div>
