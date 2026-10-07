@@ -13,6 +13,7 @@ import {
   nomFichierPiece,
   nomsUniques,
   piecesExportables,
+  type DextStatut,
   type EnvoiStatut,
   type LigneFacture,
   type PieceFacture,
@@ -273,6 +274,24 @@ export function useTerminerEnvoi() {
 }
 
 /** Paiement reçu (dirigeant seul) : le jalon passe « encaissé ». */
+/**
+ * Dépôt dans Dext (0144) : refait ou fait seulement ce dépôt, sans renvoyer
+ * l'e-mail au client. Le dépôt normal part déjà tout seul à « Valider et envoyer ».
+ */
+export function useDeposerDext() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (piece: PieceFacture): Promise<DextStatut | null> => {
+      const { data, error } = await supabase.functions.invoke("envoyer-facture", {
+        body: { facture_id: piece.id, seulement_dext: true },
+      });
+      if (error) throw error;
+      return (data as { dext?: DextStatut | null } | null)?.dext ?? null;
+    },
+    onSettled: (_d, _e, piece) => invalider(qc, piece.copro_id),
+  });
+}
+
 export function useMarquerPaye() {
   const qc = useQueryClient();
   return useMutation({

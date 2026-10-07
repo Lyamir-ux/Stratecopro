@@ -12,10 +12,21 @@
 // avec « [TEST] » dans l'objet et un encadré « document de test, sans valeur,
 // ne pas régler » ; la pièce elle-même porte un numéro TEST-FAC / TEST-AVR.
 //
+// Dépôt dans Dext (0144, demande d'Amir du 07/10/2026) : Dext n'a pas d'API de
+// dépôt, la pièce lui est envoyée par e-mail, seule en pièce jointe, à l'adresse
+// « ventes » du compte (secret DEXT_EMAIL_VENTES, sinon l'adresse ci-dessous).
+// Séparé de l'e-mail du client (il ne voit pas l'adresse Dext et un échec de
+// l'un n'empêche pas l'autre) ; jamais pour une pièce de test ; une pièce déjà
+// déposée n'est pas redéposée (« Terminer l'envoi » ne crée pas de doublon).
+// { seulement_dext: true } reprend uniquement le dépôt Dext, sans toucher à
+// l'e-mail du client.
+//
 // Envoi réel via Resend si le secret RESEND_API_KEY est configuré ; sans clé,
 // l'envoi est simulé et la réponse l'indique (même convention que les autres
 // notifications).
 import { createClient } from "npm:@supabase/supabase-js@2";
+
+const DEXT_EMAIL_VENTES_DEFAUT = "amir.chelgham.strat.eco+ventes@dext.cc";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -38,7 +49,7 @@ const LIBELLE_JALON: Record<string, string> = {
 
 /** « 1 439,96 € » */
 const euros = (v: number) =>
-  Number(v).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/ /g, " ") + " €";
+  Number(v).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\u202f/g, "\u00a0") + " €";
 
 /** AAAA-MM-JJ → JJ/MM/AAAA */
 const dateFr = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "");
@@ -74,12 +85,13 @@ Deno.serve(async (req: Request) => {
     .maybeSingle();
   if (!profile || !profile.active || profile.role !== "amo") return json(403, { error: "Réservé à l'équipe Strat Eco" });
 
-  const { facture_id } = await req.json().catch(() => ({}));
+  const { facture_id, seulement_dext } = await req.json().catch(() => ({}));
   if (!facture_id) return json(400, { error: "facture_id attendu" });
+  const seulementDext = seulement_dext === true;
 
   const { data: f } = await admin
     .from("factures")
-    .select("id, type, statut, test, copro_id, jalon, nature, facture_origine_id, numero, date_emission, date_echeance, client_nom, destinataire_nom, reference, reference_client, reference_client_type, total_ttc, pdf_path")
+    .select("id, type, statut, test, copro_id, jalon, nature, facture_origine_id, numero, date_emission, date_echeance, client_nom, destinataire_nom, reference, reference_client, reference_client_type, total_ttc, pdf_path, dext_statut")
     .eq("id", facture_id)
     .maybeSingle();
   if (!f) return json(404, { error: "Pièce introuvable" });
@@ -111,10 +123,67 @@ Deno.serve(async (req: Request) => {
     });
   };
 
+  // PDF de la pièce, commun au dépôt Dext et à l'e-mail du client
+  const { data: fichier, error: dlErr } = await admin.storage.from("copro-files").download(f.pdf_path);
+  if (dlErr || !fichier) {
+    if (!seulementDext) await tracer("erreur", "PDF introuvable dans les fichiers");
+    return json(200, { statut: "erreur", erreur: "PDF introuvable" });
+  }
+  const pdf = new Uint8Array(await fichier.arrayBuffer());
+
+  const avoir = f.type === "avoir";
+  const nomCopro = d.copro ?? "";
+  const jalon = LIBELLE_JALON[f.jalon] ?? f.jalon;
+  const objet = f.nature === "cee"
+    ? `Honoraires CEE - Copropriété ${nomCopro.toUpperCase()}`
+    : `${f.client_nom} - ${jalon}`;
+  const subject = `${f.test ? "[TEST] " : ""}${avoir ? "Avoir" : "Facture"} ${f.numero} - ${objet}`;
+  const resendKey = Deno.env.get("RESEND_API_KEY");
+  const from = Deno.env.get("RESEND_FROM") ?? "Strat Eco <onboarding@resend.dev>";
+
+  // --- dépôt dans Dext (avant l'e-mail du client : une pièce sans e-mail de
+  // destinataire doit tout de même arriver en comptabilité) ---
+  type StatutDext = "envoye" | "simule" | "erreur";
+  const tracerDext = async (statut: StatutDext, detailDext: string): Promise<StatutDext> => {
+    await admin
+      .from("factures")
+      .update({ dext_statut: statut, dext_le: new Date().toISOString(), dext_detail: detailDext })
+      .eq("id", f.id);
+    return statut;
+  };
+  const deposerDext = async (): Promise<StatutDext> => {
+    const adresse = Deno.env.get("DEXT_EMAIL_VENTES")?.trim() || DEXT_EMAIL_VENTES_DEFAUT;
+    if (!resendKey) return tracerDext("simule", `Vers ${adresse} (dépôt simulé, clé Resend absente)`);
+    try {
+      const r = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from,
+          to: [adresse],
+          subject,
+          // Dext lit la pièce jointe ; le texte ne sert qu'à s'y retrouver dans la boîte d'envoi
+          text: `${avoir ? "Avoir" : "Facture"} ${f.numero} du ${dateFr(f.date_emission)} - ${f.client_nom} - ${euros(Number(f.total_ttc))} TTC.`,
+          attachments: [{ filename: `${f.numero}.pdf`, content: b64(pdf) }],
+        }),
+      });
+      if (!r.ok) {
+        const txt = (await r.text().catch(() => "")).slice(0, 300);
+        return tracerDext("erreur", `Vers ${adresse} - refus de Resend ${r.status} ${txt}`);
+      }
+      return tracerDext("envoye", `Vers ${adresse}`);
+    } catch (e) {
+      return tracerDext("erreur", `Vers ${adresse} - ${String(e).slice(0, 200)}`);
+    }
+  };
+  // jamais pour une pièce de test ; pas de doublon si la pièce est déjà déposée
+  const dext: StatutDext | null = !f.test && f.dext_statut !== "envoye" ? await deposerDext() : null;
+  if (seulementDext) return json(200, { dext: dext ?? f.dext_statut ?? null });
+
   const to = d.to?.trim() ?? "";
   if (!emailValide(to)) {
     await tracer("sans_email", "Aucun e-mail de destinataire valide");
-    return json(200, { statut: "sans_email" });
+    return json(200, { statut: "sans_email", dext });
   }
   // copie : chef de projet du dossier et dirigeant, sans doublon
   const cc = [...new Set([d.chef?.email, ...(d.dirigeants ?? [])].filter(emailValide).map((e) => e.trim().toLowerCase()))]
@@ -128,25 +197,11 @@ Deno.serve(async (req: Request) => {
     origine = o ?? null;
   }
 
-  const { data: fichier, error: dlErr } = await admin.storage.from("copro-files").download(f.pdf_path);
-  if (dlErr || !fichier) {
-    await tracer("erreur", "PDF introuvable dans les fichiers");
-    return json(200, { statut: "erreur", erreur: "PDF introuvable" });
-  }
-  const pdf = new Uint8Array(await fichier.arrayBuffer());
-
-  const avoir = f.type === "avoir";
-  const nomCopro = d.copro ?? "";
   // numéro de référence ou d'ordre de service du client (0135), repris dans le message
   const refClient = f.reference_client?.trim()
     ? `${f.reference_client_type === "ordre_service" ? "N° d'ordre de service" : "N° de référence"} : ${f.reference_client.trim()}`
     : "";
-  const jalon = LIBELLE_JALON[f.jalon] ?? f.jalon;
   const piece = avoir ? "l'avoir" : "la facture";
-  const objet = f.nature === "cee"
-    ? `Honoraires CEE - Copropriété ${nomCopro.toUpperCase()}`
-    : `${f.client_nom} - ${jalon}`;
-  const subject = `${f.test ? "[TEST] " : ""}${avoir ? "Avoir" : "Facture"} ${f.numero} - ${objet}`;
   const signataire = d.chef?.nom ?? profile.full_name ?? "L'équipe Strat Eco";
   const bonjour = f.destinataire_nom?.trim() ? `Bonjour ${echap(f.destinataire_nom.trim())},` : "Madame, Monsieur,";
 
@@ -176,13 +231,11 @@ Deno.serve(async (req: Request) => {
     </div>`;
 
   const detail = `À ${to}${cc.length ? ` - copie ${cc.join(", ")}` : ""}`;
-  const resendKey = Deno.env.get("RESEND_API_KEY");
   if (!resendKey) {
     await tracer("simule", `${detail} (envoi simulé, clé Resend absente)`);
-    return json(200, { statut: "simule", to, cc });
+    return json(200, { statut: "simule", to, cc, dext });
   }
 
-  const from = Deno.env.get("RESEND_FROM") ?? "Strat Eco <onboarding@resend.dev>";
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -200,12 +253,12 @@ Deno.serve(async (req: Request) => {
     if (!r.ok) {
       const txt = (await r.text().catch(() => "")).slice(0, 300);
       await tracer("erreur", `${detail} - refus de Resend ${r.status} ${txt}`);
-      return json(200, { statut: "erreur", to, cc });
+      return json(200, { statut: "erreur", to, cc, dext });
     }
     await tracer("envoye", detail);
-    return json(200, { statut: "envoye", to, cc });
+    return json(200, { statut: "envoye", to, cc, dext });
   } catch (e) {
     await tracer("erreur", `${detail} - ${String(e).slice(0, 200)}`);
-    return json(200, { statut: "erreur", to, cc });
+    return json(200, { statut: "erreur", to, cc, dext });
   }
 });

@@ -14,6 +14,7 @@ export type TypePiece = "facture" | "avoir";
 export type NaturePiece = "amo" | "cee";
 export type StatutPiece = "brouillon" | "emise";
 export type EnvoiStatut = "envoye" | "erreur" | "simule" | "sans_email";
+export type DextStatut = "envoye" | "simule" | "erreur";
 export type TypeReferenceClient = "reference" | "ordre_service";
 
 export interface LigneFacture {
@@ -63,6 +64,10 @@ export interface PieceFacture {
   envoi_statut: EnvoiStatut | null;
   envoi_le: string | null;
   envoi_detail: string | null;
+  /** Dépôt dans Dext par e-mail (0144) ; null = jamais tenté (pièce de test ou antérieure). */
+  dext_statut: DextStatut | null;
+  dext_le: string | null;
+  dext_detail: string | null;
   payee_le: string | null;
   payee_par: string | null;
   cree_par: string | null;

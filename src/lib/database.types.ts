@@ -1688,6 +1688,9 @@ export type Database = {
           date_emission: string | null
           destinataire_email: string | null
           destinataire_nom: string | null
+          dext_detail: string | null
+          dext_le: string | null
+          dext_statut: string | null
           envoi_detail: string | null
           envoi_le: string | null
           envoi_statut: string | null
@@ -1727,6 +1730,9 @@ export type Database = {
           date_emission?: string | null
           destinataire_email?: string | null
           destinataire_nom?: string | null
+          dext_detail?: string | null
+          dext_le?: string | null
+          dext_statut?: string | null
           envoi_detail?: string | null
           envoi_le?: string | null
           envoi_statut?: string | null
@@ -1766,6 +1772,9 @@ export type Database = {
           date_emission?: string | null
           destinataire_email?: string | null
           destinataire_nom?: string | null
+          dext_detail?: string | null
+          dext_le?: string | null
+          dext_statut?: string | null
           envoi_detail?: string | null
           envoi_le?: string | null
           envoi_statut?: string | null

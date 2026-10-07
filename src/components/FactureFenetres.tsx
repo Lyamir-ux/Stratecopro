@@ -23,6 +23,7 @@ import {
   useAnnulerPaiement,
   useCreerAvoir,
   useCreerBrouillon,
+  useDeposerDext,
   useFactures,
   useJournalFacturation,
   useMarquerPaye,
@@ -318,6 +319,16 @@ function FenetrePiece({
                 </dd>
               </>
             )}
+            {piece.dext_le && (
+              <>
+                <dt>Dext</dt>
+                <dd>
+                  {piece.dext_statut === "envoye" ? "Déposée" : piece.dext_statut === "simule" ? "Dépôt simulé" : "Non déposée"} le{" "}
+                  {new Date(piece.dext_le).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+                  {piece.dext_detail && <small>{piece.dext_detail}</small>}
+                </dd>
+              </>
+            )}
             {piece.payee_le && (
               <>
                 <dt>Payée le</dt>
@@ -538,6 +549,20 @@ function ResultatValidation({ r, copro, onClose }: { r: ResultatEmission; copro:
       label: dernier.envoi === "simule" ? "E-mail simulé (clé d'envoi absente)" : `E-mail envoyé à ${dernier.piece.destinataire_email}`,
       ok: dernier.envoi === "envoye" || dernier.envoi === "simule",
     },
+    // pièces de test : jamais déposées dans Dext
+    ...(dernier.piece.test
+      ? []
+      : [
+          {
+            label:
+              dernier.piece.dext_statut === "envoye"
+                ? "Pièce déposée dans Dext"
+                : dernier.piece.dext_statut === "simule"
+                  ? "Dépôt dans Dext simulé (clé d'envoi absente)"
+                  : "Dépôt dans Dext non fait : « Redéposer dans Dext » dans la fiche de la pièce",
+            ok: dernier.piece.dext_statut === "envoye" || dernier.piece.dext_statut === "simule",
+          },
+        ]),
   ];
   return (
     <div className="fz-actions">
@@ -591,6 +616,7 @@ function ActionsEmise({
 }) {
   const creerAvoir = useCreerAvoir();
   const terminer = useTerminerEnvoi();
+  const deposerDext = useDeposerDext();
   const annulerPaiement = useAnnulerPaiement();
   const [erreur, setErreur] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -633,6 +659,21 @@ function ActionsEmise({
     }
   };
 
+  // dépôt dans Dext : automatique à la validation ; ce bouton sert à le refaire
+  // (échec) ou à le faire pour une pièce émise avant 0144. Jamais pour un test.
+  const depotDextPossible = !piece.test && !!piece.pdf_path && piece.dext_statut !== "envoye";
+  const deposer = async () => {
+    setErreur(null);
+    setMessage(null);
+    try {
+      const s = await deposerDext.mutateAsync(piece);
+      if (s === "erreur") setErreur("Le dépôt dans Dext a échoué (le détail est dans la fiche de la pièce).");
+      else setMessage(s === "simule" ? "Dépôt dans Dext simulé." : "Pièce déposée dans Dext.");
+    } catch (e) {
+      setErreur(messageErreur(e, "Le dépôt dans Dext n'a pas pu être fait."));
+    }
+  };
+
   return (
     <div className="fz-actions">
       {erreur && <p className="fact-erreur">{erreur}</p>}
@@ -649,6 +690,17 @@ function ActionsEmise({
         {(etat === "a_envoyer" || etat === "envoi_erreur") && (
           <button type="button" className="se-btn se-btn-primary btn-sm" onClick={() => void reprendre()} disabled={terminer.isPending}>
             <Icon name="send" size={14} /> {terminer.isPending ? "Envoi…" : "Terminer l'envoi"}
+          </button>
+        )}
+        {depotDextPossible && (
+          <button
+            type="button"
+            className={`se-btn ${piece.dext_statut === "erreur" ? "se-btn-secondary" : "se-btn-ghost"} btn-sm`}
+            onClick={() => void deposer()}
+            disabled={deposerDext.isPending}
+          >
+            <Icon name="upload" size={14} />{" "}
+            {deposerDext.isPending ? "Dépôt…" : piece.dext_statut === "erreur" ? "Redéposer dans Dext" : "Déposer dans Dext"}
           </button>
         )}
         {dirigeant && onPaiement && piece.type === "facture" && !avoir && !piece.payee_le && jalon?.etat === "facture" && (
