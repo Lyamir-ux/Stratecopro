@@ -16,7 +16,8 @@ import { PROFILS_MPR, libellesBatiments } from "@/lib/referentiels";
 import type { Profil } from "@/lib/finance";
 import { useEnquete, useSaveReponse, useVerifierProfil } from "@/api/enquete";
 import { downloadAdhesionDoc } from "@/api/financement";
-import { PIECES, nomPiece, urlSigneePiece } from "@/api/portail";
+import { PIECES, nomPiece, urlApercuPiece } from "@/api/portail";
+import { ApercuDocument } from "@/components/ApercuDocument";
 import {
   useDossiersCoproprietaires,
   type DossierCoproprietaire,
@@ -424,13 +425,8 @@ function FicheCoproprietaire({
     );
   };
 
-  const ouvrirPiece = async (path: string) => {
-    try {
-      window.open(await urlSigneePiece(path), "_blank", "noopener");
-    } catch (e) {
-      setErreur(messageErreur(e, "Ouverture impossible"));
-    }
-  };
+  // pièce affichée dans la fenêtre d'aperçu, sans téléchargement (idée d'Amir du 07/10)
+  const [apercu, setApercu] = useState<{ name: string; path: string } | null>(null);
 
   const p = d.plan;
   const bulletins = ((d.adhesion?.bulletins as { lotNum: string; path: string }[] | null) ?? []);
@@ -695,7 +691,7 @@ function FicheCoproprietaire({
                     {piece && (
                       <>
                         <StatutPieceBadge piece={piece} />
-                        <button className="icon-btn" title={`Ouvrir ${piece.name}`} onClick={() => void ouvrirPiece(piece.storage_path)}>
+                        <button className="icon-btn" title={`Ouvrir ${piece.name}`} onClick={() => setApercu({ name: piece.name, path: piece.storage_path })}>
                           <Icon name="eye" size={14} />
                         </button>
                       </>
@@ -722,6 +718,15 @@ function FicheCoproprietaire({
         Profil {profilAnah(d.enquete.profil).toLowerCase()} · dossier {libelleStatutDossier(d.etat.statut).toLowerCase()}. Le RFR est une donnée
         sensible : il n'est visible que par l'équipe AMO et le copropriétaire concerné.
       </p>
+      {apercu && (
+        <ApercuDocument
+          name={apercu.name}
+          path={apercu.path}
+          urlSignee={urlApercuPiece}
+          onClose={() => setApercu(null)}
+          onTelecharger={() => void downloadAdhesionDoc(apercu.path, apercu.name).catch((e) => setErreur(messageErreur(e, "Téléchargement impossible")))}
+        />
+      )}
     </Modal>
   );
 }

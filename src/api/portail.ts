@@ -733,6 +733,34 @@ export async function urlSigneePiece(path: string): Promise<string> {
   return data.signedUrl;
 }
 
+/**
+ * Types d'affichage d'une pièce dans l'aperçu. Pas de SVG ni de HTML : une pièce
+ * vient d'un copropriétaire, et un lien « blob: » s'exécute dans l'origine de
+ * l'application.
+ */
+const TYPES_APERCU_PIECE: Record<string, string> = {
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+};
+
+/**
+ * Aperçu sans téléchargement d'une pièce (idée d'Amir du 07/10/2026, /taches) :
+ * l'objet est récupéré en mémoire puis affiché par un lien « blob: » typé d'après
+ * l'extension, car le type enregistré en Storage peut être générique (octet-stream)
+ * et le navigateur télécharge alors au lieu d'afficher. Lien libéré par ApercuDocument.
+ */
+export async function urlApercuPiece(path: string): Promise<string> {
+  const type = TYPES_APERCU_PIECE[path.split(".").pop()?.toLowerCase() ?? ""];
+  if (!type) throw new Error("Format non affichable");
+  const { data, error } = await supabase.storage.from("pieces-copro").download(path);
+  if (error || !data) throw error ?? new Error("Document indisponible");
+  return URL.createObjectURL(new Blob([data], { type }));
+}
+
 /** Télécharge le RIB téléversé (pour la vérification de concordance). */
 export async function downloadRibBlob(storagePath: string): Promise<Blob | null> {
   const { data, error } = await supabase.storage.from("pieces-copro").download(storagePath);

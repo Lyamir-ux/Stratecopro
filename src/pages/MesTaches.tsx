@@ -3,6 +3,7 @@
 // Bug d'Amir du 04/10/2026 : la page et la pastille du menu se limitent aux
 // dossiers du chef de projet choisi sur le tableau de bord, à défaut à ceux
 // du compte connecté (tâches et pièces justificatives à vérifier).
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
@@ -13,7 +14,9 @@ import type { Tables } from "@/lib/database.types";
 import { useCopros } from "@/api/copros";
 import { usePerimetreTaches } from "@/api/taches";
 import { dansPerimetre, libellePerimetre } from "@/lib/perimetreChef";
-import { nomPiece, urlSigneePiece, usePiecesAVerifier } from "@/api/portail";
+import { nomPiece, urlApercuPiece, usePiecesAVerifier } from "@/api/portail";
+import { downloadAdhesionDoc } from "@/api/financement";
+import { ApercuDocument } from "@/components/ApercuDocument";
 import { VerificationPiece } from "@/components/VerificationPiece";
 import { StatusDot } from "./CoproDetail/ProjetTab";
 
@@ -56,9 +59,8 @@ export default function MesTaches() {
   const { data: toutesLesPieces } = usePiecesAVerifier();
   const piecesAVerifier = (toutesLesPieces ?? []).filter((p) => idsPerimetre.has(p.copro_id));
   const portee = libellePerimetre(perimetre);
-  const ouvrirPiece = (path: string) => {
-    void urlSigneePiece(path).then((url) => window.open(url, "_blank", "noopener")).catch(() => undefined);
-  };
+  // pièce affichée dans la fenêtre d'aperçu (idée d'Amir du 07/10 : voir sans télécharger)
+  const [apercu, setApercu] = useState<{ name: string; path: string } | null>(null);
 
   const groups = copros
     .map((c) => ({
@@ -129,7 +131,11 @@ export default function MesTaches() {
                     <Icon name="building" size={13} />
                     {p.coproprietes?.name ?? "Dossier"} · {p.coproprietaires?.nom ?? "copropriétaire"}
                   </button>
-                  <button className="se-btn se-btn-secondary btn-sm" title="Ouvrir la pièce (aperçu, journalisé)" onClick={() => ouvrirPiece(p.storage_path)}>
+                  <button
+                    className="se-btn se-btn-secondary btn-sm"
+                    title="Ouvrir la pièce (aperçu sans téléchargement)"
+                    onClick={() => setApercu({ name: p.name, path: p.storage_path })}
+                  >
                     <Icon name="eye" size={13} />
                     Ouvrir
                   </button>
@@ -210,6 +216,16 @@ export default function MesTaches() {
           </div>
         ))}
       </div>
+
+      {apercu && (
+        <ApercuDocument
+          name={apercu.name}
+          path={apercu.path}
+          urlSignee={urlApercuPiece}
+          onClose={() => setApercu(null)}
+          onTelecharger={() => void downloadAdhesionDoc(apercu.path, apercu.name).catch(() => undefined)}
+        />
+      )}
     </div>
   );
 }
