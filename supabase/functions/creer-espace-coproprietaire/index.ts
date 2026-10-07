@@ -12,7 +12,8 @@
 //   • fiche déjà reliée mais lien jamais utilisé : l'e-mail est renvoyé ;
 //   • adresse d'un compte AMO, syndic ou prestataire : refusée (un compte garde
 //     un seul rôle, arbitrage d'Amir du 30/09) ;
-//   • fiche sortante (0090) ou sans adresse : ignorée.
+//   • fiche sortante (0090) ou sans adresse : ignorée ; si le champ e-mail en
+//     porte plusieurs, seule la première compte.
 // Le jeton est généré ici (generateLink) et envoyé par Resend, pas par le
 // service d'e-mails de l'authentification. Le bouton de l'e-mail mène à la page
 // /activer-espace de l'app, qui ne vérifie le jeton qu'au clic : les messageries
@@ -52,7 +53,20 @@ function initialesDe(nom: string): string {
 const ENTITES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
 const esc = (v: string) => v.replace(/[&<>"]/g, (ch) => ENTITES[ch] ?? ch);
 
-const EMAIL_VALIDE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Le champ e-mail d'une fiche peut porter plusieurs adresses (« a@x.fr / b@y.fr »,
+// « a@x.fr ; b@y.fr ») : seule la première sert à ouvrir l'espace et à écrire
+// (retour d'Amir du 07/10/2026). Même règle que premiereAdresse() de
+// src/lib/adresseEmail.ts et premiere_adresse() en base (migration 0145).
+const ADRESSE = /[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(?:[.][A-Za-z0-9-]+)+/;
+function premiereAdresse(texte: unknown): string | null {
+  const m = ADRESSE.exec(typeof texte === "string" ? texte : "");
+  return m ? m[0].toLowerCase() : null;
+}
+
+/** Dernière phrase du questionnaire, sous l'accès à l'espace (demande d'Amir du 07/10/2026). */
+const AIDE_ENQUETE = `<p>En cas de questions ou de problèmes de connexion, contactez
+      <a href="mailto:admin@strateco.fr">admin@strateco.fr</a>.</p>`;
+
 const MAX_FICHES = 25;
 const MAX_SUJET = 150;
 const MAX_MESSAGE = 4000;
@@ -233,7 +247,8 @@ Deno.serve(async (req: Request) => {
         ${bouton(actionLink, "Choisir mon mot de passe")}
         <p>Votre identifiant de connexion est votre adresse e-mail : <strong>${esc(email)}</strong>. Une fois votre
         mot de passe choisi, l'enquête vous attend dans la rubrique « Enquête sociale » de votre espace.</p>
-        ${lienExpire(email)}`,
+        ${lienExpire(email)}
+        ${AIDE_ENQUETE}`,
       );
       return envoyer(email, enquete.sujet, html);
     }
@@ -261,7 +276,8 @@ Deno.serve(async (req: Request) => {
       <p>Connectez-vous avec votre adresse e-mail (<strong>${esc(email)}</strong>) et votre mot de passe habituel.</p>
       <p style="color:#5c6470;font-size:13px">Mot de passe oublié ? Rendez-vous sur
       <a href="${appUrl}/mot-de-passe-oublie">${appUrl}/mot-de-passe-oublie</a> : vous recevrez un lien pour en
-      choisir un nouveau.</p>`,
+      choisir un nouveau.</p>
+      ${AIDE_ENQUETE}`,
     );
     return envoyer(email, enquete!.sujet, html);
   };
@@ -340,8 +356,8 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      const email = (f.email ?? "").trim().toLowerCase();
-      if (!email || !EMAIL_VALIDE.test(email)) {
+      const email = premiereAdresse(f.email);
+      if (!email) {
         r.statut = "sans_email";
         continue;
       }

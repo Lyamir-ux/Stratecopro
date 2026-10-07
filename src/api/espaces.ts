@@ -6,6 +6,7 @@
 // (mode enquête, migration 0136) : espace ouvert au passage si besoin.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { premiereAdresse } from "@/lib/adresseEmail";
 
 export type EtatEspace = "actif" | "invite" | "a_creer" | "sans_email" | "email_pris";
 
@@ -71,7 +72,7 @@ export interface EnvoiEnquete {
 export function paquetsParAdresse<T extends { id: string; email: string | null }>(cibles: T[], taille = PAQUET): T[][] {
   const groupes = new Map<string, T[]>();
   for (const c of cibles) {
-    const cle = c.email?.trim().toLowerCase() || `id:${c.id}`;
+    const cle = premiereAdresse(c.email) ?? `id:${c.id}`;
     groupes.set(cle, [...(groupes.get(cle) ?? []), c]);
   }
   const paquets: T[][] = [];

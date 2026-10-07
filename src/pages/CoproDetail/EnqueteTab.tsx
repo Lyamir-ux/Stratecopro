@@ -283,6 +283,10 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
 
   const toggleQ = (id: string) =>
     setDraft((prev) => (prev ?? config).map((it) => (it.id === id ? { ...it, on: !it.on } : it)));
+  // coche de section (idée de Marius du 07/10) : active ou désactive d'un coup les
+  // questions modifiables de la section, les questions socle restent posées
+  const toggleSection = (ids: string[], on: boolean) =>
+    setDraft((prev) => (prev ?? config).map((it) => (ids.includes(it.id) ? { ...it, on } : it)));
   const editCustom = (id: string, text: string) =>
     setDraft((prev) => (prev ?? config).map((it) => (it.id === id ? { ...it, q: text } : it)));
   const removeCustom = (id: string) => setDraft((prev) => (prev ?? config).filter((it) => it.id !== id));
@@ -356,6 +360,8 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
             {SECTIONS.map((section) => {
               const qs = resolved.filter((q) => q.section === section.id && !q.custom);
               const on = qs.filter((q) => q.on).length;
+              const modifiables = qs.filter((q) => !q.locked);
+              const modifiablesOn = modifiables.filter((q) => q.on).length;
               return (
                 <div key={section.id} className="qc-section">
                   <div className="qc-sec-head">
@@ -363,6 +369,31 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
                       <h4>{section.label}</h4>
                       <span className="qc-sec-desc">{section.desc}</span>
                     </div>
+                    {modifiables.length > 1 && (
+                      <label
+                        className="qc-sec-all"
+                        title={
+                          modifiablesOn === modifiables.length
+                            ? "Désactiver toutes les questions de cette section"
+                            : "Activer toutes les questions de cette section"
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={modifiablesOn === modifiables.length}
+                          ref={(el) => {
+                            if (el) el.indeterminate = modifiablesOn > 0 && modifiablesOn < modifiables.length;
+                          }}
+                          onChange={(e) =>
+                            toggleSection(
+                              modifiables.map((q) => q.id),
+                              e.target.checked
+                            )
+                          }
+                        />
+                        Toutes les questions
+                      </label>
+                    )}
                     <span className="qc-sec-count">
                       {on}/{qs.length} active{on > 1 ? "s" : ""}
                     </span>
@@ -684,6 +715,10 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
                   {enquete.email_envoye_le ? "Envoyé" : sent ? "Préparé" : "À envoyer"}
                 </Badge>
               </span>
+            </div>
+            <div className="kv">
+              <span className="k" title="Date du dernier envoi du questionnaire par e-mail">Date d'envoi</span>
+              <span className="v">{fmtDate(enquete.email_envoye_le)}</span>
             </div>
             <button
               className="se-btn se-btn-secondary"

@@ -5,11 +5,16 @@
 // sont ajoutés par l'edge function creer-espace-coproprietaire (mode enquête),
 // dont l'aperçu de l'écran reprend la mise en page.
 import type { EtatEspace } from "@/api/espaces";
+import { premiereAdresse } from "@/lib/adresseEmail";
 
 export const MAX_SUJET = 150;
 export const MAX_MESSAGE = 4000;
 
 export const sujetEnqueteParDefaut = (copro: string) => `Enquête sociale et technique - ${copro}`;
+
+/** Phrase ajoutée sous l'accès à l'espace (demande d'Amir du 07/10/2026), comme dans l'edge function. */
+export const AIDE_ENQUETE_DEBUT = "En cas de questions ou de problèmes de connexion, contactez";
+export const CONTACT_ENQUETE = "admin@strateco.fr";
 
 export const messageEnqueteParDefaut = (copro: string) =>
   `Strat Eco accompagne votre copropriété ${copro} dans son projet de rénovation énergétique.\n\n` +
@@ -103,7 +108,8 @@ export function classerDestinataires(
   for (const f of retenues) {
     const etat = espaces?.get(f.id)?.etat;
     if (etat === "actif" || etat === "invite" || etat === "a_creer") {
-      envoyables.push({ id: f.id, nom: f.nom, email: f.email, espaceActif: etat === "actif" });
+      // un champ à plusieurs adresses : la première seule reçoit l'e-mail
+      envoyables.push({ id: f.id, nom: f.nom, email: premiereAdresse(f.email) ?? f.email, espaceActif: etat === "actif" });
     } else if (etat === "email_pris") {
       emailPris++;
     } else {

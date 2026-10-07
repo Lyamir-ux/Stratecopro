@@ -505,6 +505,7 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .qc-sec-head h4 { margin: 0; font-family: var(--font-display); font-size: 15px; color: var(--fg1); }
 .qc-sec-desc { display: block; font-size: 12.5px; color: var(--fg-muted); margin-top: 2px; }
 .qc-sec-count { flex: none; font-size: 12.5px; font-weight: 700; color: var(--fg-muted); white-space: nowrap; }
+.qc-sec-head .qc-sec-all { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--fg2); cursor: pointer; white-space: nowrap; }
 .qc-row {
   display: flex; align-items: center; gap: 14px; padding: 12px 14px; margin-bottom: 8px;
   border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg);

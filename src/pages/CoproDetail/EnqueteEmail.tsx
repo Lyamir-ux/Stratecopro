@@ -11,6 +11,8 @@ import { messageErreur } from "@/lib/erreurs";
 import { resumeResultats, useCreerEspaces, type ResultatEspace } from "@/api/espaces";
 import { useUpdateEnquete, type Enquete } from "@/api/enquete";
 import {
+  AIDE_ENQUETE_DEBUT,
+  CONTACT_ENQUETE,
   MAX_MESSAGE,
   MAX_SUJET,
   aEnregistrer,
@@ -96,6 +98,9 @@ export function ApercuEmailEnquete({
             </p>
           </>
         )}
+        <p>
+          {AIDE_ENQUETE_DEBUT} <a href={`mailto:${CONTACT_ENQUETE}`}>{CONTACT_ENQUETE}</a>.
+        </p>
         <p style={{ marginBottom: 0 }}>
           Bien cordialement,
           <br />
@@ -171,7 +176,8 @@ export function EmailEnqueteFenetre({
     <Modal title="E-mail aux copropriétaires" onClose={onClose} width={720} closeOnBackdrop={!modifie}>
       <p className="se-small" style={{ marginTop: 0, color: "var(--fg-muted)" }}>
         Relisez l'e-mail qui accompagne le questionnaire et modifiez l'objet ou le message si nécessaire. La formule
-        d'appel, la date limite, le bouton d'accès et la signature sont ajoutés pour chaque copropriétaire.
+        d'appel, la date limite, le bouton d'accès, la phrase de contact en cas de problème de connexion et la
+        signature sont ajoutés pour chaque copropriétaire.
       </p>
       <div className="mail-champ">
         <label htmlFor="mail-sujet">Objet</label>

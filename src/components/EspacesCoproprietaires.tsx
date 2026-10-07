@@ -7,6 +7,7 @@ import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { Modal } from "@/components/Modal";
 import { fmtDate } from "@/lib/format";
+import { premiereAdresse } from "@/lib/adresseEmail";
 import {
   resumeResultats,
   useCreerEspaces,
@@ -170,12 +171,12 @@ export function OuvrirEspacesFenetre({
         <p className="se-body" style={{ marginTop: 0 }}>
           {renvoi ? (
             <>
-              Un nouvel e-mail d'activation va partir à <b>{seul.email}</b> : le lien précédent n'a pas encore été
+              Un nouvel e-mail d'activation va partir à <b>{premiereAdresse(seul.email) ?? seul.email}</b> : le lien précédent n'a pas encore été
               utilisé.
             </>
           ) : (
             <>
-              <b>{seul.nom}</b> va recevoir à <b>{seul.email}</b> un e-mail avec un lien pour choisir son mot de passe
+              <b>{seul.nom}</b> va recevoir à <b>{premiereAdresse(seul.email) ?? seul.email}</b> un e-mail avec un lien pour choisir son mot de passe
               et accéder à son espace copropriétaire.
             </>
           )}
@@ -199,7 +200,7 @@ export function OuvrirEspacesFenetre({
           >
             {cibles.map((c) => (
               <div key={c.id} style={{ padding: "3px 0" }}>
-                <b>{c.nom}</b> <span style={{ color: "var(--fg-muted)" }}>· {c.email}</span>
+                <b>{c.nom}</b> <span style={{ color: "var(--fg-muted)" }}>· {premiereAdresse(c.email) ?? c.email}</span>
               </div>
             ))}
           </div>
