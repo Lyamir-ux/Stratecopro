@@ -5,7 +5,7 @@
 // individuelle qui réunit profil de ressources, plan individuel, adhésion
 // éco-PTZ et pièces, et les trois exports concordants (liste des primes,
 // rapport d'enquête sociale, fiche état) générés depuis la même base.
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
@@ -16,6 +16,12 @@ import { PROFILS_MPR, libellesBatiments } from "@/lib/referentiels";
 import type { Profil } from "@/lib/finance";
 import { useEnquete, useSaveReponse, useVerifierProfil } from "@/api/enquete";
 import { downloadAdhesionDoc } from "@/api/financement";
+import {
+  exporterDossierAdherent,
+  exporterDossiersAdherents,
+  type BilanDossierAdherent,
+  type BilanLot,
+} from "@/api/dossierAdherent";
 import { PIECES, nomPiece, urlApercuPiece } from "@/api/portail";
 import { ApercuDocument } from "@/components/ApercuDocument";
 import {
@@ -91,6 +97,191 @@ function StatutBadge({ d }: { d: DossierCoproprietaire }) {
   );
 }
 
+/** Pièces de la banque fournies / attendues : « - » quand le dossier ne passe pas par nous (souscription en ligne). */
+function BanqueCell({ d }: { d: DossierCoproprietaire }) {
+  if (!d.banque.applicable) return <span style={{ color: "var(--fg-muted)" }}>-</span>;
+  const utiles = d.banque.lignes.filter((l) => l.etat !== "na");
+  const ok = utiles.filter((l) => l.etat === "ok").length;
+  const manque = utiles.filter((l) => l.etat !== "ok").map((l) => l.label);
+  return (
+    <span
+      title={manque.length ? `Il manque : ${manque.join(", ")}` : "Dossier de la banque complet"}
+      style={{ fontWeight: 600, fontSize: 12.5, color: manque.length ? "var(--color-warning-700, var(--fg2))" : "var(--color-success-700, var(--color-success-500))" }}
+    >
+      {ok}/{utiles.length}
+    </span>
+  );
+}
+
+/** Bilan d'un export : ce qui a été repris, ce qui manque, ce qui reste à contrôler. */
+function BilanExport({ bilan }: { bilan: BilanDossierAdherent & { nom: string; pages: number } }) {
+  return (
+    <div className="se-small" style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+      <span>
+        <b>{bilan.nom}</b> téléchargé : {bilan.integrees.length} pièce{bilan.integrees.length > 1 ? "s" : ""}, {bilan.pages} page
+        {bilan.pages > 1 ? "s" : ""}.
+      </span>
+      {bilan.absentes.length > 0 && (
+        <span style={{ color: "var(--color-error-700)" }}>Pièces absentes du PDF : {bilan.absentes.join(", ")}.</span>
+      )}
+      {bilan.ignorees.length > 0 && (
+        <span style={{ color: "var(--color-error-700)" }}>
+          Non reprises : {bilan.ignorees.map((i) => `${i.label} (${i.raison})`).join(", ")}.
+        </span>
+      )}
+      {bilan.nonValidees.length > 0 && (
+        <span style={{ color: "var(--fg-muted)" }}>Pas encore validées par l'équipe : {bilan.nonValidees.join(", ")}.</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Dossier d'adhésion au prêt collectif selon la nomenclature de la Caisse d'Épargne Grand
+ * Est (08/10/2026) : les pièces dans l'ordre de la banque, et le PDF unique « NOM prénom ».
+ */
+function BlocDossierPret({ d, coproNom, tous }: { d: DossierCoproprietaire; coproNom: string; tous: DossierCoproprietaire[] }) {
+  const [enCours, setEnCours] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [bilan, setBilan] = useState<(BilanDossierAdherent & { nom: string; pages: number }) | null>(null);
+  const exporter = () => {
+    setEnCours(true);
+    setErreur(null);
+    setBilan(null);
+    exporterDossierAdherent(d, coproNom, tous)
+      .then(setBilan)
+      .catch((e) => setErreur(messageErreur(e, "Export impossible")))
+      .finally(() => setEnCours(false));
+  };
+  return (
+    <Bloc
+      titre="Dossier de prêt - Caisse d'Épargne"
+      icon="fileCheck"
+      right={
+        <button
+          className="se-btn se-btn-secondary btn-sm"
+          disabled={enCours}
+          onClick={exporter}
+          title="Un seul PDF « NOM prénom » : bulletin, pièce d'identité, justificatif de domicile, avis d'imposition, mandat SEPA, RIB, taxe foncière… dans l'ordre de la banque. Chaque pièce d'identité, RIB et mandat lu est journalisé (niveau 1)."
+        >
+          <Icon name="download" size={14} />
+          {enCours ? "Assemblage…" : "Exporter le PDF"}
+        </button>
+      }
+    >
+      {d.banque.lignes.map((l) => (
+        <div key={l.cle} className="kv" style={{ padding: "5px 0", fontSize: 13 }}>
+          <span className="k">
+            <span style={{ color: "var(--fg-muted)" }}>{String(l.rang).padStart(2, "0")}</span> {l.label}
+          </span>
+          <span className="v">
+            <Etat e={l.etat} title={l.label} />
+          </span>
+        </div>
+      ))}
+      <p className="se-small" style={{ margin: "8px 0 0", color: "var(--fg-muted)" }}>
+        {d.banque.complet
+          ? "Dossier complet : toutes les pièces de la banque sont fournies."
+          : "Dossier incomplet : le PDF reprend les pièces déjà fournies."}
+        {d.nature === "sci" && " Le formulaire n° 2072 de la SCI n'a pas de pièce dans le logiciel : à joindre à la main."}
+      </p>
+      {bilan && <BilanExport bilan={bilan} />}
+      {erreur && <p className="se-small" style={{ color: "var(--color-error-700)", margin: "8px 0 0" }}>{erreur}</p>}
+    </Bloc>
+  );
+}
+
+/** Export groupé : un ZIP « 03 - ADHERENTS » avec le PDF de chaque dossier complet. */
+function ExportLotDialog({
+  dossiers,
+  coproNom,
+  tous,
+  onClose,
+}: {
+  dossiers: DossierCoproprietaire[];
+  coproNom: string;
+  tous: DossierCoproprietaire[];
+  onClose: () => void;
+}) {
+  const [avancement, setAvancement] = useState<{ faits: number; total: number } | null>(null);
+  const [bilan, setBilan] = useState<BilanLot | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const arret = useRef(false);
+  const enCours = avancement != null && !bilan && !erreur;
+
+  const lancer = () => {
+    arret.current = false;
+    setErreur(null);
+    setAvancement({ faits: 0, total: dossiers.length });
+    exporterDossiersAdherents(dossiers, coproNom, tous, {
+      progression: (faits, total) => setAvancement({ faits, total }),
+      arret: () => arret.current,
+    })
+      .then(setBilan)
+      .catch((e) => setErreur(messageErreur(e, "Export impossible")));
+  };
+
+  return (
+    <Modal title="Exporter les dossiers adhérents" onClose={() => { arret.current = true; onClose(); }} width={560} closeOnBackdrop={false}>
+      <p className="se-body" style={{ marginTop: 0 }}>
+        {dossiers.length} dossier{dossiers.length > 1 ? "s" : ""} complet{dossiers.length > 1 ? "s" : ""} : une archive ZIP avec le
+        dossier « 03 - ADHERENTS » de la nomenclature de la banque et, dedans, un PDF unique par adhérent
+        (« NOM prénom - {coproNom.toUpperCase()} »). Les dossiers incomplets sont exportables un par un depuis leur fiche.
+      </p>
+      <p className="se-small" style={{ color: "var(--fg-muted)" }}>
+        Chaque pièce d'identité, RIB et mandat SEPA lu est journalisé. Réservé au niveau 1 (service administratif).
+        L'assemblage prend quelques secondes par dossier : gardez cette fenêtre ouverte.
+      </p>
+      {avancement && (
+        <div style={{ margin: "12px 0" }}>
+          <div style={{ height: 8, borderRadius: 4, background: "var(--bg-soft)", overflow: "hidden" }}>
+            <div
+              style={{
+                height: "100%",
+                width: `${Math.round((avancement.faits / Math.max(1, avancement.total)) * 100)}%`,
+                background: "var(--accent)",
+                transition: "width .2s",
+              }}
+            />
+          </div>
+          <p className="se-small" style={{ margin: "6px 0 0" }}>
+            {avancement.faits} / {avancement.total} dossier{avancement.total > 1 ? "s" : ""} assemblé{avancement.faits > 1 ? "s" : ""}
+          </p>
+        </div>
+      )}
+      {bilan && (
+        <div className="se-small" style={{ display: "flex", flexDirection: "column", gap: 4, margin: "8px 0" }}>
+          <span>
+            <b>{bilan.archive}</b> téléchargée : {bilan.exportes} dossier{bilan.exportes > 1 ? "s" : ""}.
+          </span>
+          {bilan.echecs.length > 0 && (
+            <span style={{ color: "var(--color-error-700)" }}>
+              Non assemblés : {bilan.echecs.map((x) => `${x.nom} (${x.raison})`).join(", ")}.
+            </span>
+          )}
+          {bilan.avecReserves.length > 0 && (
+            <span style={{ color: "var(--fg-muted)" }}>
+              À contrôler : {bilan.avecReserves.map((x) => `${x.nom} - ${x.reserves.join(", ")}`).join(" ; ")}.
+            </span>
+          )}
+        </div>
+      )}
+      {erreur && <p className="se-small" style={{ color: "var(--color-error-700)" }}>{erreur}</p>}
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 14 }}>
+        <button className="se-btn se-btn-ghost" onClick={() => { arret.current = true; onClose(); }}>
+          {bilan ? "Fermer" : "Annuler"}
+        </button>
+        {!bilan && (
+          <button className="se-btn se-btn-primary" disabled={enCours} onClick={lancer}>
+            <Icon name="download" size={15} />
+            {enCours ? "Assemblage…" : erreur ? "Réessayer" : "Exporter"}
+          </button>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
   const navigate = useNavigate();
   const data = useDossiersCoproprietaires(c);
@@ -108,6 +299,7 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
   const { data: espaces } = useEspacesCoproprietaires(c.id);
   const [fenetreEspaces, setFenetreEspaces] = useState<{ cibles: CibleEspace[]; renvoi?: boolean; bilan?: boolean } | null>(null);
   const [fenetreRapport, setFenetreRapport] = useState(false);
+  const [fenetreExport, setFenetreExport] = useState(false);
 
   const filtres = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -121,6 +313,8 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
   }, [data.dossiers, bat, statut, q]);
 
   const compte = (f: (d: DossierCoproprietaire) => boolean) => data.dossiers.filter(f).length;
+  // dossiers de la banque complets, prêts à partir en un PDF unique chacun
+  const dossiersBanqueComplets = data.dossiers.filter((d) => d.banque.complet);
   const ctx: ContexteExport = {
     coproNom: c.name,
     denominationBatiments: c.denomination_batiments,
@@ -183,6 +377,15 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
             <Icon name="download" size={14} />
             Fiche état
           </button>
+          <button
+            className="se-btn se-btn-secondary btn-sm"
+            title="Dossiers d'adhésion au prêt collectif complets : un PDF unique « NOM prénom » par adhérent, dans le dossier « 03 - ADHERENTS » de la nomenclature de la Caisse d'Épargne Grand Est"
+            disabled={dossiersBanqueComplets.length === 0}
+            onClick={() => setFenetreExport(true)}
+          >
+            <Icon name="download" size={14} />
+            Dossiers adhérents · {dossiersBanqueComplets.length}
+          </button>
         </div>
         <div className="p-body">
           {data.dossiers.length === 0 ? (
@@ -223,7 +426,7 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
                 <span style={{ flex: 1 }}></span>
                 <span className="se-small" style={{ color: "var(--fg-muted)" }}>
                   {compte((d) => !d.enquete.profil)} profil{compte((d) => !d.enquete.profil) > 1 ? "s" : ""} à déterminer ·{" "}
-                  {compte((d) => d.etat.avis !== "ok")} avis d'imposition manquant{compte((d) => d.etat.avis !== "ok") > 1 ? "s" : ""}
+                  {compte((d) => d.etat.avis === "manquant")} avis d'imposition manquant{compte((d) => d.etat.avis === "manquant") > 1 ? "s" : ""}
                   {data.scenario?.statut === "partage"
                     ? ` · ${compte((d) => d.etat.financement === "manquant")} choix de financement en attente`
                     : " · plan non partagé au portail"}
@@ -231,7 +434,7 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
               </div>
 
               <div className="tablewrap" style={{ overflowX: "auto" }}>
-                <table className="dossiers" style={{ fontSize: 13, minWidth: 1080 }}>
+                <table className="dossiers" style={{ fontSize: 13, minWidth: 1150 }}>
                   <thead>
                     <tr>
                       <th>Copropriétaire</th>
@@ -244,6 +447,7 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
                       <th style={{ textAlign: "center" }}>RIB</th>
                       <th style={{ textAlign: "center" }}>CNI</th>
                       <th style={{ textAlign: "center" }}>Avis d'imp.</th>
+                      <th style={{ textAlign: "center" }} title="Pièces du dossier de la Caisse d'Épargne fournies / attendues (nomenclature de la banque)">Banque</th>
                       <th title="Espace copropriétaire (portail) : activé, invité (lien pas encore utilisé), à créer">Espace</th>
                       <th>Statut</th>
                       <th></th>
@@ -279,6 +483,7 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
                         <td style={{ textAlign: "center" }}><Etat e={d.etat.rib} title="RIB" /></td>
                         <td style={{ textAlign: "center" }}><Etat e={d.etat.cni} title="Pièce d'identité" /></td>
                         <td style={{ textAlign: "center" }}><Etat e={d.etat.avis} title="Avis d'imposition" /></td>
+                        <td style={{ textAlign: "center" }}><BanqueCell d={d} /></td>
                         <td>
                           <EspaceBadge espace={espaces?.get(d.id)} />
                         </td>
@@ -301,7 +506,7 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
                     ))}
                     {filtres.length === 0 && (
                       <tr style={{ cursor: "default" }}>
-                        <td colSpan={13} style={{ color: "var(--fg-muted)", textAlign: "center" }}>
+                        <td colSpan={14} style={{ color: "var(--fg-muted)", textAlign: "center" }}>
                           Aucun copropriétaire ne correspond aux filtres.
                         </td>
                       </tr>
@@ -311,8 +516,8 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
               </div>
               <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
                 Prime : montant du plan individuel, ou barème selon le profil déclaré (*, à confirmer à l'instruction) ;
-                « à déterminer » tant que le profil de ressources n'est pas renseigné. Bulletin et SEPA ne concernent
-                que le prêt collectif. Les trois exports (liste des primes, rapport d'enquête, fiche état) sont
+                « à déterminer » tant que le profil de ressources n'est pas renseigné. Bulletin, SEPA et « Banque »
+                (pièces du dossier de la Caisse d'Épargne) ne concernent que le prêt collectif monté par Strat Eco. Les trois exports (liste des primes, rapport d'enquête, fiche état) sont
                 générés depuis cette même base : mêmes montants au centime, un onglet par {lb.singulier.toLowerCase()}.
               </p>
             </>
@@ -325,6 +530,7 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
           d={dossierOuvert}
           data={data}
           coproId={c.id}
+          coproNom={c.name}
           enqueteId={enquete.id}
           lb={lb}
           onClose={() => setOuvert(null)}
@@ -337,6 +543,15 @@ export function CoproprietairesTab({ c }: { c: CoproWithStats }) {
       )}
 
       {fenetreRapport && <RapportEnqueteDialog rapport={rapport} onClose={() => setFenetreRapport(false)} />}
+
+      {fenetreExport && (
+        <ExportLotDialog
+          dossiers={dossiersBanqueComplets}
+          coproNom={c.name}
+          tous={data.dossiers}
+          onClose={() => setFenetreExport(false)}
+        />
+      )}
 
       {fenetreEspaces && (
         <OuvrirEspacesFenetre
@@ -380,6 +595,7 @@ function FicheCoproprietaire({
   d,
   data,
   coproId,
+  coproNom,
   enqueteId,
   lb,
   onClose,
@@ -390,6 +606,7 @@ function FicheCoproprietaire({
   d: DossierCoproprietaire;
   data: DossiersCopro;
   coproId: string;
+  coproNom: string;
   enqueteId: string;
   lb: ReturnType<typeof libellesBatiments>;
   onClose: () => void;
@@ -666,13 +883,23 @@ function FicheCoproprietaire({
             )}
         </Bloc>
 
+        {/* ---------- Dossier de la banque (PDF unique) ---------- */}
+        {d.banque.applicable && <BlocDossierPret d={d} coproNom={coproNom} tous={data.dossiers} />}
+
         {/* ---------- Pièces ---------- */}
         <Bloc titre="Pièces justificatives" icon="folder">
           {[
-            ...PIECES.map((pc) => ({ type: pc.type as string, name: pc.name, required: pc.required })),
-            // pièces demandées selon la situation déclarée à l'enquête (0118), puis celles
+            // pièces historiques, exigées selon le dossier (une SCI n'a pas d'avis d'imposition du ménage)
+            ...PIECES.map((pc) => ({
+              type: pc.type as string,
+              name: d.piecesSituation.find((ps) => ps.type === pc.type)?.nom ?? pc.name,
+              required: d.piecesRequises.includes(pc.type),
+            })),
+            // pièces demandées selon la situation déclarée à l'enquête (0118) et par la banque, puis celles
             // déposées qui ne sont plus demandées (réponse modifiée depuis)
-            ...d.piecesSituation.map((ps) => ({ type: ps.type as string, name: ps.nom, required: true })),
+            ...d.piecesSituation
+              .filter((ps) => !PIECES.some((pc) => pc.type === ps.type))
+              .map((ps) => ({ type: ps.type as string, name: ps.nom, required: true })),
             ...Object.keys(d.pieces)
               .filter((t) => !PIECES.some((pc) => pc.type === t) && !d.piecesSituation.some((ps) => ps.type === t))
               .map((t) => ({ type: t, name: nomPiece(t), required: false })),

@@ -34,7 +34,7 @@ import {
   type PieceJustificative,
 } from "@/api/portail";
 import { CGU_VERSION } from "@/lib/cguSignature";
-import { PIECES_SITUATION, type PieceAttendue } from "@/lib/piecesSituation";
+import { PIECES_SITUATION, RAISON_PRET, type PieceAttendue } from "@/lib/piecesSituation";
 import { useAccepterCguDepot, useCguDepotPieces } from "@/api/signature";
 import { ouvrirDocumentSignature, urlApercuDocumentSignature, useMesDocumentsEcoPtz } from "@/api/ecoPtzIndividuel";
 import { messageErreur } from "@/lib/erreurs";
@@ -250,7 +250,12 @@ export function PiecesJustificatives({
       </div>
       <div className="cx-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <p className="se-body" style={{ margin: 0 }}>
-          {liste.length > 1 ? (
+          {liste.some((a) => a.raison === RAISON_PRET) ? (
+            <>
+              Merci de déposer les pièces ci-dessous : l'avis d'imposition si vous êtes éligible aux aides, et les
+              pièces que la Caisse d'Épargne demande pour votre adhésion au prêt collectif. <b>Toutes les pages.</b>
+            </>
+          ) : liste.length > 1 ? (
             <>
               Si vous êtes éligible, merci de déposer les pièces ci-dessous, demandées selon vos réponses à
               l'enquête. <b>Toutes les pages.</b>

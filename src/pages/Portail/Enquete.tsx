@@ -38,6 +38,7 @@ import {
   useEnquetePortail,
   useMaReponse,
   useMesPieces,
+  useContextePieces,
   useSaveMaReponse,
   notifierEnqueteTransmise,
   type Membership,
@@ -340,6 +341,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
   const [restaure, setRestaure] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const { data: pieces } = useMesPieces(membership.coproprietaireId);
+  const contextePieces = useContextePieces(membership.copro.id, membership.coproprietaireId, membership.nom);
 
   const cleSecours = enquete ? `${PREFIXE_SECOURS_ENQUETE}${enquete.id}:${membership.coproprietaireId}` : null;
 
@@ -558,7 +560,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
   const info = profil ? PROFILS_MPR[profil] : null;
 
   // Pièces à fournir selon les réponses en cours (elles apparaissent dès la réponse donnée).
-  const attendues = piecesAttendues(rep);
+  const attendues = piecesAttendues(rep, contextePieces);
   const piecesManquantes = attendues.filter(
     (a) => !(pieces ?? []).some((x) => x.type === a.type && x.statut !== "refuse")
   );
@@ -743,7 +745,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
           {/* Le dépôt de l'avis reste ouvert même sans questionnaire : c'est la
               seule pièce attendue, et elle n'a plus d'autre page où vivre. */}
           <div style={{ maxWidth: 560 }}>
-            <PiecesJustificatives membership={membership} attendues={piecesAttendues(null)} />
+            <PiecesJustificatives membership={membership} attendues={piecesAttendues(null, contextePieces)} />
           </div>
         </>
       )}

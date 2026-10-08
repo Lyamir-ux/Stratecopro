@@ -5,7 +5,8 @@ import { nomFichierSansAccents } from "@/lib/nommage";
 import type { Tables, Enums, Json } from "@/lib/database.types";
 import { determineProfil, type Bareme, type FinanceParams, type Profil } from "@/lib/finance";
 import { readParams } from "./scenarios";
-import { libellePieceSituation } from "@/lib/piecesSituation";
+import { estSci, libellePieceSituation, type ContextePieces } from "@/lib/piecesSituation";
+import { useMesBulletins } from "@/api/signature";
 import type { TachePortail } from "@/lib/recapPhases";
 import { computePlanDefinitif, readPlanDefinitif, type PlanDefinitifData, type PlanDefinitifResult } from "@/lib/finance/planDefinitif";
 
@@ -516,6 +517,33 @@ export const PIECES: { type: TypePiece; name: string; required: boolean; hint: s
   { type: "justificatif_domicile", name: "Justificatif de domicile", required: false, hint: "De moins de 3 mois" },
   { type: "taxe_fonciere", name: "Taxe foncière", required: false, hint: "Facultatif" },
 ];
+
+/**
+ * Contexte des pièces attendues d'un copropriétaire (08/10/2026) : s'il adhère au prêt collectif
+ * par le parcours interne - dossier monté par Strat Eco, donc pas de lien de souscription de la
+ * banque, ou un bulletin déjà engagé - la Caisse d'Épargne Grand Est lui demande des pièces en
+ * plus (justificatif de domicile, taxe foncière, pièces de SCI) ; et s'il s'agit d'une SCI.
+ */
+export function useContextePieces(coproId: string | undefined, coproprietaireId: string | undefined, nom: string | undefined): ContextePieces {
+  const { data: collectif } = useQuery({
+    queryKey: ["portail", "choix-collectif", coproprietaireId],
+    enabled: !!coproprietaireId,
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabase
+        .from("choix_financement")
+        .select("type, transmitted_at")
+        .eq("coproprietaire_id", coproprietaireId!)
+        .order("transmitted_at", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return data?.[0]?.type === "collectif";
+    },
+  });
+  const { data: config } = useFinancementConfig(coproId);
+  const { data: bulletins } = useMesBulletins(coproprietaireId);
+  const interne = !config?.lien_adhesion || (bulletins?.length ?? 0) > 0;
+  return { pretCollectif: !!collectif && interne, sci: estSci(null, nom) };
+}
 
 /** Libellé d'une pièce, qu'elle soit historique (PIECES) ou demandée selon la situation (0118). */
 export function nomPiece(type: string): string {

@@ -5,7 +5,14 @@
 // existants - les montants sont ceux du plan partagé au portail (ou du PF
 // définitif validé), arrondis au centime, donc concordants entre les écrans.
 import { useMemo } from "react";
-import { piecesAttendues, type PieceAttendue, type ReponsesPieces } from "@/lib/piecesSituation";
+import { estSci, piecesAttendues, type PieceAttendue, type ReponsesPieces } from "@/lib/piecesSituation";
+import {
+  dossierBanqueComplet,
+  lignesDossierBanque,
+  pireEtat,
+  type LigneBanque,
+  type NatureAdherent,
+} from "@/lib/dossierAdherent";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Enums, Tables } from "@/lib/database.types";
@@ -105,6 +112,16 @@ export interface DossierCoproprietaire {
   pieces: Partial<Record<TypePiece, PieceJustificative>>;
   /** Pièces demandées selon les réponses à l'enquête, en plus de l'avis d'imposition (0118). */
   piecesSituation: PieceAttendue[];
+  /** Personne physique ou SCI : détermine la liste de pièces de la banque. */
+  nature: NatureAdherent;
+  /** Pièces justificatives exigées de ce copropriétaire (identité, RIB, avis, selon sa situation et les pièces de la banque). */
+  piecesRequises: TypePiece[];
+  /**
+   * Dossier d'adhésion au prêt collectif selon la nomenclature de la Caisse d'Épargne Grand
+   * Est (08/10/2026) : les pièces dans l'ordre de la banque. `applicable` : le dossier est
+   * monté par nous (le parcours de souscription en ligne de la banque ne l'est pas).
+   */
+  banque: { applicable: boolean; complet: boolean; lignes: LigneBanque[] };
   etat: {
     profil: EtatItem;
     prime: EtatItem;
@@ -296,6 +313,8 @@ export function assemblerDossiers(input: {
     if (etatFin === "manquant") manquants.push("choix de financement");
     let etatBulletin: EtatItem = "na";
     let etatSepa: EtatItem = "na";
+    // dossier d'adhésion monté par nous : adhérent au prêt collectif hors souscription en ligne
+    let parcoursPret = false;
     if (collectif) {
       const signe = adhesion?.statut === "signee" || bulletinsElec.some((b) => b.statut === "complet");
       const enCours = !!adhesion || bulletinsElec.some((b) => b.statut === "en_signature");
@@ -304,6 +323,7 @@ export function assemblerDossiers(input: {
         etatBulletin = "na";
         etatSepa = "na";
       } else {
+        parcoursPret = true;
         etatBulletin = signe ? "ok" : enCours ? "en_cours" : "manquant";
         if (etatBulletin !== "ok") manquants.push("bulletin d'adhésion" + (etatBulletin === "en_cours" ? " (en cours)" : ""));
         // Mandat SEPA signé électroniquement avec le bulletin (0148), par le seul
@@ -331,13 +351,42 @@ export function assemblerDossiers(input: {
     const cniBulletin = bulletinsElec.some((b) => b.signataires.some((sg) => !!sg.piece_identite_path));
     const etatCni: EtatItem = cniBulletin ? "ok" : etatPiece(pieces.piece_identite);
     if (etatCni !== "ok") manquants.push("pièce d'identité" + suffixe(pieces.piece_identite));
-    const etatAvis: EtatItem = etatPiece(pieces.avis_imposition);
-    if (etatAvis !== "ok") manquants.push("avis d'imposition" + suffixe(pieces.avis_imposition));
-    // pièces demandées selon la situation déclarée (feedback Marius MAZZANTE 30/09/2026)
-    const piecesSituation = piecesAttendues(enquete.reponses as ReponsesPieces | null).filter((p) => p.type !== "avis_imposition");
+    // pièces demandées selon la situation déclarée (feedback Marius MAZZANTE 30/09/2026) et,
+    // pour un adhérent au prêt collectif, selon la nomenclature de la banque (08/10/2026)
+    const nature: NatureAdherent = estSci(reponses?.copro?.["type-coproprietaire"], cp.nom) ? "sci" : "physique";
+    const piecesSituation = piecesAttendues(enquete.reponses as ReponsesPieces | null, { pretCollectif: parcoursPret, sci: nature === "sci" }).filter(
+      (p) => p.type !== "avis_imposition"
+    );
+    // l'avis d'imposition est celui du ménage ; une SCI n'en a pas : ce sont ceux de ses associés, demandés seulement avec le prêt
+    const avisAssocies = piecesSituation.some((p) => p.type === "avis_associes_sci");
+    const etatAvis: EtatItem = nature === "sci" ? (avisAssocies ? etatPiece(pieces.avis_associes_sci) : "na") : etatPiece(pieces.avis_imposition);
+    if (etatAvis !== "ok" && etatAvis !== "na") {
+      const p = nature === "sci" ? pieces.avis_associes_sci : pieces.avis_imposition;
+      manquants.push((nature === "sci" ? "avis d'imposition des associés" : "avis d'imposition") + suffixe(p));
+    }
     for (const ps of piecesSituation) {
+      if (nature === "sci" && ps.type === "avis_associes_sci") continue; // déjà compté ci-dessus
       if (etatPiece(pieces[ps.type]) !== "ok") manquants.push(ps.nom.charAt(0).toLowerCase() + ps.nom.slice(1) + suffixe(pieces[ps.type]));
     }
+    const piecesRequises = new Set<TypePiece>(["piece_identite", "rib"]);
+    if (nature === "physique") piecesRequises.add("avis_imposition");
+    for (const ps of piecesSituation) piecesRequises.add(ps.type);
+
+    // dossier de la banque, dans l'ordre de sa nomenclature
+    const tutelle = (reponses?.copro as Record<string, unknown> | undefined)?.["curatelle-tutelle"] === "Tutelle";
+    const lignes = lignesDossierBanque(nature, {
+      bulletin: etatBulletin,
+      identite: etatCni,
+      domicile: etatPiece(pieces.justificatif_domicile),
+      irpp: nature === "sci" ? etatAvis : pireEtat(etatAvis, piecesSituation.some((p) => p.type === "avis_imposition_2") ? etatPiece(pieces.avis_imposition_2) : "na"),
+      sepa: etatSepa,
+      rib: etatRib,
+      taxe_fonciere: etatPiece(pieces.taxe_fonciere),
+      juge: tutelle ? etatPiece(pieces.jugement_protection) : "na",
+      kbis: etatPiece(pieces.kbis_sci),
+      statuts: etatPiece(pieces.statuts_sci),
+    });
+    const banque = { applicable: parcoursPret, complet: parcoursPret && dossierBanqueComplet(lignes), lignes };
 
     const rienCommence = !r && !financement && !adhesion && bulletinsElec.length === 0 && Object.keys(pieces).length === 0;
     const statut: StatutDossier = manquants.length === 0 ? "complet" : rienCommence ? "non_commence" : "incomplet";
@@ -358,6 +407,9 @@ export function assemblerDossiers(input: {
       bulletinsElec,
       pieces,
       piecesSituation,
+      nature,
+      piecesRequises: [...piecesRequises],
+      banque,
       etat: {
         profil: etatProfil,
         prime: etatPrime,

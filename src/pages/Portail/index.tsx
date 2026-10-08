@@ -12,6 +12,7 @@ import {
   useScenariosPartages,
   useEnquetePortail,
   useMaReponse,
+  useContextePieces,
   useMonChoix,
   useMonPlan,
   useMesPieces,
@@ -285,6 +286,7 @@ export default function Portail() {
   const { data: choix } = useMonChoix(scenario?.id, membership?.coproprietaireId);
   const { data: plan } = useMonPlan(scenario?.id, membership?.coproprietaireId);
   const { data: pieces } = useMesPieces(membership?.coproprietaireId);
+  const contextePieces = useContextePieces(membership?.copro.id, membership?.coproprietaireId, membership?.nom);
   const { data: messages } = useMessagesPortail(membership?.copro.id, membership?.coproprietaireId);
   const { data: lectures } = useLectures();
 
@@ -355,7 +357,7 @@ export default function Portail() {
   const enqueteComplete = !!(reponse?.reponses as { complet?: boolean } | null)?.complet;
   // Pièces attendues selon les réponses enregistrées (feedback Marius MAZZANTE
   // 30/09/2026) ; refusée = à redéposer, donc pas fournie (feedback 10/09).
-  const attendues = piecesAttendues(reponse?.reponses as ReponsesPieces | null);
+  const attendues = piecesAttendues(reponse?.reponses as ReponsesPieces | null, contextePieces);
   const piecesManquantes = attendues
     .filter((a) => !(pieces ?? []).some((x) => x.type === a.type && x.statut !== "refuse"))
     .map((a) => a.nom);
