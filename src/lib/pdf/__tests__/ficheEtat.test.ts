@@ -97,6 +97,6 @@ describe("PDF fiche État", () => {
   });
 
   it("nom de fichier sans caractère interdit", () => {
-    expect(nomFichierFicheEtat("RUE / ZORN", true)).toBe("Fiche Etat ANAH - RUE   ZORN - signee.pdf");
+    expect(nomFichierFicheEtat("RUE / ZORN", true)).toBe("FICHE ETAT - RUE   ZORN - signee.pdf");
   });
 });

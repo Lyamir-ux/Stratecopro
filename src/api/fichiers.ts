@@ -99,6 +99,10 @@ export const DISPOSITIFS_RECAP: { id: string; label: string; types: string[] }[]
       "fiche_renseignements", "attestation_impayes", "fiche_synthetique", "attestation_registre",
       "avis_sirene", "annexes_comptables", "delegation_pouvoirs", "formulaire_ppe", "demande_pret",
       "cerfa_ecoptz", "attestation_non_recours", "attestation_caution", "fiche_etat_anah",
+      // pièces du dossier CEGEE nommées selon la nomenclature de la banque (08/10/2026)
+      "audit_energetique", "contrat_syndic", "reglement_copropriete", "attestation_mri", "cni_signataire",
+      "rib_compte_copro", "rib_compte_travaux", "preuve_envoi_convocation", "convocation_ag", "accord_sub_rib",
+      "devis_honoraires_moe", "accord_subvention",
     ],
   },
 ];

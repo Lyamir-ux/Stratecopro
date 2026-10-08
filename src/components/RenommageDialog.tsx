@@ -1,6 +1,9 @@
 // Dialogue de nommage : à chaque dépôt, le déposant décrit le document
 // (type, objet, émetteur, date, état) et le nom normalisé se construit
 // en direct - {PREFIXE} - {Type} - {Objet} - {ÉMETTEUR} - {Date}[ - {état}].
+// Pour une pièce du dossier de prêt de la Caisse d'Épargne Grand Est, le nom
+// ouvre par le terme de sa nomenclature, la copropriété vient après (nommage.ts,
+// NOMENCLATURE_CEGEE, 08/10/2026).
 // Saisie entièrement manuelle (pas d'analyse automatique) ; « Garder le nom
 // d'origine » reste toujours possible.
 // Éco-PTZ (02/10/2026) : avec `ecoPtz`, le dépôt d'un audit, d'un devis ou d'un

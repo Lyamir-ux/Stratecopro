@@ -3,6 +3,13 @@
 // Le vocabulaire des types est contrôlé : c'est lui qui garantit qu'un devis
 // s'appelle toujours « Devis ». Saisie manuelle dans RenommageDialog à chaque
 // dépôt (l'analyse automatique par IA a été retirée - trop coûteuse à l'usage).
+//
+// Pièces du dossier de prêt de la Caisse d'Épargne Grand Est (08/10/2026) : le
+// nom commence par le terme de la colonne D de sa « nomenclature de
+// numérisation » (NOMENCLATURE_CEGEE), le nom de la copropriété vient après :
+//   {TERME CEGEE} - {COPRO} - {Objet} - {ÉMETTEUR} - {AAAA-MM-JJ}[ - {état}].ext
+// Les deux formats coexistent : les fichiers déjà déposés gardent l'ancien et
+// sont toujours reconnus (typesDepuisNom, champsDepuisNom).
 
 /** Types de documents reconnus, avec le dossier de classement suggéré par défaut. */
 export const TYPES_DOCUMENT: { id: string; label: string; dossier: string }[] = [
@@ -58,6 +65,13 @@ export const TYPES_DOCUMENT: { id: string; label: string; dossier: string }[] = 
   { id: "attestation_non_recours", label: "Attestation de non-recours", dossier: "Plans de financement" },
   { id: "attestation_caution", label: "Attestation de cautionnement", dossier: "Plans de financement" },
   { id: "fiche_etat_anah", label: "Fiche État ANAH", dossier: "Plans de financement" },
+  // Pièces du dossier CEGEE qui n'avaient pas de type propre (08/10/2026) : un type
+  // par pièce, pour que chacune reçoive le terme de la nomenclature de la banque
+  { id: "attestation_mri", label: "Attestation d'assurance multirisque immeuble", dossier: "Plans de financement" },
+  { id: "cni_signataire", label: "Pièce d'identité du signataire de l'offre de prêt", dossier: "Plans de financement" },
+  { id: "rib_compte_copro", label: "RIB du compte de la copropriété", dossier: "Plans de financement" },
+  { id: "preuve_envoi_convocation", label: "Preuve d'envoi des convocations d'AG", dossier: "Assemblée générale" },
+  { id: "accord_sub_rib", label: "Attestation de prise en compte du RIB (subventions)", dossier: "Plans de financement" },
   // Pièces communes à plusieurs dispositifs (feedback Amir 13/09/2026 : un
   // type par pièce de checklist, pour qu'un dépôt coche la pièce partout où
   // elle est attendue - ANAH, EMS & Climaxion, éco-PTZ, CEE, assurance)
@@ -136,18 +150,111 @@ export const TYPES_DOCUMENT_TRIES: typeof TYPES_DOCUMENT = [
 
 export const typeLabel = (id: string): string => TYPES_DOCUMENT.find((t) => t.id === id)?.label ?? id;
 
-/** Retrouve le type (id TYPES_DOCUMENT) d'un fichier d'après son nom normalisé
- *  ({COPRO} - {Type} - …) - sert aux dossiers récapitulatifs par dispositif.
- *  Retourne null si le nom ne suit pas la nomenclature. */
-export function typeDepuisNom(name: string): string | null {
-  const sansExt = name.replace(/\.[a-zA-Z0-9]{1,8}$/, "");
-  const egal = (a: string, b: string) => a.localeCompare(b, "fr", { sensitivity: "base" }) === 0;
-  // le type est en 2e segment (préfixe copro) ou en 1er (nom sans préfixe)
-  for (const seg of sansExt.split(" - ").slice(0, 2)) {
-    const t = TYPES_DOCUMENT.find((x) => egal(x.label, seg.trim()));
-    if (t) return t.id;
+// ========== Nomenclature de numérisation de la Caisse d'Épargne Grand Est ==========
+
+/**
+ * Termes de la colonne D du classeur « 00 - NOMENCLATURE A RESPECTER » de la
+ * CEGEE (reçu le 08/10/2026), par type de document : un fichier de ce type
+ * commence par ce terme, la copropriété vient après. Orthographe de la banque
+ * conservée (« Mail CEGC », « PROJET de CONTRAT »).
+ *
+ * - Deux types peuvent partager un terme (le RIB du compte de la copropriété et
+ *   celui du compte travaux : « RIB COMPTE TRAVAUX » chez la banque).
+ * - Une cellule à « / » de la banque (« KBIS SYNDIC / STATUTS SYNDIC ») désigne
+ *   deux pièces : « / » est interdit dans un nom de fichier, chaque pièce
+ *   prend son terme.
+ * - Les justificatifs d'un adhérent (pièce d'identité, avis d'imposition, RIB,
+ *   bulletin…) n'y figurent pas : la banque les veut regroupés dans un seul PDF
+ *   « NOM prénom ».
+ * - Les pièces de la banque sans terme (offre de prêt, compte travaux) et les
+ *   pièces propres à Strat Eco gardent le format « {COPRO} - {Type} ».
+ */
+export const NOMENCLATURE_CEGEE: Record<string, string> = {
+  // 01 - Demande de prêt + documents du syndicat
+  demande_pret: "DEMANDE DE PRET",
+  fiche_synthetique: "FICHE ANAH",
+  attestation_registre: "MISE A JOUR ANNUELLE",
+  avis_sirene: "SIRENE",
+  attestation_impayes: "TAUX DE DEFAILLANCE",
+  fiche_etat_anah: "FICHE ETAT",
+  accord_subvention: "NOTIF ACCORD SUB",
+  accord_sub_rib: "ACCORD SUB RIB",
+  // 02 - Syndic
+  delegation_pouvoirs: "DELEGATION POUVOIRS",
+  formulaire_ppe: "PPE SIGNATAIRE",
+  cni_signataire: "CNI SIGNATAIRE",
+  contrat_syndic: "CONTRAT SYNDIC",
+  // 04 - Projet
+  pv_ag_travaux: "PV AG TRAVAUX",
+  pv_ag_mandat: "PV AG SYNDIC",
+  attestation_non_recours: "ATT. NON RECOURS",
+  annexes_comptables: "ANNEXES COMPTABLES",
+  attestation_mri: "MRI",
+  devis_travaux: "DEVIS ENTREPRISE",
+  devis_honoraires_moe: "DEVIS HONORAIRES",
+  // 05 - Éco-PTZ copropriété
+  audit_energetique: "AUDIT",
+  cerfa_ecoptz_emprunteur: "FORMULAIRE EMPRUNTEUR",
+  cerfa_ecoptz_entreprise: "FORMULAIRE ENTREPRISES",
+  attestation_rge: "RGE",
+  convocation_ag: "CONVOC AG",
+  preuve_envoi_convocation: "PREUVE ENVOI CONVOC",
+  // 06 - RIB (« RIB XX » : XX = l'entreprise)
+  rib_entreprises: "RIB",
+  rib_compte_copro: "RIB COMPTE TRAVAUX",
+  rib_compte_travaux: "RIB COMPTE TRAVAUX",
+  // 07 - Garantie CEGC
+  attestation_caution: "ATTESTATION CAUTIONNEMENT",
+};
+
+/** « RIB XX » : le terme est complété par l'entreprise émettrice (XX), au lieu de la suivre. */
+const TERME_AVEC_EMETTEUR = new Set(["rib_entreprises"]);
+
+const egalBase = (a: string, b: string) => a.localeCompare(b, "fr", { sensitivity: "base" }) === 0;
+
+/** Terme de la nomenclature de la banque pour ce type de document, ou null. */
+export const termeNomenclature = (typeId: string): string | null => NOMENCLATURE_CEGEE[typeId] ?? null;
+
+/** Lit un premier segment de nom comme terme de la nomenclature : types concernés
+ *  (plusieurs si le terme est partagé) et, pour « RIB XX », l'entreprise. */
+function lireTerme(segment: string): { types: string[]; emetteur: string | null } | null {
+  const s = segment.trim();
+  const exacts = Object.entries(NOMENCLATURE_CEGEE)
+    .filter(([id, terme]) => !TERME_AVEC_EMETTEUR.has(id) && egalBase(terme, s))
+    .map(([id]) => id);
+  if (exacts.length) return { types: exacts, emetteur: null };
+  for (const id of TERME_AVEC_EMETTEUR) {
+    const terme = NOMENCLATURE_CEGEE[id];
+    if (egalBase(s, terme)) return { types: [id], emetteur: null }; // « RIB » déposé sans entreprise
+    if (s.length > terme.length + 1 && egalBase(s.slice(0, terme.length), terme) && s[terme.length] === " ")
+      return { types: [id], emetteur: s.slice(terme.length + 1).trim() || null };
   }
   return null;
+}
+
+/** Types (ids TYPES_DOCUMENT) d'un fichier d'après son nom normalisé : terme de la
+ *  banque en tête de nom (« PV AG TRAVAUX - {COPRO} - … »), ou ancien format
+ *  « {COPRO} - {Type} - … ». Plusieurs types quand le terme est partagé ; liste
+ *  vide si le nom ne suit aucune des deux nomenclatures. */
+export function typesDepuisNom(name: string): string[] {
+  const sansExt = name.replace(/\.[a-zA-Z0-9]{1,8}$/, "");
+  const segs = sansExt.split(" - ");
+  const terme = lireTerme(segs[0]);
+  if (terme) return terme.types;
+  // ancien format : le type est en 2e segment (préfixe copro) ou en 1er (nom sans préfixe)
+  for (const seg of segs.slice(0, 2)) {
+    const t = TYPES_DOCUMENT.find((x) => egalBase(x.label, seg.trim()));
+    if (t) return [t.id];
+  }
+  return [];
+}
+
+/** Retrouve le type (id TYPES_DOCUMENT) d'un fichier d'après son nom normalisé -
+ *  sert aux dossiers récapitulatifs par dispositif. Null si le nom ne suit pas la
+ *  nomenclature ou si son terme est partagé par deux types (voir typesDepuisNom). */
+export function typeDepuisNom(name: string): string | null {
+  const types = typesDepuisNom(name);
+  return types.length === 1 ? types[0] : null;
 }
 
 export const dossierSuggere = (typeId: string): string | null =>
@@ -176,16 +283,22 @@ export function extensionDe(filename: string): string {
   return m ? m[1].toLowerCase() : "";
 }
 
-/** Assemble le nom final : segments non vides joints par « - », extension conservée. */
+/** Assemble le nom final : segments non vides joints par « - », extension conservée.
+ *  Un type de la nomenclature bancaire (NOMENCLATURE_CEGEE) ouvre le nom par son
+ *  terme, la copropriété vient ensuite ; sinon l'ancien ordre « {COPRO} - {Type} ». */
 export function construireNomFichier(champs: ChampsNom, extension: string): string {
-  const segments = [
-    champs.prefixe ? nettoyerSegment(champs.prefixe).toUpperCase() : null,
-    typeLabel(champs.type),
-    champs.objet ? nettoyerSegment(champs.objet) : null,
-    champs.emetteur ? nettoyerSegment(champs.emetteur).toUpperCase() : null,
-    champs.date && /^\d{4}-\d{2}-\d{2}$/.test(champs.date) ? champs.date : null,
-    champs.etat ? nettoyerSegment(champs.etat) : null,
-  ].filter((s): s is string => !!s && s.length > 0);
+  const prefixe = champs.prefixe ? nettoyerSegment(champs.prefixe).toUpperCase() : null;
+  const objet = champs.objet ? nettoyerSegment(champs.objet) : null;
+  const emetteur = champs.emetteur ? nettoyerSegment(champs.emetteur).toUpperCase() : null;
+  const date = champs.date && /^\d{4}-\d{2}-\d{2}$/.test(champs.date) ? champs.date : null;
+  const etat = champs.etat ? nettoyerSegment(champs.etat) : null;
+  const terme = termeNomenclature(champs.type);
+  const emetteurDansTerme = !!terme && TERME_AVEC_EMETTEUR.has(champs.type);
+  const segments = (
+    terme
+      ? [emetteurDansTerme && emetteur ? `${terme} ${emetteur}` : terme, prefixe, objet, emetteurDansTerme ? null : emetteur, date, etat]
+      : [prefixe, typeLabel(champs.type), objet, emetteur, date, etat]
+  ).filter((s): s is string => !!s && s.length > 0);
   const nom = segments.join(" - ");
   return extension ? `${nom}.${extension}` : nom;
 }
@@ -231,7 +344,8 @@ export function nomRenomme(saisie: string, ancienNom: string): string | null {
   return nomFichierSansAccents(ext ? `${base}.${ext}` : base);
 }
 
-/** Relit les champs d'un nom normalisé ({COPRO} - {Type} - {Objet} - {ÉMETTEUR} - {Date}) :
+/** Relit les champs d'un nom normalisé ({COPRO} - {Type} - {Objet} - {ÉMETTEUR} - {Date},
+ *  ou {TERME CEGEE} - {COPRO} - {Objet} - {ÉMETTEUR} - {Date}) :
  *  sert à vérifier après coup un devis déjà déposé (vérification RGE, 07/10/2026).
  *  L'émetteur est le segment en majuscules qui précède la date ; null si absent. */
 export function champsDepuisNom(name: string): { type: string | null; objet: string | null; emetteur: string | null; date: string | null } {
@@ -240,10 +354,14 @@ export function champsDepuisNom(name: string): { type: string | null; objet: str
     .split(" - ")
     .map((s) => s.trim())
     .filter(Boolean);
-  const egal = (a: string, b: string) => a.localeCompare(b, "fr", { sensitivity: "base" }) === 0;
-  // libellé à « / » coupé en deux au dépôt (« Devis / DPGF des travaux » -> « Devis - DPGF des travaux »)
+  const egal = egalBase;
   let type: string | null = null;
   let suite = -1;
+  let emetteurTerme: string | null = null;
+  // nomenclature de la banque : le terme ouvre le nom, la copropriété est le segment suivant
+  const terme = segs.length ? lireTerme(segs[0]) : null;
+  if (terme) [type, suite, emetteurTerme] = [terme.types[0], 2, terme.emetteur];
+  // libellé à « / » coupé en deux au dépôt (« Devis / DPGF des travaux » -> « Devis - DPGF des travaux »)
   for (let i = 0; i < Math.min(2, segs.length) && !type; i++) {
     const double = segs[i + 1] ? TYPES_DOCUMENT.find((t) => egal(nomFichierSansAccents(t.label), `${segs[i]} - ${segs[i + 1]}`)) : undefined;
     const simple = TYPES_DOCUMENT.find((t) => egal(t.label, segs[i]));
@@ -257,7 +375,11 @@ export function champsDepuisNom(name: string): { type: string | null; objet: str
   const majuscules = (s: string) => s === s.toUpperCase() && /[A-Z]/.test(s);
   let objet: string | null = null;
   let emetteur: string | null = null;
-  if (avant.length >= 2 && majuscules(avant[avant.length - 1])) {
+  if (emetteurTerme) {
+    // « RIB XX » : l'entreprise est dans le terme, le reste est l'objet
+    emetteur = emetteurTerme;
+    objet = avant.length ? avant.join(" - ") : null;
+  } else if (avant.length >= 2 && majuscules(avant[avant.length - 1])) {
     emetteur = avant[avant.length - 1];
     objet = avant.slice(0, -1).join(" - ");
   } else if (avant.length === 1 && majuscules(avant[0])) emetteur = avant[0];

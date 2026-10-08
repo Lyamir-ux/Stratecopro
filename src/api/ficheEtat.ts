@@ -22,7 +22,7 @@ import {
   type OccupationFiche,
   type ReponseFiche,
 } from "@/lib/ficheEtat";
-import { genFicheEtat, ficheSignee, nomFichierFicheEtat, type SignatureFichePdf } from "@/lib/pdf/ficheEtat";
+import { estFicheEtatGeneree, genFicheEtat, ficheSignee, nomFichierFicheEtat, type SignatureFichePdf } from "@/lib/pdf/ficheEtat";
 import { nomFichierSansAccents } from "@/lib/nommage";
 import { messageErreurSignature } from "@/api/signature";
 import { docFiles, useUploadMontageDoc, type MontageDoc } from "@/api/montage";
@@ -262,8 +262,6 @@ export function telechargerPdf(bytes: Uint8Array, nom: string) {
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-const PREFIXE_GENERE = "Fiche Etat ANAH";
-
 /**
  * Génère le PDF signé et le dépose dans la pièce `fiche_etat` du dossier ANAH
  * (propagé aux autres dossiers qui attendent la fiche État). Les versions
@@ -282,7 +280,7 @@ export function useDeposerFicheEtatSignee(coproId: string, coproNom: string) {
         .eq("montage", "anah")
         .eq("doc_key", "fiche_etat")
         .maybeSingle();
-      const anciens = docFiles((row ?? undefined) as MontageDoc | undefined).filter((f) => f.name.startsWith(PREFIXE_GENERE));
+      const anciens = docFiles((row ?? undefined) as MontageDoc | undefined).filter((f) => estFicheEtatGeneree(f.name));
       const nom = nomFichierSansAccents(nomFichierFicheEtat(coproNom, true));
       await upload.mutateAsync({ docKey: "fiche_etat", file: new File([bytes as BlobPart], nom, { type: "application/pdf" }) });
       for (const f of anciens) {

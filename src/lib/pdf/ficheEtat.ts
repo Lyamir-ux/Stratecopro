@@ -206,7 +206,13 @@ export async function genFicheEtat(input: FicheEtatPdfInput): Promise<Uint8Array
   return doc.save();
 }
 
-/** Nom du fichier déposé dans le dossier ANAH. */
+/** Nom du fichier déposé dans le dossier ANAH : il ouvre par le terme « FICHE ETAT » de la
+ *  nomenclature de la Caisse d'Épargne Grand Est (08/10/2026), la copropriété vient après. */
 export function nomFichierFicheEtat(coproNom: string, signee: boolean): string {
-  return `Fiche Etat ANAH - ${coproNom}${signee ? " - signee" : " - projet"}.pdf`.replace(/[\\/:*?"<>|]/g, " ");
+  return `FICHE ETAT - ${coproNom}${signee ? " - signee" : " - projet"}.pdf`.replace(/[\\/:*?"<>|]/g, " ");
 }
+
+/** Fiche générée par le logiciel (ancien nom « Fiche Etat ANAH - … » ou nom actuel) : elle se
+ *  remplace à chaque régénération, contrairement à une fiche déposée à la main. */
+export const estFicheEtatGeneree = (nom: string): boolean =>
+  nom.startsWith("Fiche Etat ANAH") || /^FICHE ETAT - .+ - (signee|projet)\.pdf$/.test(nom);

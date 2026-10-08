@@ -184,7 +184,7 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
             key: "rib_copro",
             name: "RIB du compte de la copropriété",
             fournisseur: "syndic",
-            type: "rib",
+            type: "rib_compte_copro",
           },
           {
             key: "pv_ag_mandat",
@@ -211,7 +211,7 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
             name: "Attestation d'assurance multirisque habitation de l'immeuble",
             hint: "Période en cours (pas l'appel de cotisation), précisant le nom ou l'adresse de la copropriété",
             fournisseur: "syndic",
-            type: "attestation_assurance",
+            type: "attestation_mri",
           },
           {
             key: "contrat_syndic",
@@ -241,7 +241,7 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
             hint: "Recto-verso, en cours de validité",
             fournisseur: "syndic",
             conditionnel: true,
-            type: "piece_identite",
+            type: "cni_signataire",
           },
           {
             key: "formulaire_ppe",
@@ -329,7 +329,7 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
             name: "Preuve de la convocation à l'AG",
             hint: "Accusés de réception",
             fournisseur: "syndic",
-            type: "convocation_ag",
+            type: "preuve_envoi_convocation",
           },
           {
             key: "annexe_2bis_cegc",
@@ -370,7 +370,7 @@ export const ECOPTZ_ETAPES: EtapeDef[] = [
             name: "Confirmation d'enregistrement du compte travaux en bénéficiaire",
             hint: "Mail des organismes subventionneurs - fourni par Strat Eco",
             fournisseur: "amo",
-            type: "courrier",
+            type: "accord_sub_rib",
           },
         ],
       },

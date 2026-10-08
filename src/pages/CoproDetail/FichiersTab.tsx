@@ -25,7 +25,7 @@ import {
   type Fichier,
 } from "@/api/fichiers";
 import { derniereParFichier, siretDuFichier, useVerificationsRge } from "@/api/rge";
-import { champsDepuisNom, typeDepuisNom, typeLabel } from "@/lib/nommage";
+import { champsDepuisNom, typeDepuisNom, typesDepuisNom, typeLabel } from "@/lib/nommage";
 import { verificationRgePour } from "@/lib/rge";
 import type { CoproWithStats } from "@/api/copros";
 
@@ -67,10 +67,7 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
 
   // Fichiers concernant un dispositif : type déduit du nom normalisé.
   const byDispositif = (types: string[]) =>
-    (fichiers ?? []).filter((x) => {
-      const t = typeDepuisNom(x.name);
-      return t != null && types.includes(t);
-    });
+    (fichiers ?? []).filter((x) => typesDepuisNom(x.name).some((t) => types.includes(t)));
   const dispositifOuvert = DISPOSITIFS_RECAP.find((d) => d.id === openDispositif) ?? null;
   const dispositifFiles = dispositifOuvert ? byDispositif(dispositifOuvert.types) : [];
 
