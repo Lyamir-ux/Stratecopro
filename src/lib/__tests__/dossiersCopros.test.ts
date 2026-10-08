@@ -213,6 +213,42 @@ describe("assemblerDossiers", () => {
     expect(b1.etat.sepa).toBe("na");
     expect(b1.etat.manquants).not.toContain("bulletin d'adhésion");
     expect(b1.etat.manquants).not.toContain("mandat SEPA");
+
+    // Dossier du portail (0148) : le mandat SEPA est signé avec le bulletin, par
+    // le seul principal - « en cours » pendant la préparation, puis fourni dès
+    // sa signature, même si les cosignataires n'ont pas encore signé le bulletin.
+    const bulletin = (patch: Record<string, unknown>) =>
+      ({
+        id: "b1",
+        coproprietaire_id: CP(1),
+        copro_id: COPRO,
+        statut: "en_signature",
+        mandat_path: "b1/mandat-sepa.pdf",
+        mandat_signe_le: null,
+        signataires: [],
+        ...patch,
+      }) as unknown as (typeof base.bulletins)[number];
+    const adhesionBrouillon = { id: "a1", coproprietaire_id: CP(1), copro_id: COPRO, statut: "brouillon", sepa_path: null };
+    const prepa = assemblerDossiers({
+      ...base,
+      scenario,
+      choix,
+      adhesions: [adhesionBrouillon] as unknown as typeof base.adhesions,
+      bulletins: [bulletin({ statut: "brouillon" })],
+    });
+    const p1 = prepa.dossiers.find((d) => d.id === CP(1))!;
+    expect(p1.etat.bulletin).toBe("en_cours");
+    expect(p1.etat.sepa).toBe("en_cours");
+    expect(p1.etat.manquants).toContain("mandat SEPA (en cours)");
+    const signe = assemblerDossiers({
+      ...base,
+      scenario,
+      choix,
+      bulletins: [bulletin({ mandat_signe_le: "2026-10-08T10:00:00Z" })],
+    });
+    const s1 = signe.dossiers.find((d) => d.id === CP(1))!;
+    expect(s1.etat.sepa).toBe("ok");
+    expect(s1.etat.bulletin).toBe("en_cours");
   });
 
   it("un PF revalidé après le partage n'est pas considéré comme publié", () => {

@@ -1,0 +1,1290 @@
+// Dossier d'adhésion au prêt collectif éco-PTZ (CEGEE) : formulaire, puis
+// signature électronique avancée (eIDAS art. 26) - CGU acceptées avant toute
+// saisie, déclaration des cosignataires (chacun signe depuis son propre lien),
+// dépôt de la pièce d'identité et du RIB par le principal, lecture complète du
+// bulletin et du mandat SEPA, puis code OTP. Voir
+// SPEC_signature_bulletins_adhesion.md et CGU v1.6.
+//
+// Retiré le 22/09/2026 au profit du lien de la banque, rétabli le 08/10/2026
+// (Amir) : c'est le parcours des copropriétés sans lien de souscription.
+// Nouveauté : le mandat SEPA n'est plus à imprimer - généré depuis le RIB
+// (un par bulletin), il est signé avec le même code que le bulletin, par le
+// seul signataire principal (titulaire du compte). Les cosignataires ne le
+// voient pas : il porte l'IBAN complet.
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Icon } from "@/components/Icon";
+import { Badge } from "@/components/ui";
+import { PdfLecteur } from "@/components/PdfLecteur";
+import { useAuth } from "@/auth/AuthProvider";
+import { fmtDate } from "@/lib/format";
+import { messageErreur } from "@/lib/erreurs";
+import {
+  genBulletin,
+  genMandatSepa,
+  isValidBic,
+  isValidIban,
+  normalizeIban,
+  type Adherent,
+  type AdhesionForm,
+  type SituationMatrimoniale,
+} from "@/lib/pdf/adhesion";
+import { checkRibConcordance } from "@/lib/pdf/ribCheck";
+import { assemblerPieceIdentite, validerFichiersPiece } from "@/lib/pdf/pieceIdentite";
+import { CGU_VERSION } from "@/lib/cguSignature";
+import {
+  lotsAnnexesNonRattaches,
+  tantiemesAvecRattaches,
+  urlSigneePiece,
+  downloadFromPieces,
+  useMonAdhesion,
+  useSaveAdhesion,
+  type FinancementConfig,
+  type Membership,
+  type Scenario,
+} from "@/api/portail";
+import {
+  appelSignature,
+  creerBulletin,
+  supprimerBrouillons,
+  uploadVersBucket,
+  useMesBulletins,
+  useRelancerSignataire,
+  type BulletinAvecSignataires,
+  type CosignataireDeclare,
+} from "@/api/signature";
+import { readParams } from "@/api/scenarios";
+import { libellesBatiments, USAGE_LOT_LABEL } from "@/lib/referentiels";
+import { Modal } from "@/components/Modal";
+import type { Bareme } from "@/lib/finance";
+import type { Json } from "@/lib/database.types";
+import type { SectionId } from "./index";
+
+const SITUATIONS: { id: SituationMatrimoniale; label: string }[] = [
+  { id: "mariee", label: "Marié(e)" },
+  { id: "pacsee", label: "Pacsé(e)" },
+  { id: "divorcee", label: "Divorcé(e)" },
+  { id: "veuve", label: "Veuf / veuve" },
+  { id: "celibataire", label: "Célibataire" },
+];
+
+const TYPES_PIECE = [
+  { id: "cni", label: "Carte nationale d'identité" },
+  { id: "passeport", label: "Passeport" },
+  { id: "titre_sejour", label: "Titre de séjour" },
+];
+
+const emptyAdherent = (nom = ""): Adherent => ({
+  nomPrenom: nom,
+  nomNaissance: "",
+  dateLieuNaissance: "",
+  profession: "",
+  professionDepuis: "",
+  situation: "celibataire",
+  situationDepuis: "",
+});
+
+const emptyForm = (nom: string, email: string, ville: string): AdhesionForm => ({
+  adherent1: emptyAdherent(nom),
+  adherent2: null,
+  adresse: "",
+  cp: "",
+  ville: "",
+  telDomicile: "",
+  telBureau: "",
+  portable: "",
+  email,
+  montantType: "100",
+  montantAutre: "",
+  lieuSignature: ville,
+});
+
+const emptyCosignataire = (): CosignataireDeclare => ({
+  civilite: "",
+  nom: "",
+  prenom: "",
+  email: "",
+  telephone: "",
+  adresse_ligne1: "",
+  code_postal: "",
+  ville: "",
+  date_naissance: "",
+  lieu_naissance: "",
+});
+
+/** Téléphone mobile français vers E.164 (+33612345678). */
+function normaliserTelephone(tel: string): string {
+  const brut = tel.replace(/[\s.\-()]/g, "");
+  if (/^0[67]\d{8}$/.test(brut)) return "+33" + brut.slice(1);
+  if (/^\+\d{8,15}$/.test(brut)) return brut;
+  return brut;
+}
+
+const telValide = (tel: string) => /^\+\d{8,15}$/.test(normaliserTelephone(tel));
+const emailValide = (e: string) => /.+@.+\..+/.test(e);
+
+function Fld({ label, children, span }: { label: string; children: ReactNode; span?: boolean }) {
+  return (
+    <div className="fld" style={span ? { gridColumn: "1 / -1" } : undefined}>
+      <label>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function AdherentFields({ a, onChange, titre }: { a: Adherent; onChange: (a: Adherent) => void; titre: string }) {
+  const set = (patch: Partial<Adherent>) => onChange({ ...a, ...patch });
+  return (
+    <>
+      <div className="se-eyebrow" style={{ gridColumn: "1 / -1", marginTop: 6 }}>{titre}</div>
+      <Fld label="Nom et prénom *">
+        <input value={a.nomPrenom} onChange={(e) => set({ nomPrenom: e.target.value })} />
+      </Fld>
+      <Fld label="Nom de naissance">
+        <input value={a.nomNaissance} onChange={(e) => set({ nomNaissance: e.target.value })} />
+      </Fld>
+      <Fld label="Date et lieu de naissance *">
+        <input placeholder="12/05/1980 à Colmar" value={a.dateLieuNaissance} onChange={(e) => set({ dateLieuNaissance: e.target.value })} />
+      </Fld>
+      <Fld label="Profession">
+        <input value={a.profession} onChange={(e) => set({ profession: e.target.value })} />
+      </Fld>
+      <Fld label="Profession exercée depuis le">
+        <input placeholder="01/09/2015" value={a.professionDepuis} onChange={(e) => set({ professionDepuis: e.target.value })} />
+      </Fld>
+      <Fld label="Situation matrimoniale *">
+        <select value={a.situation} onChange={(e) => set({ situation: e.target.value as SituationMatrimoniale })}>
+          {SITUATIONS.map((s) => (
+            <option key={s.id} value={s.id}>{s.label}</option>
+          ))}
+        </select>
+      </Fld>
+      {a.situation !== "celibataire" && (
+        <Fld label="Depuis le">
+          <input placeholder="15/06/2010" value={a.situationDepuis} onChange={(e) => set({ situationDepuis: e.target.value })} />
+        </Fld>
+      )}
+    </>
+  );
+}
+
+/** Mandat SEPA d'un dossier signé avant la signature électronique avancée
+ *  (adhesions_pret.sepa_path) : il était imprimé et signé à la main. */
+function MandatSepaAncienRow({ path, onApercu }: { path: string; onApercu: () => void }) {
+  return (
+    <div className="doc-row">
+      <span className="d-ico" style={{ background: "var(--accent-soft)", color: "var(--color-primary-700)" }}>
+        <Icon name="fileText" size={18} />
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div className="d-name">Mandat SEPA pré-rempli</div>
+        <div className="d-sub">Signé à la main et remis à Strat Eco</div>
+      </div>
+      <span className="spacer"></span>
+      <button className="icon-btn" title="Visualiser sans télécharger" onClick={onApercu}>
+        <Icon name="eye" size={16} />
+      </button>
+      <button
+        className="icon-btn"
+        title="Télécharger le mandat SEPA"
+        onClick={() => void downloadFromPieces(path, "mandat-sepa.pdf").catch(() => null)}
+      >
+        <Icon name="download" size={16} />
+      </button>
+    </div>
+  );
+}
+
+/** Aperçu inline d'un PDF généré (bucket pieces-copro), sans téléchargement. */
+function ApercuPdfGenere({ name, path, onClose }: { name: string; path: string; onClose: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [erreur, setErreur] = useState(false);
+  useEffect(() => {
+    let vivant = true;
+    urlSigneePiece(path)
+      .then((u) => vivant && setUrl(u))
+      .catch(() => vivant && setErreur(true));
+    return () => {
+      vivant = false;
+    };
+  }, [path]);
+  return (
+    <Modal title={name} onClose={onClose} width={980}>
+      <div style={{ height: "72vh", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", overflow: "hidden" }}>
+        {erreur ? (
+          <p className="se-small" style={{ color: "var(--color-error-700)", padding: 20, margin: 0 }}>
+            Aperçu indisponible. Téléchargez le document pour l'ouvrir.
+          </p>
+        ) : url ? (
+          <iframe src={url} title={name} style={{ width: "100%", height: "100%", border: 0 }} />
+        ) : (
+          <p className="se-small" style={{ color: "var(--fg-muted)", padding: 20, margin: 0 }}>
+            Chargement de l'aperçu…
+          </p>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+const STATUT_SIGNATAIRE: Record<string, { label: string; kind: "success" | "warn" | "neutral" }> = {
+  en_attente: { label: "En attente", kind: "neutral" },
+  identite_deposee: { label: "Identité déposée", kind: "warn" },
+  signe: { label: "Signé", kind: "success" },
+  expire: { label: "Lien expiré", kind: "warn" },
+};
+
+/** Document à lire en entier avant le code de signature. */
+type Lecture = "bulletin" | "mandat";
+
+export function Adhesion({
+  membership,
+  scenario,
+  bareme,
+  config,
+  email,
+  go,
+  suiviSeul = false,
+}: {
+  membership: Membership;
+  scenario: Scenario;
+  bareme: Bareme;
+  config: FinancementConfig | null;
+  email: string;
+  go?: (s: SectionId) => void;
+  /** Campagne fermée ou souscription passée chez la banque : on n'affiche que
+   *  les dossiers déjà engagés (signés ou en signature), sans en ouvrir de nouveau. */
+  suiviSeul?: boolean;
+}) {
+  // Aperçu AMO du portail : lecture seule - le dossier se remplit et se signe
+  // depuis le compte du copropriétaire, jamais à sa place.
+  const { profile } = useAuth();
+  const apercuAmo = profile?.role === "amo";
+  const copro = membership.copro;
+  const { data: adhesion, isLoading } = useMonAdhesion(copro.id, membership.coproprietaireId);
+  const { data: bulletins, isLoading: chargeBulletins, refetch: refetchBulletins } = useMesBulletins(membership.coproprietaireId);
+  const save = useSaveAdhesion(copro.id, membership.coproprietaireId);
+  const relancer = useRelancerSignataire();
+
+  const [form, setForm] = useState<AdhesionForm>(() => emptyForm(membership.nom, email, copro.city ?? ""));
+  const [prenomPrincipal, setPrenomPrincipal] = useState("");
+  const [nomPrincipal, setNomPrincipal] = useState(membership.nom);
+  const [cosignataires, setCosignataires] = useState<CosignataireDeclare[]>([]);
+  const [cguCochee, setCguCochee] = useState(false);
+  const [attestHonneur, setAttestHonneur] = useState(false);
+  const [infoAvis, setInfoAvis] = useState(false);
+
+  const [typePiece, setTypePiece] = useState("cni");
+  const [fichiersPiece, setFichiersPiece] = useState<File[]>([]);
+  const [attestPiece, setAttestPiece] = useState(false);
+
+  const [ribFichier, setRibFichier] = useState<File | null>(null);
+  const [iban, setIban] = useState("");
+  const [bic, setBic] = useState("");
+  // Retour volontaire à l'étape RIB pour régénérer le mandat SEPA (feedback
+  // du 03/09/2026) - possible tant que les bulletins sont en brouillon
+  const [refaireRib, setRefaireRib] = useState(false);
+
+  const [lecture, setLecture] = useState<{ quoi: Lecture; url: string } | null>(null);
+  const [otp, setOtp] = useState<{ canal: string; codeTest?: string } | null>(null);
+  const [code, setCode] = useState("");
+
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [apercu, setApercu] = useState<{ name: string; path: string } | null>(null);
+
+  // reprise du brouillon existant
+  useEffect(() => {
+    if (!adhesion) return;
+    const f = adhesion.form as Partial<AdhesionForm> | null;
+    if (f?.adherent1) setForm((prev) => ({ ...prev, ...f } as AdhesionForm));
+  }, [adhesion]);
+
+  const cle = readParams(scenario.params, bareme).cle;
+  const lotsHab = useMemo(() => {
+    const hab = membership.lots.filter((l) => l.usage === "habitation");
+    return hab.length ? hab : membership.lots;
+  }, [membership.lots]);
+  const aLotHab = membership.lots.some((l) => l.usage === "habitation");
+  const annexesLibres = useMemo(
+    () => (aLotHab ? lotsAnnexesNonRattaches(membership.lots) : []),
+    [membership.lots, aLotHab]
+  );
+
+  const actifs = useMemo(
+    () => (bulletins ?? []).filter((b) => b.statut !== "annule"),
+    [bulletins]
+  );
+  const brouillons = actifs.filter((b) => b.statut === "brouillon");
+  const principalDe = (b: BulletinAvecSignataires) => b.signataires.find((s) => s.role === "principal");
+
+  const agir = async (fn: () => Promise<void>, label: string) => {
+    setBusy(label);
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(messageErreur(e, "Une erreur est survenue. Réessayez."));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** Ouvre un document du principal (URL signée 60 s) dans un nouvel onglet. */
+  const ouvrir = (bulletinId: string, quoi: "signe" | "certificat" | "mandat_signe") =>
+    void agir(async () => {
+      const r = await appelSignature({ action: "principal_document_url", bulletin_id: bulletinId, quoi });
+      if (typeof r.url === "string") window.open(r.url, "_blank");
+    }, "dl");
+
+  if (isLoading || chargeBulletins) {
+    return suiviSeul ? null : <p className="se-small" style={{ color: "var(--fg-muted)" }}>Chargement du dossier…</p>;
+  }
+
+  // ---------- Suivi seul : rien d'engagé, rien à montrer ----------
+  const engage = actifs.some((b) => b.statut !== "brouillon") || adhesion?.statut === "signee";
+  if (suiviSeul && !engage) return null;
+
+  // ---------- Aperçu AMO : pas de saisie à la place du copropriétaire ----------
+  if (apercuAmo && !engage) {
+    return (
+      <div className="cc-next" style={{ marginTop: 18 }}>
+        <Icon name="eye" size={15} className="ico" />
+        <span>
+          Aperçu AMO : le copropriétaire remplit ici son bulletin d'adhésion et son mandat SEPA, puis les signe
+          électroniquement depuis son propre compte.
+          {brouillons.length > 0 ? " Son dossier est en cours de préparation." : " Il n'a pas encore commencé."}
+        </span>
+      </div>
+    );
+  }
+
+  // ---------- Lots annexes non rattachés : génération bloquée ----------
+  if (actifs.length === 0 && adhesion?.statut !== "signee" && annexesLibres.length > 0) {
+    return (
+      <div className="card-xl fade" style={{ marginTop: 22 }}>
+        <div className="cx-head">
+          <Icon name="alert" size={20} style={{ color: "var(--color-warning-500)" }} />
+          <h2 style={{ fontSize: 19 }}>Rattachez d'abord vos lots annexes</h2>
+        </div>
+        <div className="cx-body">
+          <p className="se-body" style={{ marginTop: 0 }}>
+            Vos documents d'adhésion (bulletin et mandat SEPA) ne peuvent pas être générés tant que{" "}
+            {annexesLibres.length > 1 ? "ces lots ne sont pas rattachés" : "ce lot n'est pas rattaché"} à
+            l'un de vos lots d'habitation. Le bulletin ne mentionne que le lot d'habitation, avec les
+            tantièmes des lots rattachés additionnés.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+            {annexesLibres.map((l) => (
+              <div key={l.id} className="afournir-row">
+                <Icon name="alert" size={15} style={{ color: "var(--color-warning-500)" }} />
+                Lot n°{l.num} ({(USAGE_LOT_LABEL[l.usage] ?? l.usage).toLowerCase()})
+                {l.batiment ? ` · ${libellesBatiments(copro.denomination_batiments).court} ` + l.batiment : ""} - non rattaché
+              </div>
+            ))}
+          </div>
+          <button className="se-btn se-btn-primary" onClick={() => go?.("plan-indiv")}>
+            <Icon name="link" size={16} />
+            Rattacher mes lots dans « Mes quotes-parts »
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================
+  // SUIVI : bulletins en signature / complets / expirés
+  // ============================================================
+  if (actifs.length > 0 && brouillons.length === 0) {
+    const tousComplets = actifs.every((b) => b.statut === "complet");
+    return (
+      <div className="card-xl fade" style={{ marginTop: 22 }}>
+        <div className="cx-head">
+          <Icon name={tousComplets ? "checkCircle" : "clock"} size={20}
+            style={{ color: tousComplets ? "var(--color-success-500)" : "var(--accent)" }} />
+          <h2 style={{ fontSize: 19 }}>
+            {tousComplets ? "Dossier d'adhésion signé" : "Signatures en cours"}
+          </h2>
+          <span style={{ flex: 1 }}></span>
+          {tousComplets && <Badge kind="success">Scellé le {fmtDate(actifs[0].scelle_le)}</Badge>}
+        </div>
+        <div className="cx-body">
+          {actifs.map((b) => (
+            <div key={b.id} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: 14, marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <b>Bulletin d'adhésion - {b.lot_reference}</b>
+                <span style={{ flex: 1 }}></span>
+                <Badge kind={b.statut === "complet" ? "success" : b.statut === "expire" ? "warn" : "neutral"}>
+                  {b.statut === "complet" ? "Signé et scellé" : b.statut === "expire" ? "Liens expirés" : "En signature"}
+                </Badge>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {b.signataires.sort((x, y) => x.ordre - y.ordre).map((s) => (
+                  <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13.5 }}>
+                    <Icon name={s.statut === "signe" ? "checkCircle" : "clock"} size={15}
+                      style={{ color: s.statut === "signe" ? "var(--color-success-500)" : "var(--fg-muted)" }} />
+                    <span>{s.prenom} {s.nom}{s.role === "principal" ? " (vous)" : ""}</span>
+                    <Badge kind={STATUT_SIGNATAIRE[s.statut]?.kind ?? "neutral"}>
+                      {STATUT_SIGNATAIRE[s.statut]?.label ?? s.statut}
+                      {s.signe_le ? ` le ${fmtDate(s.signe_le)}` : ""}
+                    </Badge>
+                    <span style={{ flex: 1 }}></span>
+                    {b.statut === "en_signature" && s.role === "cosignataire" && s.statut !== "signe" && (
+                      <button
+                        className="se-btn se-btn-ghost btn-sm"
+                        disabled={relancer.isPending}
+                        onClick={() => void relancer.mutateAsync(s.id).catch(() => null)}
+                      >
+                        <Icon name="send" size={13} />Relancer
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* Le mandat SEPA est scellé dès la signature du principal : il se
+                  télécharge sans attendre les cosignataires. */}
+              {!apercuAmo && (b.statut === "complet" || (!!b.mandat_path && !!principalDe(b)?.signe_le)) && (
+                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                  {b.statut === "complet" && (
+                    <button className="se-btn se-btn-secondary btn-sm" disabled={!!busy} onClick={() => ouvrir(b.id, "signe")}>
+                      <Icon name="download" size={14} />Bulletin signé
+                    </button>
+                  )}
+                  {b.mandat_path && (
+                    <button className="se-btn se-btn-secondary btn-sm" disabled={!!busy} onClick={() => ouvrir(b.id, "mandat_signe")}>
+                      <Icon name="download" size={14} />Mandat SEPA signé
+                    </button>
+                  )}
+                  {b.statut === "complet" && (
+                    <button className="se-btn se-btn-secondary btn-sm" disabled={!!busy} onClick={() => ouvrir(b.id, "certificat")}>
+                      <Icon name="fileCheck" size={14} />Certificat de preuve
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {!tousComplets && actifs.some((b) => b.statut === "en_signature") && (
+            <p className="se-small" style={{ color: "var(--fg-muted)", margin: "4px 0 0" }}>
+              Vous recevrez par e-mail les documents scellés et le certificat de preuve dès que tous les signataires
+              auront signé.
+            </p>
+          )}
+
+          {actifs.some((b) => b.statut === "expire") && (
+            <div className="cc-next" style={{ marginTop: 12 }}>
+              <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
+              <span>
+                Des liens de signature ont expiré (30 jours). Contactez Strat Eco (contact@strateco.fr)
+                pour relancer la procédure.
+              </span>
+            </div>
+          )}
+          {error && <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 10 }}>{error}</p>}
+        </div>
+        {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}
+      </div>
+    );
+  }
+
+  // ============================================================
+  // PRÉPARATION EN COURS : bulletins en brouillon
+  // ============================================================
+  if (brouillons.length > 0) {
+    const pieceOk = brouillons.every((b) => !!principalDe(b)?.piece_deposee_le);
+    const ribOk = brouillons.every((b) => !!b.rib_path);
+    // Mandat SEPA généré depuis l'IBAN saisi, qui n'est conservé que chiffré :
+    // s'il manque (échec réseau après le dépôt du RIB), on repasse par le RIB.
+    const mandatOk = brouillons.every((b) => !!b.mandat_path || !!principalDe(b)?.signe_le);
+
+    // ---------- étape pièce d'identité ----------
+    if (!pieceOk) {
+      const erreurFichiers = fichiersPiece.length ? validerFichiersPiece(fichiersPiece) : null;
+      return (
+        <div className="card-xl fade" style={{ marginTop: 22 }}>
+          <div className="cx-head">
+            <Icon name="user" size={20} style={{ color: "var(--accent)" }} />
+            <h2 style={{ fontSize: 19 }}>Votre pièce d'identité</h2>
+          </div>
+          <div className="cx-body">
+            <p className="se-body" style={{ marginTop: 0 }}>
+              Déposez <b>votre propre pièce d'identité</b> en cours de validité (photo recto/verso ou PDF).
+              Chaque cosignataire déposera la sienne depuis son propre lien - vous ne pouvez pas le faire
+              à sa place.
+            </p>
+            <div className="form-grid">
+              <Fld label="Type de pièce">
+                <select value={typePiece} onChange={(e) => setTypePiece(e.target.value)}>
+                  {TYPES_PIECE.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+              </Fld>
+              <Fld label="Fichier(s) - JPG, PNG ou PDF, 10 Mo max">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,application/pdf"
+                  multiple
+                  onChange={(e) => setFichiersPiece([...(e.target.files ?? [])].slice(0, 2))}
+                />
+              </Fld>
+            </div>
+            {erreurFichiers && <p className="se-small" style={{ color: "var(--color-error-700)" }}>{erreurFichiers}</p>}
+            <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer", margin: "14px 0" }}>
+              <input type="checkbox" checked={attestPiece} onChange={(e) => setAttestPiece(e.target.checked)} style={{ marginTop: 3 }} />
+              <span>Je certifie que la pièce d'identité que je téléverse est <b>la mienne</b> et qu'elle est en cours de validité.</span>
+            </label>
+            {error && <p className="se-small" style={{ color: "var(--color-error-700)" }}>{error}</p>}
+            <button
+              className="se-btn se-btn-primary"
+              disabled={!fichiersPiece.length || !!erreurFichiers || !attestPiece || !!busy}
+              onClick={() =>
+                void agir(async () => {
+                  const piece = await assemblerPieceIdentite(fichiersPiece);
+                  for (const b of brouillons) {
+                    const up = await appelSignature({ action: "principal_piece_upload", bulletin_id: b.id, ext: piece.ext });
+                    await uploadVersBucket("signature-pieces", up.path as string, up.token as string, piece.blob);
+                    await appelSignature({
+                      action: "principal_piece_confirmer",
+                      bulletin_id: b.id,
+                      path: up.path,
+                      type_piece: typePiece,
+                      attestation: true,
+                    });
+                  }
+                  await refetchBulletins();
+                }, "piece")
+              }
+            >
+              <Icon name="upload" size={16} />
+              {busy ? "Dépôt en cours…" : "Déposer ma pièce d'identité"}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ---------- étape RIB (ou retour volontaire pour régénérer le mandat) ----------
+    if (!ribOk || !mandatOk || refaireRib) {
+      const ibanOk = isValidIban(iban);
+      const bicOk = isValidBic(bic);
+      return (
+        <div className="card-xl fade" style={{ marginTop: 22 }}>
+          <div className="cx-head">
+            <Icon name="euro" size={20} style={{ color: "var(--accent)" }} />
+            <h2 style={{ fontSize: 19 }}>{refaireRib ? "Nouveau RIB et nouveau mandat SEPA" : "RIB du lot"}</h2>
+            {refaireRib && (
+              <>
+                <span style={{ flex: 1 }}></span>
+                <button className="se-btn se-btn-ghost btn-sm" disabled={!!busy} onClick={() => setRefaireRib(false)}>
+                  <Icon name="chevronLeft" size={14} />
+                  Garder le mandat actuel
+                </button>
+              </>
+            )}
+          </div>
+          <div className="cx-body">
+            {refaireRib && (
+              <div className="cc-next" style={{ marginBottom: 14 }}>
+                <Icon name="refresh" size={15} className="ico" />
+                <span>
+                  Déposez à nouveau le RIB et ressaisissez l'IBAN et le BIC : le RIB rattaché à vos bulletins
+                  est remplacé et un nouveau mandat SEPA pré-rempli est généré, à relire avant de signer.
+                </span>
+              </div>
+            )}
+            {!refaireRib && ribOk && !mandatOk && (
+              <div className="cc-next" style={{ marginBottom: 14 }}>
+                <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
+                <span>
+                  Votre mandat SEPA n'a pas pu être préparé. Ressaisissez votre RIB, votre IBAN et votre BIC pour
+                  le générer à nouveau.
+                </span>
+              </div>
+            )}
+            <p className="se-body" style={{ marginTop: 0 }}>
+              Le RIB sert au prélèvement des échéances du prêt (un seul RIB par bulletin) : il remplit votre
+              mandat de prélèvement SEPA, que vous signerez en ligne avec votre bulletin. L'IBAN est conservé
+              chiffré ; seuls ses 4 derniers caractères restent affichables.
+            </p>
+            <div className="form-grid">
+              <Fld label="RIB (JPG, PNG ou PDF) *" span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,application/pdf"
+                  onChange={(e) => setRibFichier(e.target.files?.[0] ?? null)}
+                />
+              </Fld>
+              <Fld label="IBAN *">
+                <input placeholder="FR76 …" value={iban} onChange={(e) => setIban(e.target.value)} />
+              </Fld>
+              <Fld label="BIC *">
+                <input placeholder="CEPAFRPP…" value={bic} onChange={(e) => setBic(e.target.value)} />
+              </Fld>
+            </div>
+            {iban && !ibanOk && (
+              <p className="se-small" style={{ color: "var(--color-error-700)", margin: "6px 0 0" }}>
+                IBAN invalide - vérifiez la saisie (clé de contrôle incorrecte).
+              </p>
+            )}
+            {bic && !bicOk && (
+              <p className="se-small" style={{ color: "var(--color-error-700)", margin: "6px 0 0" }}>
+                BIC invalide - 8 ou 11 caractères (ex. CEPAFRPP513).
+              </p>
+            )}
+            {error && <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 8 }}>{error}</p>}
+            <button
+              className="se-btn se-btn-primary"
+              style={{ marginTop: 14 }}
+              disabled={!ribFichier || !ibanOk || !bicOk || !!busy}
+              onClick={() =>
+                void agir(async () => {
+                  // concordance IBAN saisi / RIB déposé (information AMO)
+                  const concordance = await checkRibConcordance(ribFichier!, ribFichier!.type, iban);
+                  const ext = ribFichier!.type === "application/pdf" ? "pdf" : ribFichier!.type === "image/png" ? "png" : "jpg";
+                  // mandat SEPA pré-rempli, déposé sur chaque bulletin : il sera lu puis
+                  // signé avec le même code que le bulletin (0148)
+                  const mandat = new Blob(
+                    [
+                      (await genMandatSepa({
+                        nom: form.adherent1.nomPrenom || `${prenomPrincipal} ${nomPrincipal}`,
+                        rue: form.adresse,
+                        cp: form.cp,
+                        ville: form.ville,
+                        iban,
+                        bic,
+                        lieu: form.lieuSignature || copro.city || "",
+                        date: new Date(),
+                      })) as BlobPart,
+                    ],
+                    { type: "application/pdf" }
+                  );
+                  for (const b of brouillons) {
+                    if (principalDe(b)?.signe_le) continue;
+                    const up = await appelSignature({ action: "principal_rib_upload", bulletin_id: b.id, ext });
+                    await uploadVersBucket("signature-pieces", up.path as string, up.token as string, ribFichier!);
+                    await appelSignature({
+                      action: "principal_rib_confirmer",
+                      bulletin_id: b.id,
+                      path: up.path,
+                      iban: normalizeIban(iban),
+                    });
+                    const upM = await appelSignature({ action: "principal_mandat_upload", bulletin_id: b.id });
+                    await uploadVersBucket("signature-docs", upM.path as string, upM.token as string, mandat);
+                    await appelSignature({ action: "principal_mandat_confirmer", bulletin_id: b.id });
+                  }
+                  await save.mutateAsync({
+                    scenarioId: scenario.id,
+                    form: form as unknown as Json,
+                    lieuSignature: form.lieuSignature,
+                    ribConcordance: concordance,
+                  });
+                  setRefaireRib(false);
+                  setRibFichier(null);
+                  setLecture(null);
+                  await refetchBulletins();
+                }, "rib")
+              }
+            >
+              <Icon name="upload" size={16} />
+              {busy ? "Dépôt en cours…" : refaireRib ? "Remplacer le RIB et régénérer le mandat" : "Déposer le RIB et continuer"}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ---------- étape lecture + OTP (bulletin par bulletin) ----------
+    // Le premier bulletin que le principal n'a pas encore signé ; un même code
+    // signe le bulletin et son mandat SEPA, lus en entier l'un et l'autre.
+    const aSigner = brouillons.filter((b) => !principalDe(b)?.signe_le);
+    const bulletinCourant = aSigner[0] ?? brouillons[0];
+    const sPrincipal = principalDe(bulletinCourant);
+    const documentLu = !!sPrincipal?.document_lu_le;
+    const mandatLu = !!bulletinCourant.mandat_lu_le;
+    const afficher = (quoi: Lecture) =>
+      void agir(async () => {
+        const r = await appelSignature({
+          action: "principal_document_url",
+          bulletin_id: bulletinCourant.id,
+          quoi: quoi === "mandat" ? "mandat" : "document",
+        });
+        setLecture({ quoi, url: r.url as string });
+      }, "doc");
+    const etapeLecture = (quoi: Lecture, lu: boolean, titre: string, sousTitre: string) => (
+      <div className={"adh-etape" + (lu ? " lu" : "")}>
+        <Icon
+          name={lu ? "checkCircle" : "fileText"}
+          size={20}
+          style={{ color: lu ? "var(--color-success-500)" : "var(--accent)", flex: "none" }}
+        />
+        <div className="ae-txt">
+          <div className="ae-titre">{titre}</div>
+          <div className="ae-sub">{lu ? "Lu en entier" : sousTitre}</div>
+        </div>
+        {lecture?.quoi !== quoi && (
+          <button className="se-btn se-btn-secondary btn-sm" disabled={!!busy} onClick={() => afficher(quoi)}>
+            <Icon name="eye" size={14} />
+            {lu ? "Relire" : "Lire"}
+          </button>
+        )}
+      </div>
+    );
+    return (
+      <div className="card-xl fade" style={{ marginTop: 22 }}>
+        <div className="cx-head">
+          <Icon name="edit" size={20} style={{ color: "var(--accent)" }} />
+          <h2 style={{ fontSize: 19 }}>Signature - {bulletinCourant.lot_reference}</h2>
+          {aSigner.length > 1 && (
+            <>
+              <span style={{ flex: 1 }}></span>
+              <Badge kind="neutral">{aSigner.length} bulletins à signer</Badge>
+            </>
+          )}
+        </div>
+        <div className="cx-body">
+          <p className="se-body" style={{ marginTop: 0 }}>
+            Lisez en entier votre bulletin d'adhésion puis votre mandat de prélèvement SEPA : un seul code à
+            usage unique, qui vous sera transmis, les signe tous les deux.{" "}
+            {bulletinCourant.signataires.length > 1
+              ? "Votre signature déclenche l'envoi des liens de signature du bulletin à vos cosignataires ; le mandat SEPA, lui, n'est signé que par vous."
+              : "Vous êtes l'unique signataire : les documents seront scellés dès votre signature."}
+          </p>
+
+          <div className="adh-etapes">
+            {etapeLecture("bulletin", documentLu, "1. Bulletin d'adhésion", "À lire jusqu'à la dernière page")}
+            {lecture?.quoi === "bulletin" && (
+              <PdfLecteur
+                key={"bulletin-" + bulletinCourant.id}
+                url={lecture.url}
+                onLectureComplete={() => {
+                  void appelSignature({ action: "principal_document_lu", bulletin_id: bulletinCourant.id })
+                    .then(() => refetchBulletins())
+                    .catch(() => null);
+                }}
+              />
+            )}
+            {etapeLecture(
+              "mandat",
+              mandatLu,
+              "2. Mandat de prélèvement SEPA",
+              `Prélèvement des échéances sur le compte ····${bulletinCourant.iban_dernier4 ?? ""} - à lire en entier`
+            )}
+            {lecture?.quoi === "mandat" && (
+              <PdfLecteur
+                key={"mandat-" + bulletinCourant.id}
+                url={lecture.url}
+                onLectureComplete={() => {
+                  void appelSignature({ action: "principal_document_lu", bulletin_id: bulletinCourant.id, quoi: "mandat" })
+                    .then(() => refetchBulletins())
+                    .catch(() => null);
+                }}
+              />
+            )}
+          </div>
+
+          {!otp ? (
+            <>
+              {error && <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 10 }}>{error}</p>}
+              <button
+                className="se-btn se-btn-primary"
+                style={{ marginTop: 4 }}
+                disabled={!documentLu || !mandatLu || !!busy}
+                onClick={() =>
+                  void agir(async () => {
+                    const r = await appelSignature({ action: "principal_otp_demander", bulletin_id: bulletinCourant.id });
+                    setOtp({ canal: r.canal as string, codeTest: r.code_test as string | undefined });
+                  }, "otp")
+                }
+              >
+                <Icon name="lock" size={16} />
+                {busy === "otp" ? "Envoi du code…" : "Recevoir mon code de signature"}
+              </button>
+              {(!documentLu || !mandatLu) && (
+                <p className="se-small" style={{ color: "var(--fg-muted)", margin: "8px 0 0" }}>
+                  Le code s'obtient une fois les deux documents lus jusqu'à la dernière page.
+                </p>
+              )}
+            </>
+          ) : (
+            <div style={{ marginTop: 6, maxWidth: 400 }}>
+              <p className="se-body" style={{ margin: "0 0 10px" }}>
+                {otp.canal === "email"
+                  ? "Un code à 6 chiffres vient de vous être envoyé par e-mail."
+                  : otp.canal === "sms"
+                    ? "Un code à 6 chiffres vient d'être envoyé par SMS."
+                    : "Mode test : aucun envoi réel configuré."}
+                {" "}Il est valable 10 minutes.
+              </p>
+              {otp.codeTest && (
+                <p className="se-small" style={{ color: "var(--color-warning-500)" }}>
+                  Code de test (environnement sans envoi réel) : <b>{otp.codeTest}</b>
+                </p>
+              )}
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                placeholder="______"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                style={{
+                  width: "100%", fontSize: 28, letterSpacing: 12, textAlign: "center",
+                  padding: "8px 0", border: "1px solid var(--border)", borderRadius: "var(--radius-md)",
+                }}
+              />
+              <p className="se-small" style={{ color: "var(--fg-muted)", margin: "8px 0 0" }}>
+                En validant ce code, vous signez le bulletin d'adhésion et le mandat de prélèvement SEPA.
+              </p>
+              {error && <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 8 }}>{error}</p>}
+              <div className="adh-otp-boutons">
+                <button
+                  className="se-btn se-btn-primary"
+                  disabled={code.length !== 6 || !!busy}
+                  onClick={() =>
+                    void agir(async () => {
+                      await appelSignature({ action: "principal_otp_valider", bulletin_id: bulletinCourant.id, code });
+                      setOtp(null);
+                      setCode("");
+                      setLecture(null);
+                      await refetchBulletins();
+                    }, "valider")
+                  }
+                >
+                  <Icon name="checkCircle" size={17} />
+                  {busy === "valider" ? "Vérification…" : "Signer le bulletin et le mandat"}
+                </button>
+                <button
+                  className="se-btn se-btn-ghost btn-sm"
+                  disabled={!!busy}
+                  onClick={() =>
+                    void agir(async () => {
+                      const r = await appelSignature({ action: "principal_otp_demander", bulletin_id: bulletinCourant.id });
+                      setOtp({ canal: r.canal as string, codeTest: r.code_test as string | undefined });
+                      setCode("");
+                    }, "renvoi")
+                  }
+                >
+                  Renvoyer un code
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 10, marginTop: 22, flexWrap: "wrap" }}>
+            <button
+              className="se-btn se-btn-ghost btn-sm"
+              title="Ressaisir le RIB : un nouveau mandat SEPA est généré, à relire avant de signer"
+              disabled={!!busy}
+              onClick={() => {
+                setLecture(null);
+                setOtp(null);
+                setCode("");
+                setRefaireRib(true);
+              }}
+            >
+              <Icon name="refresh" size={14} />
+              Erreur de RIB ? Régénérer le mandat
+            </button>
+            <button
+              className="se-btn se-btn-ghost btn-sm"
+              disabled={!!busy}
+              onClick={() => {
+                if (!window.confirm("Abandonner ce dossier ? Les bulletins en préparation sont supprimés et vous repartez du formulaire.")) return;
+                void agir(async () => {
+                  await supprimerBrouillons(membership.coproprietaireId);
+                  setLecture(null);
+                  setOtp(null);
+                  await refetchBulletins();
+                }, "reset");
+              }}
+            >
+              <Icon name="trash" size={14} />
+              Abandonner et reprendre la préparation à zéro
+            </button>
+          </div>
+        </div>
+        {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}
+      </div>
+    );
+  }
+
+  // ============================================================
+  // Ancien dossier signé (avant la signature électronique avancée)
+  // ============================================================
+  if (adhesion?.statut === "signee") {
+    const anciens = (adhesion.bulletins as { lotNum: string; path: string }[] | null) ?? [];
+    return (
+      <div className="card-xl fade" style={{ marginTop: 22 }}>
+        <div className="cx-head">
+          <Icon name="checkCircle" size={20} style={{ color: "var(--color-success-500)" }} />
+          <h2 style={{ fontSize: 19 }}>Dossier d'adhésion signé</h2>
+          <span style={{ flex: 1 }}></span>
+          <Badge kind="success">Signé le {fmtDate(adhesion.signed_at)}</Badge>
+        </div>
+        <div className="cx-body">
+          <div className="se-eyebrow" style={{ marginBottom: 8 }}>Vos bulletins d'adhésion (signés)</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {anciens.map((b) => (
+              <div key={b.path} className="doc-row">
+                <span className="d-ico"><Icon name="fileText" size={18} /></span>
+                <div style={{ minWidth: 0 }}>
+                  <div className="d-name">Bulletin d'adhésion - Lot n°{b.lotNum}</div>
+                  <div className="d-sub">PDF pré-rempli et signé électroniquement</div>
+                </div>
+                <span className="spacer"></span>
+                <button
+                  className="icon-btn"
+                  title="Visualiser sans télécharger"
+                  onClick={() => setApercu({ name: `Bulletin d'adhésion - Lot n°${b.lotNum}`, path: b.path })}
+                >
+                  <Icon name="eye" size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+          {adhesion.sepa_path && (
+            <>
+              <div className="se-eyebrow" style={{ margin: "18px 0 8px" }}>Mandat de prélèvement SEPA</div>
+              <MandatSepaAncienRow
+                path={adhesion.sepa_path}
+                onApercu={() => setApercu({ name: "Mandat SEPA pré-rempli", path: adhesion.sepa_path! })}
+              />
+            </>
+          )}
+        </div>
+        {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}
+      </div>
+    );
+  }
+
+  // ============================================================
+  // FORMULAIRE : CGU d'abord, puis saisie + cosignataires
+  // ============================================================
+
+  // ---------- porte d'entrée : acceptation des CGU avant toute saisie ----------
+  if (!cguCochee) {
+    return (
+      <div className="card-xl fade" style={{ marginTop: 22 }}>
+        <div className="cx-head">
+          <Icon name="fileCheck" size={20} style={{ color: "var(--accent)" }} />
+          <h2 style={{ fontSize: 19 }}>Adhésion au prêt collectif - avant de commencer</h2>
+        </div>
+        <div className="cx-body">
+          <p className="se-body" style={{ marginTop: 0 }}>
+            Ce parcours vous permet de remplir votre bulletin d'adhésion à l'éco-prêt à taux zéro et votre
+            mandat de prélèvement SEPA, puis de les <b>signer électroniquement</b> (signature électronique
+            avancée : pièce d'identité + code à usage unique). Rien à imprimer ni à envoyer par courrier. Si
+            le lot a plusieurs propriétaires (indivision, couple, SCI), chacun signera le bulletin depuis son
+            propre lien, reçu par e-mail.
+          </p>
+          <p className="se-body">
+            L'acceptation des Conditions Générales d'Utilisation est un préalable : elles régissent le
+            traitement de vos données (pièce d'identité, RIB) et la valeur juridique de la signature.
+          </p>
+          <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer", margin: "14px 0" }}>
+            <input type="checkbox" onChange={(e) => setCguCochee(e.target.checked)} style={{ marginTop: 3 }} />
+            <span>
+              J'ai lu et j'accepte les{" "}
+              <a href="/cgu-signature" target="_blank" rel="noreferrer">Conditions Générales d'Utilisation</a>{" "}
+              du service de signature électronique Strat Eco Pro (version {CGU_VERSION}), y compris la
+              convention de preuve figurant à l'article 5.2.
+            </span>
+          </label>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- formulaire + cosignataires ----------
+  const champsOk =
+    form.adherent1.nomPrenom.trim() &&
+    form.adherent1.dateLieuNaissance.trim() &&
+    form.adresse.trim() &&
+    form.cp.trim() &&
+    form.ville.trim() &&
+    form.portable.trim() &&
+    form.email.trim() &&
+    form.lieuSignature.trim() &&
+    (form.montantType === "100" || form.montantAutre.trim()) &&
+    (!form.adherent2 || (form.adherent2.nomPrenom.trim() && form.adherent2.dateLieuNaissance.trim()));
+
+  const principalOk =
+    prenomPrincipal.trim() && nomPrincipal.trim() && emailValide(form.email) && telValide(form.portable);
+  const cosignatairesOk = cosignataires.every(
+    (c) => c.nom.trim() && c.prenom.trim() && emailValide(c.email) && telValide(c.telephone)
+  );
+  // garde-fou anti auto-signature : e-mails et téléphones tous distincts
+  const emails = [form.email, ...cosignataires.map((c) => c.email)].map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const tels = [form.portable, ...cosignataires.map((c) => c.telephone)].map(normaliserTelephone).filter(Boolean);
+  const doublons = new Set(emails).size !== emails.length || new Set(tels).size !== tels.length;
+
+  const brouillonAdhesion = () =>
+    save.mutateAsync({
+      scenarioId: scenario.id,
+      form: form as unknown as Json,
+      lieuSignature: form.lieuSignature,
+    });
+  const saveBrouillon = () => void brouillonAdhesion().catch((e) => setError(messageErreur(e, "Enregistrement impossible.")));
+
+  const preparerSignature = () =>
+    agir(async () => {
+      // le dossier d'adhésion doit exister avant les bulletins : c'est lui qui
+      // passe « signé » quand tous ses bulletins sont scellés
+      const adhesionId = await brouillonAdhesion();
+      const date = new Date();
+      const ctxBase = {
+        adresseImmeuble: copro.adresse ?? copro.name,
+        nomSyndic: copro.syndic_name ?? "",
+        // L'interlocuteur du bulletin est le gestionnaire de la copropriété chez
+        // le syndic (pas l'AMO) - feedback du 03/09/2026
+        interlocuteur: copro.gestionnaire_nom?.trim() || copro.syndic_name || "",
+      };
+      for (const lot of lotsHab) {
+        const tantiemes = tantiemesAvecRattaches(membership.lots, lot, cle);
+        const bulletinId = await creerBulletin({
+          coproId: copro.id,
+          coproprietaireId: membership.coproprietaireId,
+          adhesionId,
+          lotId: lot.id,
+          lotReference: `Lot n°${lot.num}${lot.batiment ? ` - ${libellesBatiments(copro.denomination_batiments).court} ${lot.batiment}` : ""}`,
+          tantiemes,
+          cguVersion: CGU_VERSION,
+          principal: {
+            nom: nomPrincipal.trim(),
+            prenom: prenomPrincipal.trim(),
+            email: form.email.trim(),
+            telephone: normaliserTelephone(form.portable),
+          },
+          cosignataires: cosignataires.map((c) => ({
+            ...c,
+            email: c.email.trim(),
+            telephone: normaliserTelephone(c.telephone),
+          })),
+        });
+        // PDF du bulletin (non signé - les blocs de signature sont apposés au
+        // scellement), déposé côté serveur qui calcule l'empreinte de référence
+        const bytes = await genBulletin(
+          form,
+          { ...ctxBase, lotNum: lot.num, tantiemes: String(tantiemes) },
+          date
+        );
+        const up = await appelSignature({ action: "principal_document_upload", bulletin_id: bulletinId });
+        await uploadVersBucket("signature-docs", up.path as string, up.token as string,
+          new Blob([bytes as BlobPart], { type: "application/pdf" }));
+        await appelSignature({ action: "principal_document_confirmer", bulletin_id: bulletinId });
+        await appelSignature({ action: "principal_cgu", bulletin_id: bulletinId });
+        await appelSignature({ action: "principal_attestation_honneur", bulletin_id: bulletinId, info_avis: infoAvis });
+      }
+      await refetchBulletins();
+    }, "preparer");
+
+  return (
+    <div className="card-xl fade" style={{ marginTop: 22 }}>
+      <div className="cx-head">
+        <Icon name="clipboard" size={20} style={{ color: "var(--accent)" }} />
+        <h2 style={{ fontSize: 19 }}>Dossier d'adhésion au prêt collectif</h2>
+        <span style={{ flex: 1 }}></span>
+        {adhesion && <Badge kind="neutral">Brouillon enregistré</Badge>}
+      </div>
+      <div className="cx-body">
+        <p className="se-body" style={{ marginTop: 0 }}>
+          Ces informations remplissent automatiquement le bulletin d'adhésion {config?.banque ?? "CEGEE"} et le
+          mandat de prélèvement SEPA. Un bulletin, avec son mandat, sera généré{" "}
+          <b>{lotsHab.length > 1 ? `pour chacun de vos ${lotsHab.length} lots d'habitation` : "pour votre lot d'habitation"}</b>
+          {membership.lots.some((l) => l.rattacheA) ? ", tantièmes des lots rattachés (garage, cave…) additionnés" : ""}.
+        </p>
+
+        <div className="form-grid">
+          <AdherentFields a={form.adherent1} onChange={(a) => setForm({ ...form, adherent1: a })} titre="Adhérent 1" />
+
+          {form.adherent2 ? (
+            <>
+              <AdherentFields a={form.adherent2} onChange={(a) => setForm({ ...form, adherent2: a })} titre="Adhérent 2 (co-emprunteur)" />
+              <div style={{ gridColumn: "1 / -1" }}>
+                <button className="se-btn se-btn-ghost btn-sm" onClick={() => setForm({ ...form, adherent2: null })}>
+                  <Icon name="trash" size={14} />Retirer l'adhérent 2
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <button className="se-btn se-btn-ghost btn-sm" onClick={() => setForm({ ...form, adherent2: emptyAdherent() })}>
+                <Icon name="plus" size={14} />Ajouter un adhérent 2 (conjoint, indivisaire…)
+              </button>
+            </div>
+          )}
+
+          <div className="se-eyebrow" style={{ gridColumn: "1 / -1", marginTop: 6 }}>Coordonnées</div>
+          <Fld label="Adresse personnelle *" span>
+            <input value={form.adresse} onChange={(e) => setForm({ ...form, adresse: e.target.value })} />
+          </Fld>
+          <Fld label="Code postal *">
+            <input value={form.cp} onChange={(e) => setForm({ ...form, cp: e.target.value })} />
+          </Fld>
+          <Fld label="Ville *">
+            <input value={form.ville} onChange={(e) => setForm({ ...form, ville: e.target.value })} />
+          </Fld>
+          <Fld label="Téléphone portable *">
+            <input value={form.portable} onChange={(e) => setForm({ ...form, portable: e.target.value })} />
+          </Fld>
+          <Fld label="Téléphone domicile">
+            <input value={form.telDomicile} onChange={(e) => setForm({ ...form, telDomicile: e.target.value })} />
+          </Fld>
+          <Fld label="Téléphone bureau">
+            <input value={form.telBureau} onChange={(e) => setForm({ ...form, telBureau: e.target.value })} />
+          </Fld>
+          <Fld label="E-mail *">
+            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </Fld>
+
+          <div className="se-eyebrow" style={{ gridColumn: "1 / -1", marginTop: 6 }}>Montant demandé</div>
+          <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14, cursor: "pointer" }}>
+              <input type="radio" checked={form.montantType === "100"} onChange={() => setForm({ ...form, montantType: "100" })} />
+              100 % de ma quote-part des dépenses éligibles à l'éco-PTZ (+ frais de garantie)
+            </label>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14, cursor: "pointer" }}>
+              <input type="radio" checked={form.montantType === "autre"} onChange={() => setForm({ ...form, montantType: "autre" })} />
+              Autre montant (dans la limite de ma quote-part) :
+              <input
+                style={{ width: 140 }}
+                placeholder="Montant en €"
+                value={form.montantAutre}
+                disabled={form.montantType !== "autre"}
+                onChange={(e) => setForm({ ...form, montantAutre: e.target.value })}
+              />
+            </label>
+          </div>
+
+          <Fld label="Fait à (lieu de signature) *">
+            <input value={form.lieuSignature} onChange={(e) => setForm({ ...form, lieuSignature: e.target.value })} />
+          </Fld>
+
+          {/* ---------- signataires ---------- */}
+          <div className="se-eyebrow" style={{ gridColumn: "1 / -1", marginTop: 6 }}>Signataire principal (vous)</div>
+          <Fld label="Prénom *">
+            <input value={prenomPrincipal} onChange={(e) => setPrenomPrincipal(e.target.value)} />
+          </Fld>
+          <Fld label="Nom *">
+            <input value={nomPrincipal} onChange={(e) => setNomPrincipal(e.target.value)} />
+          </Fld>
+          <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>
+            Votre code de signature vous sera transmis personnellement (e-mail et téléphone portable
+            renseignés ci-dessus).
+          </p>
+
+          <div className="se-eyebrow" style={{ gridColumn: "1 / -1", marginTop: 6 }}>
+            Cosignataires (indivision, couple, SCI…)
+          </div>
+          <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>
+            Si le lot a plusieurs propriétaires, <b>tous doivent signer</b>. Chaque cosignataire recevra
+            son propre lien par e-mail, déposera lui-même sa pièce d'identité et signera avec son propre
+            code : vous ne pouvez pas signer à sa place.
+          </p>
+          {cosignataires.map((c, i) => (
+            <div key={i} style={{ gridColumn: "1 / -1", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
+                <b style={{ fontSize: 14 }}>Cosignataire {i + 1}</b>
+                <span style={{ flex: 1 }}></span>
+                <button className="se-btn se-btn-ghost btn-sm" onClick={() => setCosignataires(cosignataires.filter((_, j) => j !== i))}>
+                  <Icon name="trash" size={13} />Retirer
+                </button>
+              </div>
+              <div className="form-grid">
+                <Fld label="Civilité">
+                  <select value={c.civilite} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, civilite: e.target.value } : x)))}>
+                    <option value="">-</option>
+                    <option value="Madame">Madame</option>
+                    <option value="Monsieur">Monsieur</option>
+                  </select>
+                </Fld>
+                <Fld label="Prénom *">
+                  <input value={c.prenom} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, prenom: e.target.value } : x)))} />
+                </Fld>
+                <Fld label="Nom *">
+                  <input value={c.nom} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, nom: e.target.value } : x)))} />
+                </Fld>
+                <Fld label="E-mail *">
+                  <input type="email" value={c.email} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)))} />
+                </Fld>
+                <Fld label="Téléphone mobile *">
+                  <input placeholder="06 12 34 56 78" value={c.telephone} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, telephone: e.target.value } : x)))} />
+                </Fld>
+                <Fld label="Date de naissance">
+                  <input type="date" value={c.date_naissance} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, date_naissance: e.target.value } : x)))} />
+                </Fld>
+                <Fld label="Lieu de naissance">
+                  <input value={c.lieu_naissance} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, lieu_naissance: e.target.value } : x)))} />
+                </Fld>
+                <Fld label="Adresse postale" span>
+                  <input value={c.adresse_ligne1} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, adresse_ligne1: e.target.value } : x)))} />
+                </Fld>
+                <Fld label="Code postal">
+                  <input value={c.code_postal} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, code_postal: e.target.value } : x)))} />
+                </Fld>
+                <Fld label="Ville">
+                  <input value={c.ville} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, ville: e.target.value } : x)))} />
+                </Fld>
+              </div>
+            </div>
+          ))}
+          <div style={{ gridColumn: "1 / -1" }}>
+            <button className="se-btn se-btn-ghost btn-sm" onClick={() => setCosignataires([...cosignataires, emptyCosignataire()])}>
+              <Icon name="plus" size={14} />Ajouter un cosignataire
+            </button>
+          </div>
+          {doublons && (
+            <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--color-error-700)", margin: 0 }}>
+              Chaque signataire doit avoir son propre e-mail et son propre téléphone : les coordonnées ne
+              peuvent pas être partagées entre deux signataires.
+            </p>
+          )}
+
+          <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
+            <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer" }}>
+              <input type="checkbox" checked={attestHonneur} onChange={(e) => setAttestHonneur(e.target.checked)} style={{ marginTop: 3 }} />
+              <span>
+                Je certifie sur l'honneur que les coordonnées communiquées correspondent aux personnes
+                déclarées et que je suis habilité(e) à les transmettre.
+              </span>
+            </label>
+            <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer" }}>
+              <input type="checkbox" checked={infoAvis} onChange={(e) => setInfoAvis(e.target.checked)} style={{ marginTop: 3 }} />
+              <span>
+                J'ai été informé(e) que mon avis d'imposition sera transmis dans son intégralité à l'Anah
+                et, le cas échéant, à l'établissement bancaire instruisant ma demande d'éco-prêt à taux
+                zéro, aux fins de vérification de mes ressources, puis supprimé des systèmes de Strat Eco
+                une fois ces transmissions effectuées.
+              </span>
+            </label>
+          </div>
+        </div>
+
+        {error && <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 12 }}>{error}</p>}
+        <div style={{ display: "flex", gap: 10, marginTop: 22, flexWrap: "wrap" }}>
+          <button className="se-btn se-btn-ghost" onClick={saveBrouillon} disabled={save.isPending || !!busy}>
+            {save.isPending ? "Enregistrement…" : "Enregistrer le brouillon"}
+          </button>
+          <button
+            className="se-btn se-btn-primary"
+            disabled={!champsOk || !principalOk || !cosignatairesOk || doublons || !attestHonneur || !infoAvis || !!busy}
+            onClick={() => void preparerSignature()}
+          >
+            {busy ? "Préparation des bulletins…" : "Passer à la signature"}
+            <Icon name="arrowRight" size={16} />
+          </button>
+        </div>
+        {!champsOk && (
+          <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10 }}>
+            Renseignez tous les champs marqués * - la banque rejette les dossiers incomplets.
+          </p>
+        )}
+        {champsOk && !principalOk && (
+          <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10 }}>
+            Renseignez vos prénom et nom de signataire, un e-mail valide et un téléphone portable valide.
+          </p>
+        )}
+      </div>
+      {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}
+    </div>
+  );
+}

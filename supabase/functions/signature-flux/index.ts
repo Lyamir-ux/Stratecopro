@@ -2,6 +2,13 @@
 // avancée (eIDAS art. 26) des bulletins d'adhésion à l'éco-PTZ.
 // Voir SPEC_signature_bulletins_adhesion.md et CGU v1.6.
 //
+// Mandat de prélèvement SEPA (0148, demande d'Amir du 08/10/2026) : généré
+// depuis le RIB du bulletin, lu puis signé par le seul signataire principal
+// (titulaire du compte), avec le même code que le bulletin. Le mandat signé
+// porte la mention de signature dans sa case « Signature(s) » et une page de
+// preuve ; il est scellé dès la signature du principal, sans attendre les
+// cosignataires, qui ne le voient jamais (IBAN complet).
+//
 // Trois familles d'actions, routées par le champ `action` du POST :
 //  - token   : cosignataire sans compte, authentifié par son lien personnel
 //              (token 256 bits ; seul le SHA-256 est stocké) ;
@@ -112,7 +119,7 @@ async function chiffrerIban(iban: string): Promise<string | null> {
   );
   const total = new Uint8Array(iv.length + chiffre.length);
   total.set(iv); total.set(chiffre, iv.length);
-  return "\\x" + [...total].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return String.fromCharCode(92) + "x" + [...total].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /** Signe le hash final avec la clé privée Ed25519 de Strat Eco (si configurée). */
@@ -197,7 +204,7 @@ function boutonEmail(url: string, libelle: string): string {
  *  affiché au signataire. Sans RESEND_API_KEY : simulation, code renvoyé au
  *  client pour permettre les tests (jamais le cas avec un envoi réel). */
 async function envoyerOtp(
-  email: string, prenom: string, coproNom: string, code: string,
+  email: string, prenom: string, coproNom: string, code: string, avecMandat = false,
 ): Promise<{ canal: "sms" | "email" | "simulation"; codeTest?: string }> {
   // TODO prestataire SMS (opérateur européen) : brancher ici, canal 'sms'.
   const statut = await envoyerEmail(
@@ -205,7 +212,9 @@ async function envoyerOtp(
     `Votre code de signature - ${coproNom}`,
     gabaritEmail(`
       <p>Bonjour ${prenom},</p>
-      <p>Votre code de vérification pour signer votre bulletin d'adhésion :</p>
+      <p>Votre code de vérification pour signer votre bulletin d'adhésion${
+        avecMandat ? " et votre mandat de prélèvement SEPA" : ""
+      } :</p>
       <p style="font-size:30px;font-weight:bold;letter-spacing:6px;margin:18px 0">${code}</p>
       <p>Ce code est valable ${OTP_VALIDITE_MIN} minutes. Si vous n'êtes pas à l'origine de cette
       demande, ignorez ce message et signalez-le à contact@strateco.fr.</p>`),
@@ -263,6 +272,9 @@ type Bulletin = {
   notification_anah_le: string | null; transmission_banque_le: string | null;
   eco_ptz_demande: boolean; purge_effectuee_le: string | null;
   cree_par: string; scelle_le: string | null;
+  mandat_path: string | null; mandat_hash: string | null; mandat_lu_le: string | null;
+  mandat_hash_signature: string | null; mandat_signe_le: string | null;
+  mandat_signe_path: string | null; mandat_signe_hash: string | null; mandat_sceau: string | null;
 };
 
 /** Résout un lien de signature. Réponse identique pour token inexistant,
@@ -469,6 +481,16 @@ async function genererCertificat(
     y -= 10;
   }
 
+  if (b.mandat_signe_le) {
+    if (y < 130) { page = pdf.addPage(A4); y = A4[1] - 60; }
+    ligne("Mandat de prélèvement SEPA", { taille: 12, police: gras });
+    ligne("Signé par le signataire principal seul, avec le même code à usage unique que le bulletin.");
+    ligne(`Signé le : ${fmtDateHeure(b.mandat_signe_le)}`);
+    ligne(`Empreinte du mandat au moment de la signature : ${b.mandat_hash_signature ?? "-"}`);
+    ligne(`Empreinte du mandat signé : ${b.mandat_signe_hash ?? "-"}`);
+    y -= 10;
+  }
+
   if (y < 120) { page = pdf.addPage(A4); y = A4[1] - 60; }
   y -= 6;
   ligne("Procédé", { taille: 12, police: gras });
@@ -482,14 +504,163 @@ async function genererCertificat(
   return await pdf.save();
 }
 
+// ========== Mandat SEPA : mention de signature + page de preuve ==========
+
+/** Case « Signature(s) » du gabarit CEGEE TRA929 (rectangle extrait avec pypdf). */
+const SEPA_CASE_SIGNATURE = { x: 138.7, y: 334.2, w: 363.5, h: 35.3 };
+
+/** WinAnsi (Helvetica standard) : remplace ce que la police ne sait pas écrire
+ *  (codes 32 à 255, plus Œ et œ). Sans séquence d'échappement : le déploiement
+ *  par l'outil MCP les décode. */
+const winAnsi = (s: string): string =>
+  [...s.replace(/[‘’]/g, "'").replace(/[“”]/g, '"')]
+    .map((c) => {
+      const n = c.charCodeAt(0);
+      return (n >= 32 && n <= 255) || c === "Œ" || c === "œ" ? c : "?";
+    })
+    .join("");
+
+async function genererMandatSigne(
+  original: Uint8Array, b: Bulletin, s: Signataire, coproName: string, hashInstant: string,
+): Promise<Uint8Array> {
+  const pdf = await PDFDocument.load(original);
+  const police = await pdf.embedFont(StandardFonts.Helvetica);
+  const gras = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const encre = rgb(0.08, 0.08, 0.35);
+  const vert = rgb(0.208, 0.341, 0.09);
+  const signeLe = s.signe_le ?? new Date().toISOString();
+
+  // Mention dans la case « Signature(s) » : taille réduite si la ligne déborde
+  const p1 = pdf.getPage(0);
+  const C = SEPA_CASE_SIGNATURE;
+  const xTexte = C.x + 7;
+  const largeur = C.w - 12;
+  const ecrire = (texte: string, y: number, taille: number, f = police) => {
+    const t = winAnsi(texte);
+    let size = taille;
+    while (size > 5 && f.widthOfTextAtSize(t, size) > largeur) size -= 0.25;
+    p1.drawText(t, { x: xTexte, y, size, font: f, color: encre });
+  };
+  ecrire(`Signé électroniquement par ${s.prenom} ${s.nom}`.trim(), C.y + C.h - 11, 8.5, gras);
+  ecrire(
+    `le ${fmtDateHeure(signeLe)} (heure de Paris) - signature électronique avancée, code à usage unique`,
+    C.y + C.h - 21.5, 7,
+  );
+  ecrire(
+    `Empreinte SHA-256 du mandat signé : ${hashInstant.slice(0, 32)}... - preuve en dernière page`,
+    C.y + 4.5, 6.5,
+  );
+
+  // Page de preuve
+  const page = pdf.addPage(A4);
+  let y = A4[1] - 60;
+  const ligne = (txt: string, opts?: { taille?: number; f?: typeof police; couleur?: ReturnType<typeof rgb> }) => {
+    page.drawText(winAnsi(txt), {
+      x: 50, y, size: opts?.taille ?? 9.5, font: opts?.f ?? police, color: opts?.couleur,
+    });
+    y -= (opts?.taille ?? 9.5) + 5;
+  };
+  ligne("Mandat de prélèvement SEPA - preuve de signature électronique", { taille: 15, f: gras, couleur: vert });
+  y -= 6;
+  ligne(`Copropriété : ${coproName}`);
+  ligne(`Bulletin d'adhésion associé : ${b.lot_reference} (référence ${b.id})`);
+  ligne(`Créancier : Caisse d'Epargne Grand Est Europe`);
+  y -= 6;
+  ligne(`${s.civilite ? s.civilite + " " : ""}${s.prenom} ${s.nom} - débiteur, signataire principal`, { taille: 12, f: gras });
+  ligne(`E-mail : ${s.email}`);
+  ligne(`Téléphone : ${telMasque(s.telephone)}`);
+  ligne(`CGU acceptées le : ${s.cgu_acceptees_le ? fmtDateHeure(s.cgu_acceptees_le) : "-"} (version ${b.cgu_version})`);
+  ligne(`Pièce d'identité déposée le : ${s.piece_deposee_le ? fmtDateHeure(s.piece_deposee_le) : "-"}`);
+  ligne(`Empreinte SHA-256 de la pièce : ${s.piece_identite_hash ?? "-"}`);
+  ligne(`Mandat lu intégralement le : ${b.mandat_lu_le ? fmtDateHeure(b.mandat_lu_le) : "-"}`);
+  ligne(`Code à usage unique validé et mandat signé le : ${fmtDateHeure(signeLe)}`);
+  ligne(`IP de signature : ${s.signe_ip ?? "-"}`);
+  for (const l of decoupe(`Navigateur : ${s.signe_user_agent ?? "-"}`, 100)) ligne(l);
+  ligne(`Empreinte SHA-256 du mandat au moment de la signature : ${hashInstant}`);
+  y -= 8;
+  ligne("Procédé", { taille: 12, f: gras });
+  for (const l of decoupe(
+    "Signature électronique avancée au sens de l'article 26 du règlement (UE) n° 910/2014 (eIDAS) : " +
+    "identification par pièce d'identité officielle, consentement donné par code à usage unique - le même " +
+    "code signe le bulletin d'adhésion et le présent mandat -, scellement cryptographique SHA-256, journal " +
+    "d'événements chaîné. Convention de preuve : article 5.2 des CGU du service (version " + b.cgu_version + ").",
+    105,
+  )) ligne(l);
+  return await pdf.save();
+}
+
+/** Scelle le mandat SEPA dès que le signataire principal a signé. Sans effet si
+ *  le mandat est absent ou déjà scellé ; renvoie false en cas d'échec technique
+ *  (le consentement, lui, est déjà acquis - nouvel essai au scellement final ou
+ *  à la prochaine consultation du mandat signé). */
+async function signerMandat(admin: Admin, req: Request | null, bulletinId: string): Promise<boolean> {
+  try {
+    const { data: bul } = await admin.from("bulletins").select("*").eq("id", bulletinId).maybeSingle();
+    const b = bul as Bulletin | null;
+    if (!b?.mandat_path) return true;
+    if (b.mandat_signe_path) return true;
+    const { data: sp } = await admin.from("signataires").select("*")
+      .eq("bulletin_id", b.id).eq("role", "principal").maybeSingle();
+    const s = sp as Signataire | null;
+    if (!s?.signe_le) return false;
+
+    const { data: doc, error } = await admin.storage.from(BUCKET_DOCS).download(b.mandat_path);
+    if (error || !doc) throw new Error("mandat introuvable");
+    const original = new Uint8Array(await doc.arrayBuffer());
+    // empreinte au moment de la signature : figée au premier passage
+    const hashInstant = b.mandat_hash_signature ?? await sha256Hex(original);
+    if (!b.mandat_hash_signature) {
+      await admin.from("bulletins").update({
+        mandat_hash_signature: hashInstant,
+        mandat_signe_le: s.signe_le,
+      }).eq("id", b.id);
+      b.mandat_hash_signature = hashInstant;
+      b.mandat_signe_le = s.signe_le;
+    }
+
+    const signe = await genererMandatSigne(original, b, s, await coproNom(admin, b.copro_id), hashInstant);
+    const hashFinal = await sha256Hex(signe);
+    const sceau = await scellerHash(hashFinal);
+    const path = `${b.id}/mandat-sepa-signe.pdf`;
+    const up = await admin.storage.from(BUCKET_DOCS)
+      .upload(path, signe, { contentType: "application/pdf", upsert: true });
+    if (up.error) throw new Error(up.error.message);
+    await admin.from("bulletins").update({
+      mandat_signe_path: path,
+      mandat_signe_hash: hashFinal,
+      mandat_sceau: sceau,
+    }).eq("id", b.id);
+    await journal(admin, req, b.id, "mandat.signe", {
+      signataireId: s.id,
+      payload: { mandat_hash_signature: hashInstant, mandat_signe_hash: hashFinal, sceau: !!sceau },
+    });
+    return true;
+  } catch (e) {
+    console.error("Mandat SEPA : scellement impossible", e);
+    await journal(admin, req, bulletinId, "mandat.echec_scellement", {
+      payload: { erreur: e instanceof Error ? e.message : String(e) },
+    });
+    return false;
+  }
+}
+
 /** Dernier signataire passé : PDF final, sceau, certificat, e-mails. */
 async function sceller(admin: Admin, req: Request | null, bulletinId: string): Promise<void> {
-  const { data: b } = await admin.from("bulletins").select("*").eq("id", bulletinId).maybeSingle();
-  if (!b || b.statut === "complet" || !b.document_path) return;
+  const { data: b0 } = await admin.from("bulletins").select("*").eq("id", bulletinId).maybeSingle();
+  if (!b0 || b0.statut === "complet" || !b0.document_path) return;
   const { data: sigs } = await admin
     .from("signataires").select("*").eq("bulletin_id", bulletinId).order("ordre");
   const signataires = (sigs ?? []) as Signataire[];
   if (!signataires.length || signataires.some((s) => s.statut !== "signe")) return;
+
+  // mandat resté non scellé après une erreur technique : nouvel essai, puis
+  // relecture pour que le certificat en porte les empreintes
+  let b = b0;
+  if (b0.mandat_path && !b0.mandat_signe_path) {
+    await signerMandat(admin, req, bulletinId);
+    const { data: b1 } = await admin.from("bulletins").select("*").eq("id", bulletinId).maybeSingle();
+    if (b1) b = b1;
+  }
 
   const nomCopro = await coproNom(admin, b.copro_id);
   const scelleLe = new Date();
@@ -546,12 +717,19 @@ async function sceller(admin: Admin, req: Request | null, bulletinId: string): P
     }
   }
 
-  // envoi du document scellé + certificat à chaque signataire
+  // envoi du document scellé + certificat à chaque signataire ; le mandat SEPA
+  // (IBAN complet) au seul signataire principal, titulaire du compte
   const attachments: PieceJointe[] = [
     { filename: "bulletin-adhesion-signe.pdf", content: b64(pdfSigne) },
     { filename: "certificat-de-preuve.pdf", content: b64(certificat) },
   ];
+  let mandatJoint: PieceJointe | null = null;
+  if (b.mandat_signe_path) {
+    const { data: m } = await admin.storage.from(BUCKET_DOCS).download(b.mandat_signe_path);
+    if (m) mandatJoint = { filename: "mandat-sepa-signe.pdf", content: b64(new Uint8Array(await m.arrayBuffer())) };
+  }
   for (const s of signataires) {
+    const avecMandat = s.role === "principal" && !!mandatJoint;
     await envoyerEmail(
       s.email,
       `Votre bulletin d'adhésion signé - ${nomCopro}`,
@@ -559,9 +737,9 @@ async function sceller(admin: Admin, req: Request | null, bulletinId: string): P
         <p>Bonjour ${s.prenom},</p>
         <p>Tous les signataires ont signé : le bulletin d'adhésion du ${b.lot_reference}
         (copropriété <strong>${nomCopro}</strong>) est désormais scellé.</p>
-        <p>Vous trouverez en pièces jointes le document signé et son certificat de preuve.
-        Conservez-les : ils font foi du consentement de chacun.</p>`),
-      attachments,
+        <p>Vous trouverez en pièces jointes le document signé${avecMandat ? ", votre mandat de prélèvement SEPA signé" : ""}
+        et le certificat de preuve. Conservez-les : ils font foi du consentement de chacun.</p>`),
+      avecMandat ? [...attachments, mandatJoint!] : attachments,
     );
   }
 }
@@ -593,7 +771,9 @@ async function demanderOtpPour(
   });
   if (error) return json(500, { error: "otp_insert" });
 
-  const envoi = await envoyerOtp(s.email, s.prenom, await coproNom(admin, b.copro_id), code);
+  const envoi = await envoyerOtp(
+    s.email, s.prenom, await coproNom(admin, b.copro_id), code, s.role === "principal" && !!b.mandat_path,
+  );
   await journal(admin, req, b.id, "signataire.otp_demande", {
     signataireId: s.id,
     payload: { canal: envoi.canal, telephone: telMasque(s.telephone) },
@@ -654,15 +834,17 @@ async function validerOtpEtSigner(
   });
 
   const nomCopro = await coproNom(admin, b.copro_id);
+  const avecMandat = s.role === "principal" && !!b.mandat_path;
   await envoyerEmail(
     s.email,
     `Signature enregistrée - ${nomCopro}`,
     gabaritEmail(`
       <p>Bonjour ${s.prenom},</p>
-      <p>Votre signature du bulletin d'adhésion (${b.lot_reference}, copropriété
-      <strong>${nomCopro}</strong>) a bien été enregistrée le ${fmtDateHeure(maintenant)}.</p>
-      <p>Vous recevrez le document final et son certificat de preuve dès que tous les
-      signataires auront signé.</p>`),
+      <p>Votre signature du bulletin d'adhésion${avecMandat ? " et du mandat de prélèvement SEPA" : ""}
+      (${b.lot_reference}, copropriété <strong>${nomCopro}</strong>) a bien été enregistrée le
+      ${fmtDateHeure(maintenant)}.</p>
+      <p>Vous recevrez ${avecMandat ? "les documents finaux" : "le document final"} et le certificat de preuve
+      dès que tous les signataires auront signé.</p>`),
   );
 
   return json(200, { ok: true, signe_le: maintenant });
@@ -841,6 +1023,17 @@ Deno.serve(async (req: Request) => {
       if (!b) return json(404, { error: "bulletin_introuvable" });
       const s = await signatairePrincipal(b.id);
       if (!s) return json(400, { error: "signataire_absent" });
+      if (corps.quoi === "mandat") {
+        // lecture intégrale du mandat SEPA - préalable au code, comme le bulletin
+        if (!b.mandat_path) return json(400, { error: "mandat_requis" });
+        if (!b.mandat_lu_le) {
+          await admin.from("bulletins").update({ mandat_lu_le: new Date().toISOString() }).eq("id", b.id);
+          await journal(admin, req, b.id, "mandat.lu", {
+            signataireId: s.id, payload: { mandat_hash: b.mandat_hash },
+          });
+        }
+        return json(200, { ok: true });
+      }
       if (!s.document_lu_le) {
         await admin.from("signataires")
           .update({ document_lu_le: new Date().toISOString() }).eq("id", s.id);
@@ -936,6 +1129,9 @@ Deno.serve(async (req: Request) => {
       const b = await bulletinDuPrincipal(corps.bulletin_id);
       if (!b) return json(404, { error: "bulletin_introuvable" });
       if (b.statut !== "brouillon") return json(400, { error: "bulletin_verrouille" });
+      // RIB et mandat sont figés dès la signature du principal
+      const sp = await signatairePrincipal(b.id);
+      if (sp?.signe_le) return json(400, { error: "deja_signe" });
       const path = String(corps.path ?? "");
       if (!path.startsWith(`${b.id}/rib-`)) return json(400, { error: "chemin_invalide" });
       const { data: fichier, error } = await admin.storage.from(BUCKET_PIECES).download(path);
@@ -951,13 +1147,51 @@ Deno.serve(async (req: Request) => {
         await admin.storage.from(BUCKET_PIECES).remove([b.rib_path]);
       }
       const chiffre = await chiffrerIban(iban);
+      // nouveau RIB = le mandat SEPA en place ne vaut plus : il est régénéré
+      // juste après par le portail, et devra être relu avant la signature
       await admin.from("bulletins").update({
         rib_path: path,
         rib_hash: await sha256Hex(bytes),
         iban_chiffre: chiffre,
         iban_dernier4: iban.slice(-4),
+        mandat_path: null,
+        mandat_hash: null,
+        mandat_lu_le: null,
       }).eq("id", b.id);
       return json(200, { ok: true, iban_chiffre: !!chiffre });
+    }
+    case "principal_mandat_upload": {
+      const b = await bulletinDuPrincipal(corps.bulletin_id);
+      if (!b) return json(404, { error: "bulletin_introuvable" });
+      if (b.statut !== "brouillon") return json(400, { error: "bulletin_verrouille" });
+      if (!b.rib_path) return json(400, { error: "rib_requis" });
+      const s = await signatairePrincipal(b.id);
+      if (s?.signe_le) return json(400, { error: "deja_signe" });
+      const path = `${b.id}/mandat-sepa.pdf`;
+      const { data, error } = await admin.storage.from(BUCKET_DOCS)
+        .createSignedUploadUrl(path, { upsert: true });
+      if (error) return json(500, { error: "upload_url" });
+      return json(200, { path, token: data.token });
+    }
+    case "principal_mandat_confirmer": {
+      const b = await bulletinDuPrincipal(corps.bulletin_id);
+      if (!b) return json(404, { error: "bulletin_introuvable" });
+      if (b.statut !== "brouillon") return json(400, { error: "bulletin_verrouille" });
+      const s = await signatairePrincipal(b.id);
+      if (s?.signe_le) return json(400, { error: "deja_signe" });
+      const path = `${b.id}/mandat-sepa.pdf`;
+      const { data: doc, error } = await admin.storage.from(BUCKET_DOCS).download(path);
+      if (error || !doc) return json(400, { error: "fichier_absent" });
+      const bytes = new Uint8Array(await doc.arrayBuffer());
+      if (typeMimeReel(bytes) !== "application/pdf") return json(400, { error: "format_invalide" });
+      const hash = await sha256Hex(bytes);
+      await admin.from("bulletins").update({
+        mandat_path: path, mandat_hash: hash, mandat_lu_le: null,
+      }).eq("id", b.id);
+      await journal(admin, req, b.id, "mandat.depose", {
+        signataireId: s?.id ?? null, payload: { mandat_hash: hash, iban_dernier4: b.iban_dernier4 },
+      });
+      return json(200, { ok: true, sha256: hash });
     }
     case "principal_otp_demander": {
       const b = await bulletinDuPrincipal(corps.bulletin_id);
@@ -967,6 +1201,10 @@ Deno.serve(async (req: Request) => {
       if (!s.attestation_honneur_le) return json(400, { error: "attestation_honneur_requise" });
       if (!b.document_path) return json(400, { error: "document_absent" });
       if (!b.rib_path) return json(400, { error: "rib_requis" });
+      // le même code signe le bulletin et le mandat SEPA (0148) : le mandat doit
+      // être là et lu en entier
+      if (!b.mandat_path) return json(400, { error: "mandat_requis" });
+      if (!b.mandat_lu_le) return json(400, { error: "lecture_mandat_requise" });
       return demanderOtpPour(admin, req, s, b);
     }
     case "principal_otp_valider": {
@@ -974,8 +1212,13 @@ Deno.serve(async (req: Request) => {
       if (!b) return json(404, { error: "bulletin_introuvable" });
       const s = await signatairePrincipal(b.id);
       if (!s) return json(400, { error: "signataire_absent" });
+      if (!s.signe_le && b.mandat_path && !b.mandat_lu_le) return json(400, { error: "lecture_mandat_requise" });
       const r = await validerOtpEtSigner(admin, req, s, b, corps.code);
       if (r.status !== 200) return r;
+
+      // le code vaut aussi signature du mandat SEPA : scellé tout de suite, le
+      // principal étant son seul signataire
+      const mandatOk = await signerMandat(admin, req, b.id);
 
       // signature du principal = envoi des liens aux cosignataires (spec §3.8)
       const { data: cosigs } = await admin.from("signataires").select("*")
@@ -998,17 +1241,27 @@ Deno.serve(async (req: Request) => {
       } else {
         await sceller(admin, req, b.id);
       }
-      return json(200, { ok: true, cosignataires: (cosigs ?? []).length, envoyes, simules });
+      return json(200, { ok: true, cosignataires: (cosigs ?? []).length, envoyes, simules, mandat: mandatOk });
     }
     case "principal_document_url": {
-      const b = await bulletinDuPrincipal(corps.bulletin_id);
+      let b = await bulletinDuPrincipal(corps.bulletin_id);
       if (!b) return json(404, { error: "bulletin_introuvable" });
       const quoi = String(corps.quoi ?? "document");
+      if (quoi === "mandat_signe" && b.mandat_path && !b.mandat_signe_path) {
+        // scellement du mandat resté en échec : nouvel essai à la consultation
+        await signerMandat(admin, req, b.id);
+        b = await bulletinDuPrincipal(b.id);
+        if (!b) return json(404, { error: "bulletin_introuvable" });
+      }
       const cible = quoi === "signe"
         ? { bucket: BUCKET_DOCS, path: b.document_signe_path }
         : quoi === "certificat"
           ? { bucket: BUCKET_CERTIFICATS, path: b.certificat_path }
-          : { bucket: BUCKET_DOCS, path: b.document_path };
+          : quoi === "mandat"
+            ? { bucket: BUCKET_DOCS, path: b.mandat_path }
+            : quoi === "mandat_signe"
+              ? { bucket: BUCKET_DOCS, path: b.mandat_signe_path }
+              : { bucket: BUCKET_DOCS, path: b.document_path };
       if (!cible.path) return json(404, { error: "document_absent" });
       const { data, error } = await admin.storage.from(cible.bucket).createSignedUrl(cible.path, 60);
       if (error) return json(500, { error: "url_document" });
@@ -1038,18 +1291,26 @@ Deno.serve(async (req: Request) => {
       if (profil!.niveau_pieces !== 1) return json(403, { error: "niveau_2_sans_lecture" });
       const quoi = String(corps.quoi ?? "piece");
       let path: string | null = null;
+      let bucket = BUCKET_PIECES;
       let bulletinId: string;
       let signataireId: string | null = null;
       if (quoi === "rib") {
         const { data: b } = await admin.from("bulletins").select("*").eq("id", corps.bulletin_id).maybeSingle();
         if (!b?.rib_path) return json(404, { error: "document_absent" });
         path = b.rib_path; bulletinId = b.id;
+      } else if (quoi === "mandat") {
+        // le mandat SEPA porte l'IBAN complet : même régime que le RIB
+        // (niveau 1, consultation journalisée) ; signé s'il l'est, sinon pré-rempli
+        const { data: b } = await admin.from("bulletins").select("*").eq("id", corps.bulletin_id).maybeSingle();
+        const p = b?.mandat_signe_path ?? b?.mandat_path;
+        if (!b || !p) return json(404, { error: "document_absent" });
+        path = p; bucket = BUCKET_DOCS; bulletinId = b.id;
       } else {
         const { data: s } = await admin.from("signataires").select("*").eq("id", corps.signataire_id).maybeSingle();
         if (!s?.piece_identite_path) return json(404, { error: "document_absent" });
         path = s.piece_identite_path; bulletinId = s.bulletin_id; signataireId = s.id;
       }
-      const { data, error } = await admin.storage.from(BUCKET_PIECES).createSignedUrl(path!, 60);
+      const { data, error } = await admin.storage.from(bucket).createSignedUrl(path!, 60);
       if (error) return json(500, { error: "url_document" });
       await journal(admin, req, bulletinId, "document.consulte", {
         signataireId, payload: { quoi, par: uid },

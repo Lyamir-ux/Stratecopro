@@ -1308,6 +1308,14 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .proc-note { display: flex; gap: 12px; align-items: flex-start; padding: 16px; border-radius: var(--radius-lg); background: var(--color-warning-50, #fdf6e7); border: 1px solid var(--color-warning-200, #f0dca8); color: var(--color-warning-700, #8a5a00); }
 .proc-note b { display: block; font-size: 14.5px; margin-bottom: 3px; }
 .proc-note span { font-size: 13px; line-height: 1.5; color: var(--fg2); }
+/* Dossier d'adhésion du portail : lecture du bulletin puis du mandat SEPA avant le code */
+.adh-etapes { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 14px; }
+.adh-etape { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.adh-etape.lu { border-color: var(--color-success-500); background: var(--color-success-50, #eef8ea); }
+.adh-etape .ae-txt { flex: 1; min-width: 0; }
+.adh-etape .ae-titre { font-weight: 600; font-size: 14px; }
+.adh-etape .ae-sub { font-size: 12.5px; color: var(--fg-muted); }
+.adh-otp-boutons { display: flex; gap: 10px; margin-top: 12px; }
 @media (max-width: 900px) { .loan-opts-3 { grid-template-columns: 1fr; } }
 .loan-opt {
   border: 2px solid var(--border); border-radius: var(--radius-lg); padding: 22px; cursor: pointer; background: var(--bg);
@@ -1855,6 +1863,11 @@ table.dossiers.sf-table tfoot td:first-child { text-align: left; }
   .dz-action { flex-basis: 100%; padding-left: 52px; }
   .doc-row { gap: 12px; }
   .doc-row .d-name { overflow-wrap: anywhere; }
+  /* dossier d'adhésion : formulaire sur une colonne, lecteurs du bulletin et du mandat */
+  .adh-docs .doc-row { flex-wrap: wrap; }
+  .portal .form-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .adh-etapes .adh-etape { flex-wrap: wrap; }
+  .adh-otp-boutons { flex-wrap: wrap; }
   .faq-q { padding: 13px 14px; }
   .faq-a { padding: 2px 14px 14px 39px; }
 

@@ -229,6 +229,14 @@ export type Database = {
           liens_envoyes_le: string | null
           lot_id: string | null
           lot_reference: string
+          mandat_hash: string | null
+          mandat_hash_signature: string | null
+          mandat_lu_le: string | null
+          mandat_path: string | null
+          mandat_sceau: string | null
+          mandat_signe_hash: string | null
+          mandat_signe_le: string | null
+          mandat_signe_path: string | null
           notification_anah_le: string | null
           purge_effectuee_le: string | null
           rib_hash: string | null
@@ -259,6 +267,14 @@ export type Database = {
           liens_envoyes_le?: string | null
           lot_id?: string | null
           lot_reference: string
+          mandat_hash?: string | null
+          mandat_hash_signature?: string | null
+          mandat_lu_le?: string | null
+          mandat_path?: string | null
+          mandat_sceau?: string | null
+          mandat_signe_hash?: string | null
+          mandat_signe_le?: string | null
+          mandat_signe_path?: string | null
           notification_anah_le?: string | null
           purge_effectuee_le?: string | null
           rib_hash?: string | null
@@ -289,6 +305,14 @@ export type Database = {
           liens_envoyes_le?: string | null
           lot_id?: string | null
           lot_reference?: string
+          mandat_hash?: string | null
+          mandat_hash_signature?: string | null
+          mandat_lu_le?: string | null
+          mandat_path?: string | null
+          mandat_sceau?: string | null
+          mandat_signe_hash?: string | null
+          mandat_signe_le?: string | null
+          mandat_signe_path?: string | null
           notification_anah_le?: string | null
           purge_effectuee_le?: string | null
           rib_hash?: string | null

@@ -306,8 +306,17 @@ export function assemblerDossiers(input: {
       } else {
         etatBulletin = signe ? "ok" : enCours ? "en_cours" : "manquant";
         if (etatBulletin !== "ok") manquants.push("bulletin d'adhésion" + (etatBulletin === "en_cours" ? " (en cours)" : ""));
-        etatSepa = adhesion?.sepa_path ? "ok" : "manquant";
-        if (etatSepa !== "ok") manquants.push("mandat SEPA");
+        // Mandat SEPA signé électroniquement avec le bulletin (0148), par le seul
+        // principal : fourni dès sa signature, sans attendre les cosignataires.
+        // Avant la signature électronique : mandat papier déposé sur le dossier.
+        const avecMandat = bulletinsElec.filter((b) => !!b.mandat_path);
+        etatSepa =
+          adhesion?.sepa_path || (avecMandat.length > 0 && avecMandat.every((b) => !!b.mandat_signe_le))
+            ? "ok"
+            : avecMandat.length > 0 || enCours
+              ? "en_cours"
+              : "manquant";
+        if (etatSepa !== "ok") manquants.push("mandat SEPA" + (etatSepa === "en_cours" ? " (en cours)" : ""));
       }
     }
     // Pièce déposée au portail : validée = fournie ; à vérifier = en cours ;

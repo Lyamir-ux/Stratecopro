@@ -43,11 +43,11 @@ const GROUPES: Groupe[] = [
       },
       {
         q: "Comment adhérer à ces prêts ?",
-        a: "Depuis cet espace, dans l'onglet « Mon financement » : vous indiquez votre choix, puis le bouton « Adhérer au prêt collectif » vous emmène sur le parcours de souscription en ligne de la banque, qui instruit votre dossier (identité, RIB, pièces, signature). Vous pouvez aussi vous rapprocher de votre AMO ou de votre syndic si vous préférez un dossier papier.",
+        a: "Depuis cet espace, dans l'onglet « Mon financement » : vous indiquez votre choix, puis vous remplissez votre bulletin d'adhésion et votre mandat de prélèvement SEPA, pré-remplis, que vous signez en ligne avec un code reçu par e-mail - rien à imprimer. Si votre copropriété souscrit directement chez la banque, le bouton « Adhérer au prêt collectif » vous emmène sur son site. Vous pouvez aussi vous rapprocher de votre AMO ou de votre syndic si vous préférez un dossier papier.",
       },
       {
         q: "Puis-je adhérer uniquement à l'éco-PTZ, sans le prêt complémentaire ?",
-        a: "Oui, les deux adhésions sont indépendantes : vous pouvez souscrire l'un sans l'autre. Vous ne remplissez chez la banque que le dossier du prêt qui vous intéresse.",
+        a: "Oui, les deux adhésions sont indépendantes : vous pouvez souscrire l'un sans l'autre. Vous ne remplissez que le dossier du prêt qui vous intéresse.",
       },
       {
         q: "Quelle est la durée de ces prêts ?",
@@ -91,7 +91,7 @@ const GROUPES: Groupe[] = [
       },
       {
         q: "J'ai plusieurs logements dans l'immeuble : comment ça se passe ?",
-        a: "Vous pouvez obtenir un éco-PTZ par logement, chacun pouvant atteindre 50 000 €. Il faut alors un dossier de souscription distinct pour chaque lot d'habitation.",
+        a: "Vous pouvez obtenir un éco-PTZ par logement, chacun pouvant atteindre 50 000 €. Il faut alors un bulletin d'adhésion distinct pour chaque lot d'habitation.",
       },
       {
         q: "Puis-je financer aussi des travaux privatifs (mes fenêtres, par exemple) avec l'éco-PTZ ?",

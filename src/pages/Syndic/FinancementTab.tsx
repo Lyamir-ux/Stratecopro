@@ -605,10 +605,17 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
                   <div className="kv">
                     <span className="k">Souscription</span>
                     <span className="v">
-                      {/* Les copropriétaires souscrivent en ligne chez la banque :
-                          c'est la présence du lien qui ouvre la campagne. */}
-                      <Badge kind={finConfig.lien_adhesion ? "success" : "neutral"} dot={!!finConfig.lien_adhesion}>
-                        {finConfig.lien_adhesion ? "Ouverte en ligne chez la banque" : "Pas encore ouverte"}
+                      {/* Le lien de la banque l'emporte ; sans lien, la campagne
+                          ouverte par l'AMO se mène dans le portail (08/10/2026). */}
+                      <Badge
+                        kind={finConfig.lien_adhesion || finConfig.adhesion_ouverte ? "success" : "neutral"}
+                        dot={!!finConfig.lien_adhesion || finConfig.adhesion_ouverte}
+                      >
+                        {finConfig.lien_adhesion
+                          ? "Ouverte en ligne chez la banque"
+                          : finConfig.adhesion_ouverte
+                            ? "Ouverte sur le portail des copropriétaires"
+                            : "Pas encore ouverte"}
                       </Badge>
                     </span>
                   </div>

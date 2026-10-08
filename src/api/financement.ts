@@ -34,15 +34,15 @@ export function useFinancementConfigAmo(coproId: string | undefined) {
 export function useSaveFinancementConfig(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
-    // `adhesion_ouverte` n'est plus écrit : depuis le retrait du dossier
-    // d'adhésion interne (22/09/2026), c'est la présence du lien de la banque
-    // qui ouvre la souscription. La colonne reste en base pour les campagnes
-    // menées avant le basculement.
+    // Deux parcours d'adhésion (Amir, 08/10/2026) : le lien de la banque, s'il
+    // est saisi, l'emporte ; sinon `adhesion_ouverte` ouvre le dossier
+    // d'adhésion du portail (bulletin + mandat SEPA signés électroniquement).
     // `dateLimiteChoix` (0117) : dernier jour où le copropriétaire peut choisir ou
     // modifier son financement depuis le portail ; null = sans limite.
     mutationFn: async (input: {
       banque: string;
       dureeAnnees: number;
+      adhesionOuverte: boolean;
       lienAdhesion: string | null;
       dateLimiteChoix: string | null;
     }) => {
@@ -51,6 +51,7 @@ export function useSaveFinancementConfig(coproId: string) {
           copro_id: coproId,
           banque: input.banque,
           duree_annees: input.dureeAnnees,
+          adhesion_ouverte: input.adhesionOuverte,
           lien_adhesion: input.lienAdhesion,
           date_limite_choix: input.dateLimiteChoix,
         },

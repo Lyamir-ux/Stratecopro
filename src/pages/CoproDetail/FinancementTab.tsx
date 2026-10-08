@@ -71,10 +71,11 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   const saveConfig = useSaveFinancementConfig(c.id);
   const [banque, setBanque] = useState<string>("CEGEE");
   const [duree, setDuree] = useState(15);
-  // Parcours de souscription en ligne de la banque : c'est lui qui s'ouvre quand
-  // le copropriétaire clique « Adhérer au prêt collectif » sur son portail, et
-  // c'est lui seul qui ouvre la campagne depuis le retrait du dossier
-  // d'adhésion interne (feedback Amir 22/09/2026).
+  // Deux parcours d'adhésion (Amir, 08/10/2026) : le lien de souscription de la
+  // banque, s'il est saisi, l'emporte - « Adhérer au prêt collectif » l'ouvre ;
+  // sans lien, la case « campagne ouverte » ouvre le dossier d'adhésion du
+  // portail (bulletin + mandat SEPA signés électroniquement).
+  const [ouverte, setOuverte] = useState(false);
   const [lien, setLien] = useState("");
   // Date limite du choix de financement dans le portail (0117, feedback du 30/09/2026).
   const [dateLimite, setDateLimite] = useState("");
@@ -83,17 +84,18 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
     if (!finConfig) return;
     setBanque(finConfig.banque);
     setDuree(finConfig.duree_annees);
+    setOuverte(finConfig.adhesion_ouverte);
     setLien(finConfig.lien_adhesion ?? "");
     setDateLimite(finConfig.date_limite_choix ?? "");
   }, [finConfig]);
 
   const lienNettoye = lien.trim();
   const lienKo = lienNettoye !== "" && !lienAdhesionValide(lienNettoye);
-  const ouverte = lienNettoye !== "";
   const configDirty =
     !finConfig ||
     finConfig.banque !== banque ||
     finConfig.duree_annees !== duree ||
+    finConfig.adhesion_ouverte !== ouverte ||
     (finConfig.lien_adhesion ?? "") !== lienNettoye ||
     (finConfig.date_limite_choix ?? "") !== dateLimite;
 
@@ -238,7 +240,9 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
             <Icon name="users" size={18} />
             <h3>Prêt collectif - adhésions</h3>
             <span style={{ flex: 1 }}></span>
-            <Badge kind={ouverte ? "success" : "neutral"}>{ouverte ? "Souscription ouverte" : "Lien à venir"}</Badge>
+            <Badge kind={lienNettoye || ouverte ? "success" : "neutral"}>
+              {lienNettoye ? "Souscription chez la banque" : ouverte ? "Campagne ouverte sur le portail" : "Fermée"}
+            </Badge>
           </div>
           <div className="p-body">
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -278,6 +282,13 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                   onChange={(e) => setDateLimite(e.target.value)}
                 />
               </div>
+              <label
+                style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, cursor: "pointer", paddingBottom: 8 }}
+                title="Ouvre le dossier d'adhésion du portail : bulletin pré-rempli et mandat SEPA, signés électroniquement. Sans effet tant qu'un lien de souscription de la banque est saisi."
+              >
+                <input type="checkbox" checked={ouverte} onChange={(e) => setOuverte(e.target.checked)} />
+                Adhésions ouvertes sur le portail
+              </label>
               <button
                 className="se-btn se-btn-secondary btn-sm"
                 style={{ marginBottom: 4 }}
@@ -286,6 +297,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                   saveConfig.mutate({
                     banque,
                     dureeAnnees: duree,
+                    adhesionOuverte: ouverte,
                     lienAdhesion: lienNettoye || null,
                     dateLimiteChoix: dateLimite || null,
                   })
@@ -297,7 +309,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 14 }}>
               <label style={{ fontSize: 12.5, color: "var(--fg2)" }}>
-                Lien de souscription de la banque - ouvre la campagne
+                Lien de souscription de la banque - facultatif, remplace le dossier du portail
               </label>
               <input
                 className="edit-inp"
@@ -310,16 +322,19 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                 {lienKo
                   ? "Le lien doit commencer par https:// - il est ouvert depuis le portail des copropriétaires."
                   : lienNettoye
-                    ? "Le bouton « Adhérer au prêt collectif » du portail ouvre ce lien après avoir enregistré le choix du copropriétaire. C'est la banque qui mène ensuite tout le dossier de prêt."
-                    : "Tant qu'il est vide, le portail enregistre le choix du copropriétaire et lui annonce que la souscription n'est pas encore ouverte."}
+                    ? "Le bouton « Adhérer au prêt collectif » du portail ouvre ce lien après avoir enregistré le choix du copropriétaire : la banque mène alors tout le dossier de prêt, à la place du dossier d'adhésion du portail. Les dossiers déjà engagés dans le portail restent consultables."
+                    : ouverte
+                      ? "Sans lien, le copropriétaire remplit son dossier d'adhésion dans le portail : bulletin pré-rempli et mandat SEPA, signés électroniquement avec un code reçu par e-mail."
+                      : "Sans lien ni campagne ouverte, le portail enregistre le choix du copropriétaire et lui annonce que le dossier d'adhésion ouvrira bientôt."}
               </p>
             </div>
 
             <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 2 }}>
               {(adhesions ?? []).length === 0 ? (
                 <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
-                  Aucun dossier d'adhésion dans le portail. Les copropriétaires souscrivent désormais en ligne
-                  chez la banque : suivez leurs choix de financement dans l'onglet Copropriétaires.
+                  {lienNettoye
+                    ? "Aucun dossier d'adhésion dans le portail : les copropriétaires souscrivent en ligne chez la banque. Suivez leurs choix de financement dans l'onglet Copropriétaires."
+                    : "Aucun dossier d'adhésion pour l'instant - les copropriétaires y accèdent depuis leur portail après avoir choisi le prêt collectif, une fois la campagne ouverte."}
                 </p>
               ) : (
                 (adhesions ?? []).map((a, i, arr) => {
@@ -338,8 +353,10 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                         </div>
                         <div className="t-copro">
                           {a.statut === "signee"
-                            ? `Signé · ${bulletins.length} bulletin${bulletins.length > 1 ? "s" : ""}`
-                            : "Brouillon en cours"}
+                            ? bulletins.length
+                              ? `Signé · ${bulletins.length} bulletin${bulletins.length > 1 ? "s" : ""}`
+                              : "Signé électroniquement (détail ci-dessous)"
+                            : "En préparation ou en signature"}
                           {a.rib_concordance === "concordant" && " · RIB concordant"}
                           {a.rib_concordance === "discordant" && " · ⚠ IBAN ≠ RIB"}
                           {a.rib_concordance === "non_verifie" && " · RIB à vérifier"}
@@ -1170,7 +1187,8 @@ function RepartitionClesDialog({
  *  (spec signature + CGU v1.6). Les dates Anah / banque saisies ici sont les
  *  déclencheurs de la purge automatique des pièces justificatives (art. 7.4.1).
  *  Le contenu des pièces (identité, RIB) n'est lisible que par les profils de
- *  niveau 1 - chaque consultation est journalisée. */
+ *  niveau 1 - chaque consultation est journalisée. Même régime pour le mandat
+ *  SEPA (0148), qui porte l'IBAN complet. */
 function SignaturesElectroniquesPanel({ coproId }: { coproId: string }) {
   const { data: bulletins } = useBulletinsCopro(coproId);
   const relancer = useRelancerSignataire();
@@ -1198,7 +1216,7 @@ function SignaturesElectroniquesPanel({ coproId }: { coproId: string }) {
     <div className="panel">
       <div className="p-head">
         <Icon name="fileCheck" size={18} />
-        <h3>Signatures électroniques des bulletins</h3>
+        <h3>Signatures électroniques - bulletins et mandats SEPA</h3>
         <span style={{ flex: 1 }}></span>
         <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{actifs.length}</span>
       </div>
@@ -1215,6 +1233,7 @@ function SignaturesElectroniquesPanel({ coproId }: { coproId: string }) {
                 <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
                   {signes}/{b.signataires.length} signature{b.signataires.length > 1 ? "s" : ""}
                   {b.iban_dernier4 ? ` · IBAN ····${b.iban_dernier4}` : ""}
+                  {b.mandat_signe_le ? ` · mandat SEPA signé le ${fmtDate(b.mandat_signe_le)}` : ""}
                   {b.purge_effectuee_le ? ` · pièces purgées le ${fmtDate(b.purge_effectuee_le)}` : ""}
                 </span>
                 <span style={{ flex: 1 }}></span>
@@ -1235,6 +1254,15 @@ function SignaturesElectroniquesPanel({ coproId }: { coproId: string }) {
                       <Icon name="fileCheck" size={15} />
                     </button>
                   </>
+                )}
+                {b.mandat_path && (
+                  <button
+                    className="icon-btn"
+                    title={`Mandat SEPA ${b.mandat_signe_path ? "signé" : "pré-rempli, pas encore signé"} (IBAN complet : niveau 1 uniquement - consultation journalisée)`}
+                    onClick={() => agir(ouvrirDocumentSignature({ action: "amo_piece_url", bulletin_id: b.id, quoi: "mandat" }))}
+                  >
+                    <Icon name="fileCheck" size={15} style={{ color: b.mandat_signe_path ? "var(--color-success-500)" : undefined }} />
+                  </button>
                 )}
                 {!b.purge_effectuee_le && b.rib_path && (
                   <button

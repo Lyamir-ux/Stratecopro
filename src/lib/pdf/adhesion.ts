@@ -1,13 +1,10 @@
 // Génération des documents d'adhésion au prêt collectif éco-PTZ :
-// bulletin d'adhésion CEGEE (un par lot principal, signé électroniquement)
-// et mandat de prélèvement SEPA (téléchargé, signature manuscrite exigée).
-//
-// Plus branché depuis le 22/09/2026 : le dossier d'adhésion interne du portail a
-// été retiré, les copropriétaires souscrivent sur le parcours en ligne de la
-// banque. `genBulletin` / `genMandatSepa` sont conservés avec les gabarits
-// (public/modeles/) et leur calibrage au rectangle (./coords) - à supprimer
-// seulement si Strat Eco n'a plus jamais à produire ces PDF elle-même. Les
-// validateurs IBAN/BIC ci-dessous, eux, servent toujours (ribCheck).
+// bulletin d'adhésion CEGEE (un par lot principal) et mandat de prélèvement
+// SEPA (un par bulletin), tous deux signés électroniquement depuis le portail
+// (Portail/Adhesion.tsx). Débranchés du 22/09 au 08/10/2026, le temps où la
+// souscription passait par la seule banque. Les gabarits (public/modeles/) sont
+// calibrés au rectangle (./coords) ; la mention de signature du mandat est
+// apposée côté serveur (signature-flux), dans la case « Signature(s) ».
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import { BULLETIN_COORDS, SEPA_COORDS, type TextSpot } from "./coords";
 
@@ -157,7 +154,8 @@ function drawInBox(page: PDFPage, font: PDFFont, ch: string, x: number, w: numbe
   page.drawText(ch, { x: x + (w - cw) / 2, y, size, font, color: INK });
 }
 
-/** Mandat SEPA pré-rempli - SANS signature (manuscrite exigée, envoi postal). */
+/** Mandat SEPA pré-rempli, sans signature : déposé sur le bulletin, il est signé
+ *  avec le même code que lui et la mention de signature est apposée au scellement. */
 export async function genMandatSepa(input: {
   nom: string;
   rue: string;
