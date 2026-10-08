@@ -21,6 +21,7 @@ import {
   type Scenario,
 } from "@/api/portail";
 import { useBareme } from "@/api/scenarios";
+import { lienVueAmo } from "@/lib/vuesCopro";
 import type { Profil } from "@/lib/finance";
 import { Accueil } from "./Accueil";
 import { QuotesParts } from "./QuotesParts";
@@ -68,14 +69,19 @@ function Loader() {
 // ---------- Aperçu AMO : choisir le copropriétaire à consulter ----------
 function ApercuSelect({
   memberships,
+  coproInitiale,
   onPick,
   onExit,
+  onDossier,
 }: {
   memberships: Membership[];
+  /** Copropriété déjà choisie (bouton « Vue copropriétaire » d'un dossier AMO) */
+  coproInitiale: string | null;
   onPick: (coproprietaireId: string) => void;
   onExit: () => void;
+  onDossier: (coproId: string) => void;
 }) {
-  const [coproId, setCoproId] = useState<string | null>(null);
+  const [coproId, setCoproId] = useState<string | null>(coproInitiale);
   const [recherche, setRecherche] = useState("");
   const copros = useMemo(() => {
     const seen = new Map<string, { copro: Membership["copro"]; n: number }>();
@@ -103,6 +109,11 @@ function ApercuSelect({
       <div className="portal-header">
         <img className="ph-logo" src="/logo-strateco-pro.png" alt="Strat Eco" />
         <span className="ph-spacer"></span>
+        {coproId && (
+          <button className="se-btn se-btn-ghost btn-sm" onClick={() => onDossier(coproId)} title="Revenir à ce dossier dans l'espace AMO">
+            <Icon name="building" size={15} />Vue AMO
+          </button>
+        )}
         <button className="se-btn se-btn-ghost btn-sm" onClick={onExit}>
           <Icon name="gauge" size={15} />Espace AMO
         </button>
@@ -156,7 +167,13 @@ function ApercuSelect({
           ) : (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 8, padding: 2 }}>
-                {cpsFiltres.length === 0 && <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)" }}>Aucun copropriétaire ne correspond.</p>}
+                {cpsFiltres.length === 0 && (
+                  <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)" }}>
+                    {cps.length === 0
+                      ? "Aucun copropriétaire n'est encore rattaché à cette copropriété (onglet Copropriétaires du dossier)."
+                      : "Aucun copropriétaire ne correspond."}
+                  </p>
+                )}
                 {cpsFiltres.map((m) => (
                   <button
                     key={m.coproprietaireId}
@@ -257,6 +274,9 @@ export default function Portail() {
   const isAmo = profile?.role === "amo";
   const { data: memberships, isLoading } = useMesCopros();
   const [cpId, setCpId] = useState<string | null>(null);
+  // Aperçu AMO : copropriété dont on choisit le copropriétaire (bouton « Vue
+  // copropriétaire » d'un dossier, idée d'Amir du 08/10/2026)
+  const [coproApercu, setCoproApercu] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Lien profond ?cp=<coproprietaireId> (ex. clic sur un plan individuel côté
@@ -267,6 +287,18 @@ export default function Portail() {
     if (memberships.some((m) => m.coproprietaireId === cpParam)) setCpId(cpParam);
     setSearchParams({}, { replace: true });
   }, [cpParam, memberships, setSearchParams]);
+
+  // Lien profond ?copro=<coproprieteId> (aperçu AMO depuis un dossier) : ouvre la
+  // liste des copropriétaires de ce dossier, ou directement le portail du seul
+  // copropriétaire s'il est unique.
+  const coproParam = searchParams.get("copro");
+  useEffect(() => {
+    if (cpParam || !coproParam || !memberships || !isAmo) return;
+    const deLaCopro = memberships.filter((m) => m.copro.id === coproParam);
+    if (deLaCopro.length === 1) setCpId(deLaCopro[0].coproprietaireId);
+    else setCoproApercu(coproParam);
+    setSearchParams({}, { replace: true });
+  }, [cpParam, coproParam, memberships, isAmo, setSearchParams]);
 
   // sélection automatique si un seul rattachement
   useEffect(() => {
@@ -328,12 +360,15 @@ export default function Portail() {
     if (isAmo) {
       return (
         <ApercuSelect
+          key={coproApercu ?? "toutes"}
           memberships={memberships}
+          coproInitiale={coproApercu}
           onPick={(id) => {
             setCpId(id);
             navigate("/portail", { replace: true });
           }}
           onExit={() => navigate("/")}
+          onDossier={(id) => navigate(lienVueAmo(id))}
         />
       );
     }
@@ -384,8 +419,11 @@ export default function Portail() {
           <Icon name="eye" size={15} />
           Aperçu AMO - portail de {membership.nom} · {copro.name}
           <span style={{ flex: 1 }}></span>
-          <button onClick={() => setCpId(null)}>
+          <button onClick={() => { setCoproApercu(copro.id); setCpId(null); }} title="Choisir un autre copropriétaire de cette copropriété">
             <Icon name="users" size={14} />Changer
+          </button>
+          <button onClick={() => navigate(lienVueAmo(copro.id))} title="Revenir à ce dossier dans l'espace AMO">
+            <Icon name="building" size={14} />Vue AMO
           </button>
           <button onClick={() => navigate("/")}>
             <Icon name="gauge" size={14} />Espace AMO

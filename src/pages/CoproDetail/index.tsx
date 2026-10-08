@@ -22,7 +22,7 @@ import {
 import { PhotoCadree, PhotoFictive, RecadrerPhoto, ratioBandeau } from "@/components/PhotoCadrage";
 import { lireCadrage } from "@/lib/photoCadrage";
 import { messageErreur } from "@/lib/erreurs";
-import { lienVueSyndic } from "@/lib/vuesCopro";
+import { lienVueCopropriete, lienVueSyndic } from "@/lib/vuesCopro";
 import { useConsultations } from "@/api/consultations";
 import { usePrestataires } from "@/api/prestataires";
 import { normaliserNomOrganisation } from "@/lib/organisations";
@@ -175,6 +175,15 @@ export default function CoproDetail() {
             >
               <Icon name="eye" size={14} />
               Vue syndic
+            </Link>
+            {/* Portail tel que le voit un copropriétaire de ce dossier (idée d'Amir du 08/10/2026) */}
+            <Link
+              to={lienVueCopropriete(c.id)}
+              className="se-btn se-btn-secondary btn-sm"
+              title="Voir le portail de ce dossier tel qu'un copropriétaire le voit"
+            >
+              <Icon name="users" size={14} />
+              Vue copropriétaire
             </Link>
             <button
               className="se-btn se-btn-secondary btn-sm"

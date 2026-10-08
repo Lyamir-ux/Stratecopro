@@ -29,6 +29,13 @@ export function lienVueSyndic(coproId: string, ongletAmo?: string): string {
   return `/syndic/copros/${coproId}/${(ongletAmo && AMO_VERS_SYNDIC[ongletAmo]) || "projet"}`;
 }
 
+/** Portail copropriétaire en aperçu AMO, ouvert sur la liste des copropriétaires
+ *  du dossier (idée d'Amir du 08/10/2026) : le portail est propre à chaque
+ *  copropriétaire, il faut donc en choisir un (le seul s'il est unique). */
+export function lienVueCopropriete(coproId: string): string {
+  return `/portail?copro=${encodeURIComponent(coproId)}`;
+}
+
 /** Page du dossier dans l'espace AMO, sur l'onglet équivalent. */
 export function lienVueAmo(coproId: string, ongletSyndic?: string): string {
   return `/copros/${coproId}/${(ongletSyndic && SYNDIC_VERS_AMO[ongletSyndic]) || "projet"}`;
