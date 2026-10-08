@@ -12,11 +12,12 @@ with nouveaux (org_slug, full_name, email, initials) as (values
   ('christelle-clauss', 'Mohamed BELKACEMI', 'mbelkacemi@christelleclauss.com', 'MB')
 ),
 crees as (
-  insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+  insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change, email_change_token_new)
   select '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', 'authenticated',
          n.email, extensions.crypt(gen_random_uuid()::text || gen_random_uuid()::text, extensions.gen_salt('bf')), now(),
          '{"provider":"email","providers":["email"]}'::jsonb,
-         jsonb_build_object('full_name', n.full_name, 'mot_de_passe_provisoire', true), now(), now()
+         jsonb_build_object('full_name', n.full_name, 'mot_de_passe_provisoire', true), now(), now(),
+         '', '', '', ''
   from nouveaux n
   where not exists (select 1 from auth.users u where lower(u.email) = n.email)
   returning id, email
