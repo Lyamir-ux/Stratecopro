@@ -20,7 +20,7 @@ export interface Copro {
 
 /** Lignes MOE et annexes : même ossature que le PF Boudhors / la vitrine, montants
  *  proportionnés à l'opération. `moeTravauxPct` = MOE phase travaux en % du HT. */
-function moe(o: {
+export function moe(o: {
   amoConseil: number;
   amoProjet: number;
   amoTravaux: number;
@@ -72,7 +72,7 @@ function moe(o: {
 
 /** Aides : MPR Copro (30 % pour un gain >= 35 %, 45 % pour un gain >= 50 %), CEE,
  *  Climaxion (Région Grand Est) et, dans l'Eurométropole, les aides EMS. */
-function aides(o: { mprPct: 30 | 45; cee: number; climaxionAmo: number; ems: boolean }): AideDef[] {
+export function aides(o: { mprPct: 30 | 45; cee: number; climaxionAmo: number; ems: boolean }): AideDef[] {
   const plafond = (o.mprPct * 25000) / 100;
   const a: AideDef[] = [
     { id: "cee-fiche-par-fiche", groupe: "CEE", libelle: "CEE fiche par fiche", publique: false, calcul: { mode: "manuel", montant: o.cee }, commentaire: "Depend des lots de travaux energetiques et de la surface habitable" },
@@ -92,7 +92,7 @@ function aides(o: { mprPct: 30 | 45; cee: number; climaxionAmo: number; ems: boo
   return a;
 }
 
-function params(o: { mprPct: 30 | 45; fondsTravaux: number; commentaireFonds: string; totalTantiemes: number; exemples: number[] }): ParamsFinancement {
+export function params(o: { mprPct: 30 | 45; fondsTravaux: number; commentaireFonds: string; totalTantiemes: number; exemples: number[] }): ParamsFinancement {
   return {
     imprevusPct: 7,
     plafondTravauxParLogement: 25000,
@@ -109,7 +109,7 @@ function params(o: { mprPct: 30 | 45; fondsTravaux: number; commentaireFonds: st
   };
 }
 
-const L = (retenu: boolean, tvaPct: number, montantHt: number, designation: string) => ({ retenu, tvaPct, montantHt, designation });
+export const L = (retenu: boolean, tvaPct: number, montantHt: number, designation: string) => ({ retenu, tvaPct, montantHt, designation });
 
 // ---------------------------------------------------------------------------
 // 1. RESIDENCE GRAFFENSTADEN - Illkirch-Graffenstaden (EMS), 45 logements, E -> C
