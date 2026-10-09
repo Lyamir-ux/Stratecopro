@@ -98,7 +98,7 @@ export default function SignatureFichePublique() {
           <h2 style={{ fontSize: 19, marginTop: 0 }}>Lien non valable</h2>
           <p className="se-body">
             Ce lien de signature n'est plus valable (expiré, remplacé par un lien plus récent ou inconnu). Demandez un
-            nouveau lien à votre syndic ou à Strat Eco (contact@strateco.fr).
+            nouveau lien à votre syndic ou à Strat Eco (admin@strateco.fr).
           </p>
         </div>
       </Cadre>

@@ -562,7 +562,7 @@ async function demanderOtp(admin: Admin, req: Request, p: Participant, corps: Re
       <p>Votre code pour signer les documents éco-PTZ de la copropriété <strong>${echapper(copro.nom)}</strong> :</p>
       <p style="font-size:30px;font-weight:bold;letter-spacing:6px;margin:18px 0">${code}</p>
       <p>Ce code est valable ${OTP_VALIDITE_MIN} minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez ce
-      message et signalez-le à contact@strateco.fr.</p>`),
+      message et signalez-le à admin@strateco.fr.</p>`),
   );
   await journal(admin, req, p.envoi_id, p.id, "signature.otp_demande", { canal: statut === "simule" ? "simulation" : "email", statut });
   if (statut === "erreur") return json(502, { error: "envoi_echec" });

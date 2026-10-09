@@ -1,11 +1,13 @@
-// CGU du service de dépôt de pièces et de signature électronique (v1.6).
+// CGU du service de dépôt de pièces et de signature électronique (v1.7).
+// v1.7 (09/10/2026, Amir) : contact admin@strateco.fr ; le Code OTP part
+// toujours par courrier électronique, jamais par SMS.
 // Texte affiché sur /cgu-signature et dans les parcours de signature ; la
 // version acceptée est figée par signataire (cgu_version) et reportée dans le
 // certificat de preuve - toute évolution du texte impose d'incrémenter
 // CGU_VERSION.
 import { Fragment, type ReactNode } from "react";
 
-export const CGU_VERSION = "1.6";
+export const CGU_VERSION = "1.7";
 
 // ---- mini-rendu markdown (titres, gras, listes, tableaux, citations) ----
 
@@ -87,13 +89,13 @@ export const CGU_MARKDOWN = `
 # CONDITIONS GÉNÉRALES D'UTILISATION
 ## Espace adhérent, dépôt de pièces justificatives et signature électronique - Strat Eco Pro
 
-**Version 1.6 - En vigueur au 30 août 2026**
+**Version 1.7 - En vigueur au 9 octobre 2026**
 
 ## PRÉAMBULE
 
 Les présentes Conditions Générales d'Utilisation (ci-après les « CGU ») régissent l'accès et l'utilisation du service permettant aux copropriétaires de **déposer les pièces justificatives** nécessaires au montage de leur dossier de rénovation énergétique, de **renseigner leurs informations personnelles et bancaires**, et de **signer électroniquement** les documents afférents, au sein du logiciel **Strat Eco Pro**, édité par **STRAT ECO SUB**, société par actions simplifiée au capital de 1 000 euros, immatriculée au Registre du commerce et des sociétés de Strasbourg sous le numéro SIREN 980 988 901 (SIRET 980 988 901 00024), dont le siège social est situé 27 rue du Vieux Marché aux Vins, 67000 Strasbourg, représentée par son Président (ci-après « Strat Eco » ou « l'Éditeur »).
 
-Contact : contact@strateco.fr - 03 65 67 13 54
+Contact : admin@strateco.fr - 03 65 67 13 54
 
 L'acceptation des présentes CGU est un préalable obligatoire à l'utilisation du service. En cochant la case « J'ai lu et j'accepte les Conditions Générales d'Utilisation », l'Utilisateur reconnaît en avoir pris connaissance et les accepter sans réserve.
 
@@ -109,7 +111,7 @@ L'acceptation des présentes CGU est un préalable obligatoire à l'utilisation 
 
 **Lien de signature** : URL personnelle, unique, à usage limité et à durée de validité déterminée, permettant au Signataire d'accéder au Service sans création de compte.
 
-**Code OTP** (One-Time Password) : code numérique à usage unique transmis par SMS au numéro de téléphone mobile du Signataire ou par courrier électronique à l'adresse qu'il a déclarée, permettant de vérifier qu'il en a le contrôle exclusif.
+**Code OTP** (One-Time Password) : code numérique à usage unique transmis par courrier électronique à l'adresse déclarée par le Signataire, permettant de vérifier qu'il en a le contrôle exclusif. Le Code OTP n'est jamais transmis par SMS.
 
 **Signature électronique avancée** : signature électronique répondant aux exigences de l'article 26 du Règlement (UE) n° 910/2014 dit « eIDAS ».
 
@@ -129,7 +131,7 @@ Les présentes CGU ont pour objet de définir les conditions dans lesquelles Str
 
 - le téléversement des **pièces justificatives** nécessaires au montage du dossier de rénovation énergétique (pièces d'identité, avis d'imposition, avis de taxe foncière, actes notariés ou titres de propriété) ainsi que, **en cas d'adhésion**, du relevé d'identité bancaire ;
 - la **saisie d'informations personnelles** relatives au copropriétaire, à son foyer fiscal et à son lot ;
-- la vérification du contrôle d'un numéro de téléphone mobile ou d'une adresse électronique par Code OTP ;
+- la vérification du contrôle d'une adresse électronique par Code OTP ;
 - la **signature électronique avancée** de Bulletins d'adhésion, attestations, mandats et documents connexes ;
 - la **transmission de ces pièces aux Organismes tiers** habilités (Anah, établissements bancaires, délégataires CEE) dans le cadre de l'instruction des demandes d'aides ;
 - la conservation et la restitution des éléments de preuve associés.
@@ -151,7 +153,7 @@ Le Lien de signature est :
 
 ### 3.3 Responsabilité du Signataire
 
-Le Signataire s'engage à ne pas communiquer son Lien de signature à un tiers et à signaler sans délai à Strat Eco toute utilisation frauduleuse dont il aurait connaissance, à l'adresse contact@strateco.fr.
+Le Signataire s'engage à ne pas communiquer son Lien de signature à un tiers et à signaler sans délai à Strat Eco toute utilisation frauduleuse dont il aurait connaissance, à l'adresse admin@strateco.fr.
 
 Toute signature apposée au moyen du Lien de signature d'un Signataire, après validation du Code OTP qui lui a été transmis, est réputée émaner de lui.
 
@@ -174,7 +176,7 @@ Chaque Cosignataire, depuis son propre Lien de signature :
 1. téléverse **personnellement** sa pièce d'identité en cours de validité (carte nationale d'identité, passeport ou titre de séjour) ;
 2. prend connaissance de l'intégralité du document à signer ;
 3. exprime son consentement de manière explicite ;
-4. reçoit un Code OTP (par SMS ou par courrier électronique) et le saisit ;
+4. reçoit un Code OTP par courrier électronique et le saisit ;
 5. valide sa signature.
 
 ### 4.3 Unicité des coordonnées
@@ -192,7 +194,7 @@ Le document n'est réputé signé qu'une fois **l'ensemble** des Signataires aya
 Le Service met en œuvre un procédé de **signature électronique avancée** au sens de l'article 26 du Règlement (UE) n° 910/2014, reposant sur :
 
 - l'identification du Signataire par la fourniture d'une pièce d'identité officielle ;
-- la vérification du contrôle exclusif d'un numéro de téléphone mobile ou d'une adresse électronique par Code OTP ;
+- la vérification du contrôle exclusif d'une adresse électronique par Code OTP ;
 - le lien univoque entre la signature et le Signataire ;
 - le scellement cryptographique du document (empreinte SHA-256) permettant de détecter toute modification ultérieure ;
 - l'horodatage et la journalisation de l'ensemble des opérations.
@@ -203,7 +205,7 @@ Le Service ne constitue pas une signature électronique qualifiée au sens de l'
 
 **Conformément à l'article 1368 du Code civil, les parties conviennent expressément que :**
 
-a) Le procédé de signature électronique mis en œuvre par Strat Eco Pro, tel que décrit à l'article 5.1 et détaillé dans la Politique de signature communiquée sur demande à l'adresse contact@strateco.fr, constitue entre elles un procédé fiable d'identification garantissant le lien entre la signature et l'acte auquel elle s'attache.
+a) Le procédé de signature électronique mis en œuvre par Strat Eco Pro, tel que décrit à l'article 5.1 et détaillé dans la Politique de signature communiquée sur demande à l'adresse admin@strateco.fr, constitue entre elles un procédé fiable d'identification garantissant le lien entre la signature et l'acte auquel elle s'attache.
 
 b) Les documents signés par ce procédé, ainsi que les Certificats de preuve et journaux d'événements générés par le Service, sont admis entre les parties comme modes de preuve des opérations réalisées et de leur contenu.
 
@@ -400,7 +402,7 @@ Strat Eco est responsable du bon fonctionnement du Service et de la sécurité d
 
 ### 8.3 Non-réception du Code OTP
 
-En cas de non-réception du Code OTP, le Signataire peut en solliciter le renvoi. Après 3 tentatives infructueuses, il est invité à contacter Strat Eco à l'adresse contact@strateco.fr afin qu'une solution alternative de signature lui soit proposée.
+En cas de non-réception du Code OTP, le Signataire peut en solliciter le renvoi. Après 3 tentatives infructueuses, il est invité à contacter Strat Eco à l'adresse admin@strateco.fr afin qu'une solution alternative de signature lui soit proposée.
 
 ## ARTICLE 9 - DROIT DE RÉTRACTATION
 
@@ -418,11 +420,11 @@ Strat Eco n'est ni prêteur, ni intermédiaire en opérations de banque et servi
 
 ### 9.3 Information de l'Utilisateur
 
-Strat Eco informe l'Utilisateur qu'il lui appartient de prendre connaissance des délais de rétractation figurant dans l'offre de prêt et de les respecter. Sur simple demande adressée à contact@strateco.fr, Strat Eco pourra l'orienter vers l'interlocuteur compétent au sein de l'établissement prêteur.
+Strat Eco informe l'Utilisateur qu'il lui appartient de prendre connaissance des délais de rétractation figurant dans l'offre de prêt et de les respecter. Sur simple demande adressée à admin@strateco.fr, Strat Eco pourra l'orienter vers l'interlocuteur compétent au sein de l'établissement prêteur.
 
 ### 9.4 Renonciation à l'adhésion
 
-Indépendamment du droit de rétractation attaché au prêt, l'Utilisateur peut à tout moment, tant qu'aucune offre de prêt n'a été acceptée, informer Strat Eco de sa décision de ne pas donner suite à son adhésion, par simple message adressé à contact@strateco.fr. Les Pièces justificatives déposées sont alors supprimées dans les conditions prévues à l'article 7.4.
+Indépendamment du droit de rétractation attaché au prêt, l'Utilisateur peut à tout moment, tant qu'aucune offre de prêt n'a été acceptée, informer Strat Eco de sa décision de ne pas donner suite à son adhésion, par simple message adressé à admin@strateco.fr. Les Pièces justificatives déposées sont alors supprimées dans les conditions prévues à l'article 7.4.
 
 ## ARTICLE 10 - PROPRIÉTÉ INTELLECTUELLE
 
@@ -436,7 +438,7 @@ Strat Eco se réserve le droit de modifier les présentes CGU. La version applic
 
 ### 12.1 Réclamations
 
-Toute réclamation relative à l'utilisation du Service peut être adressée à contact@strateco.fr ou par courrier à Strat Eco, 27 rue du Vieux Marché aux Vins, 67000 Strasbourg.
+Toute réclamation relative à l'utilisation du Service peut être adressée à admin@strateco.fr ou par courrier à Strat Eco, 27 rue du Vieux Marché aux Vins, 67000 Strasbourg.
 
 Strat Eco s'engage à accuser réception de toute réclamation dans un délai de **quinze (15) jours ouvrés** et à y apporter une réponse motivée dans un délai raisonnable.
 
@@ -458,5 +460,5 @@ Les présentes CGU sont soumises au droit français.
 
 En cas de litige, et à défaut de résolution amiable, compétence est attribuée aux tribunaux français compétents. Lorsque le Signataire agit en qualité de consommateur, il conserve le droit de saisir la juridiction du lieu de son domicile conformément aux dispositions du Code de procédure civile.
 
-**Version 1.6**
+**Version 1.7**
 `;

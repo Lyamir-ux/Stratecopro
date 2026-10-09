@@ -722,7 +722,7 @@ export function Adhesion({
               <div className="cc-next" style={{ marginTop: 12 }}>
                 <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
                 <span>
-                  Des liens de signature ont expiré (30 jours). Contactez Strat Eco (contact@strateco.fr)
+                  Des liens de signature ont expiré (30 jours). Contactez Strat Eco (admin@strateco.fr)
                   pour relancer la procédure.
                 </span>
               </div>
@@ -1167,8 +1167,6 @@ export function Adhesion({
                     Un code à 6 chiffres vient de vous être envoyé par e-mail
                     {sPrincipal?.email ? <> à <b>{sPrincipal.email}</b></> : null}.
                   </>
-                ) : otp.canal === "sms" ? (
-                  "Un code à 6 chiffres vient d'être envoyé par SMS."
                 ) : (
                   "Mode test : aucun envoi réel configuré."
                 )}
@@ -1462,7 +1460,7 @@ export function Adhesion({
             <input type="tel" value={form.telDomicile} onChange={(e) => setForm({ ...form, telDomicile: e.target.value })} />
             {telephoneRepris === "domicile" && (
               <span className="hint">
-                Numéro fixe repris de votre réponse au questionnaire : indiquez aussi un téléphone portable (il reçoit votre code de signature).
+                Numéro fixe repris de votre réponse au questionnaire : indiquez aussi un téléphone portable.
               </span>
             )}
           </Fld>
@@ -1505,8 +1503,8 @@ export function Adhesion({
             <input value={nomPrincipal} onChange={(e) => setNomPrincipal(e.target.value)} />
           </Fld>
           <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>
-            Votre code de signature vous sera transmis personnellement (e-mail et téléphone portable
-            renseignés ci-dessus).
+            Votre code de signature vous sera transmis personnellement par e-mail, à l'adresse
+            renseignée ci-dessus (jamais par SMS).
           </p>
 
           <div className="se-eyebrow" style={{ gridColumn: "1 / -1", marginTop: 6 }}>

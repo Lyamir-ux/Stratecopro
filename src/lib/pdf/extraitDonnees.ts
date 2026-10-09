@@ -2,13 +2,12 @@
 // (audit réglementaire, devis, DPGF) - 02/10/2026. Propositions seulement :
 // le déposant vérifie et complète chaque champ avant d'enregistrer.
 // PDF scanné sans texte : rien n'est proposé.
+import { chargerPdfjs } from "./pdfjs";
 
 /** Texte des premières pages d'un PDF (pdfjs chargé à la demande). */
 export async function extraireTextePdf(file: Blob, maxPages = 40): Promise<string> {
   try {
-    const pdfjs = await import("pdfjs-dist");
-    const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
-    pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+    const pdfjs = await chargerPdfjs();
     const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
     let text = "";
     for (let p = 1; p <= Math.min(pdf.numPages, maxPages); p++) {

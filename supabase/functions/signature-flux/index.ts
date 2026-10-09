@@ -1,6 +1,6 @@
 // Edge function « signature-flux » - cœur du module de signature électronique
 // avancée (eIDAS art. 26) des bulletins d'adhésion à l'éco-PTZ.
-// Voir SPEC_signature_bulletins_adhesion.md et CGU v1.6.
+// Voir SPEC_signature_bulletins_adhesion.md et CGU v1.6 (v1.7 depuis le 09/10/2026).
 //
 // Mandat de prélèvement SEPA (0148, demande d'Amir du 08/10/2026) : généré
 // depuis le RIB du bulletin, lu puis signé par le seul signataire principal
@@ -22,8 +22,10 @@
 //  RESEND_API_KEY / RESEND_FROM / APP_URL      e-mails (absent = simulation)
 //  SIGNATURE_CHIFFREMENT_CLE                   base64, 32 octets - AES-256-GCM des IBAN
 //  SIGNATURE_SEAL_PRIVATE_KEY                  PEM PKCS8 Ed25519 - sceau du hash final
-//  SMS : prestataire à définir (spec §12, opérateur européen à privilégier).
-//  Tant qu'aucun prestataire SMS n'est configuré, le code OTP part par e-mail.
+//
+// Code OTP : toujours par e-mail, jamais par SMS (décision d'Amir du 09/10/2026),
+// même quand le signataire a renseigné un téléphone portable ou signe depuis
+// son téléphone. Le téléphone reste une coordonnée du bulletin, rien de plus.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { PDFDocument, type PDFFont, type PDFPage, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
 
@@ -149,6 +151,13 @@ function telMasque(tel: string): string {
   return tel.slice(0, 4) + "••••••" + tel.slice(-2);
 }
 
+/** jean.dupont@gmail.com -> je••••••@gmail.com (page publique du cosignataire). */
+function emailMasque(email: string): string {
+  const at = email.lastIndexOf("@");
+  if (at < 1) return "••••";
+  return email.slice(0, Math.min(2, at)) + "••••••" + email.slice(at);
+}
+
 /** Vérifie le type réel du fichier par ses octets, pas par l'extension. */
 function typeMimeReel(bytes: Uint8Array): "image/jpeg" | "image/png" | "application/pdf" | null {
   if (bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
@@ -201,15 +210,14 @@ function boutonEmail(url: string, libelle: string): string {
   </p>`;
 }
 
-/** Envoie le code OTP. SMS dès qu'un prestataire sera configuré (spec §12) ;
- *  en attendant, e-mail - le canal réellement utilisé est journalisé et
- *  affiché au signataire. Sans RESEND_API_KEY : simulation, code renvoyé au
- *  client pour permettre les tests (jamais le cas avec un envoi réel).
+/** Envoie le code OTP, toujours par e-mail (jamais par SMS, 09/10/2026) ; le
+ *  canal est journalisé et affiché au signataire. Sans RESEND_API_KEY :
+ *  simulation, code renvoyé au client pour permettre les tests (jamais le cas
+ *  avec un envoi réel).
  *  `echec` : Resend a refusé l'envoi ou n'a pas répondu, rien n'est parti. */
 async function envoyerOtp(
   email: string, prenom: string, coproNom: string, code: string, avecMandat = false,
-): Promise<{ canal: "sms" | "email" | "simulation"; codeTest?: string; echec?: true }> {
-  // TODO prestataire SMS (opérateur européen) : brancher ici, canal 'sms'.
+): Promise<{ canal: "email" | "simulation"; codeTest?: string; echec?: true }> {
   const statut = await envoyerEmail(
     email,
     `Votre code de signature - ${coproNom}`,
@@ -220,7 +228,7 @@ async function envoyerOtp(
       } :</p>
       <p style="font-size:30px;font-weight:bold;letter-spacing:6px;margin:18px 0">${code}</p>
       <p>Ce code est valable ${OTP_VALIDITE_MIN} minutes. Si vous n'êtes pas à l'origine de cette
-      demande, ignorez ce message et signalez-le à contact@strateco.fr.</p>`),
+      demande, ignorez ce message et signalez-le à admin@strateco.fr.</p>`),
   );
   if (statut === "simule") return { canal: "simulation", codeTest: code };
   if (statut === "erreur") return { canal: "email", echec: true };
@@ -315,6 +323,7 @@ function etatPublic(s: Signataire, b: Bulletin, coproName: string) {
     signataire: {
       civilite: s.civilite, nom: s.nom, prenom: s.prenom,
       telephone_masque: telMasque(s.telephone),
+      email_masque: emailMasque(s.email),
       statut: s.statut,
       cgu_acceptees: !!s.cgu_acceptees_le,
       piece_deposee: !!s.piece_deposee_le,
@@ -365,7 +374,7 @@ async function envoyerLienSignataire(
       <ul>
         <li>d'accepter les conditions générales d'utilisation du service ;</li>
         <li>de déposer votre pièce d'identité (ayez-la à portée de main, une photo suffit) ;</li>
-        <li>de lire le bulletin puis de le signer avec un code reçu sur votre téléphone.</li>
+        <li>de lire le bulletin puis de le signer avec un code reçu par e-mail, à cette même adresse.</li>
       </ul>
       ${boutonEmail(url, "Accéder à la signature")}
       <p style="color:#555">Ce lien est personnel : ne le transmettez à personne.
@@ -568,8 +577,8 @@ async function genererCertificat(
   ligne("Procédé", { taille: 12, police: gras });
   for (const l of decoupe(
     "Signature électronique avancée au sens de l'article 26 du règlement (UE) n° 910/2014 (eIDAS) : " +
-    "identification par pièce d'identité officielle, vérification du contrôle exclusif du téléphone mobile " +
-    "par code à usage unique, scellement cryptographique SHA-256 du document, journal d'événements chaîné. " +
+    "identification par pièce d'identité officielle, vérification du contrôle exclusif de l'adresse électronique " +
+    "par code à usage unique transmis par e-mail, scellement cryptographique SHA-256 du document, journal d'événements chaîné. " +
     "Convention de preuve : article 5.2 des CGU du service (version " + b.cgu_version + ").", 105,
   )) ligne(l);
   if (chaineHash) ligne(`Empreinte de la chaîne d'audit à la date de génération : ${chaineHash.slice(0, 40)}...`);
@@ -859,7 +868,7 @@ async function demanderOtpPour(
     .eq("signataire_id", s.id).is("valide_le", null).neq("id", nouveau.id);
   await journal(admin, req, b.id, "signataire.otp_demande", {
     signataireId: s.id,
-    payload: { canal: envoi.canal, telephone: telMasque(s.telephone) },
+    payload: { canal: envoi.canal, email: emailMasque(s.email) },
   });
   return json(200, {
     ok: true, canal: envoi.canal, validite_min: OTP_VALIDITE_MIN,

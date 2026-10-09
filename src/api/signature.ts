@@ -25,8 +25,8 @@ export const ERREURS_SIGNATURE: Record<string, string> = {
   fichier_trop_gros: "Fichier trop volumineux (10 Mo maximum).",
   fichier_invalide: "Fichier illisible ou trop volumineux (10 Mo maximum).",
   fichier_absent: "Le fichier n'a pas été reçu - réessayez le dépôt.",
-  trop_de_renvois: "Trop de codes demandés : patientez une heure ou contactez contact@strateco.fr.",
-  trop_de_tentatives: "3 codes erronés : demandez un nouveau code ou contactez contact@strateco.fr.",
+  trop_de_renvois: "Trop de codes demandés : patientez une heure ou contactez admin@strateco.fr.",
+  trop_de_tentatives: "3 codes erronés : demandez un nouveau code ou contactez admin@strateco.fr.",
   code_faux: "Code incorrect - vérifiez et réessayez.",
   code_expire: "Ce code a expiré : demandez-en un nouveau.",
   code_invalide: "Saisissez les 6 chiffres du code reçu.",
@@ -44,11 +44,11 @@ export const ERREURS_SIGNATURE: Record<string, string> = {
   email_president_invalide: "Renseignez un courriel valide pour le président du conseil syndical.",
   email_compte_absent: "Votre compte n'a pas d'adresse e-mail : impossible d'envoyer le code.",
   interdit: "Action non autorisée sur ce dossier.",
-  envoi_echec: "L'e-mail n'a pas pu être envoyé. Réessayez dans quelques minutes ou contactez contact@strateco.fr.",
+  envoi_echec: "L'e-mail n'a pas pu être envoyé. Réessayez dans quelques minutes ou contactez admin@strateco.fr.",
 };
 
 export function messageErreurSignature(code: string | undefined): string {
-  return (code && ERREURS_SIGNATURE[code]) ?? "Une erreur est survenue. Réessayez ou contactez contact@strateco.fr.";
+  return (code && ERREURS_SIGNATURE[code]) ?? "Une erreur est survenue. Réessayez ou contactez admin@strateco.fr.";
 }
 
 type Reponse = Record<string, unknown> & { error?: string };

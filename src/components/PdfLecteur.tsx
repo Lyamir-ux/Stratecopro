@@ -9,7 +9,12 @@
 // vidait le conteneur avec innerHTML = "" alors que React y avait mis le message :
 // au passage à « prêt », React retirait un nœud déjà disparu et plantait
 // (« Failed to execute 'removeChild' on 'Node' »), emportant toute l'application.
+//
+// pdf.js est chargé dans sa version legacy (chargerPdfjs) : la version standard
+// plantait au dessin de la page sur un téléphone au navigateur pas à jour
+// (09/10/2026, H CHELGHAM, « Le document n'a pas pu être affiché »).
 import { useEffect, useRef, useState } from "react";
+import { chargerPdfjs } from "@/lib/pdf/pdfjs";
 
 export function PdfLecteur({
   url,
@@ -32,9 +37,7 @@ export function PdfLecteur({
     let vivant = true;
     (async () => {
       try {
-        const pdfjs = await import("pdfjs-dist");
-        const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
-        pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+        const pdfjs = await chargerPdfjs();
         const pdf = await pdfjs.getDocument({ url }).promise;
         if (!vivant || !conteneur.current || !pages.current) return;
         pages.current.replaceChildren();
@@ -59,7 +62,8 @@ export function PdfLecteur({
           await page.render({ canvas, canvasContext: ctx, viewport }).promise;
         }
         if (vivant) setEtat("pret");
-      } catch {
+      } catch (e) {
+        console.error("PdfLecteur :", e);
         if (vivant) setEtat("erreur");
       }
     })();
@@ -109,7 +113,7 @@ export function PdfLecteur({
         )}
         {etat === "erreur" && (
           <p className="se-small" style={{ color: "var(--color-error-700)", padding: 8 }}>
-            Le document n'a pas pu être affiché. Rechargez la page ou contactez contact@strateco.fr.
+            Le document n'a pas pu être affiché. Rechargez la page ou contactez admin@strateco.fr.
           </p>
         )}
       </div>

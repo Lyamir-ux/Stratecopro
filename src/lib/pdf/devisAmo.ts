@@ -6,7 +6,7 @@
 // questions du skill sont remplies depuis le dossier :
 //   1-4  nom, adresse, syndic (sinon l'enseigne rattachée), nombre de lots ;
 //   5-6  chargé d'affaire = chef de projet du dossier, e-mail de son compte
-//        AMO (devis_amo_chef_projet, 0114), sinon contact@strateco.fr ;
+//        AMO (devis_amo_chef_projet, 0114), sinon admin@strateco.fr ;
 //   7    téléphone du bureau pour tous ;
 //   8-9  P1 = P1a + P1b + P1c, P2 = montant revalorisé ;
 //   10   n° = initiales du chef de projet + AAAA-MM de la revalorisation +
@@ -20,7 +20,7 @@ import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb, type RGB } from "pdf
 import { libelleJalon, type JalonHonoraires } from "@/lib/facturation";
 
 export const TEL_BUREAU = "03.65.67.13.54";
-export const EMAIL_CONTACT = "contact@strateco.fr";
+export const EMAIL_CONTACT = "admin@strateco.fr";
 export const TAUX_TVA = 0.2;
 
 export interface DevisAmoPdfInput {
@@ -357,7 +357,7 @@ class Flux {
     this.y = HAUT;
     // en-tête du modèle : coordonnées de Strat Eco, filet noir
     const g = texte("SAS STRAT ECO  ·  27 rue du Vieux Marché aux Vins, 67000 Strasbourg");
-    const d = texte("contact@strateco.fr  ·  www.strateco.fr");
+    const d = texte("admin@strateco.fr  ·  www.strateco.fr");
     const yT = A4.h - 34;
     this.page.drawText(g, { x: MARGE, y: yT, size: 7, font: this.p.r, color: GRIS_555 });
     this.page.drawText(d, { x: A4.w - MARGE - this.p.r.widthOfTextAtSize(d, 7), y: yT, size: 7, font: this.p.r, color: GRIS_555 });
@@ -523,7 +523,7 @@ export async function genererDevisAmoPdf(input: DevisAmoPdfInput): Promise<Uint8
         { t: "SAS STRAT ECO", f: p.b },
         { t: "27 rue du Vieux Marché aux Vins" },
         { t: "67000 Strasbourg" },
-        { t: "contact@strateco.fr  ·  www.strateco.fr" },
+        { t: "admin@strateco.fr  ·  www.strateco.fr" },
         { t: "FR77887527356" },
       ],
     },

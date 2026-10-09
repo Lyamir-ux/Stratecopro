@@ -21,7 +21,8 @@ interface EtatLien {
     civilite: string | null;
     nom: string;
     prenom: string;
-    telephone_masque: string;
+    /** adresse qui reçoit le code (le code part toujours par e-mail, jamais par SMS) */
+    email_masque?: string;
     statut: string;
     cgu_acceptees: boolean;
     piece_deposee: boolean;
@@ -161,7 +162,7 @@ export default function SignaturePublique() {
             </button>
           )}
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 14 }}>
-            Besoin d'aide ? contact@strateco.fr - 03 65 67 13 54
+            Besoin d'aide ? admin@strateco.fr - 03 65 67 13 54
           </p>
         </div>
       </Cadre>
@@ -344,19 +345,28 @@ export default function SignaturePublique() {
             </button>
             <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10 }}>
               En demandant ce code, vous exprimez votre consentement à signer. Le code vous est transmis
-              personnellement (téléphone {s.telephone_masque} déclaré au dossier).
+              personnellement par e-mail, à l'adresse qui a reçu ce lien
+              {s.email_masque ? <> ({s.email_masque})</> : null}.
             </p>
           </>
         ) : (
           <div style={{ marginTop: 16 }}>
             <p className="se-body" style={{ margin: "0 0 10px" }}>
-              {otp.canal === "email"
-                ? "Un code à 6 chiffres vient de vous être envoyé par e-mail."
-                : otp.canal === "sms"
-                  ? `Un code à 6 chiffres vient d'être envoyé par SMS au ${s.telephone_masque}.`
-                  : "Mode test : aucun envoi réel configuré."}
+              {otp.canal === "email" ? (
+                <>
+                  Un code à 6 chiffres vient de vous être envoyé par e-mail
+                  {s.email_masque ? <> à <b>{s.email_masque}</b></> : null}.
+                </>
+              ) : (
+                "Mode test : aucun envoi réel configuré."
+              )}
               {" "}Il est valable 10 minutes.
             </p>
+            {otp.canal === "email" && (
+              <p className="se-small" style={{ color: "var(--fg-muted)", margin: "0 0 10px" }}>
+                Rien reçu ? Regardez dans vos courriers indésirables, puis « Renvoyer un code » si besoin.
+              </p>
+            )}
             {otp.codeTest && (
               <p className="se-small" style={{ color: "var(--color-warning-500)" }}>
                 Code de test (environnement sans envoi réel) : <b>{otp.codeTest}</b>

@@ -2,6 +2,7 @@
 // PDF texte : extraction pdfjs (import dynamique - chargé à la demande).
 // Image ou PDF scanné sans texte : « non_verifie » (contrôle manuel AMO).
 import { isValidIban, normalizeIban } from "./adhesion";
+import { chargerPdfjs } from "./pdfjs";
 
 export type RibConcordance = "concordant" | "discordant" | "non_verifie";
 
@@ -28,9 +29,7 @@ export function extractIbans(text: string): string[] {
 export async function checkRibConcordance(file: Blob, mime: string | null, ibanSaisi: string): Promise<RibConcordance> {
   if (!mime?.includes("pdf")) return "non_verifie";
   try {
-    const pdfjs = await import("pdfjs-dist");
-    const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
-    pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+    const pdfjs = await chargerPdfjs();
     const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
     let text = "";
     for (let p = 1; p <= Math.min(pdf.numPages, 3); p++) {
