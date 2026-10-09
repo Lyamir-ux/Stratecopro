@@ -4,9 +4,12 @@
 // syndic, ni les entreprises ne le lisent (RLS 0088). Les annonces que l'AMO
 // adresse à tous les copropriétaires depuis l'onglet Communications ont leur
 // propre encadré, au-dessus du fil privé : mêlées au fil, elles faisaient douter
-// de sa confidentialité (feedback Cyrielle KLEIN 30/09/2026).
+// de sa confidentialité (feedback Cyrielle KLEIN 30/09/2026). À l'envoi, une
+// fenêtre confirme la prise en compte : la ligne sous le message passait
+// inaperçue (feedback Pierre MAXTAFF 09/10/2026).
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
+import { Modal } from "@/components/Modal";
 import { Avatar } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
 import { useAuth } from "@/auth/AuthProvider";
@@ -38,6 +41,7 @@ export function Messages({ membership }: { membership: Membership }) {
   const [body, setBody] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
   const [envoye, setEnvoye] = useState(false);
+  const [confirmation, setConfirmation] = useState(false);
   const zone = useRef<HTMLTextAreaElement>(null);
 
   const tous = messages ?? [];
@@ -64,7 +68,7 @@ export function Messages({ membership }: { membership: Membership }) {
       });
       setBody("");
       setEnvoye(true);
-      zone.current?.focus();
+      setConfirmation(true);
     } catch (err) {
       setErreur(
         isApercu
@@ -160,22 +164,13 @@ export function Messages({ membership }: { membership: Membership }) {
           )}
 
           {envoye && !erreur && (
-            <p
-              style={{
-                margin: 0,
-                padding: "10px 12px",
-                borderRadius: "var(--radius-md)",
-                background: "var(--bg-soft)",
-                border: "1px solid var(--border)",
-                fontSize: 13,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <Icon name="check" size={14} style={{ flex: "none", color: "var(--color-primary-700)" }} />
-              Message transmis à l'équipe Strat Eco. La réponse arrivera dans ce fil.
-            </p>
+            <div className="eq-transmis" style={{ marginTop: 0 }}>
+              <Icon name="checkCircle" size={18} />
+              <span>
+                <b>Votre message a bien été envoyé.</b> Votre AMO vous répondra dans les meilleurs délais ; sa
+                réponse arrivera dans ce fil.
+              </span>
+            </div>
           )}
           {erreur && (
             <p
@@ -225,6 +220,36 @@ export function Messages({ membership }: { membership: Membership }) {
           </div>
         </div>
       </div>
+
+      {confirmation && (
+        <Modal
+          title="Message envoyé"
+          width={440}
+          onClose={() => {
+            setConfirmation(false);
+            zone.current?.focus();
+          }}
+        >
+          <div role="status" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
+            <Icon name="checkCircle" size={44} style={{ color: "var(--color-success-500)" }} />
+            <p className="se-body" style={{ margin: 0 }}>
+              <b>Votre message a bien été envoyé.</b>
+              <br />
+              Votre AMO vous répondra dans les meilleurs délais.
+            </p>
+            <button
+              className="se-btn se-btn-primary"
+              autoFocus
+              onClick={() => {
+                setConfirmation(false);
+                zone.current?.focus();
+              }}
+            >
+              Fermer
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

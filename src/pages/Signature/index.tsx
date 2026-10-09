@@ -2,12 +2,13 @@
 // tokenisé, sans compte. Mobile d'abord - la plupart des cosignataires
 // photographient leur pièce d'identité depuis un téléphone.
 // Étapes imposées : CGU → pièce d'identité → lecture complète → OTP → signé.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { PdfLecteur } from "@/components/PdfLecteur";
 import { appelSignaturePublique, uploadVersBucket, messageErreurSignature } from "@/api/signature";
-import { assemblerPieceIdentite, validerFichiersPiece } from "@/lib/pdf/pieceIdentite";
+import { PieceIdentiteChamps } from "@/components/PieceIdentiteChamps";
+import { assemblerPieceIdentite, facesADeposer, verifierFacesPiece } from "@/lib/pdf/pieceIdentite";
 import { messageErreur } from "@/lib/erreurs";
 
 interface EtatLien {
@@ -28,12 +29,6 @@ interface EtatLien {
     expire_le: string | null;
   };
 }
-
-const TYPES_PIECE = [
-  { id: "cni", label: "Carte nationale d'identité" },
-  { id: "passeport", label: "Passeport" },
-  { id: "titre_sejour", label: "Titre de séjour" },
-];
 
 /** Habillage des pages publiques de signature (réutilisé par /signature-fiche/:token). */
 export function Cadre({ children }: { children: React.ReactNode }) {
@@ -89,13 +84,13 @@ export default function SignaturePublique() {
 
   const [cguCochee, setCguCochee] = useState(false);
   const [typePiece, setTypePiece] = useState("cni");
-  const [fichiers, setFichiers] = useState<File[]>([]);
+  const [recto, setRecto] = useState<File | null>(null);
+  const [verso, setVerso] = useState<File | null>(null);
   const [attestation, setAttestation] = useState(false);
   const [docUrl, setDocUrl] = useState<string | null>(null);
   const [otp, setOtp] = useState<{ canal: string; codeTest?: string } | null>(null);
   const [code, setCode] = useState("");
   const [nouveauLienEnvoye, setNouveauLienEnvoye] = useState(false);
-  const inputFichiers = useRef<HTMLInputElement>(null);
 
   const recharger = useCallback(async (premiere = false) => {
     try {
@@ -208,7 +203,7 @@ export default function SignaturePublique() {
           </p>
           <p className="se-body">Il vous faudra :</p>
           <ul className="se-body" style={{ marginTop: 0 }}>
-            <li>votre pièce d'identité (une photo suffit) ;</li>
+            <li>votre pièce d'identité (une photo du recto et une du verso) ;</li>
             <li>environ 5 minutes.</li>
           </ul>
           <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer", margin: "16px 0" }}>
@@ -242,47 +237,24 @@ export default function SignaturePublique() {
 
   // ---------- étape 2 : pièce d'identité ----------
   if (!s.piece_deposee) {
-    const erreurFichiers = fichiers.length ? validerFichiersPiece(fichiers) : null;
+    const { complet, erreur: erreurFichiers } = verifierFacesPiece(typePiece, recto, verso);
     return (
       <Cadre>
         <Etapes active={1} />
         <div className="card-xl" style={{ padding: 26 }}>
           <h2 style={{ fontSize: 19, marginTop: 0 }}>Votre pièce d'identité</h2>
           <p className="se-body">
-            Déposez <b>votre propre pièce</b>, en cours de validité : photo(s) ou PDF, recto et verso
-            lisibles. Personne d'autre ne peut la déposer à votre place.
+            Déposez <b>votre propre pièce</b>, en cours de validité : une photo (ou un PDF) du <b>recto</b> et
+            une du <b>verso</b>, bien lisibles. Personne d'autre ne peut la déposer à votre place.
           </p>
-          <div className="fld" style={{ marginBottom: 14 }}>
-            <label>Type de pièce</label>
-            <select value={typePiece} onChange={(e) => setTypePiece(e.target.value)}>
-              {TYPES_PIECE.map((t) => (
-                <option key={t.id} value={t.id}>{t.label}</option>
-              ))}
-            </select>
-          </div>
-          <input
-            ref={inputFichiers}
-            type="file"
-            accept="image/jpeg,image/png,application/pdf"
-            capture="environment"
-            multiple
-            style={{ display: "none" }}
-            onChange={(e) => setFichiers([...(e.target.files ?? [])].slice(0, 2))}
+          <PieceIdentiteChamps
+            type={typePiece}
+            onType={setTypePiece}
+            recto={recto}
+            verso={verso}
+            onRecto={setRecto}
+            onVerso={setVerso}
           />
-          <button
-            className="se-btn se-btn-secondary"
-            style={{ width: "100%", justifyContent: "center" }}
-            onClick={() => inputFichiers.current?.click()}
-          >
-            <Icon name="upload" size={16} />
-            {fichiers.length ? "Changer de fichier(s)" : "Prendre en photo ou choisir un fichier"}
-          </button>
-          {fichiers.length > 0 && (
-            <p className="se-small" style={{ margin: "8px 0 0" }}>
-              {fichiers.map((f) => f.name).join(" + ")}
-              {fichiers.length === 1 && fichiers[0].type !== "application/pdf" && " - ajoutez le verso si besoin (2 fichiers max)"}
-            </p>
-          )}
           {erreurFichiers && <p className="se-small" style={{ color: "var(--color-error-700)" }}>{erreurFichiers}</p>}
           <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer", margin: "16px 0" }}>
             <input type="checkbox" checked={attestation} onChange={(e) => setAttestation(e.target.checked)} style={{ marginTop: 3 }} />
@@ -292,10 +264,10 @@ export default function SignaturePublique() {
           <button
             className="se-btn se-btn-primary"
             style={{ width: "100%", justifyContent: "center" }}
-            disabled={!fichiers.length || !!erreurFichiers || !attestation || !!busy}
+            disabled={!complet || !attestation || !!busy}
             onClick={() =>
               void agir(async () => {
-                const piece = await assemblerPieceIdentite(fichiers);
+                const piece = await assemblerPieceIdentite(facesADeposer(typePiece, recto, verso));
                 const up = await appelSignaturePublique({ action: "lien_piece_upload", token, ext: piece.ext });
                 await uploadVersBucket("signature-pieces", up.path as string, up.token as string, piece.blob);
                 await appelSignaturePublique({

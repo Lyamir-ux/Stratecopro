@@ -29,7 +29,8 @@ import {
   type SituationMatrimoniale,
 } from "@/lib/pdf/adhesion";
 import { checkRibConcordance } from "@/lib/pdf/ribCheck";
-import { assemblerPieceIdentite, validerFichiersPiece } from "@/lib/pdf/pieceIdentite";
+import { assemblerPieceIdentite, facesADeposer, verifierFacesPiece } from "@/lib/pdf/pieceIdentite";
+import { PieceIdentiteChamps } from "@/components/PieceIdentiteChamps";
 import { CGU_VERSION } from "@/lib/cguSignature";
 import {
   lotsAnnexesNonRattaches,
@@ -65,12 +66,6 @@ const SITUATIONS: { id: SituationMatrimoniale; label: string }[] = [
   { id: "divorcee", label: "Divorcé(e)" },
   { id: "veuve", label: "Veuf / veuve" },
   { id: "celibataire", label: "Célibataire" },
-];
-
-const TYPES_PIECE = [
-  { id: "cni", label: "Carte nationale d'identité" },
-  { id: "passeport", label: "Passeport" },
-  { id: "titre_sejour", label: "Titre de séjour" },
 ];
 
 const emptyAdherent = (nom = ""): Adherent => ({
@@ -128,6 +123,58 @@ function Fld({ label, children, span }: { label: string; children: ReactNode; sp
       <label>{label}</label>
       {children}
     </div>
+  );
+}
+
+/** Case d'acceptation des CGU - porte d'entrée du parcours, et reprise d'une
+ *  préparation interrompue (le serveur refuse tout dépôt tant qu'elles ne sont
+ *  pas enregistrées). */
+function CaseCgu({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer", margin: "14px 0" }}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} style={{ marginTop: 3 }} />
+      <span>
+        J'ai lu et j'accepte les{" "}
+        <a href="/cgu-signature" target="_blank" rel="noreferrer">Conditions Générales d'Utilisation</a>{" "}
+        du service de signature électronique Strat Eco Pro (version {CGU_VERSION}), y compris la
+        convention de preuve figurant à l'article 5.2.
+      </span>
+    </label>
+  );
+}
+
+/** Attestation sur l'honneur et information sur l'avis d'imposition, cochées
+ *  avant la création des bulletins (puis, si besoin, à la reprise). */
+function CasesAttestations({
+  attestHonneur,
+  onAttestHonneur,
+  infoAvis,
+  onInfoAvis,
+}: {
+  attestHonneur: boolean;
+  onAttestHonneur: (v: boolean) => void;
+  infoAvis: boolean;
+  onInfoAvis: (v: boolean) => void;
+}) {
+  return (
+    <>
+      <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer" }}>
+        <input type="checkbox" checked={attestHonneur} onChange={(e) => onAttestHonneur(e.target.checked)} style={{ marginTop: 3 }} />
+        <span>
+          Je certifie sur l'honneur que les coordonnées communiquées correspondent aux personnes
+          déclarées et que je suis habilité(e) à les transmettre.
+        </span>
+      </label>
+      <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer" }}>
+        <input type="checkbox" checked={infoAvis} onChange={(e) => onInfoAvis(e.target.checked)} style={{ marginTop: 3 }} />
+        <span>
+          J'ai été informé(e) que mon avis d'imposition sera transmis dans son intégralité à l'Anah
+          et, le cas échéant, à l'établissement bancaire instruisant ma demande d'éco-prêt à taux
+          zéro, aux fins de vérification de mes ressources, puis supprimé des systèmes de Strat Eco
+          une fois ces transmissions effectuées.
+        </span>
+      </label>
+    </>
   );
 }
 
@@ -274,7 +321,9 @@ export function Adhesion({
   const [infoAvis, setInfoAvis] = useState(false);
 
   const [typePiece, setTypePiece] = useState("cni");
-  const [fichiersPiece, setFichiersPiece] = useState<File[]>([]);
+  // recto et verso déposés dans deux champs distincts (feedback du 09/10/2026)
+  const [recto, setRecto] = useState<File | null>(null);
+  const [verso, setVerso] = useState<File | null>(null);
   const [attestPiece, setAttestPiece] = useState(false);
 
   const [ribFichier, setRibFichier] = useState<File | null>(null);
@@ -335,6 +384,114 @@ export function Adhesion({
       const r = await appelSignature({ action: "principal_document_url", bulletin_id: bulletinId, quoi });
       if (typeof r.url === "string") window.open(r.url, "_blank");
     }, "dl");
+
+  const brouillonAdhesion = () =>
+    save.mutateAsync({
+      scenarioId: scenario.id,
+      form: form as unknown as Json,
+      lieuSignature: form.lieuSignature,
+    });
+
+  // La préparation crée d'abord le bulletin en base, puis dépose son PDF et
+  // enregistre les CGU et l'attestation du principal. Si la page est rechargée
+  // ou la connexion coupée entre les deux, il reste un brouillon sans PDF ni
+  // CGU : le serveur refusait alors tout dépôt (« acceptez d'abord les CGU »)
+  // sans que l'écran propose de les accepter (feedback du 09/10/2026).
+  const incomplet = (b: BulletinAvecSignataires) => {
+    const p = principalDe(b);
+    return !b.document_path || !p?.cgu_acceptees_le || !p?.attestation_honneur_le;
+  };
+
+  const abandonner = () => {
+    if (!window.confirm("Abandonner ce dossier ? Les bulletins en préparation sont supprimés et vous repartez du formulaire.")) return;
+    void agir(async () => {
+      await supprimerBrouillons(membership.coproprietaireId);
+      setLecture(null);
+      setOtp(null);
+      await refetchBulletins();
+    }, "reset");
+  };
+
+  /** PDF du bulletin (non signé : les blocs de signature sont apposés au
+   *  scellement), déposé côté serveur qui calcule l'empreinte de référence, puis
+   *  CGU et attestation du principal enregistrées. */
+  const finaliserBulletin = async (bulletinId: string, lotNum: string, tantiemes: number | null, date: Date) => {
+    const bytes = await genBulletin(
+      form,
+      {
+        adresseImmeuble: copro.adresse ?? copro.name,
+        nomSyndic: copro.syndic_name ?? "",
+        // L'interlocuteur du bulletin est le gestionnaire de la copropriété chez
+        // le syndic (pas l'AMO) - feedback du 03/09/2026
+        interlocuteur: copro.gestionnaire_nom?.trim() || copro.syndic_name || "",
+        lotNum,
+        tantiemes: String(tantiemes ?? ""),
+      },
+      date
+    );
+    const up = await appelSignature({ action: "principal_document_upload", bulletin_id: bulletinId });
+    await uploadVersBucket("signature-docs", up.path as string, up.token as string,
+      new Blob([bytes as BlobPart], { type: "application/pdf" }));
+    await appelSignature({ action: "principal_document_confirmer", bulletin_id: bulletinId });
+    await appelSignature({ action: "principal_cgu", bulletin_id: bulletinId });
+    await appelSignature({ action: "principal_attestation_honneur", bulletin_id: bulletinId, info_avis: infoAvis });
+  };
+
+  /** Termine une préparation interrompue : bulletins restés incomplets, et lots
+   *  d'habitation restés sans bulletin si l'arrêt a eu lieu entre deux lots. Les
+   *  signataires (principal et cosignataires) sont repris du bulletin existant. */
+  const reprendrePreparation = () =>
+    agir(async () => {
+      const date = new Date();
+      const modele = actifs[0];
+      const sPrincipal = principalDe(modele);
+      try {
+        const aFinir = brouillons.filter(incomplet).map((b) => {
+          const lot = membership.lots.find((l) => l.id === b.lot_id);
+          return {
+            id: b.id,
+            lotNum: lot?.num ?? b.lot_reference.match(/n°\s*(\S+)/)?.[1] ?? "",
+            tantiemes: b.tantiemes ?? (lot ? tantiemesAvecRattaches(membership.lots, lot, cle) : null),
+          };
+        });
+        for (const lot of lotsHab.filter((l) => !actifs.some((b) => b.lot_id === l.id))) {
+          const tantiemes = tantiemesAvecRattaches(membership.lots, lot, cle);
+          const id = await creerBulletin({
+            coproId: copro.id,
+            coproprietaireId: membership.coproprietaireId,
+            adhesionId: modele.adhesion_id,
+            lotId: lot.id,
+            lotReference: `Lot n°${lot.num}${lot.batiment ? ` - ${libellesBatiments(copro.denomination_batiments).court} ${lot.batiment}` : ""}`,
+            tantiemes,
+            cguVersion: CGU_VERSION,
+            principal: {
+              nom: sPrincipal?.nom ?? "",
+              prenom: sPrincipal?.prenom ?? "",
+              email: sPrincipal?.email ?? "",
+              telephone: sPrincipal?.telephone ?? "",
+            },
+            cosignataires: modele.signataires
+              .filter((s) => s.role === "cosignataire")
+              .map((s) => ({
+                civilite: s.civilite ?? "",
+                nom: s.nom,
+                prenom: s.prenom,
+                email: s.email,
+                telephone: s.telephone,
+                adresse_ligne1: s.adresse_ligne1 ?? "",
+                code_postal: s.code_postal ?? "",
+                ville: s.ville ?? "",
+                date_naissance: s.date_naissance ?? "",
+                lieu_naissance: s.lieu_naissance ?? "",
+              })),
+          });
+          aFinir.push({ id, lotNum: lot.num, tantiemes });
+        }
+        for (const x of aFinir) await finaliserBulletin(x.id, x.lotNum, x.tantiemes, date);
+      } finally {
+        await refetchBulletins().catch(() => null);
+      }
+    }, "reprise");
 
   if (isLoading || chargeBulletins) {
     return suiviSeul ? null : <p className="se-small" style={{ color: "var(--fg-muted)" }}>Chargement du dossier…</p>;
@@ -490,7 +647,81 @@ export function Adhesion({
   // ============================================================
   // PRÉPARATION EN COURS : bulletins en brouillon
   // ============================================================
-  if (brouillons.length > 0) {
+  // Pendant la préparation (bulletins créés, PDF pas encore déposé), on reste
+  // sur le formulaire : un rafraîchissement des données ne doit pas faire
+  // apparaître un écran intermédiaire.
+  if (brouillons.length > 0 && busy !== "preparer") {
+    // ---------- préparation interrompue : on la reprend avant toute autre étape ----------
+    if (brouillons.some(incomplet)) {
+      // le formulaire enregistré, lu tel quel (l'état local n'est resynchronisé
+      // qu'après le premier rendu)
+      const saisie = (adhesion?.form as Partial<AdhesionForm> | null) ?? form;
+      const nbSignataires = brouillons[0].signataires.length;
+      const adherent2Sans = !!saisie.adherent2 && nbSignataires < 2;
+      const saisieRetrouvee = !!saisie.adherent1?.nomPrenom?.trim() && !!saisie.adherent1?.dateLieuNaissance?.trim();
+      const peutReprendre = saisieRetrouvee && !adherent2Sans;
+      return (
+        <div className="card-xl fade" style={{ marginTop: 22 }}>
+          <div className="cx-head">
+            <Icon name="alert" size={20} style={{ color: "var(--color-warning-500)" }} />
+            <h2 style={{ fontSize: 19 }}>Reprenez la préparation de votre dossier</h2>
+          </div>
+          <div className="cx-body">
+            <p className="se-body" style={{ marginTop: 0 }}>
+              La préparation de votre bulletin d'adhésion s'est interrompue avant la fin (page rechargée ou
+              connexion coupée). {peutReprendre
+                ? "Vos informations sont conservées : confirmez les cases ci-dessous pour la reprendre là où elle s'est arrêtée."
+                : "Vous pouvez la recommencer depuis le formulaire."}
+            </p>
+            {adherent2Sans && (
+              <div className="cc-next" style={{ marginBottom: 12 }}>
+                <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
+                <span>
+                  Vous avez déclaré un adhérent 2 (co-emprunteur) sans cosignataire : il doit lui aussi signer le
+                  bulletin et déposer sa pièce d'identité. Recommencez la préparation pour l'ajouter comme
+                  cosignataire.
+                </span>
+              </div>
+            )}
+            {!saisieRetrouvee && (
+              <div className="cc-next" style={{ marginBottom: 12 }}>
+                <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
+                <span>Les informations du formulaire n'ont pas été retrouvées : recommencez la préparation.</span>
+              </div>
+            )}
+            {peutReprendre && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <CaseCgu checked={cguCochee} onChange={setCguCochee} />
+                <CasesAttestations
+                  attestHonneur={attestHonneur}
+                  onAttestHonneur={setAttestHonneur}
+                  infoAvis={infoAvis}
+                  onInfoAvis={setInfoAvis}
+                />
+              </div>
+            )}
+            {error && <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 12 }}>{error}</p>}
+            <div style={{ display: "flex", gap: 10, marginTop: 18, flexWrap: "wrap" }}>
+              {peutReprendre && (
+                <button
+                  className="se-btn se-btn-primary"
+                  disabled={!cguCochee || !attestHonneur || !infoAvis || !!busy}
+                  onClick={() => void reprendrePreparation()}
+                >
+                  {busy === "reprise" ? "Reprise en cours…" : "Reprendre la préparation"}
+                  <Icon name="arrowRight" size={16} />
+                </button>
+              )}
+              <button className="se-btn se-btn-ghost btn-sm" disabled={!!busy} onClick={abandonner}>
+                <Icon name="trash" size={14} />
+                Abandonner et reprendre la préparation à zéro
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     const pieceOk = brouillons.every((b) => !!principalDe(b)?.piece_deposee_le);
     const ribOk = brouillons.every((b) => !!b.rib_path);
     // Mandat SEPA généré depuis l'IBAN saisi, qui n'est conservé que chiffré :
@@ -499,64 +730,90 @@ export function Adhesion({
 
     // ---------- étape pièce d'identité ----------
     if (!pieceOk) {
-      const erreurFichiers = fichiersPiece.length ? validerFichiersPiece(fichiersPiece) : null;
+      const { complet, erreur: erreurFichiers } = verifierFacesPiece(typePiece, recto, verso);
+      // Les personnes déclarées sur le dossier : le principal (vous) et chaque
+      // cosignataire. Chacune dépose sa propre pièce, recto et verso : le
+      // principal la sienne ici, les autres depuis leur lien personnel.
+      const personnes = [...brouillons[0].signataires].sort((x, y) => x.ordre - y.ordre);
       return (
         <div className="card-xl fade" style={{ marginTop: 22 }}>
           <div className="cx-head">
             <Icon name="user" size={20} style={{ color: "var(--accent)" }} />
-            <h2 style={{ fontSize: 19 }}>Votre pièce d'identité</h2>
+            <h2 style={{ fontSize: 19 }}>Pièces d'identité</h2>
+            <span style={{ flex: 1 }}></span>
+            <Badge kind="neutral">{personnes.length} {personnes.length > 1 ? "personnes déclarées" : "personne déclarée"}</Badge>
           </div>
           <div className="cx-body">
             <p className="se-body" style={{ marginTop: 0 }}>
-              Déposez <b>votre propre pièce d'identité</b> en cours de validité (photo recto/verso ou PDF).
-              Chaque cosignataire déposera la sienne depuis son propre lien - vous ne pouvez pas le faire
-              à sa place.
+              {personnes.length > 1
+                ? `Ce dossier compte ${personnes.length} signataires : chacun dépose sa propre pièce d'identité en cours de validité, en deux fichiers (recto et verso). Vous déposez la vôtre ci-dessous ; les autres la déposeront depuis le lien personnel qu'ils recevront par e-mail dès que vous aurez signé - vous ne pouvez pas le faire à leur place.`
+                : "Déposez votre propre pièce d'identité en cours de validité, en deux fichiers : le recto et le verso (pour un passeport, la page d'identité suffit)."}
             </p>
-            <div className="form-grid">
-              <Fld label="Type de pièce">
-                <select value={typePiece} onChange={(e) => setTypePiece(e.target.value)}>
-                  {TYPES_PIECE.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-                </select>
-              </Fld>
-              <Fld label="Fichier(s) - JPG, PNG ou PDF, 10 Mo max">
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,application/pdf"
-                  multiple
-                  onChange={(e) => setFichiersPiece([...(e.target.files ?? [])].slice(0, 2))}
-                />
-              </Fld>
-            </div>
+            {personnes.length > 1 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, margin: "0 0 16px" }}>
+                {personnes.map((s) => (
+                  <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13.5 }}>
+                    <Icon
+                      name={s.piece_deposee_le ? "checkCircle" : "clock"}
+                      size={15}
+                      style={{ color: s.piece_deposee_le ? "var(--color-success-500)" : "var(--fg-muted)", flex: "none" }}
+                    />
+                    <span>{s.prenom} {s.nom}{s.role === "principal" ? " (vous)" : ""}</span>
+                    <span className="se-small" style={{ color: "var(--fg-muted)" }}>
+                      {s.piece_deposee_le
+                        ? "pièce déposée"
+                        : s.role === "principal"
+                          ? "recto + verso à déposer ci-dessous"
+                          : "recto + verso à déposer depuis son lien"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <PieceIdentiteChamps
+              type={typePiece}
+              onType={setTypePiece}
+              recto={recto}
+              verso={verso}
+              onRecto={setRecto}
+              onVerso={setVerso}
+            />
             {erreurFichiers && <p className="se-small" style={{ color: "var(--color-error-700)" }}>{erreurFichiers}</p>}
             <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer", margin: "14px 0" }}>
               <input type="checkbox" checked={attestPiece} onChange={(e) => setAttestPiece(e.target.checked)} style={{ marginTop: 3 }} />
               <span>Je certifie que la pièce d'identité que je téléverse est <b>la mienne</b> et qu'elle est en cours de validité.</span>
             </label>
             {error && <p className="se-small" style={{ color: "var(--color-error-700)" }}>{error}</p>}
-            <button
-              className="se-btn se-btn-primary"
-              disabled={!fichiersPiece.length || !!erreurFichiers || !attestPiece || !!busy}
-              onClick={() =>
-                void agir(async () => {
-                  const piece = await assemblerPieceIdentite(fichiersPiece);
-                  for (const b of brouillons) {
-                    const up = await appelSignature({ action: "principal_piece_upload", bulletin_id: b.id, ext: piece.ext });
-                    await uploadVersBucket("signature-pieces", up.path as string, up.token as string, piece.blob);
-                    await appelSignature({
-                      action: "principal_piece_confirmer",
-                      bulletin_id: b.id,
-                      path: up.path,
-                      type_piece: typePiece,
-                      attestation: true,
-                    });
-                  }
-                  await refetchBulletins();
-                }, "piece")
-              }
-            >
-              <Icon name="upload" size={16} />
-              {busy ? "Dépôt en cours…" : "Déposer ma pièce d'identité"}
-            </button>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <button
+                className="se-btn se-btn-primary"
+                disabled={!complet || !attestPiece || !!busy}
+                onClick={() =>
+                  void agir(async () => {
+                    const piece = await assemblerPieceIdentite(facesADeposer(typePiece, recto, verso));
+                    for (const b of brouillons) {
+                      const up = await appelSignature({ action: "principal_piece_upload", bulletin_id: b.id, ext: piece.ext });
+                      await uploadVersBucket("signature-pieces", up.path as string, up.token as string, piece.blob);
+                      await appelSignature({
+                        action: "principal_piece_confirmer",
+                        bulletin_id: b.id,
+                        path: up.path,
+                        type_piece: typePiece,
+                        attestation: true,
+                      });
+                    }
+                    await refetchBulletins();
+                  }, "piece")
+                }
+              >
+                <Icon name="upload" size={16} />
+                {busy === "piece" ? "Dépôt en cours…" : "Déposer ma pièce d'identité"}
+              </button>
+              <button className="se-btn se-btn-ghost btn-sm" disabled={!!busy} onClick={abandonner}>
+                <Icon name="trash" size={14} />
+                Abandonner et reprendre la préparation à zéro
+              </button>
+            </div>
           </div>
         </div>
       );
@@ -884,19 +1141,7 @@ export function Adhesion({
               <Icon name="refresh" size={14} />
               Erreur de RIB ? Régénérer le mandat
             </button>
-            <button
-              className="se-btn se-btn-ghost btn-sm"
-              disabled={!!busy}
-              onClick={() => {
-                if (!window.confirm("Abandonner ce dossier ? Les bulletins en préparation sont supprimés et vous repartez du formulaire.")) return;
-                void agir(async () => {
-                  await supprimerBrouillons(membership.coproprietaireId);
-                  setLecture(null);
-                  setOtp(null);
-                  await refetchBulletins();
-                }, "reset");
-              }}
-            >
+            <button className="se-btn se-btn-ghost btn-sm" disabled={!!busy} onClick={abandonner}>
               <Icon name="trash" size={14} />
               Abandonner et reprendre la préparation à zéro
             </button>
@@ -980,15 +1225,7 @@ export function Adhesion({
             L'acceptation des Conditions Générales d'Utilisation est un préalable : elles régissent le
             traitement de vos données (pièce d'identité, RIB) et la valeur juridique de la signature.
           </p>
-          <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer", margin: "14px 0" }}>
-            <input type="checkbox" onChange={(e) => setCguCochee(e.target.checked)} style={{ marginTop: 3 }} />
-            <span>
-              J'ai lu et j'accepte les{" "}
-              <a href="/cgu-signature" target="_blank" rel="noreferrer">Conditions Générales d'Utilisation</a>{" "}
-              du service de signature électronique Strat Eco Pro (version {CGU_VERSION}), y compris la
-              convention de preuve figurant à l'article 5.2.
-            </span>
-          </label>
+          <CaseCgu checked={cguCochee} onChange={setCguCochee} />
         </div>
       </div>
     );
@@ -1017,12 +1254,11 @@ export function Adhesion({
   const tels = [form.portable, ...cosignataires.map((c) => c.telephone)].map(normaliserTelephone).filter(Boolean);
   const doublons = new Set(emails).size !== emails.length || new Set(tels).size !== tels.length;
 
-  const brouillonAdhesion = () =>
-    save.mutateAsync({
-      scenarioId: scenario.id,
-      form: form as unknown as Json,
-      lieuSignature: form.lieuSignature,
-    });
+  // Titulaires du prêt et signataires vont de pair : un adhérent 2 (co-emprunteur)
+  // signe le bulletin comme le principal et dépose sa propre pièce d'identité
+  // (recto + verso), donc il est forcément cosignataire (feedback du 09/10/2026).
+  const adherent2SansSignataire = !!form.adherent2 && cosignataires.length === 0;
+
   const saveBrouillon = () => void brouillonAdhesion().catch((e) => setError(messageErreur(e, "Enregistrement impossible.")));
 
   const preparerSignature = () =>
@@ -1031,50 +1267,36 @@ export function Adhesion({
       // passe « signé » quand tous ses bulletins sont scellés
       const adhesionId = await brouillonAdhesion();
       const date = new Date();
-      const ctxBase = {
-        adresseImmeuble: copro.adresse ?? copro.name,
-        nomSyndic: copro.syndic_name ?? "",
-        // L'interlocuteur du bulletin est le gestionnaire de la copropriété chez
-        // le syndic (pas l'AMO) - feedback du 03/09/2026
-        interlocuteur: copro.gestionnaire_nom?.trim() || copro.syndic_name || "",
-      };
-      for (const lot of lotsHab) {
-        const tantiemes = tantiemesAvecRattaches(membership.lots, lot, cle);
-        const bulletinId = await creerBulletin({
-          coproId: copro.id,
-          coproprietaireId: membership.coproprietaireId,
-          adhesionId,
-          lotId: lot.id,
-          lotReference: `Lot n°${lot.num}${lot.batiment ? ` - ${libellesBatiments(copro.denomination_batiments).court} ${lot.batiment}` : ""}`,
-          tantiemes,
-          cguVersion: CGU_VERSION,
-          principal: {
-            nom: nomPrincipal.trim(),
-            prenom: prenomPrincipal.trim(),
-            email: form.email.trim(),
-            telephone: normaliserTelephone(form.portable),
-          },
-          cosignataires: cosignataires.map((c) => ({
-            ...c,
-            email: c.email.trim(),
-            telephone: normaliserTelephone(c.telephone),
-          })),
-        });
-        // PDF du bulletin (non signé - les blocs de signature sont apposés au
-        // scellement), déposé côté serveur qui calcule l'empreinte de référence
-        const bytes = await genBulletin(
-          form,
-          { ...ctxBase, lotNum: lot.num, tantiemes: String(tantiemes) },
-          date
-        );
-        const up = await appelSignature({ action: "principal_document_upload", bulletin_id: bulletinId });
-        await uploadVersBucket("signature-docs", up.path as string, up.token as string,
-          new Blob([bytes as BlobPart], { type: "application/pdf" }));
-        await appelSignature({ action: "principal_document_confirmer", bulletin_id: bulletinId });
-        await appelSignature({ action: "principal_cgu", bulletin_id: bulletinId });
-        await appelSignature({ action: "principal_attestation_honneur", bulletin_id: bulletinId, info_avis: infoAvis });
+      try {
+        for (const lot of lotsHab) {
+          const tantiemes = tantiemesAvecRattaches(membership.lots, lot, cle);
+          const bulletinId = await creerBulletin({
+            coproId: copro.id,
+            coproprietaireId: membership.coproprietaireId,
+            adhesionId,
+            lotId: lot.id,
+            lotReference: `Lot n°${lot.num}${lot.batiment ? ` - ${libellesBatiments(copro.denomination_batiments).court} ${lot.batiment}` : ""}`,
+            tantiemes,
+            cguVersion: CGU_VERSION,
+            principal: {
+              nom: nomPrincipal.trim(),
+              prenom: prenomPrincipal.trim(),
+              email: form.email.trim(),
+              telephone: normaliserTelephone(form.portable),
+            },
+            cosignataires: cosignataires.map((c) => ({
+              ...c,
+              email: c.email.trim(),
+              telephone: normaliserTelephone(c.telephone),
+            })),
+          });
+          await finaliserBulletin(bulletinId, lot.num, tantiemes, date);
+        }
+      } finally {
+        // même en cas d'échec : un bulletin déjà créé doit apparaître (écran de
+        // reprise) plutôt que d'être recréé en double au prochain essai
+        await refetchBulletins().catch(() => null);
       }
-      await refetchBulletins();
     }, "preparer");
 
   return (
@@ -1107,7 +1329,14 @@ export function Adhesion({
             </>
           ) : (
             <div style={{ gridColumn: "1 / -1" }}>
-              <button className="se-btn se-btn-ghost btn-sm" onClick={() => setForm({ ...form, adherent2: emptyAdherent() })}>
+              <button
+                className="se-btn se-btn-ghost btn-sm"
+                onClick={() => {
+                  setForm({ ...form, adherent2: emptyAdherent() });
+                  // le co-emprunteur signe aussi : sa fiche de cosignataire est ouverte d'office
+                  if (cosignataires.length === 0) setCosignataires([emptyCosignataire()]);
+                }}
+              >
                 <Icon name="plus" size={14} />Ajouter un adhérent 2 (conjoint, indivisaire…)
               </button>
             </div>
@@ -1180,6 +1409,12 @@ export function Adhesion({
             son propre lien par e-mail, déposera lui-même sa pièce d'identité et signera avec son propre
             code : vous ne pouvez pas signer à sa place.
           </p>
+          <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>
+            Signataires de ce dossier : <b>{1 + cosignataires.length}</b>{" "}
+            {cosignataires.length === 0 ? "(vous seul)" : `(vous et ${cosignataires.length} cosignataire${cosignataires.length > 1 ? "s" : ""})`}
+            . Chacun dépose sa propre pièce d'identité, <b>recto et verso</b>.
+            {form.adherent2 && " L'adhérent 2 (co-emprunteur) fait partie des signataires : renseignez-le ci-dessous."}
+          </p>
           {cosignataires.map((c, i) => (
             <div key={i} style={{ gridColumn: "1 / -1", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: 14 }}>
               <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
@@ -1240,22 +1475,12 @@ export function Adhesion({
           )}
 
           <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
-            <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer" }}>
-              <input type="checkbox" checked={attestHonneur} onChange={(e) => setAttestHonneur(e.target.checked)} style={{ marginTop: 3 }} />
-              <span>
-                Je certifie sur l'honneur que les coordonnées communiquées correspondent aux personnes
-                déclarées et que je suis habilité(e) à les transmettre.
-              </span>
-            </label>
-            <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer" }}>
-              <input type="checkbox" checked={infoAvis} onChange={(e) => setInfoAvis(e.target.checked)} style={{ marginTop: 3 }} />
-              <span>
-                J'ai été informé(e) que mon avis d'imposition sera transmis dans son intégralité à l'Anah
-                et, le cas échéant, à l'établissement bancaire instruisant ma demande d'éco-prêt à taux
-                zéro, aux fins de vérification de mes ressources, puis supprimé des systèmes de Strat Eco
-                une fois ces transmissions effectuées.
-              </span>
-            </label>
+            <CasesAttestations
+              attestHonneur={attestHonneur}
+              onAttestHonneur={setAttestHonneur}
+              infoAvis={infoAvis}
+              onInfoAvis={setInfoAvis}
+            />
           </div>
         </div>
 
@@ -1266,7 +1491,7 @@ export function Adhesion({
           </button>
           <button
             className="se-btn se-btn-primary"
-            disabled={!champsOk || !principalOk || !cosignatairesOk || doublons || !attestHonneur || !infoAvis || !!busy}
+            disabled={!champsOk || !principalOk || !cosignatairesOk || adherent2SansSignataire || doublons || !attestHonneur || !infoAvis || !!busy}
             onClick={() => void preparerSignature()}
           >
             {busy ? "Préparation des bulletins…" : "Passer à la signature"}
@@ -1276,6 +1501,12 @@ export function Adhesion({
         {!champsOk && (
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10 }}>
             Renseignez tous les champs marqués * - la banque rejette les dossiers incomplets.
+          </p>
+        )}
+        {adherent2SansSignataire && (
+          <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 10 }}>
+            Vous avez déclaré un adhérent 2 (co-emprunteur) : il doit aussi signer le bulletin. Ajoutez-le comme
+            cosignataire - il recevra son propre lien et déposera sa pièce d'identité, recto et verso.
           </p>
         )}
         {champsOk && !principalOk && (
