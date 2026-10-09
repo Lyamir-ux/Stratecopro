@@ -25,7 +25,7 @@
 //  SMS : prestataire à définir (spec §12, opérateur européen à privilégier).
 //  Tant qu'aucun prestataire SMS n'est configuré, le code OTP part par e-mail.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
+import { PDFDocument, type PDFFont, type PDFPage, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -179,8 +179,10 @@ async function envoyerEmail(
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from, to: [to], subject, html, ...(attachments ? { attachments } : {}) }),
     });
+    if (!r.ok) console.error(`Resend ${r.status} : ${(await r.text().catch(() => "")).slice(0, 300)}`);
     return r.ok ? "envoye" : "erreur";
-  } catch {
+  } catch (e) {
+    console.error("Resend injoignable :", e instanceof Error ? e.message : e);
     return "erreur";
   }
 }
@@ -202,10 +204,11 @@ function boutonEmail(url: string, libelle: string): string {
 /** Envoie le code OTP. SMS dès qu'un prestataire sera configuré (spec §12) ;
  *  en attendant, e-mail - le canal réellement utilisé est journalisé et
  *  affiché au signataire. Sans RESEND_API_KEY : simulation, code renvoyé au
- *  client pour permettre les tests (jamais le cas avec un envoi réel). */
+ *  client pour permettre les tests (jamais le cas avec un envoi réel).
+ *  `echec` : Resend a refusé l'envoi ou n'a pas répondu, rien n'est parti. */
 async function envoyerOtp(
   email: string, prenom: string, coproNom: string, code: string, avecMandat = false,
-): Promise<{ canal: "sms" | "email" | "simulation"; codeTest?: string }> {
+): Promise<{ canal: "sms" | "email" | "simulation"; codeTest?: string; echec?: true }> {
   // TODO prestataire SMS (opérateur européen) : brancher ici, canal 'sms'.
   const statut = await envoyerEmail(
     email,
@@ -220,6 +223,7 @@ async function envoyerOtp(
       demande, ignorez ce message et signalez-le à contact@strateco.fr.</p>`),
   );
   if (statut === "simule") return { canal: "simulation", codeTest: code };
+  if (statut === "erreur") return { canal: "email", echec: true };
   return { canal: "email" };
 }
 
@@ -391,13 +395,81 @@ function decoupe(texte: string, max: number): string[] {
   return lignes;
 }
 
+type Case = { x: number; y: number; w: number; h: number };
+const ENCRE = rgb(0.08, 0.08, 0.35);
+
+/** Écrit une ligne dans la largeur d'une case, en réduisant la taille si elle déborde. */
+function ecrireAjuste(
+  page: PDFPage, f: PDFFont, texte: string,
+  x: number, y: number, taille: number, largeur: number,
+) {
+  const t = winAnsi(texte);
+  let size = taille;
+  while (size > 5 && f.widthOfTextAtSize(t, size) > largeur) size -= 0.25;
+  page.drawText(t, { x, y, size, font: f, color: ENCRE });
+}
+
+/** Cases « Signature Adhérent 1 » et « Signature Adhérent 2 » de la première page
+ *  du bulletin CEGEE (rectangles extraits avec pypdf) ; le libellé en occupe le haut. */
+const BULLETIN_CASES_SIGNATURE: [Case, Case] = [
+  { x: 191.2, y: 145.5, w: 182.4, h: 55 },
+  { x: 374.4, y: 145.5, w: 192.5, h: 55 },
+];
+
+/** Cosignataire de la case « Adhérent 2 » : celui dont le nom correspond à l'adhérent 2
+ *  du formulaire (le co-emprunteur), à défaut le premier cosignataire. */
+function cosignataireAdherent2(cosigs: Signataire[], adherent2: string | null): Signataire | null {
+  if (!cosigs.length) return null;
+  const mots = (t: string) =>
+    [...t.normalize("NFD")]
+      .filter((c) => c.charCodeAt(0) < 0x300 || c.charCodeAt(0) > 0x36f)
+      .join("").toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  const cible = mots(adherent2 ?? "");
+  const trouve = cible.length
+    ? cosigs.find((c) => {
+      const m = mots(`${c.prenom} ${c.nom}`);
+      return m.length > 0 && m.every((x) => cible.includes(x));
+    })
+    : undefined;
+  return trouve ?? cosigs[0];
+}
+
+/** Mention de signature dans une case du bulletin, sous son libellé. */
+function mentionCaseBulletin(
+  page: PDFPage, police: PDFFont, gras: PDFFont,
+  C: Case, s: Signataire, autres: number,
+) {
+  const x = C.x + 6;
+  const largeur = C.w - 12;
+  ecrireAjuste(page, gras, `Signé électroniquement par ${s.prenom} ${s.nom}`.trim(), x, C.y + 33, 8, largeur);
+  ecrireAjuste(page, police, `le ${s.signe_le ? fmtDateHeure(s.signe_le) : "-"} (heure de Paris)`, x, C.y + 24, 7, largeur);
+  ecrireAjuste(page, police, "Signature électronique avancée, code à usage unique", x, C.y + 15.5, 6.5, largeur);
+  ecrireAjuste(
+    page, police,
+    autres > 0
+      ? `+ ${autres} autre${autres > 1 ? "s" : ""} signataire${autres > 1 ? "s" : ""} - preuve en dernière page`
+      : "Preuve de signature en dernière page",
+    x, C.y + 6, 6.5, largeur,
+  );
+}
+
 async function genererPdfSigne(
-  original: Uint8Array, signataires: Signataire[], b: Bulletin, scelleLe: Date,
+  original: Uint8Array, signataires: Signataire[], b: Bulletin, scelleLe: Date, adherent2: string | null,
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(original);
   const police = await pdf.embedFont(StandardFonts.Helvetica);
   const gras = await pdf.embedFont(StandardFonts.HelveticaBold);
   const vert = rgb(0.208, 0.341, 0.09);
+
+  // Mention dans les cases « Signature Adhérent 1 / 2 » de la première page (retour
+  // d'Amir du 09/10/2026 : elle n'apparaissait que sur la page ajoutée en fin de document)
+  const p1 = pdf.getPage(0);
+  const principal = signataires.find((s) => s.role === "principal");
+  const cosigs = signataires.filter((s) => s.role !== "principal");
+  const second = cosignataireAdherent2(cosigs, adherent2);
+  if (principal) mentionCaseBulletin(p1, police, gras, BULLETIN_CASES_SIGNATURE[0], principal, 0);
+  if (second) mentionCaseBulletin(p1, police, gras, BULLETIN_CASES_SIGNATURE[1], second, cosigs.length - 1);
+
   let page = pdf.addPage(A4);
   let y = A4[1] - 64;
   const nouvellePageSiBesoin = (h: number) => {
@@ -526,21 +598,14 @@ async function genererMandatSigne(
   const pdf = await PDFDocument.load(original);
   const police = await pdf.embedFont(StandardFonts.Helvetica);
   const gras = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const encre = rgb(0.08, 0.08, 0.35);
   const vert = rgb(0.208, 0.341, 0.09);
   const signeLe = s.signe_le ?? new Date().toISOString();
 
   // Mention dans la case « Signature(s) » : taille réduite si la ligne déborde
   const p1 = pdf.getPage(0);
   const C = SEPA_CASE_SIGNATURE;
-  const xTexte = C.x + 7;
-  const largeur = C.w - 12;
-  const ecrire = (texte: string, y: number, taille: number, f = police) => {
-    const t = winAnsi(texte);
-    let size = taille;
-    while (size > 5 && f.widthOfTextAtSize(t, size) > largeur) size -= 0.25;
-    p1.drawText(t, { x: xTexte, y, size, font: f, color: encre });
-  };
+  const ecrire = (texte: string, y: number, taille: number, f = police) =>
+    ecrireAjuste(p1, f, texte, C.x + 7, y, taille, C.w - 12);
   ecrire(`Signé électroniquement par ${s.prenom} ${s.nom}`.trim(), C.y + C.h - 11, 8.5, gras);
   ecrire(
     `le ${fmtDateHeure(signeLe)} (heure de Paris) - signature électronique avancée, code à usage unique`,
@@ -669,7 +734,14 @@ async function sceller(admin: Admin, req: Request | null, bulletinId: string): P
   if (eDl || !orig) { console.error("Scellement : document introuvable", eDl?.message); return; }
   const origBytes = new Uint8Array(await orig.arrayBuffer());
 
-  const pdfSigne = await genererPdfSigne(origBytes, signataires, b as Bulletin, scelleLe);
+  // nom de l'adhérent 2 (co-emprunteur) déclaré au formulaire : son cosignataire signe
+  // dans la case « Signature Adhérent 2 »
+  let adherent2: string | null = null;
+  if (b.adhesion_id) {
+    const { data: adh } = await admin.from("adhesions_pret").select("form").eq("id", b.adhesion_id).maybeSingle();
+    adherent2 = (adh?.form as { adherent2?: { nomPrenom?: string } | null } | null)?.adherent2?.nomPrenom ?? null;
+  }
+  const pdfSigne = await genererPdfSigne(origBytes, signataires, b as Bulletin, scelleLe, adherent2);
   const hashFinal = await sha256Hex(pdfSigne);
   const sceau = await scellerHash(hashFinal);
 
@@ -760,20 +832,31 @@ async function demanderOtpPour(
     .eq("signataire_id", s.id).gt("created_at", depuis);
   if ((count ?? 0) >= OTP_RENVOIS_PAR_HEURE) return json(429, { error: "trop_de_renvois" });
 
-  // invalide les codes précédents puis en émet un neuf
-  await admin.from("otp_codes").update({ expire_le: new Date().toISOString() })
-    .eq("signataire_id", s.id).is("valide_le", null);
+  // Nouveau code enregistré avant l'envoi ; les précédents ne sont invalidés qu'une
+  // fois l'e-mail parti. Un envoi refusé par Resend est signalé au signataire au lieu
+  // d'afficher « code envoyé » (avant le 09/10/2026) : le code jamais parti est retiré,
+  // il ne compte pas dans les codes de l'heure, et un code déjà reçu reste valable.
   const code = genOtp();
-  const { error } = await admin.from("otp_codes").insert({
+  const { data: nouveau, error } = await admin.from("otp_codes").insert({
     signataire_id: s.id,
     code_hash: await hashOtp(code),
     expire_le: new Date(Date.now() + OTP_VALIDITE_MIN * 60 * 1000).toISOString(),
-  });
-  if (error) return json(500, { error: "otp_insert" });
+  }).select("id").single();
+  if (error || !nouveau) return json(500, { error: "otp_insert" });
 
   const envoi = await envoyerOtp(
     s.email, s.prenom, await coproNom(admin, b.copro_id), code, s.role === "principal" && !!b.mandat_path,
   );
+  if (envoi.echec) {
+    await admin.from("otp_codes").delete().eq("id", nouveau.id);
+    await journal(admin, req, b.id, "signataire.otp_envoi_echec", {
+      signataireId: s.id,
+      payload: { canal: envoi.canal },
+    });
+    return json(502, { error: "envoi_echec" });
+  }
+  await admin.from("otp_codes").update({ expire_le: new Date().toISOString() })
+    .eq("signataire_id", s.id).is("valide_le", null).neq("id", nouveau.id);
   await journal(admin, req, b.id, "signataire.otp_demande", {
     signataireId: s.id,
     payload: { canal: envoi.canal, telephone: telMasque(s.telephone) },
