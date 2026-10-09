@@ -4,6 +4,7 @@ import { supabase, toutesLesLignes } from "@/lib/supabase";
 import type { Enums, Tables, TablesUpdate } from "@/lib/database.types";
 import { batimentsVidesASupprimer, rapprocherBatiments, type ImportedRow } from "@/lib/importLots";
 import { trierParNomFamille } from "@/lib/nomFamille";
+import type { EtatCompteEmail } from "@/lib/emailCoproprietaire";
 
 export interface LotFull extends Tables<"lots"> {
   batiment: { code: string } | null;
@@ -151,6 +152,47 @@ export function useRenommerCoproprietaire(coproId: string) {
     onSuccess: () => {
       invalidateDonnees(qc, coproId);
       for (const cle of ["enquete", "choix-financement", "scenarios", "messages", "pieces-a-verifier", "pieces-copro", "mutations-lots", "syndic", "portail"]) {
+        void qc.invalidateQueries({ queryKey: [cle] });
+      }
+    },
+  });
+}
+
+export interface EmailCoproprietaireModifie {
+  /** Adresse enregistrée sur la fiche (null = effacée). */
+  email: string | null;
+  inchange: boolean;
+  /** Sort du compte du portail : suit = identifiant de connexion changé aussi (invitation jamais utilisée),
+   *  garde = espace déjà utilisé, identifiant conservé, aucun = fiche sans espace. */
+  compte: EtatCompteEmail;
+  /** Autres fiches reliées au même compte (leur adresse n'a pas changé). */
+  autres_fiches: number;
+}
+
+/**
+ * Change l'adresse e-mail d'un copropriétaire (clic sur l'adresse, onglet Données AMO). Edge function
+ * modifier-email-coproprietaire : l'adresse de la fiche change et, si son espace n'a jamais servi,
+ * l'identifiant de connexion aussi (sinon « Renvoyer l'invitation » repartirait à l'ancienne adresse).
+ * Aucun e-mail n'est envoyé. Les écrans qui lisent l'adresse (espaces, enquête, messages) se rechargent.
+ */
+export function useModifierEmailCoproprietaire(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, email }: { id: string; email: string | null }): Promise<EmailCoproprietaireModifie> => {
+      const { data, error } = await supabase.functions.invoke("modifier-email-coproprietaire", {
+        body: { coproprietaire_id: id, email },
+      });
+      if (error) {
+        const ctx = (error as { context?: Response }).context;
+        const parsed = ctx ? await ctx.json().catch(() => null) : null;
+        throw new Error(parsed?.error ?? "L'adresse n'a pas pu être modifiée. Réessayez.");
+      }
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      return data as EmailCoproprietaireModifie;
+    },
+    onSuccess: () => {
+      invalidateDonnees(qc, coproId);
+      for (const cle of ["espaces", "enquete", "messages", "pieces-a-verifier", "pieces-copro", "syndic"]) {
         void qc.invalidateQueries({ queryKey: [cle] });
       }
     },

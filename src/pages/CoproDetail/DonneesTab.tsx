@@ -14,6 +14,7 @@ import {
 } from "@/lib/referentiels";
 import {
   useDonnees,
+  useModifierEmailCoproprietaire,
   useMutationsLots,
   useRenommerCoproprietaire,
   useSetNbBatiments,
@@ -54,6 +55,7 @@ import type { Enums } from "@/lib/database.types";
 import { trierParNomFamille } from "@/lib/nomFamille";
 import { fmtDate } from "@/lib/format";
 import { ImportLotsDialog } from "./ImportLotsDialog";
+import { EmailCoproprietaire } from "@/components/EmailCoproprietaire";
 import { NomCoproprietaire } from "@/components/NomCoproprietaire";
 import { ChangementProprietaire, JournalMutations } from "@/pages/Syndic/ChangementProprietaire";
 
@@ -89,6 +91,7 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
   const setNbBatiments = useSetNbBatiments(c.id);
   const setUsage = useSetUsageLot(c.id);
   const renommer = useRenommerCoproprietaire(c.id);
+  const changerEmail = useModifierEmailCoproprietaire(c.id);
   const [synth, setSynth] = useState({
     nom: "",
     adresse: "",
@@ -517,8 +520,18 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                             "-"
                           )}
                         </td>
-                        <td style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {l.coproprietaire?.email ?? "-"}
+                        <td>
+                          {l.coproprietaire && l.coproprietaire_id ? (
+                            // un clic sur l'adresse la corrige (ou l'ajoute) ; le reste de la ligne change le propriétaire
+                            <EmailCoproprietaire
+                              email={l.coproprietaire.email?.trim() ? l.coproprietaire.email : null}
+                              onModifier={(email) =>
+                                changerEmail.mutateAsync({ id: l.coproprietaire_id!, email })
+                              }
+                            />
+                          ) : (
+                            "-"
+                          )}
                         </td>
                         <td className="mono">{l.coproprietaire?.telephone ?? "-"}</td>
                         <td onClick={(e) => e.stopPropagation()}>
@@ -553,8 +566,8 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                 </table>
                 <p className="se-small" style={{ marginTop: 12, color: "var(--fg-muted)" }}>
                   Vente ou succession : cliquez la ligne du lot pour enregistrer son nouveau propriétaire.
-                  Les tantièmes et les lots rattachés suivent. Faute d'orthographe dans un nom : cliquez directement
-                  sur le nom pour le corriger.
+                  Les tantièmes et les lots rattachés suivent. Faute d'orthographe dans un nom ou une adresse mail :
+                  cliquez directement dessus pour la corriger.
                 </p>
               </div>
             )}
