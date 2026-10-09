@@ -17,21 +17,23 @@
 //
 // Le dépôt (bucket privé pieces-copro) exige l'acceptation préalable des CGU du
 // service - tracée par version dans cgu_acceptations.
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import { RenommageDialog } from "@/components/RenommageDialog";
 import { ApercuDocument } from "@/components/ApercuDocument";
+import { useGlisserDeposer } from "@/components/useGlisserDeposer";
 import { Badge } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
 import { downloadFichier, estVisualisable, type Fichier } from "@/api/fichiers";
+import { downloadAdhesionDoc } from "@/api/financement";
 import {
   libelleQualification,
   useContextePieces,
   useEnquetePortail,
   useFichiersPartages,
   useMaReponse,
-  urlSigneePiece,
+  urlApercuPiece,
   useMesPieces,
   useSupprimerPiece,
   useUploadPiece,
@@ -39,11 +41,19 @@ import {
   type PieceJustificative,
 } from "@/api/portail";
 import { CGU_VERSION } from "@/lib/cguSignature";
-import { PIECES_SITUATION, piecesDossierPret, type PieceAttendue, type ReponsesPieces } from "@/lib/piecesSituation";
-import { useAccepterCguDepot, useCguDepotPieces } from "@/api/signature";
+import {
+  PIECES_SITUATION,
+  piecesDossierPret,
+  piecesEnquete,
+  piecesFourniesSignature,
+  type PieceAttendue,
+  type ReponsesPieces,
+} from "@/lib/piecesSituation";
+import { useAccepterCguDepot, useCguDepotPieces, useMesBulletins } from "@/api/signature";
 import { ouvrirDocumentSignature, urlApercuDocumentSignature, useMesDocumentsEcoPtz } from "@/api/ecoPtzIndividuel";
 import { messageErreur } from "@/lib/erreurs";
 import { ACCEPT_PIECE, erreurFormatPiece, LIBELLE_FORMATS_PIECE } from "@/lib/formatPiece";
+import type { SectionId } from "./index";
 
 function fmtSize(bytes: number | null): string {
   if (bytes == null) return "";
@@ -72,6 +82,15 @@ function DepotPiece({
   const [erreurPiece, setErreurPiece] = useState<string | null>(null);
   // format refusé au choix du fichier (ex. un Word passé par « Tous les fichiers »)
   const [erreurFormat, setErreurFormat] = useState<string | null>(null);
+  const [apercu, setApercu] = useState(false);
+
+  const choisir = (file: File) => {
+    const refus = erreurFormatPiece(file);
+    setErreurFormat(refus);
+    if (!refus) setDepot(file);
+  };
+  // le fichier peut aussi être glissé sur l'encadré (retour de A CHELGHAM, 09/10/2026)
+  const glisser = useGlisserDeposer(choisir, !upload.isPending);
 
   // Encadré : vert une fois validé par Strat Eco, orange en attente de
   // vérification, rouge si refusé (feedback Amir 10/09).
@@ -97,18 +116,15 @@ function DepotPiece({
         style={{ display: "none" }}
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) {
-            const refus = erreurFormatPiece(file);
-            setErreurFormat(refus);
-            if (!refus) setDepot(file);
-          }
+          if (file) choisir(file);
           if (inputRef.current) inputRef.current.value = "";
         }}
       />
       <div
-        className={"dropzone" + etat}
+        className={"dropzone" + etat + (glisser.survol ? " survol" : "")}
         onClick={() => !upload.isPending && inputRef.current?.click()}
         style={{ cursor: "pointer" }}
+        {...glisser.props}
       >
         <span className="dz-ico"><Icon name={icone as never} size={18} /></span>
         <div>
@@ -132,7 +148,13 @@ function DepotPiece({
         </div>
         <span className="spacer"></span>
         <span className="dz-action">
-          {!piece ? "Téléverser" : piece.statut === "refuse" ? "Déposer une nouvelle version" : "Remplacer"}
+          {glisser.survol
+            ? "Déposer ici"
+            : !piece
+              ? "Téléverser"
+              : piece.statut === "refuse"
+                ? "Déposer une nouvelle version"
+                : "Remplacer"}
         </span>
       </div>
       {erreurFormat && (
@@ -147,10 +169,8 @@ function DepotPiece({
       )}
       {piece && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: -6 }}>
-          <button
-            className="se-btn se-btn-ghost btn-sm"
-            onClick={() => void urlSigneePiece(piece.storage_path).then((u) => window.open(u, "_blank", "noopener")).catch((e) => setErreurPiece(messageErreur(e, "Ouverture impossible.")))}
-          >
+          {/* aperçu à l'écran, sans téléchargement (retour de A CHELGHAM, 09/10/2026) */}
+          <button className="se-btn se-btn-ghost btn-sm" onClick={() => setApercu(true)}>
             <Icon name="eye" size={13} />
             Voir mon fichier
           </button>
@@ -163,6 +183,7 @@ function DepotPiece({
           {erreurPiece && <span className="se-small" style={{ color: "var(--color-error-700)" }}>{erreurPiece}</span>}
         </div>
       )}
+      {apercu && piece && <ApercuPiece piece={piece} onClose={() => setApercu(false)} />}
       {confirmerSuppr && piece && (
         <Modal title="Supprimer cette pièce ?" onClose={() => setConfirmerSuppr(false)} width={480}>
           <p className="se-body" style={{ marginTop: 0, overflowWrap: "anywhere" }}>
@@ -236,11 +257,14 @@ export function PiecesJustificatives({
   attendues,
   variante = "enquete",
   masquer = [],
+  dejaFournies,
 }: {
   membership: Membership;
   attendues: PieceAttendue[];
   variante?: "enquete" | "pret";
   masquer?: string[];
+  /** variante « pret » : pièces fournies ailleurs (enquête, signature), rappelées en tête */
+  dejaFournies?: { lignes: ReactNode; total: number; fournies: number };
 }) {
   const { data: pieces } = useMesPieces(membership.coproprietaireId);
   const { data: cguAcceptees, isLoading: chargeCgu } = useCguDepotPieces(CGU_VERSION);
@@ -260,6 +284,8 @@ export function PiecesJustificatives({
     const p = parType.get(a.type);
     return p && p.statut !== "refuse";
   }).length;
+  const nbRecues = recues + (dejaFournies?.fournies ?? 0);
+  const nbAttendues = attendues.length + (dejaFournies?.total ?? 0);
 
   return (
     <div className="card-xl">
@@ -268,11 +294,11 @@ export function PiecesJustificatives({
         <h2 style={{ fontSize: 18 }}>
           {pret ? "Pièces de votre dossier de prêt" : liste.length > 1 ? "Vos pièces justificatives" : "Votre avis d'imposition"}
         </h2>
-        {attendues.length > 0 && (
+        {nbAttendues > 0 && (
           <>
             <span style={{ flex: 1 }}></span>
             <span className="se-small" style={{ color: "var(--fg-muted)" }}>
-              {recues} / {attendues.length} reçue{recues > 1 ? "s" : ""}
+              {nbRecues} / {nbAttendues} {pret ? "fournie" : "reçue"}{nbRecues > 1 ? "s" : ""}
             </span>
           </>
         )}
@@ -281,10 +307,11 @@ export function PiecesJustificatives({
         <p className="se-body" style={{ margin: 0 }}>
           {pret ? (
             <>
-              Vos bulletins sont signés : pour compléter votre dossier d'adhésion au prêt collectif, la banque
-              demande aussi les pièces ci-dessous. <b>Toutes les pages.</b>
-              {!liste.some((a) => a.type === "avis_associes_sci") &&
-                " L'avis d'imposition, lui, se dépose dans l'enquête sociale : il sert aussi à ce dossier."}
+              Vos bulletins sont signés : voici toutes les pièces de votre dossier d'adhésion au prêt collectif.
+              {dejaFournies
+                ? " Celles que vous avez déjà fournies, dans l'enquête sociale ou à la signature, sont en vert ; déposez ci-dessous celles que la banque demande en plus."
+                : " Déposez ci-dessous celles que la banque demande en plus."}{" "}
+              <b>Toutes les pages.</b>
             </>
           ) : liste.length > 1 ? (
             <>
@@ -297,6 +324,13 @@ export function PiecesJustificatives({
             </>
           )}
         </p>
+        {dejaFournies && (
+          <>
+            <div className="se-eyebrow" style={{ marginTop: 4 }}>Fournies lors de l'enquête sociale et de la signature</div>
+            {dejaFournies.lignes}
+            {liste.length > 0 && <div className="se-eyebrow" style={{ marginTop: 8 }}>À déposer ici</div>}
+          </>
+        )}
         {liste.length === 0 && (
           <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
             Selon vos réponses, aucune pièce n'est demandée pour l'instant.
@@ -358,6 +392,7 @@ export function PiecesJustificatives({
               <DepotPiece key={a.type} membership={membership} attendue={a} piece={parType.get(a.type)} />
             ))}
             <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
+              Cliquez sur un encadré pour choisir le fichier, ou faites-le glisser dessus depuis votre ordinateur.
               Vos pièces sont vérifiées par l'équipe Strat Eco (lisibilité, pages complètes, bonne année) :
               l'encadré passe au vert une fois validé ; en cas de problème, vous recevez un e-mail qui précise
               quoi corriger et l'encadré passe au rouge. Elles sont stockées de manière sécurisée et ne sont
@@ -371,19 +406,131 @@ export function PiecesJustificatives({
   );
 }
 
+/** Pièce déposée, affichée à l'écran sans téléchargement (lien blob typé, jamais SVG ni HTML). */
+function ApercuPiece({ piece, onClose }: { piece: PieceJustificative; onClose: () => void }) {
+  return (
+    <ApercuDocument
+      name={piece.name}
+      path={piece.storage_path}
+      urlSignee={urlApercuPiece}
+      onClose={onClose}
+      onTelecharger={() => void downloadAdhesionDoc(piece.storage_path, piece.name).catch(() => null)}
+    />
+  );
+}
+
+/** Pièce fournie ailleurs (enquête sociale, signature), rappelée en lecture seule dans le dossier de prêt. */
+function LignePieceFournie({
+  nom,
+  etat,
+  detail,
+  children,
+}: {
+  nom: string;
+  /** attendue : un cosignataire la dépose depuis son lien ; manquante : à déposer dans l'enquête */
+  etat: "fournie" | "attendue" | "manquante" | "refusee";
+  detail: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className={"dropzone lecture" + (etat === "fournie" ? " filled" : etat === "refusee" ? " refus" : "")}>
+      <span className="dz-ico">
+        <Icon name={etat === "fournie" ? "check" : etat === "refusee" ? "alert" : "clock"} size={18} />
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div className="dz-name">
+          {nom}
+          <span className="dz-etat">
+            {etat === "fournie" ? (
+              <Badge kind="success" dot>Déjà fournie</Badge>
+            ) : etat === "refusee" ? (
+              <span className="badge b-refus">Refusée - à redéposer</span>
+            ) : (
+              <Badge kind="neutral">{etat === "manquante" ? "Manquante" : "En attente"}</Badge>
+            )}
+          </span>
+        </div>
+        <div className="dz-hint">{detail}</div>
+      </div>
+      <span className="spacer"></span>
+      {children}
+    </div>
+  );
+}
+
 /**
  * Pièces du dossier de prêt collectif, sous les bulletins signés de « Mon
  * financement » (retour de A CHELGHAM, 09/10/2026). Rien sans pièce demandée.
+ * En tête, les pièces déjà fournies ailleurs, en vert (second retour du même
+ * jour) : celles de l'enquête sociale (avis d'imposition…), la pièce d'identité
+ * de chaque signataire et le RIB. Une pièce de l'enquête manquante ou refusée se
+ * redépose dans l'enquête ; sans enquête dans la copropriété, ici même.
  */
-export function PiecesDossierPret({ membership }: { membership: Membership }) {
+export function PiecesDossierPret({ membership, go }: { membership: Membership; go?: (s: SectionId) => void }) {
   const { data: enquete } = useEnquetePortail(membership.copro.id);
   const { data: reponse } = useMaReponse(enquete?.id, membership.coproprietaireId);
   const contexte = useContextePieces(membership.copro.id, membership.coproprietaireId, membership.nom);
-  const attendues = piecesDossierPret(reponse?.reponses as ReponsesPieces | null, contexte);
+  const { data: pieces } = useMesPieces(membership.coproprietaireId);
+  const { data: bulletins } = useMesBulletins(membership.coproprietaireId);
+  const [apercu, setApercu] = useState<PieceJustificative | null>(null);
+  const rep = reponse?.reponses as ReponsesPieces | null;
+  const attendues = piecesDossierPret(rep, contexte);
   if (attendues.length === 0) return null;
+
+  const parType = new Map((pieces ?? []).map((p) => [p.type as string, p]));
+  const sansEnquete = enquete === null;
+  const deEnquete = piecesEnquete(rep, contexte).map((a) => ({ a, p: parType.get(a.type) }));
+  // sans enquête, une pièce de la situation qui manque se dépose ici
+  const aDeposerIci = deEnquete.filter(({ p }) => sansEnquete && (!p || p.statut === "refuse")).map(({ a }) => a);
+  const rappelEnquete = deEnquete.filter(({ a }) => !aDeposerIci.includes(a));
+  const signature = piecesFourniesSignature(bulletins);
+
+  const lignes = (
+    <>
+      {signature.map((s) => (
+        <LignePieceFournie key={s.cle} nom={s.nom} etat={s.deposee ? "fournie" : "attendue"} detail={s.detail} />
+      ))}
+      {rappelEnquete.map(({ a, p }) => (
+        <LignePieceFournie
+          key={a.type}
+          nom={a.nom}
+          etat={!p ? "manquante" : p.statut === "refuse" ? "refusee" : "fournie"}
+          detail={
+            !p
+              ? "À déposer dans l'enquête sociale"
+              : p.statut === "refuse"
+                ? `Refusée le ${fmtDate(p.verifiee_le)} : ${p.motif_refus || libelleQualification(p.qualification).toLowerCase()} - déposez une nouvelle version dans l'enquête sociale`
+                : p.statut === "valide"
+                  ? `${p.name} · validée par Strat Eco le ${fmtDate(p.verifiee_le)}`
+                  : `${p.name} · déposée le ${fmtDate(p.uploaded_at)} dans l'enquête sociale · en cours de vérification par Strat Eco`
+          }
+        >
+          {p && p.statut !== "refuse" ? (
+            <button className="icon-btn" title="Aperçu sans téléchargement" onClick={() => setApercu(p)}>
+              <Icon name="eye" size={18} />
+            </button>
+          ) : go ? (
+            <button className="se-btn se-btn-secondary btn-sm" onClick={() => go("enquete")}>
+              Aller à l'enquête
+            </button>
+          ) : null}
+        </LignePieceFournie>
+      ))}
+    </>
+  );
+  const total = signature.length + rappelEnquete.length;
+  const fournies =
+    signature.filter((s) => s.deposee).length + rappelEnquete.filter(({ p }) => p && p.statut !== "refuse").length;
+
   return (
     <div style={{ marginTop: 18 }}>
-      <PiecesJustificatives membership={membership} attendues={attendues} variante="pret" />
+      <PiecesJustificatives
+        membership={membership}
+        attendues={[...aDeposerIci, ...attendues]}
+        variante="pret"
+        dejaFournies={total > 0 ? { lignes, total, fournies } : undefined}
+      />
+      {apercu && <ApercuPiece piece={apercu} onClose={() => setApercu(null)} />}
     </div>
   );
 }

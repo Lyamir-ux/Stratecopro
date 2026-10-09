@@ -135,6 +135,21 @@ describe("nomenclature de la Caisse d'Épargne Grand Est", () => {
     expect(construireNomFichier(champs("rib_entreprises"), "pdf")).toBe("RIB - LE FORUM.pdf");
   });
 
+  // Amir 09/10/2026 : « RGE [nom de l'entreprise] », sans le nom de la copropriété
+  it("« RGE XX » : l'entreprise est dans le terme, sans la copropriété", () => {
+    const rge = champs("attestation_rge", { objet: "Qualibat", emetteur: "Decopeint", date: "2026-10-09" });
+    expect(construireNomFichier(rge, "pdf")).toBe("RGE DECOPEINT - Qualibat - 2026-10-09.pdf");
+    expect(construireNomFichier({ ...rge, emetteur: null }, "pdf")).toBe("RGE - Qualibat - 2026-10-09.pdf");
+    expect(typeDepuisNom("RGE DECOPEINT - Qualibat - 2026-10-09.pdf")).toBe("attestation_rge");
+    expect(champsDepuisNom("RGE DECOPEINT - Qualibat - 2026-10-09.pdf")).toEqual({
+      type: "attestation_rge", objet: "Qualibat", emetteur: "DECOPEINT", date: "2026-10-09",
+    });
+    // nom d'avant le 09/10 : « RGE - COPRO - organisme - ENTREPRISE - date »
+    expect(champsDepuisNom("RGE - 53 RUE DE LA COURSE - Qualibat - DECOPEINT - 2026-10-09.pdf")).toEqual({
+      type: "attestation_rge", objet: "Qualibat", emetteur: "DECOPEINT", date: "2026-10-09",
+    });
+  });
+
   it("garde l'ancien ordre pour un type absent de la nomenclature", () => {
     expect(construireNomFichier(champs("facture", { objet: "Ventilation" }), "pdf")).toBe("LE FORUM - Facture - Ventilation.pdf");
     expect(construireNomFichier(champs("reglement_copropriete"), "pdf")).toBe("LE FORUM - Règlement de copropriété.pdf");

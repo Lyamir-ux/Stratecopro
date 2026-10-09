@@ -44,6 +44,7 @@ import { ACCEPT_PIECE, erreurFormatPiece, LIBELLE_FORMATS_PIECE, typeMimePiece }
 import { decouperNomPrenom } from "@/lib/nomFamille";
 import { assemblerPieceIdentite, facesADeposer, verifierFacesPiece } from "@/lib/pdf/pieceIdentite";
 import { PieceIdentiteChamps } from "@/components/PieceIdentiteChamps";
+import { useGlisserDeposer } from "@/components/useGlisserDeposer";
 import { CGU_VERSION } from "@/lib/cguSignature";
 import {
   lotsAnnexesNonRattaches,
@@ -141,6 +142,29 @@ function Fld({ label, children, span }: { label: string; children: ReactNode; sp
     <div className="fld" style={span ? { gridColumn: "1 / -1" } : undefined}>
       <label>{label}</label>
       {children}
+    </div>
+  );
+}
+
+/** Champ du RIB : choisi dans le sélecteur ou glissé sur le champ (retour du 09/10/2026).
+ *  `onFichier` renvoie false si le format est refusé. */
+function ChampRib({ onFichier, erreur }: { onFichier: (f: File | null) => boolean; erreur: string | null }) {
+  const { survol, props } = useGlisserDeposer(onFichier);
+  return (
+    <div className={"fld champ-depot" + (survol ? " survol" : "")} style={{ gridColumn: "1 / -1" }} {...props}>
+      <label>{`RIB (${LIBELLE_FORMATS_PIECE}) *`}</label>
+      <input
+        type="file"
+        accept={ACCEPT_PIECE}
+        onChange={(e) => {
+          if (!onFichier(e.target.files?.[0] ?? null)) e.target.value = "";
+        }}
+      />
+      {erreur ? (
+        <span className="hint" style={{ color: "var(--color-error-700)" }}>{erreur}</span>
+      ) : (
+        <span className="hint">Vous pouvez aussi glisser le fichier sur le champ.</span>
+      )}
     </div>
   );
 }
@@ -732,7 +756,7 @@ export function Adhesion({
           {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}
         </div>
         {/* les pièces du prêt suivent la signature des bulletins (retour de A CHELGHAM, 09/10/2026) */}
-        <PiecesDossierPret membership={membership} />
+        <PiecesDossierPret membership={membership} go={go} />
       </>
     );
   }
@@ -963,16 +987,7 @@ export function Adhesion({
               chiffré ; seuls ses 4 derniers caractères restent affichables.
             </p>
             <div className="form-grid">
-              <Fld label={`RIB (${LIBELLE_FORMATS_PIECE}) *`} span>
-                <input
-                  type="file"
-                  accept={ACCEPT_PIECE}
-                  onChange={(e) => {
-                    if (!majRib(e.target.files?.[0] ?? null)) e.target.value = "";
-                  }}
-                />
-                {erreurRib && <span className="hint" style={{ color: "var(--color-error-700)" }}>{erreurRib}</span>}
-              </Fld>
+              <ChampRib onFichier={majRib} erreur={erreurRib} />
               <Fld label="IBAN *">
                 <ChampIban value={iban} onChange={setIban} />
                 <span className="hint">Un IBAN français compte 27 caractères : les blocs de 4 sont séparés automatiquement.</span>
@@ -1294,7 +1309,7 @@ export function Adhesion({
           </div>
           {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}
         </div>
-        <PiecesDossierPret membership={membership} />
+        <PiecesDossierPret membership={membership} go={go} />
       </>
     );
   }

@@ -19,6 +19,7 @@
 //   Kbis, les statuts et les avis d'imposition des associés. Au portail, elles se
 //   déposent après la signature des bulletins (piecesDossierPret, 09/10/2026).
 import type { Enums } from "@/lib/database.types";
+import { fmtDate } from "@/lib/format";
 
 export type TypePiece = Enums<"type_piece">;
 
@@ -177,6 +178,92 @@ export function piecesDossierPret(rep: ReponsesPieces | null | undefined, contex
 export function bulletinsSignes(bulletins: { statut: string }[] | null | undefined, ancienDossierSigne = false): boolean {
   const actifs = (bulletins ?? []).filter((b) => b.statut !== "annule");
   return ancienDossierSigne || (actifs.length > 0 && actifs.every((b) => b.statut !== "brouillon"));
+}
+
+/** Ce que le dossier de prêt lit d'un bulletin et de ses signataires. */
+export interface BulletinPieces {
+  statut: string;
+  rib_path: string | null;
+  iban_dernier4: string | null;
+  mandat_signe_le: string | null;
+  signataires: {
+    role: string;
+    ordre: number;
+    prenom: string;
+    nom: string;
+    email: string;
+    piece_deposee_le: string | null;
+    piece_identite_type: string | null;
+  }[];
+}
+
+/** Pièce du dossier de prêt fournie à la signature des bulletins (lecture seule au portail). */
+export interface PieceSignature {
+  cle: string;
+  nom: string;
+  /** déposée ; sinon attendue d'un cosignataire, depuis son propre lien */
+  deposee: boolean;
+  detail: string;
+}
+
+const LIBELLES_PIECE_IDENTITE: Record<string, string> = {
+  cni: "Carte nationale d'identité",
+  passeport: "Passeport",
+  titre_sejour: "Titre de séjour",
+};
+
+/**
+ * Pièces du dossier de prêt déjà fournies à la signature : la pièce d'identité de
+ * chaque signataire (une fois par personne, quel que soit le nombre de bulletins) et
+ * le RIB du prélèvement (retour de A CHELGHAM, 09/10/2026 : « remettre dans
+ * l'encadré les pièces déjà fournies, en vert »).
+ */
+export function piecesFourniesSignature(bulletins: BulletinPieces[] | null | undefined): PieceSignature[] {
+  const actifs = (bulletins ?? []).filter((b) => b.statut !== "annule" && b.statut !== "brouillon");
+  const personnes = new Map<string, { principal: boolean; ordre: number; nom: string; deposee: string | null; type: string | null }>();
+  for (const b of actifs) {
+    for (const s of b.signataires) {
+      const cle = (s.email || `${s.prenom} ${s.nom}`).trim().toLowerCase();
+      const avant = personnes.get(cle);
+      // la même personne signe chaque bulletin : son premier dépôt fait foi
+      const depot = avant?.deposee ? avant : { deposee: s.piece_deposee_le, type: s.piece_identite_type };
+      personnes.set(cle, {
+        principal: (avant?.principal ?? false) || s.role === "principal",
+        ordre: Math.min(avant?.ordre ?? s.ordre, s.ordre),
+        nom: `${s.prenom} ${s.nom}`.trim(),
+        deposee: depot.deposee,
+        type: depot.type,
+      });
+    }
+  }
+  const out: PieceSignature[] = [...personnes.entries()]
+    .sort(([, a], [, b]) => Number(b.principal) - Number(a.principal) || a.ordre - b.ordre)
+    .map(([cle, p]) => ({
+      cle: "identite:" + cle,
+      nom: `Pièce d'identité de ${p.nom}${p.principal ? " (vous)" : ""}`,
+      deposee: !!p.deposee,
+      detail: p.deposee
+        ? `${LIBELLES_PIECE_IDENTITE[p.type ?? ""] ?? "Pièce d'identité"} · déposée le ${fmtDate(p.deposee)}, à la signature`
+        : "À déposer depuis le lien personnel de signature reçu par e-mail",
+    }));
+
+  const avecRib = actifs.filter((b) => !!b.rib_path);
+  if (avecRib.length > 0) {
+    const fins = [...new Set(avecRib.map((b) => b.iban_dernier4).filter((x): x is string => !!x))];
+    const mandats = avecRib.map((b) => b.mandat_signe_le).filter((x): x is string => !!x).sort();
+    out.push({
+      cle: "rib",
+      nom: "RIB du compte de prélèvement",
+      deposee: true,
+      detail: [
+        fins.length ? `IBAN se terminant par ${fins.join(", ")}` : "Déposé avec votre bulletin",
+        mandats.length ? `mandat SEPA signé le ${fmtDate(mandats[0])}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    });
+  }
+  return out;
 }
 
 /** Libellé d'une pièce, quelle qu'elle soit (situation ou pièce historique). */

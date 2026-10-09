@@ -11,6 +11,8 @@
 // Devis et contrats (feedback Amir du 09/10/2026) : l'entreprise suit le terme,
 // la copropriété vient ensuite (TERMES_ENTREPRISE_EN_TETE) :
 //   DEVIS ENTREPRISE - {ÉMETTEUR} - {COPRO} - {Objet} - {AAAA-MM-JJ}[ - {état}].ext
+// Certificat RGE : l'entreprise est collée au terme, sans la copropriété :
+//   RGE {ÉMETTEUR} - {Objet} - {AAAA-MM-JJ}[ - {état}].ext
 // Les formats coexistent : les fichiers déjà déposés sont toujours reconnus
 // (typesDepuisNom, champsDepuisNom).
 
@@ -212,7 +214,7 @@ export const NOMENCLATURE_CEGEE: Record<string, string> = {
   audit_energetique: "AUDIT",
   cerfa_ecoptz_emprunteur: "FORMULAIRE EMPRUNTEUR",
   cerfa_ecoptz_entreprise: "FORMULAIRE ENTREPRISES",
-  attestation_rge: "RGE",
+  attestation_rge: "RGE", // « RGE XX » comme « RIB XX », sans la copropriété (Amir 09/10/2026)
   convocation_ag: "CONVOC AG",
   preuve_envoi_convocation: "PREUVE ENVOI CONVOC",
   // 06 - RIB (« RIB XX » : XX = l'entreprise)
@@ -223,8 +225,12 @@ export const NOMENCLATURE_CEGEE: Record<string, string> = {
   attestation_caution: "ATTESTATION CAUTIONNEMENT",
 };
 
-/** « RIB XX » : le terme est complété par l'entreprise émettrice (XX), au lieu de la suivre. */
-const TERME_AVEC_EMETTEUR = new Set(["rib_entreprises"]);
+/** « RIB XX », « RGE XX » : le terme est complété par l'entreprise émettrice (XX), au lieu de la suivre. */
+const TERME_AVEC_EMETTEUR = new Set(["rib_entreprises", "attestation_rge"]);
+
+/** Pièces propres à l'entreprise, nommées sans la copropriété : « RGE DECOPEINT - Qualibat - … »
+ *  (Amir 09/10/2026). */
+const SANS_COPRO = new Set(["attestation_rge"]);
 
 /** Devis et contrats : l'entreprise vient juste après le terme, avant la copropriété
  *  (« DEVIS ENTREPRISE - DECOPEINT - 53 RUE DE LA COURSE - ITE - … », Amir 09/10/2026). */
@@ -332,7 +338,14 @@ export function construireNomFichier(champs: ChampsNom, extension: string): stri
       ? [prefixe, typeLabel(champs.type), objet, emetteur, date, etat]
       : TERMES_ENTREPRISE_EN_TETE.has(terme)
         ? [terme, emetteur, prefixe, objet, date, etat]
-        : [emetteurDansTerme && emetteur ? `${terme} ${emetteur}` : terme, prefixe, objet, emetteurDansTerme ? null : emetteur, date, etat]
+        : [
+            emetteurDansTerme && emetteur ? `${terme} ${emetteur}` : terme,
+            SANS_COPRO.has(champs.type) ? null : prefixe,
+            objet,
+            emetteurDansTerme ? null : emetteur,
+            date,
+            etat,
+          ]
   ).filter((s): s is string => !!s && s.length > 0);
   const nom = segments.join(" - ");
   return extension ? `${nom}.${extension}` : nom;
@@ -403,6 +416,8 @@ export function champsDepuisNom(
   // nomenclature de la banque : le terme ouvre le nom, la copropriété est le segment suivant
   const terme = segs.length ? lireTerme(segs[0]) : null;
   if (terme) [type, suite, emetteurTerme] = [terme.types[0], 2, terme.emetteur];
+  // « RGE XX - … » : pas de copropriété après le terme (avant le 09/10/2026 : « RGE - COPRO - … »)
+  if (terme && terme.emetteur && SANS_COPRO.has(terme.types[0])) suite = 1;
   if (terme && TERMES_ENTREPRISE_EN_TETE.has(segs[0].toUpperCase())) {
     // devis : « {TERME} - {ÉMETTEUR} - {COPRO} - … » ; avant le 09/10/2026 « {TERME} - {COPRO} - … »
     const c = copro ? nomFichierSansAccents(nettoyerSegment(copro).toUpperCase()).split(" - ") : null;
@@ -425,7 +440,7 @@ export function champsDepuisNom(
   let objet: string | null = null;
   let emetteur: string | null = null;
   if (emetteurTerme) {
-    // « RIB XX » ou devis : l'entreprise est déjà lue, le reste est l'objet
+    // « RIB XX », « RGE XX » ou devis : l'entreprise est déjà lue, le reste est l'objet
     emetteur = emetteurTerme;
     objet = avant.length ? avant.join(" - ") : null;
   } else if (avant.length >= 2 && majuscules(avant[avant.length - 1])) {

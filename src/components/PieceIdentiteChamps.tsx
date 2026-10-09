@@ -3,6 +3,7 @@
 // Partagé par le dossier d'adhésion du portail et la page publique du
 // cosignataire ; l'assemblage en un seul fichier est dans lib/pdf/pieceIdentite.
 import { Icon } from "./Icon";
+import { useGlisserDeposer } from "./useGlisserDeposer";
 import { libellesFaces, TYPES_PIECE_IDENTITE, versoRequis } from "@/lib/pdf/pieceIdentite";
 
 const ACCEPT = "image/jpeg,image/png,application/pdf";
@@ -16,8 +17,10 @@ function Face({
   fichier: File | null;
   onChange: (f: File | null) => void;
 }) {
+  // le fichier peut aussi être glissé sur le champ (retour du 09/10/2026)
+  const { survol, props } = useGlisserDeposer(onChange);
   return (
-    <div className="fld">
+    <div className={"fld champ-depot" + (survol ? " survol" : "")} {...props}>
       <label>{label} *</label>
       <input type="file" accept={ACCEPT} onChange={(e) => onChange(e.target.files?.[0] ?? null)} />
       {fichier && (
@@ -59,7 +62,7 @@ export function PieceIdentiteChamps({
       <Face label={faces.recto} fichier={recto} onChange={onRecto} />
       {versoRequis(type) && faces.verso && <Face label={faces.verso} fichier={verso} onChange={onVerso} />}
       <span className="hint" style={{ fontSize: 12, color: "var(--fg-muted)" }}>
-        JPG, PNG ou PDF, 10 Mo maximum par fichier.
+        JPG, PNG ou PDF, 10 Mo maximum par fichier. Vous pouvez aussi glisser le fichier sur le champ.
       </span>
     </div>
   );
