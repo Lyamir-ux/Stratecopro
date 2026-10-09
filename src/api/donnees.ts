@@ -163,10 +163,13 @@ export interface EmailCoproprietaireModifie {
   email: string | null;
   inchange: boolean;
   /** Sort du compte du portail : suit = identifiant de connexion changé aussi (invitation jamais utilisée),
-   *  garde = espace déjà utilisé, identifiant conservé, aucun = fiche sans espace. */
+   *  garde = espace déjà utilisé, identifiant conservé, aucun = fiche sans espace, relie = l'adresse
+   *  appartenait à un compte orphelin (plus aucune fiche) auquel la fiche est maintenant reliée. */
   compte: EtatCompteEmail;
   /** Autres fiches reliées au même compte (leur adresse n'a pas changé). */
   autres_fiches: number;
+  /** Titulaire du compte orphelin repris (état « relie » seulement). */
+  compte_nom?: string | null;
 }
 
 /**

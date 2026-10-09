@@ -18,6 +18,7 @@ import {
 export interface BilanEmail {
   compte: EtatCompteEmail;
   autres_fiches: number;
+  compte_nom?: string | null;
 }
 
 /** Durée d'affichage de la note qui suit un changement (le sort du compte du portail). */
@@ -73,7 +74,7 @@ export function EmailCoproprietaire({
     try {
       const bilan = await onModifier(verdict.email);
       fermer();
-      const phrase = noteApresChangement(bilan.compte, bilan.autres_fiches);
+      const phrase = noteApresChangement(bilan.compte, bilan.autres_fiches, bilan.compte_nom);
       setNote(phrase);
       if (minuteur.current) clearTimeout(minuteur.current);
       if (phrase) minuteur.current = setTimeout(() => setNote(null), DUREE_NOTE_MS);

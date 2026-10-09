@@ -63,6 +63,15 @@ describe("noteApresChangement", () => {
     expect(noteApresChangement("garde", 0)).toContain("déjà connecté");
   });
 
+  it("adresse d'un compte orphelin : la fiche l'a repris, sans e-mail, l'ancien compte reste", () => {
+    const n = noteApresChangement("relie", 0, "Marius MAZZANTE");
+    expect(n).toContain("(Marius MAZZANTE)");
+    expect(n).toContain("sans aucune fiche");
+    expect(n).toContain("mot de passe habituel");
+    expect(n).toContain("aucun e-mail n'est envoyé");
+    expect(noteApresChangement("relie", 0)).not.toContain("()");
+  });
+
   it("sans espace ou compte introuvable : rien à dire", () => {
     expect(noteApresChangement("aucun", 0)).toBeNull();
     expect(noteApresChangement("introuvable", 0)).toBeNull();

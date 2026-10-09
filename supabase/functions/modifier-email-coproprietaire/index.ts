@@ -14,6 +14,14 @@
 // - fiche avec un espace déjà utilisé : seule l'adresse de la fiche change, le compte
 //   garde son identifiant (on ne retire pas à quelqu'un l'adresse avec laquelle il se
 //   connecte) ; l'écran le dit ;
+// - adresse déjà portée par un compte copropriétaire ORPHELIN (plus aucune fiche : sa
+//   copropriété a été supprimée, la suppression définitive laisse le compte) : la fiche
+//   est reliée à ce compte au lieu de changer l'identifiant du sien (option C d'Amir du
+//   09/10/2026). Il se connecte avec son mot de passe habituel ; aucun e-mail n'est
+//   envoyé ; l'ancien compte de la fiche, jamais utilisé, est laissé tel quel. Une adresse
+//   portée par un compte qui a encore des fiches, ou par un compte AMO, syndic ou
+//   prestataire, reste refusée (409) : on n'ouvre pas une fiche à un espace actif sur une
+//   simple faute de frappe ;
 // - un compte qui n'est pas un compte copropriétaire n'est jamais touché.
 // L'adresse de la fiche peut porter plusieurs adresses (« a@x.fr / b@y.fr ») : la
 // première sert (même règle que adresseEmail.ts, creer-espace-coproprietaire et la
@@ -45,7 +53,14 @@ function nettoyer(texte: string): string {
   return texte.replace(/\s+/g, " ").trim();
 }
 
-type EtatCompte = "aucun" | "suit" | "garde" | "introuvable";
+type EtatCompte = "aucun" | "suit" | "garde" | "introuvable" | "relie";
+
+const ROLE_LIBELLE: Record<string, string> = {
+  amo: "un compte Strat Eco",
+  syndic: "un compte syndic",
+  presta: "un compte prestataire",
+  moe: "un compte maître d'œuvre",
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -105,6 +120,7 @@ Deno.serve(async (req: Request) => {
   let compte: EtatCompte = "aucun";
   let ancienneConnexion: string | null = null;
   let autresFiches = 0;
+  let compteRelie: { user_id: string; nom: string | null } | null = null;
   if (fiche.user_id) {
     const [{ data: u }, { data: profil }] = await Promise.all([
       admin.auth.admin.getUserById(fiche.user_id),
@@ -118,7 +134,37 @@ Deno.serve(async (req: Request) => {
       compte = "garde";
     } else {
       compte = "suit";
-      if (emailCompte !== premiere) {
+      // l'adresse voulue est-elle déjà portée par un autre compte ?
+      const { data: porteurs } = emailCompte !== premiere
+        ? await admin.rpc("compte_par_email", { p_email: premiere })
+        : { data: null };
+      const porteur = (porteurs ?? [])[0] as { user_id: string; role: string | null } | undefined;
+      if (porteur && porteur.user_id !== fiche.user_id) {
+        const { count: fichesDuPorteur } = await admin
+          .from("coproprietaires")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", porteur.user_id);
+        if (porteur.role !== "copro") {
+          return json(409, {
+            error: porteur.role
+              ? `Cette adresse est déjà utilisée par ${ROLE_LIBELLE[porteur.role] ?? "un autre compte"}`
+              : "Cette adresse est déjà utilisée par un compte incomplet",
+          });
+        }
+        if ((fichesDuPorteur ?? 0) > 0) {
+          return json(409, {
+            error: "Un compte copropriétaire existe déjà avec cette adresse e-mail : il est relié à d'autres fiches",
+          });
+        }
+        // compte orphelin : la fiche le reprend
+        const { data: profilPorteur } = await admin
+          .from("profiles")
+          .select("full_name")
+          .eq("user_id", porteur.user_id)
+          .maybeSingle();
+        compteRelie = { user_id: porteur.user_id, nom: profilPorteur?.full_name ?? null };
+        compte = "relie";
+      } else if (emailCompte !== premiere) {
         const { error: majErr } = await admin.auth.admin.updateUserById(fiche.user_id, {
           email: premiere!,
           email_confirm: true,
@@ -150,7 +196,15 @@ Deno.serve(async (req: Request) => {
   }
 
   // --- La fiche ---
-  const { error: ficheErr } = await admin.from("coproprietaires").update({ email: stockee }).eq("id", id);
+  // fiche reliée à un compte orphelin : une seule écriture (adresse et compte), gardée par
+  // l'ancien user_id pour ne rien écraser si la fiche a bougé entre-temps
+  const maj = admin.from("coproprietaires").update(compteRelie ? { email: stockee, user_id: compteRelie.user_id } : { email: stockee }).eq("id", id);
+  const { data: lignes, error: ficheErr } = compteRelie
+    ? await maj.eq("user_id", fiche.user_id).select("id")
+    : await maj.select("id");
+  if (!ficheErr && compteRelie && (lignes ?? []).length === 0) {
+    return json(409, { error: "La fiche a changé entre-temps : rechargez la page et réessayez" });
+  }
   if (ficheErr) {
     console.error("Mise à jour de la fiche :", ficheErr.message);
     // la fiche et le compte restent cohérents : l'ancien identifiant est rétabli
@@ -170,5 +224,11 @@ Deno.serve(async (req: Request) => {
     return json(500, { error: "La modification a échoué, l'ancienne adresse est conservée. Réessayez." });
   }
 
-  return json(200, { email: stockee, inchange: false, compte, autres_fiches: autresFiches });
+  return json(200, {
+    email: stockee,
+    inchange: false,
+    compte,
+    autres_fiches: autresFiches,
+    ...(compteRelie ? { compte_nom: compteRelie.nom } : {}),
+  });
 });
