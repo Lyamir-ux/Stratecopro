@@ -9,6 +9,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/Icon";
+import { ChampCodeOtp } from "@/components/ChampCodeOtp";
 import { Badge } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
 import { useAuth } from "@/auth/AuthProvider";
@@ -603,16 +604,7 @@ export function FicheEtatForm({ c, onBack }: { c: SyndicCopro; onBack: () => voi
                       </>
                     )}
                   </span>
-                  <input
-                    className="edit-inp"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    placeholder="6 chiffres"
-                    value={code}
-                    onChange={(ev) => setCode(ev.target.value.replace(/\D/g, "").slice(0, 6))}
-                    style={{ width: 120, letterSpacing: 4 }}
-                  />
+                  <ChampCodeOtp compact value={code} onChange={setCode} />
                   <button
                     className="se-btn se-btn-primary btn-sm"
                     disabled={code.length !== 6 || action.isPending}

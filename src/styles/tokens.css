@@ -294,6 +294,15 @@
 }
 .se-btn-ghost:hover { background: var(--accent-soft); }
 
+/* Bouton désactivé : visible comme tel. Sans cette règle il gardait sa couleur et
+   sa main, et l'on cliquait sans que rien ne se passe (feedback de A CHELGHAM du
+   09/10/2026 sur « Signer le bulletin et le mandat », code incomplet). */
+.se-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.se-btn:disabled:active { transform: none; }
+.se-btn-primary:disabled:hover { background: var(--accent); }
+.se-btn-secondary:disabled:hover { background: transparent; border-color: var(--border-strong); }
+.se-btn-ghost:disabled:hover { background: transparent; }
+
 .se-btn:focus-visible {
   outline: none;
   box-shadow: var(--shadow-focus);

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { PdfLecteur } from "@/components/PdfLecteur";
+import { ChampCodeOtp } from "@/components/ChampCodeOtp";
 import { Cadre } from "@/pages/Signature";
 import { appelSignatureDocumentsPublique, messageErreurSignatureDocuments } from "@/api/ecoPtzIndividuel";
 import { messageErreur } from "@/lib/erreurs";
@@ -221,23 +222,7 @@ export default function SignatureDocumentsPublique() {
                 Code de test (environnement sans envoi réel) : <b>{otp.codeTest}</b>
               </p>
             )}
-            <input
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={6}
-              placeholder="______"
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              style={{
-                width: "100%",
-                fontSize: 30,
-                letterSpacing: 14,
-                textAlign: "center",
-                padding: "10px 0",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-md)",
-              }}
-            />
+            <ChampCodeOtp value={code} onChange={setCode} />
             {erreur && <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 8 }}>{erreur}</p>}
             <button
               className="se-btn se-btn-primary"

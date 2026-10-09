@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { PdfLecteur } from "@/components/PdfLecteur";
+import { ChampCodeOtp } from "@/components/ChampCodeOtp";
 import { useAuth } from "@/auth/AuthProvider";
 import { fmtDate } from "@/lib/format";
 import { messageErreur } from "@/lib/erreurs";
@@ -1156,30 +1157,29 @@ export function Adhesion({
           ) : (
             <div style={{ marginTop: 6, maxWidth: 400 }}>
               <p className="se-body" style={{ margin: "0 0 10px" }}>
-                {otp.canal === "email"
-                  ? "Un code à 6 chiffres vient de vous être envoyé par e-mail."
-                  : otp.canal === "sms"
-                    ? "Un code à 6 chiffres vient d'être envoyé par SMS."
-                    : "Mode test : aucun envoi réel configuré."}
+                {otp.canal === "email" ? (
+                  <>
+                    Un code à 6 chiffres vient de vous être envoyé par e-mail
+                    {sPrincipal?.email ? <> à <b>{sPrincipal.email}</b></> : null}.
+                  </>
+                ) : otp.canal === "sms" ? (
+                  "Un code à 6 chiffres vient d'être envoyé par SMS."
+                ) : (
+                  "Mode test : aucun envoi réel configuré."
+                )}
                 {" "}Il est valable 10 minutes.
               </p>
+              {otp.canal === "email" && (
+                <p className="se-small" style={{ color: "var(--fg-muted)", margin: "0 0 10px" }}>
+                  Rien reçu ? Regardez dans vos courriers indésirables, puis « Renvoyer un code » si besoin.
+                </p>
+              )}
               {otp.codeTest && (
                 <p className="se-small" style={{ color: "var(--color-warning-500)" }}>
                   Code de test (environnement sans envoi réel) : <b>{otp.codeTest}</b>
                 </p>
               )}
-              <input
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                placeholder="______"
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                style={{
-                  width: "100%", fontSize: 28, letterSpacing: 12, textAlign: "center",
-                  padding: "8px 0", border: "1px solid var(--border)", borderRadius: "var(--radius-md)",
-                }}
-              />
+              <ChampCodeOtp value={code} onChange={setCode} />
               <p className="se-small" style={{ color: "var(--fg-muted)", margin: "8px 0 0" }}>
                 En validant ce code, vous signez le bulletin d'adhésion et le mandat de prélèvement SEPA.
               </p>
