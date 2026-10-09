@@ -29,6 +29,7 @@ import {
   type SituationMatrimoniale,
 } from "@/lib/pdf/adhesion";
 import { checkRibConcordance } from "@/lib/pdf/ribCheck";
+import { decouperAdressePostale, type SourceAdresse } from "@/lib/adressePostale";
 import { assemblerPieceIdentite, facesADeposer, verifierFacesPiece } from "@/lib/pdf/pieceIdentite";
 import { PieceIdentiteChamps } from "@/components/PieceIdentiteChamps";
 import { CGU_VERSION } from "@/lib/cguSignature";
@@ -37,6 +38,7 @@ import {
   tantiemesAvecRattaches,
   urlSigneePiece,
   downloadFromPieces,
+  useAdresseConnue,
   useMonAdhesion,
   useSaveAdhesion,
   type FinancementConfig,
@@ -67,6 +69,10 @@ const SITUATIONS: { id: SituationMatrimoniale; label: string }[] = [
   { id: "veuve", label: "Veuf / veuve" },
   { id: "celibataire", label: "Célibataire" },
 ];
+
+/** Situations qui lient deux personnes : un co-emprunteur d'un adhérent marié ou pacsé l'est
+ *  presque toujours avec lui, à la même date (feedback du 09/10/2026). */
+const enCouple = (s: SituationMatrimoniale) => s === "mariee" || s === "pacsee";
 
 const emptyAdherent = (nom = ""): Adherent => ({
   nomPrenom: nom,
@@ -319,6 +325,11 @@ export function Adhesion({
   const [cguCochee, setCguCochee] = useState(false);
   const [attestHonneur, setAttestHonneur] = useState(false);
   const [infoAvis, setInfoAvis] = useState(false);
+  // la situation de l'adhérent 2 suit celle de l'adhérent 1 (couple marié ou pacsé) tant
+  // qu'on ne l'a pas modifiée à la main
+  const [situation2Libre, setSituation2Libre] = useState(false);
+  const [adresseProposee, setAdresseProposee] = useState<SourceAdresse | null>(null);
+  const [adresseTraitee, setAdresseTraitee] = useState(false);
 
   const [typePiece, setTypePiece] = useState("cni");
   // recto et verso déposés dans deux champs distincts (feedback du 09/10/2026)
@@ -346,7 +357,30 @@ export function Adhesion({
     if (!adhesion) return;
     const f = adhesion.form as Partial<AdhesionForm> | null;
     if (f?.adherent1) setForm((prev) => ({ ...prev, ...f } as AdhesionForm));
+    // un brouillon dont l'adhérent 2 a une autre situation que l'adhérent 1 : choix manuel à respecter
+    if (
+      f?.adherent1 &&
+      f.adherent2 &&
+      (f.adherent2.situation !== f.adherent1.situation || f.adherent2.situationDepuis !== f.adherent1.situationDepuis)
+    ) {
+      setSituation2Libre(true);
+    }
   }, [adhesion]);
+
+  // Coordonnées : l'adresse postale déjà connue (réponse à l'enquête, à défaut import) est
+  // proposée une seule fois, jamais par-dessus ce que le copropriétaire a saisi ou enregistré
+  // (idée du 09/10/2026).
+  const { data: adresseConnue } = useAdresseConnue(copro.id, membership.coproprietaireId, membership.adresse);
+  useEffect(() => {
+    if (isLoading || adresseTraitee || adresseConnue === undefined) return;
+    setAdresseTraitee(true);
+    if (!adresseConnue) return;
+    const f = adhesion?.form as Partial<AdhesionForm> | null;
+    if (f?.adresse?.trim() || f?.cp?.trim() || f?.ville?.trim()) return;
+    const proposee = decouperAdressePostale(adresseConnue.texte);
+    setForm((prev) => (prev.adresse.trim() || prev.cp.trim() || prev.ville.trim() ? prev : { ...prev, ...proposee }));
+    setAdresseProposee(adresseConnue.source);
+  }, [isLoading, adresseTraitee, adresseConnue, adhesion]);
 
   const cle = readParams(scenario.params, bareme).cle;
   const lotsHab = useMemo(() => {
@@ -365,6 +399,35 @@ export function Adhesion({
   );
   const brouillons = actifs.filter((b) => b.statut === "brouillon");
   const principalDe = (b: BulletinAvecSignataires) => b.signataires.find((s) => s.role === "principal");
+
+  const changerAdherent1 = (a: Adherent) =>
+    setForm((prev) => {
+      const adherent2 =
+        prev.adherent2 && !situation2Libre && enCouple(a.situation)
+          ? { ...prev.adherent2, situation: a.situation, situationDepuis: a.situationDepuis }
+          : prev.adherent2;
+      return { ...prev, adherent1: a, adherent2 };
+    });
+
+  const changerAdherent2 = (a: Adherent) => {
+    const avant = form.adherent2;
+    if (avant && (a.situation !== avant.situation || a.situationDepuis !== avant.situationDepuis)) {
+      setSituation2Libre(true);
+    }
+    setForm({ ...form, adherent2: a });
+  };
+
+  const ajouterAdherent2 = () => {
+    const a1 = form.adherent1;
+    // marié ou pacsé : le co-emprunteur l'est aussi, à la même date
+    const nouveau = enCouple(a1.situation)
+      ? { ...emptyAdherent(), situation: a1.situation, situationDepuis: a1.situationDepuis }
+      : emptyAdherent();
+    setSituation2Libre(false);
+    setForm({ ...form, adherent2: nouveau });
+    // le co-emprunteur signe aussi : sa fiche de cosignataire est ouverte d'office
+    if (cosignataires.length === 0) setCosignataires([emptyCosignataire()]);
+  };
 
   const agir = async (fn: () => Promise<void>, label: string) => {
     setBusy(label);
@@ -1316,11 +1379,17 @@ export function Adhesion({
         </p>
 
         <div className="form-grid">
-          <AdherentFields a={form.adherent1} onChange={(a) => setForm({ ...form, adherent1: a })} titre="Adhérent 1" />
+          <AdherentFields a={form.adherent1} onChange={changerAdherent1} titre="Adhérent 1" />
 
           {form.adherent2 ? (
             <>
-              <AdherentFields a={form.adherent2} onChange={(a) => setForm({ ...form, adherent2: a })} titre="Adhérent 2 (co-emprunteur)" />
+              <AdherentFields a={form.adherent2} onChange={changerAdherent2} titre="Adhérent 2 (co-emprunteur)" />
+              {!situation2Libre && enCouple(form.adherent1.situation) && (
+                <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>
+                  Situation matrimoniale et date reprises de l'adhérent 1 (couple {form.adherent1.situation === "mariee" ? "marié" : "pacsé"}) :
+                  modifiez-les si elles diffèrent.
+                </p>
+              )}
               <div style={{ gridColumn: "1 / -1" }}>
                 <button className="se-btn se-btn-ghost btn-sm" onClick={() => setForm({ ...form, adherent2: null })}>
                   <Icon name="trash" size={14} />Retirer l'adhérent 2
@@ -1329,14 +1398,7 @@ export function Adhesion({
             </>
           ) : (
             <div style={{ gridColumn: "1 / -1" }}>
-              <button
-                className="se-btn se-btn-ghost btn-sm"
-                onClick={() => {
-                  setForm({ ...form, adherent2: emptyAdherent() });
-                  // le co-emprunteur signe aussi : sa fiche de cosignataire est ouverte d'office
-                  if (cosignataires.length === 0) setCosignataires([emptyCosignataire()]);
-                }}
-              >
+              <button className="se-btn se-btn-ghost btn-sm" onClick={ajouterAdherent2}>
                 <Icon name="plus" size={14} />Ajouter un adhérent 2 (conjoint, indivisaire…)
               </button>
             </div>
@@ -1345,6 +1407,12 @@ export function Adhesion({
           <div className="se-eyebrow" style={{ gridColumn: "1 / -1", marginTop: 6 }}>Coordonnées</div>
           <Fld label="Adresse personnelle *" span>
             <input value={form.adresse} onChange={(e) => setForm({ ...form, adresse: e.target.value })} />
+            {adresseProposee && (
+              <span className="hint">
+                Adresse proposée d'après {adresseProposee === "enquete" ? "votre réponse au questionnaire" : "les informations de votre copropriété"} :
+                vérifiez-la et corrigez-la si besoin.
+              </span>
+            )}
           </Fld>
           <Fld label="Code postal *">
             <input value={form.cp} onChange={(e) => setForm({ ...form, cp: e.target.value })} />
@@ -1425,6 +1493,12 @@ export function Adhesion({
                 </button>
               </div>
               <div className="form-grid">
+                <Fld label="E-mail *">
+                  <input type="email" autoFocus placeholder="prenom.nom@exemple.fr" value={c.email} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)))} />
+                </Fld>
+                <Fld label="Téléphone mobile *">
+                  <input placeholder="06 12 34 56 78" value={c.telephone} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, telephone: e.target.value } : x)))} />
+                </Fld>
                 <Fld label="Civilité">
                   <select value={c.civilite} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, civilite: e.target.value } : x)))}>
                     <option value="">-</option>
@@ -1437,12 +1511,6 @@ export function Adhesion({
                 </Fld>
                 <Fld label="Nom *">
                   <input value={c.nom} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, nom: e.target.value } : x)))} />
-                </Fld>
-                <Fld label="E-mail *">
-                  <input type="email" value={c.email} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)))} />
-                </Fld>
-                <Fld label="Téléphone mobile *">
-                  <input placeholder="06 12 34 56 78" value={c.telephone} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, telephone: e.target.value } : x)))} />
                 </Fld>
                 <Fld label="Date de naissance">
                   <input type="date" value={c.date_naissance} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, date_naissance: e.target.value } : x)))} />

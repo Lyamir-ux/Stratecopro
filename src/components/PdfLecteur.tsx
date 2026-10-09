@@ -1,6 +1,14 @@
 // Lecteur PDF avec suivi du défilement : le bouton de signature ne s'active
 // qu'après lecture complète (spec §4.5). Rendu pdfjs page par page dans un
 // conteneur défilant - un iframe ne permet pas de détecter la fin de lecture.
+//
+// Les pages (canvas) sont ajoutées à la main dans `pages`, un div que React rend
+// VIDE et dont il ne touche jamais le contenu. Le message de chargement, lui, est
+// un enfant géré par React du conteneur défilant : il ne partage donc pas son
+// parent avec les canvas. Avant (09/10/2026, bug de A CHELGHAM sur « Lire »), on
+// vidait le conteneur avec innerHTML = "" alors que React y avait mis le message :
+// au passage à « prêt », React retirait un nœud déjà disparu et plantait
+// (« Failed to execute 'removeChild' on 'Node' »), emportant toute l'application.
 import { useEffect, useRef, useState } from "react";
 
 export function PdfLecteur({
@@ -13,7 +21,10 @@ export function PdfLecteur({
   hauteur?: number;
 }) {
   const conteneur = useRef<HTMLDivElement>(null);
-  const [etat, setEtat] = useState<"chargement" | "pret" | "erreur">("chargement");
+  const pages = useRef<HTMLDivElement>(null);
+  // « rendu » : document ouvert, pages en cours de dessin (le message disparaît,
+  // la détection de fin de lecture attend encore « pret »)
+  const [etat, setEtat] = useState<"chargement" | "rendu" | "pret" | "erreur">("chargement");
   const [luJusquauBout, setLuJusquauBout] = useState(false);
   const signale = useRef(false);
 
@@ -25,8 +36,9 @@ export function PdfLecteur({
         const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
         pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
         const pdf = await pdfjs.getDocument({ url }).promise;
-        if (!vivant || !conteneur.current) return;
-        conteneur.current.innerHTML = "";
+        if (!vivant || !conteneur.current || !pages.current) return;
+        pages.current.replaceChildren();
+        setEtat("rendu");
         const largeur = conteneur.current.clientWidth - 24;
         for (let p = 1; p <= pdf.numPages; p++) {
           const page = await pdf.getPage(p);
@@ -40,8 +52,8 @@ export function PdfLecteur({
           canvas.style.display = "block";
           canvas.style.marginBottom = "12px";
           canvas.style.boxShadow = "0 1px 4px rgba(0,0,0,0.18)";
-          if (!vivant || !conteneur.current) return;
-          conteneur.current.appendChild(canvas);
+          if (!vivant || !pages.current) return;
+          pages.current.appendChild(canvas);
           const ctx = canvas.getContext("2d");
           if (!ctx) continue;
           await page.render({ canvas, canvasContext: ctx, viewport }).promise;
@@ -91,6 +103,7 @@ export function PdfLecteur({
           padding: 12,
         }}
       >
+        <div ref={pages} />
         {etat === "chargement" && (
           <p className="se-small" style={{ color: "var(--fg-muted)", padding: 8 }}>Chargement du document…</p>
         )}

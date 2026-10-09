@@ -124,7 +124,11 @@ Deno.serve(async (req: Request) => {
           email_confirm: true,
         });
         if (majErr) {
-          const deja = majErr.code === "email_exists" || /already|registered|exists/i.test(majErr.message ?? "");
+          // adresse déjà portée par un autre compte : l'API d'administration répond
+          // alors par une 500 « Error updating user » (contrainte users_email_partial_key)
+          // sans le code email_exists, d'où la vérification directe (0152)
+          const { data: prise } = await admin.rpc("compte_email_existe", { p_email: premiere, p_sauf: fiche.user_id });
+          const deja = prise === true || majErr.code === "email_exists" || /already|registered|exists/i.test(majErr.message ?? "");
           if (!deja) console.error("Changement d'adresse du compte :", majErr.message);
           return json(deja ? 409 : 500, {
             error: deja

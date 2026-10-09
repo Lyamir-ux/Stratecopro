@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, toutesLesLignes } from "@/lib/supabase";
 import { nomFichierSansAccents } from "@/lib/nommage";
+import { adresseConnue } from "@/lib/adressePostale";
 import type { Tables, Enums, Json } from "@/lib/database.types";
 import { determineProfil, type Bareme, type FinanceParams, type Profil } from "@/lib/finance";
 import { readParams } from "./scenarios";
@@ -32,6 +33,8 @@ export interface PortalLot {
 export interface Membership {
   coproprietaireId: string;
   nom: string;
+  /** Adresse postale de la fiche (import) : proposée dans le dossier d'adhésion. */
+  adresse?: string | null;
   copro: Copro;
   lots: PortalLot[];
 }
@@ -84,7 +87,7 @@ export function useMesCopros() {
         supabase
           .from("coproprietaires")
           .select(
-            `id, nom,
+            `id, nom, adresse,
              coproprietes (*),
              lots ( id, num, usage, rattache_a, batiments ( code ),
                     lot_tantiemes ( tantiemes, cles_repartition ( code ) ) )`
@@ -104,6 +107,7 @@ export function useMesCopros() {
         .map((r) => ({
           coproprietaireId: r.id,
           nom: r.nom,
+          adresse: r.adresse,
           copro: r.coproprietes!,
           lots: (r.lots ?? [])
             .map((l) => ({
@@ -334,6 +338,33 @@ export function useMaReponse(enqueteId: string | undefined, coproprietaireId: st
         .maybeSingle();
       if (error) throw error;
       return data;
+    },
+  });
+}
+
+/**
+ * Adresse postale déjà connue du copropriétaire (texte libre) : celle de sa réponse à
+ * l'enquête de la copropriété, à défaut celle de l'import (`adresseFiche`). Sert à
+ * pré-remplir les coordonnées du dossier d'adhésion (idée du 09/10/2026).
+ */
+export function useAdresseConnue(
+  coproId: string | undefined,
+  coproprietaireId: string | undefined,
+  adresseFiche: string | null | undefined,
+) {
+  return useQuery({
+    queryKey: ["portail", "adresse-connue", coproId, coproprietaireId, adresseFiche ?? null],
+    enabled: !!coproId && !!coproprietaireId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("enquete_reponses")
+        .select("reponses, enquetes!inner(copro_id)")
+        .eq("coproprietaire_id", coproprietaireId!)
+        .eq("enquetes.copro_id", coproId!)
+        .maybeSingle();
+      // l'enquête est facultative : une erreur de lecture ne doit pas masquer l'adresse de la fiche
+      const reponses = error ? null : (data?.reponses as Record<string, unknown> | null);
+      return adresseConnue(reponses?.adresse, adresseFiche);
     },
   });
 }
