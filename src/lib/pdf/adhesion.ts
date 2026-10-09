@@ -182,9 +182,11 @@ export async function genMandatSepa(input: {
   drawSpot(p, font, "FRANCE", C.pays);
 
   const iban = normalizeIban(input.iban);
-  [...iban].slice(0, C.iban.xs.length).forEach((ch, i) =>
-    drawInBox(p, fontBold, sanitize(ch), C.iban.xs[i], C.iban.w, C.iban.y, C.iban.size)
-  );
+  const casesDeLIban = casesIban(iban.length, C.iban.xs.length);
+  [...iban].forEach((ch, i) => {
+    const k = casesDeLIban[i];
+    if (k !== undefined) drawInBox(p, fontBold, sanitize(ch), C.iban.xs[k], C.iban.w, C.iban.y, C.iban.size);
+  });
   const bic = input.bic.replace(/\s/g, "").toUpperCase();
   [...bic].slice(0, C.bic.xs.length).forEach((ch, i) =>
     drawInBox(p, fontBold, sanitize(ch), C.bic.xs[i], C.bic.w, C.bic.y, C.bic.size)
@@ -212,6 +214,19 @@ export async function genMandatSepa(input: {
 }
 
 // ========== IBAN ==========
+
+/**
+ * Case du gabarit TRA929 où écrire chaque caractère d'un IBAN (retour de A CHELGHAM,
+ * 09/10/2026 : « le RIB est mal cadré, les espaces ne sont pas respectés »). La grille compte
+ * 33 cases dont une sur cinq est volontairement non cadrée : un IBAN s'y écrit par groupes de
+ * 4 caractères séparés par une case vide (FR76 _ 1027 _ 8010 _ 1100 _ 0208 _ 4670 _ 197, soit
+ * 27 caractères + 6 espaces = 33). Un IBAN de plus de 27 caractères ne tient plus ainsi : il
+ * est alors écrit à la suite, sans espaces. `nbCases` est la taille de la grille.
+ */
+export function casesIban(longueur: number, nbCases = 33): number[] {
+  const avecEspaces = longueur + Math.ceil(longueur / 4) - 1;
+  return Array.from({ length: longueur }, (_, i) => (avecEspaces <= nbCases ? i + Math.floor(i / 4) : i));
+}
 
 export const normalizeIban = (raw: string): string => raw.replace(/\s/g, "").toUpperCase();
 

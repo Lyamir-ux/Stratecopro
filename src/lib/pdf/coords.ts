@@ -74,7 +74,9 @@ export const SEPA_COORDS = {
   cp: { xs: [139.8, 153.5, 167.1, 181.2, 194.9], w: 13, y: 645, size: 10 },
   ville: { x: 213, y: 645, size: 9, max: 60 },
   pays: { x: 143, y: 620, size: 9, max: 25 },
-  /** 33 cases de 10,4 pt (pas ≈ 11,45 pt), y de 591,4 à 604,4 */
+  /** 33 cases de 10,4 pt (pas ≈ 11,45 pt), y de 591,4 à 604,4. Une case sur cinq (5e, 10e,
+   *  15e…) n'est pas cadrée : c'est l'espace entre deux groupes de 4 caractères - voir
+   *  `casesIban` (adhesion.ts). */
   iban: {
     xs: [
       139.1, 150.2, 161.4, 172.5, 184.1, 195.2, 206.8, 218.3, 229.8, 241.0, 252.5,

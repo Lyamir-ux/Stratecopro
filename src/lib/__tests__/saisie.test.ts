@@ -13,7 +13,7 @@ import {
   positionCurseur,
 } from "../saisie";
 import { erreurFormatPiece, typeMimePiece } from "../formatPiece";
-import { isValidIban } from "../pdf/adhesion";
+import { casesIban, isValidIban } from "../pdf/adhesion";
 
 const IBAN = "FR7630001007941234567890185";
 
@@ -176,5 +176,22 @@ describe("formats de fichier d'une pièce", () => {
     expect(typeMimePiece(f("photo.JPEG", ""))).toBe("image/jpeg");
     expect(erreurFormatPiece(f("rib.docx", ""))).not.toBeNull();
     expect(erreurFormatPiece(f("rib", ""))).not.toBeNull();
+  });
+});
+
+describe("casesIban : placement dans la grille du mandat SEPA", () => {
+  it("un IBAN français occupe 33 cases : 4 caractères, une case vide, 4, une case vide… 3", () => {
+    const cases = casesIban(27, 33);
+    expect(cases).toHaveLength(27);
+    expect(cases.slice(0, 9)).toEqual([0, 1, 2, 3, 5, 6, 7, 8, 10]);
+    // les cases 4, 9, 14, 19, 24 et 29 restent vides (non cadrées dans le gabarit)
+    expect(cases.filter((c) => c % 5 === 4)).toEqual([]);
+    expect(cases[26]).toBe(32);
+  });
+  it("un IBAN trop long pour les espaces est écrit à la suite", () => {
+    expect(casesIban(28, 33)).toEqual(Array.from({ length: 28 }, (_, i) => i));
+  });
+  it("un IBAN plus court garde le même découpage par 4", () => {
+    expect(casesIban(14, 33)).toEqual([0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16]);
   });
 });
