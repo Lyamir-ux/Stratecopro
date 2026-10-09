@@ -38,6 +38,7 @@ import { PIECES_SITUATION, RAISON_PRET, type PieceAttendue } from "@/lib/piecesS
 import { useAccepterCguDepot, useCguDepotPieces } from "@/api/signature";
 import { ouvrirDocumentSignature, urlApercuDocumentSignature, useMesDocumentsEcoPtz } from "@/api/ecoPtzIndividuel";
 import { messageErreur } from "@/lib/erreurs";
+import { ACCEPT_PIECE, erreurFormatPiece, LIBELLE_FORMATS_PIECE } from "@/lib/formatPiece";
 
 function fmtSize(bytes: number | null): string {
   if (bytes == null) return "";
@@ -64,6 +65,8 @@ function DepotPiece({
   const supprimer = useSupprimerPiece(membership.coproprietaireId);
   const [confirmerSuppr, setConfirmerSuppr] = useState(false);
   const [erreurPiece, setErreurPiece] = useState<string | null>(null);
+  // format refusé au choix du fichier (ex. un Word passé par « Tous les fichiers »)
+  const [erreurFormat, setErreurFormat] = useState<string | null>(null);
 
   // Encadré : vert une fois validé par Strat Eco, orange en attente de
   // vérification, rouge si refusé (feedback Amir 10/09).
@@ -73,7 +76,7 @@ function DepotPiece({
   const hint = upload.isPending
     ? "Téléversement…"
     : !piece
-      ? `${attendue.aide} PDF ou photo.`
+      ? `${attendue.aide} ${LIBELLE_FORMATS_PIECE}.`
       : piece.statut === "valide"
         ? `${piece.name} · validé par Strat Eco le ${fmtDate(piece.verifiee_le)}`
         : piece.statut === "refuse"
@@ -85,11 +88,15 @@ function DepotPiece({
       <input
         ref={inputRef}
         type="file"
-        accept=".pdf,.jpg,.jpeg,.png"
+        accept={ACCEPT_PIECE}
         style={{ display: "none" }}
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) setDepot(file);
+          if (file) {
+            const refus = erreurFormatPiece(file);
+            setErreurFormat(refus);
+            if (!refus) setDepot(file);
+          }
           if (inputRef.current) inputRef.current.value = "";
         }}
       />
@@ -123,9 +130,14 @@ function DepotPiece({
           {!piece ? "Téléverser" : piece.statut === "refuse" ? "Déposer une nouvelle version" : "Remplacer"}
         </span>
       </div>
+      {erreurFormat && (
+        <p className="se-small" role="alert" style={{ color: "var(--color-error-700)", margin: 0 }}>
+          {erreurFormat}
+        </p>
+      )}
       {upload.isError && (
         <p className="se-small" style={{ color: "var(--color-error-700)", margin: 0 }}>
-          Le téléversement a échoué. Vérifiez le fichier (PDF ou image) et réessayez.
+          Le téléversement a échoué. Vérifiez le fichier ({LIBELLE_FORMATS_PIECE}) et réessayez.
         </p>
       )}
       {piece && (

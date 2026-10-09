@@ -41,3 +41,13 @@ export function adresseConnue(
   if (adresseFiche && adresseFiche.trim()) return { texte: adresseFiche.trim(), source: "import" };
   return null;
 }
+
+/** Réponse à une question d'identité de l'enquête (« adresse », « telephone »…) : le
+ *  questionnaire range ses réponses sous `reponses.copro` (celles du copropriétaire) et
+ *  `reponses.lots` (une par lot) - jamais à la racine. Texte non vide, sinon null. */
+export function reponseIdentiteEnquete(reponses: unknown, id: string): string | null {
+  const copro = (reponses as { copro?: Record<string, unknown> } | null | undefined)?.copro;
+  const v = copro?.[id];
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+

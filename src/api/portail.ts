@@ -2,7 +2,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, toutesLesLignes } from "@/lib/supabase";
 import { nomFichierSansAccents } from "@/lib/nommage";
-import { adresseConnue } from "@/lib/adressePostale";
+import { adresseConnue, reponseIdentiteEnquete } from "@/lib/adressePostale";
+import { erreurFormatPiece } from "@/lib/formatPiece";
 import type { Tables, Enums, Json } from "@/lib/database.types";
 import { determineProfil, type Bareme, type FinanceParams, type Profil } from "@/lib/finance";
 import { readParams } from "./scenarios";
@@ -343,17 +344,19 @@ export function useMaReponse(enqueteId: string | undefined, coproprietaireId: st
 }
 
 /**
- * Adresse postale déjà connue du copropriétaire (texte libre) : celle de sa réponse à
- * l'enquête de la copropriété, à défaut celle de l'import (`adresseFiche`). Sert à
- * pré-remplir les coordonnées du dossier d'adhésion (idée du 09/10/2026).
+ * Coordonnées déjà connues du copropriétaire : l'adresse postale (texte libre) de sa
+ * réponse à l'enquête de la copropriété, à défaut celle de l'import (`adresseFiche`), et
+ * le téléphone qu'il y a donné. Sert à pré-remplir le dossier d'adhésion (idées du
+ * 09/10/2026). L'enquête range ses réponses sous `reponses.copro` : la première version
+ * lisait la racine et ne retrouvait jamais l'adresse.
  */
-export function useAdresseConnue(
+export function useCoordonneesConnues(
   coproId: string | undefined,
   coproprietaireId: string | undefined,
   adresseFiche: string | null | undefined,
 ) {
   return useQuery({
-    queryKey: ["portail", "adresse-connue", coproId, coproprietaireId, adresseFiche ?? null],
+    queryKey: ["portail", "coordonnees-connues", coproId, coproprietaireId, adresseFiche ?? null],
     enabled: !!coproId && !!coproprietaireId,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -363,8 +366,11 @@ export function useAdresseConnue(
         .eq("enquetes.copro_id", coproId!)
         .maybeSingle();
       // l'enquête est facultative : une erreur de lecture ne doit pas masquer l'adresse de la fiche
-      const reponses = error ? null : (data?.reponses as Record<string, unknown> | null);
-      return adresseConnue(reponses?.adresse, adresseFiche);
+      const reponses = error ? null : data?.reponses;
+      return {
+        adresse: adresseConnue(reponseIdentiteEnquete(reponses, "adresse"), adresseFiche),
+        telephone: reponseIdentiteEnquete(reponses, "telephone"),
+      };
     },
   });
 }
@@ -600,6 +606,9 @@ export function useUploadPiece(coproId: string, coproprietaireId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ type, file }: { type: TypePiece; file: File }) => {
+      // le bucket n'impose pas de format : un Word ou un Excel ne doit jamais arriver jusqu'ici
+      const refus = erreurFormatPiece(file);
+      if (refus) throw new Error(refus);
       const { data: session } = await supabase.auth.getSession();
       const uid = session.session?.user.id;
       if (!uid) throw new Error("Session expirée");

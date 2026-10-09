@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adresseConnue, decouperAdressePostale } from "../adressePostale";
+import { adresseConnue, decouperAdressePostale, reponseIdentiteEnquete } from "../adressePostale";
 
 describe("decouperAdressePostale", () => {
   it("découpe une adresse d'import « rue, code postal ville »", () => {
@@ -68,5 +68,31 @@ describe("adresseConnue", () => {
   it("rien de connu", () => {
     expect(adresseConnue(undefined, null)).toBeNull();
     expect(adresseConnue(42, "")).toBeNull();
+  });
+});
+
+describe("reponseIdentiteEnquete", () => {
+  // forme réelle de enquete_reponses.reponses : les réponses d'identité sont sous « copro »
+  const reponses = {
+    copro: { adresse: " 3 rue A, 10000 Troyes ", telephone: "06 12 34 56 78", rfr: 12000 },
+    lots: { "lot-1": { "nb-habitants": 2 } },
+    complet: true,
+  };
+
+  it("lit adresse et téléphone sous « copro »", () => {
+    expect(reponseIdentiteEnquete(reponses, "adresse")).toBe("3 rue A, 10000 Troyes");
+    expect(reponseIdentiteEnquete(reponses, "telephone")).toBe("06 12 34 56 78");
+  });
+
+  it("ne lit pas la racine (c'était le défaut de la première version)", () => {
+    expect(reponseIdentiteEnquete({ adresse: "3 rue A" }, "adresse")).toBeNull();
+  });
+
+  it("réponse absente, vide ou non textuelle", () => {
+    expect(reponseIdentiteEnquete(reponses, "email")).toBeNull();
+    expect(reponseIdentiteEnquete({ copro: { adresse: "  " } }, "adresse")).toBeNull();
+    expect(reponseIdentiteEnquete(reponses, "rfr")).toBeNull();
+    expect(reponseIdentiteEnquete(null, "adresse")).toBeNull();
+    expect(reponseIdentiteEnquete(undefined, "adresse")).toBeNull();
   });
 });

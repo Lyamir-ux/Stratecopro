@@ -219,6 +219,8 @@ export const normalizeIban = (raw: string): string => raw.replace(/\s/g, "").toU
 export function isValidIban(raw: string): boolean {
   const iban = normalizeIban(raw);
   if (!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(iban)) return false;
+  // un IBAN français compte exactement 27 caractères (FR76 + 5 blocs de 4 + 1 bloc de 3)
+  if (iban.startsWith("FR") && iban.length !== 27) return false;
   const rearranged = iban.slice(4) + iban.slice(0, 4);
   const digits = rearranged.replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55));
   let rem = 0;

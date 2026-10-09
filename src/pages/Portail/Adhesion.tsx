@@ -30,6 +30,16 @@ import {
 } from "@/lib/pdf/adhesion";
 import { checkRibConcordance } from "@/lib/pdf/ribCheck";
 import { decouperAdressePostale, type SourceAdresse } from "@/lib/adressePostale";
+import {
+  ChampBic,
+  ChampDate,
+  ChampIban,
+  ChampsNaissance,
+  CpVilleFields,
+  MessageSaisie,
+} from "@/components/ChampsSaisie";
+import { classerTelephone, dateLieuComplet, diagnosticBic, diagnosticIban } from "@/lib/saisie";
+import { ACCEPT_PIECE, erreurFormatPiece, LIBELLE_FORMATS_PIECE, typeMimePiece } from "@/lib/formatPiece";
 import { assemblerPieceIdentite, facesADeposer, verifierFacesPiece } from "@/lib/pdf/pieceIdentite";
 import { PieceIdentiteChamps } from "@/components/PieceIdentiteChamps";
 import { CGU_VERSION } from "@/lib/cguSignature";
@@ -38,7 +48,7 @@ import {
   tantiemesAvecRattaches,
   urlSigneePiece,
   downloadFromPieces,
-  useAdresseConnue,
+  useCoordonneesConnues,
   useMonAdhesion,
   useSaveAdhesion,
   type FinancementConfig,
@@ -195,14 +205,12 @@ function AdherentFields({ a, onChange, titre }: { a: Adherent; onChange: (a: Adh
       <Fld label="Nom de naissance">
         <input value={a.nomNaissance} onChange={(e) => set({ nomNaissance: e.target.value })} />
       </Fld>
-      <Fld label="Date et lieu de naissance *">
-        <input placeholder="12/05/1980 à Colmar" value={a.dateLieuNaissance} onChange={(e) => set({ dateLieuNaissance: e.target.value })} />
-      </Fld>
+      <ChampsNaissance requis valeur={a.dateLieuNaissance} onChange={(v) => set({ dateLieuNaissance: v })} />
       <Fld label="Profession">
         <input value={a.profession} onChange={(e) => set({ profession: e.target.value })} />
       </Fld>
       <Fld label="Profession exercée depuis le">
-        <input placeholder="01/09/2015" value={a.professionDepuis} onChange={(e) => set({ professionDepuis: e.target.value })} />
+        <ChampDate valeur={a.professionDepuis} onChange={(v) => set({ professionDepuis: v })} min="1900-01-01" />
       </Fld>
       <Fld label="Situation matrimoniale *">
         <select value={a.situation} onChange={(e) => set({ situation: e.target.value as SituationMatrimoniale })}>
@@ -213,7 +221,7 @@ function AdherentFields({ a, onChange, titre }: { a: Adherent; onChange: (a: Adh
       </Fld>
       {a.situation !== "celibataire" && (
         <Fld label="Depuis le">
-          <input placeholder="15/06/2010" value={a.situationDepuis} onChange={(e) => set({ situationDepuis: e.target.value })} />
+          <ChampDate valeur={a.situationDepuis} onChange={(v) => set({ situationDepuis: v })} min="1900-01-01" />
         </Fld>
       )}
     </>
@@ -329,7 +337,10 @@ export function Adhesion({
   // qu'on ne l'a pas modifiée à la main
   const [situation2Libre, setSituation2Libre] = useState(false);
   const [adresseProposee, setAdresseProposee] = useState<SourceAdresse | null>(null);
-  const [adresseTraitee, setAdresseTraitee] = useState(false);
+  // champ où le téléphone de l'enquête a été repris (portable, ou domicile s'il s'agit d'un fixe)
+  const [telephoneRepris, setTelephoneRepris] = useState<"portable" | "domicile" | null>(null);
+  const [coordonneesTraitees, setCoordonneesTraitees] = useState(false);
+  const [erreurRib, setErreurRib] = useState<string | null>(null);
 
   const [typePiece, setTypePiece] = useState("cni");
   // recto et verso déposés dans deux champs distincts (feedback du 09/10/2026)
@@ -367,20 +378,29 @@ export function Adhesion({
     }
   }, [adhesion]);
 
-  // Coordonnées : l'adresse postale déjà connue (réponse à l'enquête, à défaut import) est
-  // proposée une seule fois, jamais par-dessus ce que le copropriétaire a saisi ou enregistré
-  // (idée du 09/10/2026).
-  const { data: adresseConnue } = useAdresseConnue(copro.id, membership.coproprietaireId, membership.adresse);
+  // Coordonnées : l'adresse postale et le téléphone déjà connus (réponse à l'enquête, à défaut
+  // import pour l'adresse) sont proposés une seule fois, jamais par-dessus ce que le
+  // copropriétaire a saisi ou enregistré (idées du 09/10/2026).
+  const { data: connues } = useCoordonneesConnues(copro.id, membership.coproprietaireId, membership.adresse);
   useEffect(() => {
-    if (isLoading || adresseTraitee || adresseConnue === undefined) return;
-    setAdresseTraitee(true);
-    if (!adresseConnue) return;
+    if (isLoading || coordonneesTraitees || connues === undefined) return;
+    setCoordonneesTraitees(true);
     const f = adhesion?.form as Partial<AdhesionForm> | null;
-    if (f?.adresse?.trim() || f?.cp?.trim() || f?.ville?.trim()) return;
-    const proposee = decouperAdressePostale(adresseConnue.texte);
-    setForm((prev) => (prev.adresse.trim() || prev.cp.trim() || prev.ville.trim() ? prev : { ...prev, ...proposee }));
-    setAdresseProposee(adresseConnue.source);
-  }, [isLoading, adresseTraitee, adresseConnue, adhesion]);
+    if (connues.adresse && !f?.adresse?.trim() && !f?.cp?.trim() && !f?.ville?.trim()) {
+      const proposee = decouperAdressePostale(connues.adresse.texte);
+      setForm((prev) => (prev.adresse.trim() || prev.cp.trim() || prev.ville.trim() ? prev : { ...prev, ...proposee }));
+      setAdresseProposee(connues.adresse.source);
+    }
+    if (connues.telephone && !f?.portable?.trim() && !f?.telDomicile?.trim()) {
+      const champ = classerTelephone(connues.telephone) === "fixe" ? "domicile" : "portable";
+      setForm((prev) =>
+        prev.portable.trim() || prev.telDomicile.trim()
+          ? prev
+          : { ...prev, ...(champ === "portable" ? { portable: connues.telephone! } : { telDomicile: connues.telephone! }) },
+      );
+      setTelephoneRepris(champ);
+    }
+  }, [isLoading, coordonneesTraitees, connues, adhesion]);
 
   const cle = readParams(scenario.params, bareme).cle;
   const lotsHab = useMemo(() => {
@@ -886,6 +906,13 @@ export function Adhesion({
     if (!ribOk || !mandatOk || refaireRib) {
       const ibanOk = isValidIban(iban);
       const bicOk = isValidBic(bic);
+      const majRib = (f: File | null) => {
+        // le sélecteur « Tous les fichiers » laisse passer un Word : refusé dès le choix
+        const erreurFormat = f ? erreurFormatPiece(f) : null;
+        setErreurRib(erreurFormat);
+        setRibFichier(f && !erreurFormat ? f : null);
+        return !erreurFormat;
+      };
       return (
         <div className="card-xl fade" style={{ marginTop: 22 }}>
           <div className="cx-head">
@@ -926,30 +953,27 @@ export function Adhesion({
               chiffré ; seuls ses 4 derniers caractères restent affichables.
             </p>
             <div className="form-grid">
-              <Fld label="RIB (JPG, PNG ou PDF) *" span>
+              <Fld label={`RIB (${LIBELLE_FORMATS_PIECE}) *`} span>
                 <input
                   type="file"
-                  accept="image/jpeg,image/png,application/pdf"
-                  onChange={(e) => setRibFichier(e.target.files?.[0] ?? null)}
+                  accept={ACCEPT_PIECE}
+                  onChange={(e) => {
+                    if (!majRib(e.target.files?.[0] ?? null)) e.target.value = "";
+                  }}
                 />
+                {erreurRib && <span className="hint" style={{ color: "var(--color-error-700)" }}>{erreurRib}</span>}
               </Fld>
               <Fld label="IBAN *">
-                <input placeholder="FR76 …" value={iban} onChange={(e) => setIban(e.target.value)} />
+                <ChampIban value={iban} onChange={setIban} />
+                <span className="hint">Un IBAN français compte 27 caractères : les blocs de 4 sont séparés automatiquement.</span>
               </Fld>
               <Fld label="BIC *">
-                <input placeholder="CEPAFRPP…" value={bic} onChange={(e) => setBic(e.target.value)} />
+                <ChampBic value={bic} onChange={setBic} />
+                <span className="hint">8 ou 11 caractères, par exemple CEPAFRPP513.</span>
               </Fld>
             </div>
-            {iban && !ibanOk && (
-              <p className="se-small" style={{ color: "var(--color-error-700)", margin: "6px 0 0" }}>
-                IBAN invalide - vérifiez la saisie (clé de contrôle incorrecte).
-              </p>
-            )}
-            {bic && !bicOk && (
-              <p className="se-small" style={{ color: "var(--color-error-700)", margin: "6px 0 0" }}>
-                BIC invalide - 8 ou 11 caractères (ex. CEPAFRPP513).
-              </p>
-            )}
+            <MessageSaisie diagnostic={diagnosticIban(iban)} />
+            <MessageSaisie diagnostic={diagnosticBic(bic)} />
             {error && <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 8 }}>{error}</p>}
             <button
               className="se-btn se-btn-primary"
@@ -958,8 +982,9 @@ export function Adhesion({
               onClick={() =>
                 void agir(async () => {
                   // concordance IBAN saisi / RIB déposé (information AMO)
-                  const concordance = await checkRibConcordance(ribFichier!, ribFichier!.type, iban);
-                  const ext = ribFichier!.type === "application/pdf" ? "pdf" : ribFichier!.type === "image/png" ? "png" : "jpg";
+                  const concordance = await checkRibConcordance(ribFichier!, typeMimePiece(ribFichier!), iban);
+                  const typeRib = typeMimePiece(ribFichier!);
+                  const ext = typeRib === "application/pdf" ? "pdf" : typeRib === "image/png" ? "png" : "jpg";
                   // mandat SEPA pré-rempli, déposé sur chaque bulletin : il sera lu puis
                   // signé avec le même code que le bulletin (0148)
                   const mandat = new Blob(
@@ -1297,7 +1322,7 @@ export function Adhesion({
   // ---------- formulaire + cosignataires ----------
   const champsOk =
     form.adherent1.nomPrenom.trim() &&
-    form.adherent1.dateLieuNaissance.trim() &&
+    dateLieuComplet(form.adherent1.dateLieuNaissance) &&
     form.adresse.trim() &&
     form.cp.trim() &&
     form.ville.trim() &&
@@ -1305,7 +1330,7 @@ export function Adhesion({
     form.email.trim() &&
     form.lieuSignature.trim() &&
     (form.montantType === "100" || form.montantAutre.trim()) &&
-    (!form.adherent2 || (form.adherent2.nomPrenom.trim() && form.adherent2.dateLieuNaissance.trim()));
+    (!form.adherent2 || (form.adherent2.nomPrenom.trim() && dateLieuComplet(form.adherent2.dateLieuNaissance)));
 
   const principalOk =
     prenomPrincipal.trim() && nomPrincipal.trim() && emailValide(form.email) && telValide(form.portable);
@@ -1414,20 +1439,23 @@ export function Adhesion({
               </span>
             )}
           </Fld>
-          <Fld label="Code postal *">
-            <input value={form.cp} onChange={(e) => setForm({ ...form, cp: e.target.value })} />
-          </Fld>
-          <Fld label="Ville *">
-            <input value={form.ville} onChange={(e) => setForm({ ...form, ville: e.target.value })} />
-          </Fld>
+          <CpVilleFields requis cp={form.cp} ville={form.ville} onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))} />
           <Fld label="Téléphone portable *">
-            <input value={form.portable} onChange={(e) => setForm({ ...form, portable: e.target.value })} />
+            <input type="tel" autoComplete="tel" value={form.portable} onChange={(e) => setForm({ ...form, portable: e.target.value })} />
+            {telephoneRepris === "portable" && (
+              <span className="hint">Numéro repris de votre réponse au questionnaire : vérifiez-le.</span>
+            )}
           </Fld>
           <Fld label="Téléphone domicile">
-            <input value={form.telDomicile} onChange={(e) => setForm({ ...form, telDomicile: e.target.value })} />
+            <input type="tel" value={form.telDomicile} onChange={(e) => setForm({ ...form, telDomicile: e.target.value })} />
+            {telephoneRepris === "domicile" && (
+              <span className="hint">
+                Numéro fixe repris de votre réponse au questionnaire : indiquez aussi un téléphone portable (il reçoit votre code de signature).
+              </span>
+            )}
           </Fld>
           <Fld label="Téléphone bureau">
-            <input value={form.telBureau} onChange={(e) => setForm({ ...form, telBureau: e.target.value })} />
+            <input type="tel" value={form.telBureau} onChange={(e) => setForm({ ...form, telBureau: e.target.value })} />
           </Fld>
           <Fld label="E-mail *">
             <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
@@ -1497,7 +1525,7 @@ export function Adhesion({
                   <input type="email" autoFocus placeholder="prenom.nom@exemple.fr" value={c.email} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)))} />
                 </Fld>
                 <Fld label="Téléphone mobile *">
-                  <input placeholder="06 12 34 56 78" value={c.telephone} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, telephone: e.target.value } : x)))} />
+                  <input type="tel" placeholder="06 12 34 56 78" value={c.telephone} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, telephone: e.target.value } : x)))} />
                 </Fld>
                 <Fld label="Civilité">
                   <select value={c.civilite} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, civilite: e.target.value } : x)))}>
@@ -1521,12 +1549,19 @@ export function Adhesion({
                 <Fld label="Adresse postale" span>
                   <input value={c.adresse_ligne1} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, adresse_ligne1: e.target.value } : x)))} />
                 </Fld>
-                <Fld label="Code postal">
-                  <input value={c.code_postal} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, code_postal: e.target.value } : x)))} />
-                </Fld>
-                <Fld label="Ville">
-                  <input value={c.ville} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, ville: e.target.value } : x)))} />
-                </Fld>
+                <CpVilleFields
+                  cp={c.code_postal}
+                  ville={c.ville}
+                  onChange={(patch) =>
+                    setCosignataires((prev) =>
+                      prev.map((x, j) =>
+                        j === i
+                          ? { ...x, ...(patch.cp !== undefined ? { code_postal: patch.cp } : {}), ...(patch.ville !== undefined ? { ville: patch.ville } : {}) }
+                          : x,
+                      ),
+                    )
+                  }
+                />
               </div>
             </div>
           ))}
