@@ -5,6 +5,7 @@
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb, type RGB } from "pdf-lib";
 import { DPE, libellesBatiments, PROFILS_MPR, USAGE_LOT_LABEL, type DpeClass } from "@/lib/referentiels";
 import { noteResteAFinancer, texteEtiquetteVisee } from "@/lib/specificitesCopro";
+import { peutRepondreEnquete } from "@/lib/financement";
 import { MENTIONS_PRUDENCE } from "@/pages/Portail/Mentions";
 import type { IndivBreakdown, Membership } from "@/api/portail";
 import type { Bareme, FinanceParams, Profil } from "@/lib/finance";
@@ -270,7 +271,11 @@ export async function genererPlanIndividuelPdf(input: PlanIndividuelPdfInput): P
   }
   f.ligne(
     "Profil MaPrimeRénov'",
-    profil ? PROFILS_MPR[profil]?.menage ?? "" : "À déterminer (enquête sociale à compléter)"
+    profil
+      ? PROFILS_MPR[profil]?.menage ?? ""
+      : peutRepondreEnquete(membership.lots)
+        ? "À déterminer (enquête sociale à compléter)"
+        : "Non concerné (aucun lot d'habitation)"
   );
 
   // ----- budget du projet -----
@@ -317,7 +322,11 @@ export async function genererPlanIndividuelPdf(input: PlanIndividuelPdfInput): P
   f.ligne("Votre quote-part de travaux T.T.C.", euro(indiv.quotePart), { bold: true });
   f.ligne(
     "MaPrimeRénov' individuelle" + (profil ? ` (${(PROFILS_MPR[profil]?.desc ?? "").toLowerCase()})` : ""),
-    indiv.mprIndetermine ? "À déterminer (enquête sociale à compléter)" : euro(indiv.mprIndiv),
+    indiv.mprIndetermine
+      ? peutRepondreEnquete(membership.lots)
+        ? "À déterminer (enquête sociale à compléter)"
+        : "Non concernée (aucun lot d'habitation)"
+      : euro(indiv.mprIndiv),
     { moins: !indiv.mprIndetermine }
   );
   f.ligne("Subvention collective affectée", euro(indiv.subvColl - indiv.fondsPart), { moins: true });

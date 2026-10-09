@@ -23,7 +23,7 @@ import type { Bareme, Profil } from "@/lib/finance";
 import type { SectionId } from "./index";
 import { MentionsPrudence } from "./Mentions";
 import { telechargerPlanIndividuelPdf } from "./planPdf";
-import { ecoPtzPossible, MOTIF_SANS_ECO_PTZ } from "@/lib/financement";
+import { ecoPtzPossible, MOTIF_SANS_ECO_PTZ, peutRepondreEnquete } from "@/lib/financement";
 import { noteResteAFinancer } from "@/lib/specificitesCopro";
 
 export function QuotesParts({
@@ -151,7 +151,7 @@ export function QuotesParts({
               total={{ l: lot ? "Quote-part de travaux du lot n°" + lot.num : "Quote-part de travaux", v: indiv.quotePart }}
               rows={[
                 indiv.mprIndetermine
-                  ? { l: "MaPrimeRénov' individuelle", v: 0, k: "primary", texte: "à déterminer" }
+                  ? { l: "MaPrimeRénov' individuelle", v: 0, k: "primary", texte: peutRepondreEnquete(lots) ? "à déterminer" : "non concernée" }
                   : { l: "MaPrimeRénov' individuelle" + (profil ? " (" + PROFILS_MPR[profil].desc.toLowerCase() + ")" : ""), v: indiv.mprIndiv, k: "primary" },
                 { l: "Subvention collective affectée (MaPrimeRénov' Copropriété)", v: indiv.subvColl - indiv.fondsPart, k: "primary" },
                 { l: "Fonds travaux déjà versés (à titre indicatif)", v: indiv.fondsPart, k: "blue" },
@@ -176,7 +176,16 @@ export function QuotesParts({
                 <b>{fmtEuro(indiv.reste)}</b>
               </div>
             </div>
-            {indiv.mprIndetermine && (
+            {indiv.mprIndetermine && !peutRepondreEnquete(lots) && (
+              <div className="cc-next" style={{ marginTop: 18 }}>
+                <Icon name="alert" size={15} className="ico" />
+                <span>
+                  L'aide individuelle MaPrimeRénov' ne concerne que les logements : vos lots n'en sont pas. Les
+                  montants ci-dessus ne comprennent que les aides collectives, au prorata de vos tantièmes.
+                </span>
+              </div>
+            )}
+            {indiv.mprIndetermine && peutRepondreEnquete(lots) && (
               <div className="cc-next" style={{ marginTop: 18 }}>
                 <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
                 <span>

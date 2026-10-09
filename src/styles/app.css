@@ -1173,7 +1173,21 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .eq-q { margin: 16px 0; }
 .eq-label {
   display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; color: var(--fg1);
-  margin-bottom: 9px;
+  margin-bottom: 9px; position: relative;
+}
+/* bulle d'aide d'une question (retour du 09/10/2026) : immédiate, au survol, au clic ou au toucher */
+.aide-bulle { display: inline-flex; flex: none; }
+.aide-bulle-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin: -6px -4px;
+  border: 0; border-radius: 999px; background: transparent; color: var(--fg-muted); cursor: pointer;
+  transition: color 120ms, background 120ms;
+}
+.aide-bulle-btn:hover, .aide-bulle-btn[aria-expanded="true"] { color: var(--color-primary-700); background: var(--accent-soft); }
+.aide-bulle-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.aide-bulle-txt {
+  position: absolute; z-index: 30; left: 0; top: calc(100% + 2px); width: min(100%, 380px);
+  padding: 10px 13px; font-size: 13px; font-weight: 400; line-height: 1.45; color: var(--fg1);
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
 }
 .eq-inp {
   font-family: var(--font-body); font-size: 14.5px; padding: 10px 13px; width: 100%;

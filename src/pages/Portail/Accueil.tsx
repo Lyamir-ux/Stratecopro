@@ -25,7 +25,7 @@ import { readParams } from "@/api/scenarios";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Tables } from "@/lib/database.types";
 import { messageErreur } from "@/lib/erreurs";
-import { ecoPtzPossible } from "@/lib/financement";
+import { ecoPtzPossible, peutRepondreEnquete } from "@/lib/financement";
 import type { SectionId } from "./index";
 import { telechargerPlanIndividuelPdf } from "./planPdf";
 
@@ -58,6 +58,8 @@ export function Accueil({
   go: (s: SectionId) => void;
 }) {
   const copro = membership.copro;
+  // l'enquête sociale ne concerne que les propriétaires d'un logement (retour du 09/10/2026)
+  const enqueteOuverte = peutRepondreEnquete(membership.lots);
   const phaseIdx = PHASES.findIndex((p) => p.id === copro.phase);
   const dpeAvant = (copro.energy_before as DpeClass | null) ?? null;
   const dpeApres = (copro.energy_after as DpeClass | null) ?? null;
@@ -121,7 +123,7 @@ export function Accueil({
     }
   };
 
-  const todos: { id: SectionId; done: boolean; ico: string; title: string; sub: string }[] = [
+  const todosTous: { id: SectionId; done: boolean; ico: string; title: string; sub: string }[] = [
     {
       id: "enquete",
       done: enqueteComplete,
@@ -161,6 +163,8 @@ export function Accueil({
           : "Fonds propres : le seul mode de financement ouvert à vos lots",
     },
   ];
+  // sans lot d'habitation : ni enquête ni pièces à déposer
+  const todos = enqueteOuverte ? todosTous : todosTous.filter((t) => t.id !== "enquete");
 
   return (
     <div className="fade">
@@ -170,7 +174,7 @@ export function Accueil({
         <p>
           Voici le suivi de la rénovation énergétique de la copropriété <b>{copro.name}</b>. Le projet est en
           phase <b>{PHASES[phaseIdx]?.label ?? copro.phase}</b> : retrouvez ici votre plan de financement,
-          l'enquête sociale et vos documents.
+          {enqueteOuverte ? "l'enquête sociale et vos documents." : "vos documents."}
         </p>
         <div className="timeline">
           {PHASES.map((p, i) => (
@@ -248,7 +252,12 @@ export function Accueil({
             </div>
             <div className="tile">
               <div className="t-lbl"><Icon name="user" size={16} />Votre aide individuelle</div>
-              {indiv.mprIndetermine ? (
+              {!enqueteOuverte ? (
+                <>
+                  <div className="t-val indetermine">Non concernée</div>
+                  <div className="t-foot">L'aide individuelle ne concerne que les logements : vos lots n'en sont pas</div>
+                </>
+              ) : indiv.mprIndetermine ? (
                 <>
                   <div className="t-val indetermine">À déterminer</div>
                   <div className="t-foot">Complétez l'enquête sociale : elle dépend de vos ressources</div>
@@ -273,7 +282,7 @@ export function Accueil({
               <div className="t-foot">
                 Reste à financer, appels de fonds déduits
                 {indiv.fondsPart > 0.5 ? ` (${fmtEuro(indiv.fondsPart)} de fonds travaux)` : ""}
-                {indiv.mprIndetermine ? ", hors aide individuelle" : ""}
+                {indiv.mprIndetermine && enqueteOuverte ? ", hors aide individuelle" : ""}
                 {indiv.cee > 0.5 ? ` · CEE de ${fmtEuro(indiv.cee)} versés à la fin du chantier` : ""}
               </div>
             </div>

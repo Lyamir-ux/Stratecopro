@@ -40,6 +40,7 @@ import {
 } from "@/components/ChampsSaisie";
 import { classerTelephone, dateLieuComplet, diagnosticBic, diagnosticIban } from "@/lib/saisie";
 import { ACCEPT_PIECE, erreurFormatPiece, LIBELLE_FORMATS_PIECE, typeMimePiece } from "@/lib/formatPiece";
+import { decouperNomPrenom } from "@/lib/nomFamille";
 import { assemblerPieceIdentite, facesADeposer, verifierFacesPiece } from "@/lib/pdf/pieceIdentite";
 import { PieceIdentiteChamps } from "@/components/PieceIdentiteChamps";
 import { CGU_VERSION } from "@/lib/cguSignature";
@@ -327,8 +328,11 @@ export function Adhesion({
   const relancer = useRelancerSignataire();
 
   const [form, setForm] = useState<AdhesionForm>(() => emptyForm(membership.nom, email, copro.city ?? ""));
-  const [prenomPrincipal, setPrenomPrincipal] = useState("");
-  const [nomPrincipal, setNomPrincipal] = useState(membership.nom);
+  // Signataire principal : prénom et nom séparés d'après le libellé de la fiche (retour de Pierre
+  // MAXTAFF, 09/10/2026 : le nom complet arrivait dans « Nom ») ; vides si le libellé est celui
+  // d'un couple, d'une indivision ou d'une société - la personne qui signe les saisit elle-même
+  const [prenomPrincipal, setPrenomPrincipal] = useState(() => decouperNomPrenom(membership.nom)?.prenom ?? "");
+  const [nomPrincipal, setNomPrincipal] = useState(() => decouperNomPrenom(membership.nom)?.nom ?? "");
   const [cosignataires, setCosignataires] = useState<CosignataireDeclare[]>([]);
   const [cguCochee, setCguCochee] = useState(false);
   const [attestHonneur, setAttestHonneur] = useState(false);

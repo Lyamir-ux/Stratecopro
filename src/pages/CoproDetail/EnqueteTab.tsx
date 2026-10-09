@@ -27,6 +27,7 @@ import { useFicheEtat } from "@/api/ficheEtat";
 import { useEspacesCoproprietaires, type EtatEspace } from "@/api/espaces";
 import { OuvrirEspacesFenetre } from "@/components/EspacesCoproprietaires";
 import { classerDestinataires, texteEmailEnquete } from "@/lib/emailEnquete";
+import { idsNonConcernesParEnquete } from "@/lib/financement";
 import { EmailEnqueteFenetre, EnvoyerEnqueteFenetre } from "./EnqueteEmail";
 import { RapportEnqueteDialog } from "./RapportEnqueteDialog";
 
@@ -258,17 +259,22 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
   const coproprietaires = donnees?.coproprietaires ?? [];
   const compteEspaces = (etat: EtatEspace) => coproprietaires.filter((cp) => espaces?.get(cp.id)?.etat === etat).length;
   const espacesACreer = coproprietaires.filter((cp) => espaces?.get(cp.id)?.etat === "a_creer");
-  const total = coproprietaires.length;
+  // L'enquête ne concerne que les propriétaires d'un logement (retour de Marius MAZZANTE,
+  // 09/10/2026) : ni compteur, ni envoi, ni saisie pour les fiches qui n'ont que des garages,
+  // caves ou locaux d'activité.
+  const nonConcernes = useMemo(() => idsNonConcernesParEnquete(donnees?.lots ?? []), [donnees]);
+  const concernes = coproprietaires.filter((cp) => !nonConcernes.has(cp.id));
+  const total = concernes.length;
   const repondus = useMemo(
     () => new Map((reponses ?? []).map((r) => [r.coproprietaire_id, r])),
     [reponses]
   );
-  const repondants = (reponses ?? []).filter((r) => r.profil_mpr != null).length;
+  const repondants = (reponses ?? []).filter((r) => r.profil_mpr != null && !nonConcernes.has(r.coproprietaire_id)).length;
   const sent = enquete?.statut === "envoyee";
   const aRepondu = (id: string) => repondus.get(id)?.profil_mpr != null;
-  const presents = coproprietaires.filter((cp) => !cp.sortant_le);
+  const presents = concernes.filter((cp) => !cp.sortant_le);
   const nonRep = presents.filter((cp) => !aRepondu(cp.id)).length;
-  const classement = classerDestinataires(coproprietaires, espaces, cible, aRepondu);
+  const classement = classerDestinataires(concernes, espaces, cible, aRepondu);
   const destCount = classement.envoyables.length;
 
   const config: ConfigItem[] = draft ?? normalizeConfig(enquete?.questions);
@@ -520,7 +526,7 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {coproprietaires.map((cp) => (
+                    {concernes.map((cp) => (
                       <ReponseRow
                         key={cp.id + (repondus.get(cp.id)?.updated_at ?? "")}
                         coproprietaireId={cp.id}
@@ -533,6 +539,14 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
                   </tbody>
                 </table>
               </div>
+            )}
+            {nonConcernes.size > 0 && (
+              <p className="se-small" style={{ margin: "10px 0 0", color: "var(--fg-muted)" }}>
+                {nonConcernes.size} copropriétaire{nonConcernes.size > 1 ? "s" : ""} sans lot d'habitation (garage, cave,
+                commerce…) {nonConcernes.size > 1 ? "ne sont" : "n'est"} pas concerné{nonConcernes.size > 1 ? "s" : ""} par
+                l'enquête : {nonConcernes.size > 1 ? "ils" : "il"} ne figure{nonConcernes.size > 1 ? "nt" : ""} ni dans ce tableau
+                ni dans les destinataires.
+              </p>
             )}
           </div>
         </div>

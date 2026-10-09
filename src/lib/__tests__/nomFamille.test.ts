@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleNomFamille, conventionNoms, trierParNomFamille } from "../nomFamille";
+import { cleNomFamille, conventionNoms, decouperNomPrenom, trierParNomFamille } from "../nomFamille";
 
 describe("cleNomFamille", () => {
   it("met devant le nom en capitales d'un libellé « Prénom NOM »", () => {
@@ -66,5 +66,40 @@ describe("trierParNomFamille", () => {
     const noms = ["Copropriétaire 10", "Copropriétaire 2", "Copropriétaire 1"];
     expect(trierParNomFamille(noms, (n) => n)).toEqual(["Copropriétaire 1", "Copropriétaire 2", "Copropriétaire 10"]);
     expect(noms[0]).toBe("Copropriétaire 10");
+  });
+});
+
+describe("decouperNomPrenom", () => {
+  it("sépare « Prénom NOM » et « NOM Prénom »", () => {
+    expect(decouperNomPrenom("Pierre MAXTAFF")).toEqual({ prenom: "Pierre", nom: "MAXTAFF" });
+    expect(decouperNomPrenom("SCHNEIDER Delphine")).toEqual({ prenom: "Delphine", nom: "SCHNEIDER" });
+    expect(decouperNomPrenom("Jean-Pierre MARTIN")).toEqual({ prenom: "Jean-Pierre", nom: "MARTIN" });
+    expect(decouperNomPrenom("Jean DE LA FONTAINE")).toEqual({ prenom: "Jean", nom: "DE LA FONTAINE" });
+    expect(decouperNomPrenom("MARTIN-DUPONT Anne")).toEqual({ prenom: "Anne", nom: "MARTIN-DUPONT" });
+  });
+
+  it("ignore la civilité et la mention entre parenthèses d'une seule personne", () => {
+    expect(decouperNomPrenom("Mme DURAND Julie")).toEqual({ prenom: "Julie", nom: "DURAND" });
+    expect(decouperNomPrenom("HERRMANN Philippe (Monsieur)")).toEqual({ prenom: "Philippe", nom: "HERRMANN" });
+  });
+
+  it("deux mots sans capitales : prénom puis nom", () => {
+    expect(decouperNomPrenom("Philippe Bauer")).toEqual({ prenom: "Philippe", nom: "Bauer" });
+  });
+
+  it("un seul mot : nom seul", () => {
+    expect(decouperNomPrenom("AVENEL")).toEqual({ prenom: "", nom: "AVENEL" });
+  });
+
+  it("ne devine pas pour un couple, une indivision, une société ou un libellé ambigu", () => {
+    expect(decouperNomPrenom("Bernard et Josiane LECLERC")).toBeNull();
+    expect(decouperNomPrenom("M. et Mme DURAND")).toBeNull();
+    expect(decouperNomPrenom("Sophie MARTIN et Paul DURAND")).toBeNull();
+    expect(decouperNomPrenom("MATZ / RAOUL Clément / Morgan")).toBeNull();
+    expect(decouperNomPrenom("Indivision HENRIOT")).toBeNull();
+    expect(decouperNomPrenom("SCI DU PLATEAU DE HAYE")).toBeNull();
+    expect(decouperNomPrenom("KRENCKER FRANCINE")).toBeNull();
+    expect(decouperNomPrenom("Jean de la Fontaine")).toBeNull();
+    expect(decouperNomPrenom("")).toBeNull();
   });
 });

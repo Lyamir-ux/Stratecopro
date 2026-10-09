@@ -5,6 +5,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { piecesAttendues, type ReponsesPieces } from "@/lib/piecesSituation";
 import { libelleLotsPortail } from "@/lib/lotsPortail";
+import { peutRepondreEnquete } from "@/lib/financement";
 import { Avatar, PhaseBadge, THUMB_BG } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
 import { compteNonLus, useLectures, useMessagesPortail } from "@/api/messages";
@@ -26,7 +27,7 @@ import { lienVueAmo } from "@/lib/vuesCopro";
 import type { Profil } from "@/lib/finance";
 import { Accueil } from "./Accueil";
 import { QuotesParts } from "./QuotesParts";
-import { Enquete } from "./Enquete";
+import { Enquete, EnqueteNonConcernee } from "./Enquete";
 import { Financement } from "./Financement";
 import { PlanCopro } from "./PlanCopro";
 import { Documents } from "./Documents";
@@ -391,12 +392,14 @@ export default function Portail() {
   }
 
   const copro = membership.copro;
+  // l'enquête sociale ne concerne que les propriétaires d'un logement (retour de Marius MAZZANTE, 09/10/2026)
+  const enqueteOuverte = peutRepondreEnquete(membership.lots);
   const profil = (reponse?.profil_mpr as Profil | null) ?? null;
   const profilMeta = profilMetaDepuisReponse(reponse);
   const enqueteComplete = !!(reponse?.reponses as { complet?: boolean } | null)?.complet;
   // Pièces attendues selon les réponses enregistrées (feedback Marius MAZZANTE
   // 30/09/2026) ; refusée = à redéposer, donc pas fournie (feedback 10/09).
-  const attendues = piecesAttendues(reponse?.reponses as ReponsesPieces | null, contextePieces);
+  const attendues = enqueteOuverte ? piecesAttendues(reponse?.reponses as ReponsesPieces | null, contextePieces) : [];
   const piecesManquantes = attendues
     .filter((a) => !(pieces ?? []).some((x) => x.type === a.type && x.statut !== "refuse"))
     .map((a) => a.nom);
@@ -404,7 +407,7 @@ export default function Portail() {
   // non lus pour l'onglet « Nous contacter »
   const nonLus = compteNonLus(messages, lectures, session?.user.id);
   const flags: Record<string, boolean | number> = {
-    enquete: !enqueteComplete || piecesManquantes.length > 0,
+    enquete: enqueteOuverte && (!enqueteComplete || piecesManquantes.length > 0),
     pret: !choix,
     messages: nonLus,
   };
@@ -464,7 +467,7 @@ export default function Portail() {
       </header>
 
       <nav className="portal-nav" ref={navRef}>
-        {SECTIONS.map((it) => (
+        {SECTIONS.filter((it) => it.id !== "enquete" || enqueteOuverte).map((it) => (
           <button key={it.id} className={"pnav" + (section === it.id ? " on" : "")} onClick={() => go(it.id)}>
             <Icon name={it.icon as never} size={17} />
             {it.label}
@@ -487,7 +490,8 @@ export default function Portail() {
           />
         )}
         {section === "plan-indiv" && <QuotesParts {...common} />}
-        {section === "enquete" && <Enquete membership={membership} bareme={bareme ?? null} />}
+        {section === "enquete" &&
+          (enqueteOuverte ? <Enquete membership={membership} bareme={bareme ?? null} /> : <EnqueteNonConcernee go={go} />)}
         {section === "pret" && <Financement {...common} choix={choix ?? null} />}
         {section === "plan-copro" && <PlanCopro membership={membership} scenarios={scenarios ?? []} bareme={bareme ?? null} />}
         {section === "documents" && <Documents membership={membership} />}

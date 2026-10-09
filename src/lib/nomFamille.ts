@@ -99,3 +99,34 @@ export function trierParNomFamille<T>(items: readonly T[], nomDe: (t: T) => stri
   const cles = new Map(items.map((t) => [t, cleNomFamille(nomDe(t), convention)] as const));
   return [...items].sort((a, b) => collator.compare(cles.get(a)!, cles.get(b)!) || collator.compare(nomDe(a), nomDe(b)));
 }
+
+// qualités qui désignent plusieurs personnes : pas de prénom / nom à en tirer
+const COLLECTIFS = new Set([
+  "et", "&", "mm", "mmes", "messieurs", "mesdames", "epoux", "époux", "consort", "consorts",
+  "indivision", "succession", "hoirie", "famille",
+]);
+
+/**
+ * Sépare le libellé d'UNE personne en prénom et nom de famille, pour préremplir le signataire
+ * d'un bulletin (retour de Pierre MAXTAFF, 09/10/2026 : « Pierre MAXTAFF » arrivait en entier
+ * dans le champ Nom, le prénom restait vide). Même règle que le tri : le bloc de mots en
+ * capitales est le nom, le reste est le prénom. Prudent : null quand on ne peut pas trancher
+ * (couple, indivision, société, tout en capitales, plus de deux mots sans capitales) - les
+ * champs restent alors vides plutôt que faux.
+ *   « Pierre MAXTAFF »      → { prenom: « Pierre », nom: « MAXTAFF » }
+ *   « SCHNEIDER Delphine »  → { prenom: « Delphine », nom: « SCHNEIDER » }
+ *   « Jean DE LA FONTAINE » → { prenom: « Jean », nom: « DE LA FONTAINE » }
+ */
+export function decouperNomPrenom(nom: string): { prenom: string; nom: string } | null {
+  const { mots: ms, prefixes } = mots(nom);
+  if (ms.length === 0) return null;
+  if (prefixes.some((p) => COLLECTIFS.has(p.toLowerCase()))) return null;
+  if (FORMES_SOCIALES.has(ms[0].toLowerCase()) || ms.some((m) => LIAISONS.has(m.toUpperCase()))) return null;
+  if (ms.length === 1) return { prenom: "", nom: ms[0] };
+  const i = debutCapitales(ms);
+  if (i < 0) return ms.length === 2 ? { prenom: ms[0], nom: ms[1] } : null;
+  if (ms.every(enCapitales)) return null;
+  let j = i;
+  while (j < ms.length && enCapitales(ms[j])) j++;
+  return { prenom: [...ms.slice(0, i), ...ms.slice(j)].join(" "), nom: ms.slice(i, j).join(" ") };
+}

@@ -23,9 +23,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
+import { AideBulle } from "@/components/AideBulle";
 import { Badge } from "@/components/ui";
 import { fmtDate, fmtEuro } from "@/lib/format";
 import { PROFILS_MPR } from "@/lib/referentiels";
+import { MOTIF_SANS_ENQUETE } from "@/lib/financement";
 import { determineProfil } from "@/lib/finance";
 import {
   SECTIONS,
@@ -49,6 +51,7 @@ import { PiecesJustificatives } from "./Documents";
 import { piecesAttendues } from "@/lib/piecesSituation";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Json } from "@/lib/database.types";
+import type { SectionId as PortailSectionId } from "./index";
 
 type Val = string | number | string[];
 type Answers = Record<string, Val | undefined>;
@@ -288,11 +291,7 @@ function QuestionBloc({
         ) : (
           <span className="eq-req" title="Réponse obligatoire">*</span>
         )}
-        {q.aide && (
-          <span className="qc-help" title={q.aide}>
-            <Icon name="help" size={13} />
-          </span>
-        )}
+        {q.aide && <AideBulle texte={q.aide} />}
       </label>
       <Champ q={q} value={value} onChange={(v) => onSet(q.id, v)} lotsPrincipaux={lotsPrincipaux} />
       {needsPrecision && (
@@ -310,6 +309,26 @@ function QuestionBloc({
           {erreur}
         </p>
       )}
+    </div>
+  );
+}
+
+/** Page d'un propriétaire que l'enquête ne concerne pas (garages, caves, locaux d'activité seuls). */
+export function EnqueteNonConcernee({ go }: { go: (s: PortailSectionId) => void }) {
+  return (
+    <div className="card-xl fade">
+      <div className="cx-head">
+        <Icon name="clipboard" size={20} style={{ color: "var(--accent)" }} />
+        <h2 style={{ fontSize: 19 }}>Enquête sociale</h2>
+        <Badge kind="neutral">Non concerné</Badge>
+      </div>
+      <div className="cx-body">
+        <p className="se-body" style={{ marginTop: 0 }}>{MOTIF_SANS_ENQUETE}</p>
+        <button className="se-btn se-btn-secondary" onClick={() => go("accueil")}>
+          <Icon name="chevronLeft" size={15} />
+          Retour à l'accueil
+        </button>
+      </div>
     </div>
   );
 }
