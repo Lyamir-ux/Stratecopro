@@ -39,6 +39,8 @@ export function Accueil({
   userName,
   piecesManquantes,
   nbPiecesAttendues,
+  piecesPretManquantes = [],
+  nbPiecesPret = 0,
   choix,
   enqueteComplete,
   go,
@@ -53,6 +55,9 @@ export function Accueil({
   /** pièces justificatives attendues selon l'enquête et pas encore fournies (libellés) */
   piecesManquantes: string[];
   nbPiecesAttendues: number;
+  /** pièces du dossier de prêt collectif encore à déposer, une fois les bulletins signés (libellés) */
+  piecesPretManquantes?: string[];
+  nbPiecesPret?: number;
   choix: ChoixFinancement | null;
   enqueteComplete: boolean;
   go: (s: SectionId) => void;
@@ -162,6 +167,21 @@ export function Accueil({
           ? "Prêt collectif, individuel ou fonds propres"
           : "Fonds propres : le seul mode de financement ouvert à vos lots",
     },
+    // pièces du prêt collectif, après la signature des bulletins (retour de A CHELGHAM, 09/10/2026)
+    ...(nbPiecesPret > 0
+      ? [
+          {
+            id: "pret" as const,
+            done: piecesPretManquantes.length === 0,
+            ico: "folder",
+            title: "Déposer les pièces de votre dossier de prêt",
+            sub:
+              piecesPretManquantes.length === 0
+                ? "Toutes les pièces du prêt sont déposées"
+                : `${piecesPretManquantes.length} pièce${piecesPretManquantes.length > 1 ? "s" : ""} à déposer dans « Mon financement » : ${piecesPretManquantes.join(", ")}`,
+          },
+        ]
+      : []),
   ];
   // sans lot d'habitation : ni enquête ni pièces à déposer
   const todos = enqueteOuverte ? todosTous : todosTous.filter((t) => t.id !== "enquete");

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
-import { piecesAttendues, type ReponsesPieces } from "@/lib/piecesSituation";
+import { bulletinsSignes, piecesDossierPret, piecesEnquete, type ReponsesPieces } from "@/lib/piecesSituation";
 import { libelleLotsPortail } from "@/lib/lotsPortail";
 import { peutRepondreEnquete } from "@/lib/financement";
 import { Avatar, PhaseBadge, THUMB_BG } from "@/components/ui";
@@ -18,11 +18,13 @@ import {
   useMonChoix,
   useMonPlan,
   useMesPieces,
+  useMonAdhesion,
   profilMetaDepuisReponse,
   type Membership,
   type Scenario,
 } from "@/api/portail";
 import { useBareme } from "@/api/scenarios";
+import { useMesBulletins } from "@/api/signature";
 import { lienVueAmo } from "@/lib/vuesCopro";
 import type { Profil } from "@/lib/finance";
 import { Accueil } from "./Accueil";
@@ -324,6 +326,8 @@ export default function Portail() {
   const { data: plan } = useMonPlan(scenario?.id, membership?.coproprietaireId);
   const { data: pieces } = useMesPieces(membership?.coproprietaireId);
   const contextePieces = useContextePieces(membership?.copro.id, membership?.coproprietaireId, membership?.nom);
+  const { data: bulletins } = useMesBulletins(membership?.coproprietaireId);
+  const { data: ancienneAdhesion } = useMonAdhesion(membership?.copro.id, membership?.coproprietaireId);
   const { data: messages } = useMessagesPortail(membership?.copro.id, membership?.coproprietaireId);
   const { data: lectures } = useLectures();
 
@@ -399,16 +403,22 @@ export default function Portail() {
   const enqueteComplete = !!(reponse?.reponses as { complet?: boolean } | null)?.complet;
   // Pièces attendues selon les réponses enregistrées (feedback Marius MAZZANTE
   // 30/09/2026) ; refusée = à redéposer, donc pas fournie (feedback 10/09).
-  const attendues = enqueteOuverte ? piecesAttendues(reponse?.reponses as ReponsesPieces | null, contextePieces) : [];
-  const piecesManquantes = attendues
-    .filter((a) => !(pieces ?? []).some((x) => x.type === a.type && x.statut !== "refuse"))
-    .map((a) => a.nom);
+  // Celles du prêt collectif se déposent dans « Mon financement », une fois les
+  // bulletins signés (retour de A CHELGHAM, 09/10/2026).
+  const manquantes = (liste: { type: string; nom: string }[]) =>
+    liste.filter((a) => !(pieces ?? []).some((x) => x.type === a.type && x.statut !== "refuse")).map((a) => a.nom);
+  const attendues = enqueteOuverte ? piecesEnquete(reponse?.reponses as ReponsesPieces | null, contextePieces) : [];
+  const piecesManquantes = manquantes(attendues);
+  const attenduesPret = bulletinsSignes(bulletins, ancienneAdhesion?.statut === "signee")
+    ? piecesDossierPret(reponse?.reponses as ReponsesPieces | null, contextePieces)
+    : [];
+  const piecesPretManquantes = manquantes(attenduesPret);
   // pastilles du menu : « ! » pour une action attendue, le nombre de messages
   // non lus pour l'onglet « Nous contacter »
   const nonLus = compteNonLus(messages, lectures, session?.user.id);
   const flags: Record<string, boolean | number> = {
     enquete: enqueteOuverte && (!enqueteComplete || piecesManquantes.length > 0),
-    pret: !choix,
+    pret: !choix || piecesPretManquantes.length > 0,
     messages: nonLus,
   };
 
@@ -485,6 +495,8 @@ export default function Portail() {
             userName={isAmo ? membership.nom : userName}
             piecesManquantes={piecesManquantes}
             nbPiecesAttendues={attendues.length}
+            piecesPretManquantes={piecesPretManquantes}
+            nbPiecesPret={attenduesPret.length}
             choix={choix ?? null}
             enqueteComplete={enqueteComplete}
           />

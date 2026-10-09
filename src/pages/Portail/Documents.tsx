@@ -11,7 +11,9 @@
 // pour tous les ménages, second avis s'il y a deux déclarants, justificatif
 // d'usufruit, pièces de SCI occupée par un associé, jugement de tutelle ou de
 // curatelle. Chaque pièce a son statut : manquante, reçue (en vérification),
-// validée, refusée. Un dépôt réussi se confirme par une fenêtre.
+// validée, refusée. Un dépôt réussi se confirme par une fenêtre. Les pièces que
+// la banque demande pour le prêt collectif se déposent dans « Mon financement »,
+// après la signature des bulletins (retour de A CHELGHAM, 09/10/2026).
 //
 // Le dépôt (bucket privé pieces-copro) exige l'acceptation préalable des CGU du
 // service - tracée par version dans cgu_acceptations.
@@ -25,7 +27,10 @@ import { fmtDate } from "@/lib/format";
 import { downloadFichier, estVisualisable, type Fichier } from "@/api/fichiers";
 import {
   libelleQualification,
+  useContextePieces,
+  useEnquetePortail,
   useFichiersPartages,
+  useMaReponse,
   urlSigneePiece,
   useMesPieces,
   useSupprimerPiece,
@@ -34,7 +39,7 @@ import {
   type PieceJustificative,
 } from "@/api/portail";
 import { CGU_VERSION } from "@/lib/cguSignature";
-import { PIECES_SITUATION, RAISON_PRET, type PieceAttendue } from "@/lib/piecesSituation";
+import { PIECES_SITUATION, piecesDossierPret, type PieceAttendue, type ReponsesPieces } from "@/lib/piecesSituation";
 import { useAccepterCguDepot, useCguDepotPieces } from "@/api/signature";
 import { ouvrirDocumentSignature, urlApercuDocumentSignature, useMesDocumentsEcoPtz } from "@/api/ecoPtzIndividuel";
 import { messageErreur } from "@/lib/erreurs";
@@ -220,15 +225,22 @@ function DepotPiece({
 }
 
 /**
- * Pièces justificatives à déposer, selon les réponses à l'enquête. Les pièces
- * déjà déposées qui ne sont plus demandées (réponse modifiée) restent affichées.
+ * Pièces justificatives à déposer : celles de l'enquête (selon les réponses) ou,
+ * variante « pret », celles du dossier de prêt collectif, après la signature des
+ * bulletins (retour de A CHELGHAM, 09/10/2026). Dans l'enquête, les pièces déjà
+ * déposées qui ne sont plus demandées (réponse modifiée) restent affichées, sauf
+ * celles du dossier de prêt (`masquer`), qui vivent dans « Mon financement ».
  */
 export function PiecesJustificatives({
   membership,
   attendues,
+  variante = "enquete",
+  masquer = [],
 }: {
   membership: Membership;
   attendues: PieceAttendue[];
+  variante?: "enquete" | "pret";
+  masquer?: string[];
 }) {
   const { data: pieces } = useMesPieces(membership.coproprietaireId);
   const { data: cguAcceptees, isLoading: chargeCgu } = useCguDepotPieces(CGU_VERSION);
@@ -236,10 +248,13 @@ export function PiecesJustificatives({
   const [cguCochee, setCguCochee] = useState(false);
   const [infoAvisCochee, setInfoAvisCochee] = useState(false);
 
+  const pret = variante === "pret";
   const parType = new Map((pieces ?? []).map((p) => [p.type as string, p]));
-  const deposeesHorsListe: PieceAttendue[] = (pieces ?? [])
-    .filter((p) => PIECES_SITUATION[p.type] && !attendues.some((a) => a.type === p.type))
-    .map((p) => ({ type: p.type, nom: PIECES_SITUATION[p.type].nom, aide: PIECES_SITUATION[p.type].aide, raison: "" }));
+  const deposeesHorsListe: PieceAttendue[] = pret
+    ? []
+    : (pieces ?? [])
+        .filter((p) => PIECES_SITUATION[p.type] && !masquer.includes(p.type) && !attendues.some((a) => a.type === p.type))
+        .map((p) => ({ type: p.type, nom: PIECES_SITUATION[p.type].nom, aide: PIECES_SITUATION[p.type].aide, raison: "" }));
   const liste = [...attendues, ...deposeesHorsListe];
   const recues = attendues.filter((a) => {
     const p = parType.get(a.type);
@@ -250,7 +265,9 @@ export function PiecesJustificatives({
     <div className="card-xl">
       <div className="cx-head">
         <Icon name="folder" size={20} style={{ color: "var(--accent)" }} />
-        <h2 style={{ fontSize: 18 }}>{liste.length > 1 ? "Vos pièces justificatives" : "Votre avis d'imposition"}</h2>
+        <h2 style={{ fontSize: 18 }}>
+          {pret ? "Pièces de votre dossier de prêt" : liste.length > 1 ? "Vos pièces justificatives" : "Votre avis d'imposition"}
+        </h2>
         {attendues.length > 0 && (
           <>
             <span style={{ flex: 1 }}></span>
@@ -262,10 +279,12 @@ export function PiecesJustificatives({
       </div>
       <div className="cx-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <p className="se-body" style={{ margin: 0 }}>
-          {liste.some((a) => a.raison === RAISON_PRET) ? (
+          {pret ? (
             <>
-              Merci de déposer les pièces ci-dessous : l'avis d'imposition si vous êtes éligible aux aides, et les
-              pièces que la Caisse d'Épargne demande pour votre adhésion au prêt collectif. <b>Toutes les pages.</b>
+              Vos bulletins sont signés : pour compléter votre dossier d'adhésion au prêt collectif, la banque
+              demande aussi les pièces ci-dessous. <b>Toutes les pages.</b>
+              {!liste.some((a) => a.type === "avis_associes_sci") &&
+                " L'avis d'imposition, lui, se dépose dans l'enquête sociale : il sert aussi à ce dossier."}
             </>
           ) : liste.length > 1 ? (
             <>
@@ -348,6 +367,23 @@ export function PiecesJustificatives({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Pièces du dossier de prêt collectif, sous les bulletins signés de « Mon
+ * financement » (retour de A CHELGHAM, 09/10/2026). Rien sans pièce demandée.
+ */
+export function PiecesDossierPret({ membership }: { membership: Membership }) {
+  const { data: enquete } = useEnquetePortail(membership.copro.id);
+  const { data: reponse } = useMaReponse(enquete?.id, membership.coproprietaireId);
+  const contexte = useContextePieces(membership.copro.id, membership.coproprietaireId, membership.nom);
+  const attendues = piecesDossierPret(reponse?.reponses as ReponsesPieces | null, contexte);
+  if (attendues.length === 0) return null;
+  return (
+    <div style={{ marginTop: 18 }}>
+      <PiecesJustificatives membership={membership} attendues={attendues} variante="pret" />
     </div>
   );
 }

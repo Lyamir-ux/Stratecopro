@@ -16,7 +16,8 @@
 // - adhérent au prêt collectif (dossier suivi par Strat Eco, 08/10/2026) : en plus,
 //   les pièces de la nomenclature de la Caisse d'Épargne Grand Est - justificatif de
 //   domicile, taxe foncière ou attestation notariée, et pour une SCI l'extrait
-//   Kbis, les statuts et les avis d'imposition des associés.
+//   Kbis, les statuts et les avis d'imposition des associés. Au portail, elles se
+//   déposent après la signature des bulletins (piecesDossierPret, 09/10/2026).
 import type { Enums } from "@/lib/database.types";
 
 export type TypePiece = Enums<"type_piece">;
@@ -144,6 +145,38 @@ export function piecesAttendues(rep: ReponsesPieces | null | undefined, contexte
     ajouter("jugement_protection", protection === "Tutelle" ? "tutelle" : "curatelle");
   }
   return out;
+}
+
+// Où chaque pièce se dépose au portail (retour de A CHELGHAM, 09/10/2026 : les pièces
+// du prêt « sont la continuité de la signature du bulletin ») : l'enquête sociale ne
+// demande que les pièces de la situation déclarée ; les pièces que la banque demande
+// en plus se déposent dans « Mon financement », une fois les bulletins signés.
+// L'espace AMO garde la liste complète (piecesAttendues).
+
+/** Pièces demandées dans l'enquête sociale : la situation déclarée, jamais le dossier de prêt. */
+export function piecesEnquete(rep: ReponsesPieces | null | undefined, contexte: ContextePieces = {}): PieceAttendue[] {
+  return piecesAttendues(rep, { ...contexte, pretCollectif: false });
+}
+
+/**
+ * Pièces du dossier de prêt collectif à déposer dans « Mon financement » : celles de
+ * la banque que l'enquête ne demande pas déjà (une SCI à l'IR occupée par un associé
+ * dépose son Kbis dans l'enquête, une seule fois).
+ */
+export function piecesDossierPret(rep: ReponsesPieces | null | undefined, contexte: ContextePieces = {}): PieceAttendue[] {
+  if (!contexte.pretCollectif) return [];
+  const dansEnquete = new Set(piecesEnquete(rep, contexte).map((p) => p.type));
+  return piecesAttendues(rep, contexte).filter((p) => p.raison === RAISON_PRET && !dansEnquete.has(p.type));
+}
+
+/**
+ * Bulletins d'adhésion signés par le copropriétaire : au moins un bulletin, et aucun
+ * encore en préparation (les cosignataires peuvent rester à signer). Un ancien
+ * dossier signé avant la signature électronique compte aussi.
+ */
+export function bulletinsSignes(bulletins: { statut: string }[] | null | undefined, ancienDossierSigne = false): boolean {
+  const actifs = (bulletins ?? []).filter((b) => b.statut !== "annule");
+  return ancienDossierSigne || (actifs.length > 0 && actifs.every((b) => b.statut !== "brouillon"));
 }
 
 /** Libellé d'une pièce, quelle qu'elle soit (situation ou pièce historique). */

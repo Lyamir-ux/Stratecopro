@@ -48,7 +48,7 @@ import {
 } from "@/api/portail";
 import { useAuth } from "@/auth/AuthProvider";
 import { PiecesJustificatives } from "./Documents";
-import { piecesAttendues } from "@/lib/piecesSituation";
+import { piecesDossierPret, piecesEnquete } from "@/lib/piecesSituation";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { Json } from "@/lib/database.types";
 import type { SectionId as PortailSectionId } from "./index";
@@ -579,7 +579,11 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
   const info = profil ? PROFILS_MPR[profil] : null;
 
   // Pièces à fournir selon les réponses en cours (elles apparaissent dès la réponse donnée).
-  const attendues = piecesAttendues(rep, contextePieces);
+  // Celles du dossier de prêt se déposent dans « Mon financement », après la signature
+  // des bulletins (retour de A CHELGHAM, 09/10/2026) : même déjà déposées, on ne les
+  // montre pas ici.
+  const attendues = piecesEnquete(rep, contextePieces);
+  const typesDossierPret = piecesDossierPret(rep, { ...contextePieces, pretCollectif: true }).map((p) => p.type);
   const piecesManquantes = attendues.filter(
     (a) => !(pieces ?? []).some((x) => x.type === a.type && x.statut !== "refuse")
   );
@@ -764,7 +768,11 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
           {/* Le dépôt de l'avis reste ouvert même sans questionnaire : c'est la
               seule pièce attendue, et elle n'a plus d'autre page où vivre. */}
           <div style={{ maxWidth: 560 }}>
-            <PiecesJustificatives membership={membership} attendues={piecesAttendues(null, contextePieces)} />
+            <PiecesJustificatives
+              membership={membership}
+              attendues={piecesEnquete(null, contextePieces)}
+              masquer={piecesDossierPret(null, { ...contextePieces, pretCollectif: true }).map((p) => p.type)}
+            />
           </div>
         </>
       )}
@@ -964,7 +972,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
             {/* Sous les plafonds de l'Anah : le dépôt de l'avis d'imposition, seule
                 pièce encore attendue du copropriétaire (feedback Amir 22/09/2026). */}
             <div id="eq-avis">
-              <PiecesJustificatives membership={membership} attendues={attendues} />
+              <PiecesJustificatives membership={membership} attendues={attendues} masquer={typesDossierPret} />
             </div>
 
             <div className="cc-next">

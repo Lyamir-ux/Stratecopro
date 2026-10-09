@@ -70,6 +70,7 @@ import {
 import { readParams } from "@/api/scenarios";
 import { libellesBatiments, USAGE_LOT_LABEL } from "@/lib/referentiels";
 import { Modal } from "@/components/Modal";
+import { PiecesDossierPret } from "./Documents";
 import type { Bareme } from "@/lib/finance";
 import type { Json } from "@/lib/database.types";
 import type { SectionId } from "./index";
@@ -642,93 +643,97 @@ export function Adhesion({
   if (actifs.length > 0 && brouillons.length === 0) {
     const tousComplets = actifs.every((b) => b.statut === "complet");
     return (
-      <div className="card-xl fade" style={{ marginTop: 22 }}>
-        <div className="cx-head">
-          <Icon name={tousComplets ? "checkCircle" : "clock"} size={20}
-            style={{ color: tousComplets ? "var(--color-success-500)" : "var(--accent)" }} />
-          <h2 style={{ fontSize: 19 }}>
-            {tousComplets ? "Dossier d'adhésion signé" : "Signatures en cours"}
-          </h2>
-          <span style={{ flex: 1 }}></span>
-          {tousComplets && <Badge kind="success">Scellé le {fmtDate(actifs[0].scelle_le)}</Badge>}
-        </div>
-        <div className="cx-body">
-          {actifs.map((b) => (
-            <div key={b.id} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: 14, marginBottom: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                <b>Bulletin d'adhésion - {b.lot_reference}</b>
-                <span style={{ flex: 1 }}></span>
-                <Badge kind={b.statut === "complet" ? "success" : b.statut === "expire" ? "warn" : "neutral"}>
-                  {b.statut === "complet" ? "Signé et scellé" : b.statut === "expire" ? "Liens expirés" : "En signature"}
-                </Badge>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {b.signataires.sort((x, y) => x.ordre - y.ordre).map((s) => (
-                  <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13.5 }}>
-                    <Icon name={s.statut === "signe" ? "checkCircle" : "clock"} size={15}
-                      style={{ color: s.statut === "signe" ? "var(--color-success-500)" : "var(--fg-muted)" }} />
-                    <span>{s.prenom} {s.nom}{s.role === "principal" ? " (vous)" : ""}</span>
-                    <Badge kind={STATUT_SIGNATAIRE[s.statut]?.kind ?? "neutral"}>
-                      {STATUT_SIGNATAIRE[s.statut]?.label ?? s.statut}
-                      {s.signe_le ? ` le ${fmtDate(s.signe_le)}` : ""}
-                    </Badge>
-                    <span style={{ flex: 1 }}></span>
-                    {b.statut === "en_signature" && s.role === "cosignataire" && s.statut !== "signe" && (
-                      <button
-                        className="se-btn se-btn-ghost btn-sm"
-                        disabled={relancer.isPending}
-                        onClick={() => void relancer.mutateAsync(s.id).catch(() => null)}
-                      >
-                        <Icon name="send" size={13} />Relancer
+      <>
+        <div className="card-xl fade" style={{ marginTop: 22 }}>
+          <div className="cx-head">
+            <Icon name={tousComplets ? "checkCircle" : "clock"} size={20}
+              style={{ color: tousComplets ? "var(--color-success-500)" : "var(--accent)" }} />
+            <h2 style={{ fontSize: 19 }}>
+              {tousComplets ? "Dossier d'adhésion signé" : "Signatures en cours"}
+            </h2>
+            <span style={{ flex: 1 }}></span>
+            {tousComplets && <Badge kind="success">Scellé le {fmtDate(actifs[0].scelle_le)}</Badge>}
+          </div>
+          <div className="cx-body">
+            {actifs.map((b) => (
+              <div key={b.id} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: 14, marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <b>Bulletin d'adhésion - {b.lot_reference}</b>
+                  <span style={{ flex: 1 }}></span>
+                  <Badge kind={b.statut === "complet" ? "success" : b.statut === "expire" ? "warn" : "neutral"}>
+                    {b.statut === "complet" ? "Signé et scellé" : b.statut === "expire" ? "Liens expirés" : "En signature"}
+                  </Badge>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {b.signataires.sort((x, y) => x.ordre - y.ordre).map((s) => (
+                    <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13.5 }}>
+                      <Icon name={s.statut === "signe" ? "checkCircle" : "clock"} size={15}
+                        style={{ color: s.statut === "signe" ? "var(--color-success-500)" : "var(--fg-muted)" }} />
+                      <span>{s.prenom} {s.nom}{s.role === "principal" ? " (vous)" : ""}</span>
+                      <Badge kind={STATUT_SIGNATAIRE[s.statut]?.kind ?? "neutral"}>
+                        {STATUT_SIGNATAIRE[s.statut]?.label ?? s.statut}
+                        {s.signe_le ? ` le ${fmtDate(s.signe_le)}` : ""}
+                      </Badge>
+                      <span style={{ flex: 1 }}></span>
+                      {b.statut === "en_signature" && s.role === "cosignataire" && s.statut !== "signe" && (
+                        <button
+                          className="se-btn se-btn-ghost btn-sm"
+                          disabled={relancer.isPending}
+                          onClick={() => void relancer.mutateAsync(s.id).catch(() => null)}
+                        >
+                          <Icon name="send" size={13} />Relancer
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {/* Le mandat SEPA est scellé dès la signature du principal : il se
+                    télécharge sans attendre les cosignataires. */}
+                {!apercuAmo && (b.statut === "complet" || (!!b.mandat_path && !!principalDe(b)?.signe_le)) && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                    {b.statut === "complet" && (
+                      <button className="se-btn se-btn-secondary btn-sm" disabled={!!busy} onClick={() => ouvrir(b.id, "signe")}>
+                        <Icon name="download" size={14} />Bulletin signé
+                      </button>
+                    )}
+                    {b.mandat_path && (
+                      <button className="se-btn se-btn-secondary btn-sm" disabled={!!busy} onClick={() => ouvrir(b.id, "mandat_signe")}>
+                        <Icon name="download" size={14} />Mandat SEPA signé
+                      </button>
+                    )}
+                    {b.statut === "complet" && (
+                      <button className="se-btn se-btn-secondary btn-sm" disabled={!!busy} onClick={() => ouvrir(b.id, "certificat")}>
+                        <Icon name="fileCheck" size={14} />Certificat de preuve
                       </button>
                     )}
                   </div>
-                ))}
+                )}
               </div>
-              {/* Le mandat SEPA est scellé dès la signature du principal : il se
-                  télécharge sans attendre les cosignataires. */}
-              {!apercuAmo && (b.statut === "complet" || (!!b.mandat_path && !!principalDe(b)?.signe_le)) && (
-                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                  {b.statut === "complet" && (
-                    <button className="se-btn se-btn-secondary btn-sm" disabled={!!busy} onClick={() => ouvrir(b.id, "signe")}>
-                      <Icon name="download" size={14} />Bulletin signé
-                    </button>
-                  )}
-                  {b.mandat_path && (
-                    <button className="se-btn se-btn-secondary btn-sm" disabled={!!busy} onClick={() => ouvrir(b.id, "mandat_signe")}>
-                      <Icon name="download" size={14} />Mandat SEPA signé
-                    </button>
-                  )}
-                  {b.statut === "complet" && (
-                    <button className="se-btn se-btn-secondary btn-sm" disabled={!!busy} onClick={() => ouvrir(b.id, "certificat")}>
-                      <Icon name="fileCheck" size={14} />Certificat de preuve
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
+            ))}
 
-          {!tousComplets && actifs.some((b) => b.statut === "en_signature") && (
-            <p className="se-small" style={{ color: "var(--fg-muted)", margin: "4px 0 0" }}>
-              Vous recevrez par e-mail les documents scellés et le certificat de preuve dès que tous les signataires
-              auront signé.
-            </p>
-          )}
+            {!tousComplets && actifs.some((b) => b.statut === "en_signature") && (
+              <p className="se-small" style={{ color: "var(--fg-muted)", margin: "4px 0 0" }}>
+                Vous recevrez par e-mail les documents scellés et le certificat de preuve dès que tous les signataires
+                auront signé.
+              </p>
+            )}
 
-          {actifs.some((b) => b.statut === "expire") && (
-            <div className="cc-next" style={{ marginTop: 12 }}>
-              <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
-              <span>
-                Des liens de signature ont expiré (30 jours). Contactez Strat Eco (contact@strateco.fr)
-                pour relancer la procédure.
-              </span>
-            </div>
-          )}
-          {error && <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 10 }}>{error}</p>}
+            {actifs.some((b) => b.statut === "expire") && (
+              <div className="cc-next" style={{ marginTop: 12 }}>
+                <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
+                <span>
+                  Des liens de signature ont expiré (30 jours). Contactez Strat Eco (contact@strateco.fr)
+                  pour relancer la procédure.
+                </span>
+              </div>
+            )}
+            {error && <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 10 }}>{error}</p>}
+          </div>
+          {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}
         </div>
-        {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}
-      </div>
+        {/* les pièces du prêt suivent la signature des bulletins (retour de A CHELGHAM, 09/10/2026) */}
+        <PiecesDossierPret membership={membership} />
+      </>
     );
   }
 
@@ -1250,46 +1255,49 @@ export function Adhesion({
   if (adhesion?.statut === "signee") {
     const anciens = (adhesion.bulletins as { lotNum: string; path: string }[] | null) ?? [];
     return (
-      <div className="card-xl fade" style={{ marginTop: 22 }}>
-        <div className="cx-head">
-          <Icon name="checkCircle" size={20} style={{ color: "var(--color-success-500)" }} />
-          <h2 style={{ fontSize: 19 }}>Dossier d'adhésion signé</h2>
-          <span style={{ flex: 1 }}></span>
-          <Badge kind="success">Signé le {fmtDate(adhesion.signed_at)}</Badge>
-        </div>
-        <div className="cx-body">
-          <div className="se-eyebrow" style={{ marginBottom: 8 }}>Vos bulletins d'adhésion (signés)</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {anciens.map((b) => (
-              <div key={b.path} className="doc-row">
-                <span className="d-ico"><Icon name="fileText" size={18} /></span>
-                <div style={{ minWidth: 0 }}>
-                  <div className="d-name">Bulletin d'adhésion - Lot n°{b.lotNum}</div>
-                  <div className="d-sub">PDF pré-rempli et signé électroniquement</div>
-                </div>
-                <span className="spacer"></span>
-                <button
-                  className="icon-btn"
-                  title="Visualiser sans télécharger"
-                  onClick={() => setApercu({ name: `Bulletin d'adhésion - Lot n°${b.lotNum}`, path: b.path })}
-                >
-                  <Icon name="eye" size={16} />
-                </button>
-              </div>
-            ))}
+      <>
+        <div className="card-xl fade" style={{ marginTop: 22 }}>
+          <div className="cx-head">
+            <Icon name="checkCircle" size={20} style={{ color: "var(--color-success-500)" }} />
+            <h2 style={{ fontSize: 19 }}>Dossier d'adhésion signé</h2>
+            <span style={{ flex: 1 }}></span>
+            <Badge kind="success">Signé le {fmtDate(adhesion.signed_at)}</Badge>
           </div>
-          {adhesion.sepa_path && (
-            <>
-              <div className="se-eyebrow" style={{ margin: "18px 0 8px" }}>Mandat de prélèvement SEPA</div>
-              <MandatSepaAncienRow
-                path={adhesion.sepa_path}
-                onApercu={() => setApercu({ name: "Mandat SEPA pré-rempli", path: adhesion.sepa_path! })}
-              />
-            </>
-          )}
+          <div className="cx-body">
+            <div className="se-eyebrow" style={{ marginBottom: 8 }}>Vos bulletins d'adhésion (signés)</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {anciens.map((b) => (
+                <div key={b.path} className="doc-row">
+                  <span className="d-ico"><Icon name="fileText" size={18} /></span>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="d-name">Bulletin d'adhésion - Lot n°{b.lotNum}</div>
+                    <div className="d-sub">PDF pré-rempli et signé électroniquement</div>
+                  </div>
+                  <span className="spacer"></span>
+                  <button
+                    className="icon-btn"
+                    title="Visualiser sans télécharger"
+                    onClick={() => setApercu({ name: `Bulletin d'adhésion - Lot n°${b.lotNum}`, path: b.path })}
+                  >
+                    <Icon name="eye" size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {adhesion.sepa_path && (
+              <>
+                <div className="se-eyebrow" style={{ margin: "18px 0 8px" }}>Mandat de prélèvement SEPA</div>
+                <MandatSepaAncienRow
+                  path={adhesion.sepa_path}
+                  onApercu={() => setApercu({ name: "Mandat SEPA pré-rempli", path: adhesion.sepa_path! })}
+                />
+              </>
+            )}
+          </div>
+          {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}
         </div>
-        {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}
-      </div>
+        <PiecesDossierPret membership={membership} />
+      </>
     );
   }
 

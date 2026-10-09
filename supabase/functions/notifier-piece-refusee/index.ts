@@ -12,6 +12,12 @@
 // v2 (30/09/2026) : libellés des pièces demandées selon la situation (0118), et
 // lien vers l'enquête sociale du portail, où se déposent désormais les pièces
 // (l'onglet « Mes documents » n'existe plus depuis le 22/09).
+//
+// v3 (09/10/2026, retour de A CHELGHAM) : les pièces que la banque demande pour le
+// prêt collectif se déposent dans « Mon financement », après la signature des
+// bulletins : le lien y renvoie pour ces pièces. Kbis, statuts et avis des
+// associés restent dans l'enquête pour une SCI à l'IR occupée par un associé
+// (même règle que src/lib/piecesSituation.ts, piecesEnquete / piecesDossierPret).
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const cors = {
@@ -40,6 +46,20 @@ const LIBELLE_PIECE: Record<string, string> = {
   avis_associes_sci: "Avis d'imposition de tous les associés",
   jugement_protection: "Jugement de tutelle ou de curatelle",
 };
+
+/** Pièces que seule la banque demande : toujours dans « Mon financement ». */
+const PIECES_PRET = ["justificatif_domicile", "taxe_fonciere"];
+/** Pièces de SCI : enquête si la SCI à l'IR est occupée par un associé, sinon dossier de prêt. */
+const PIECES_SCI = ["kbis_sci", "statuts_sci", "avis_associes_sci"];
+const SCI_IR = "SCI soumise à l'impôt sur le revenu";
+
+type ReponsesEnquete = { copro?: Record<string, unknown>; lots?: Record<string, Record<string, unknown>> } | null;
+
+/** La SCI déclarée à l'enquête est-elle à l'IR et occupée par un associé ? */
+function sciIrOccupee(reponses: ReponsesEnquete): boolean {
+  if (reponses?.copro?.["type-coproprietaire"] !== SCI_IR) return false;
+  return Object.values(reponses?.lots ?? {}).some((l) => typeof l["associes-occupants"] === "number" && (l["associes-occupants"] as number) > 0);
+}
 
 const MOTIF_QUALIFICATION: Record<string, string> = {
   illisible: "le document est illisible (photo floue, page coupée ou trop sombre)",
@@ -116,6 +136,13 @@ Deno.serve(async (req: Request) => {
   const appUrl = Deno.env.get("APP_URL") ?? "https://stratecopro.vercel.app";
 
   const libelle = LIBELLE_PIECE[piece.type] ?? piece.type;
+  let dossierPret = PIECES_PRET.includes(piece.type);
+  if (PIECES_SCI.includes(piece.type)) {
+    const { data: reps } = await admin.from("enquete_reponses").select("reponses").eq("coproprietaire_id", cp.id);
+    dossierPret = !(reps ?? []).some((r) => sciIrOccupee(r.reponses as ReponsesEnquete));
+  }
+  const rubrique = dossierPret ? "Mon financement" : "Enquête sociale";
+  const lien = `${appUrl}/portail/${dossierPret ? "pret" : "enquete"}`;
   const motif = (piece.motif_refus && piece.motif_refus.trim()) ||
     MOTIF_QUALIFICATION[piece.qualification ?? ""] ||
     MOTIF_QUALIFICATION.autre;
@@ -136,10 +163,10 @@ Deno.serve(async (req: Request) => {
       <p style="padding:10px 14px;background:#fdecec;border-left:3px solid #DC2626;border-radius:4px">
         <strong>${echap(motif.charAt(0).toUpperCase() + motif.slice(1))}.</strong>
       </p>
-      <p>Merci de déposer une nouvelle version depuis votre portail, rubrique « Enquête sociale » :
+      <p>Merci de déposer une nouvelle version depuis votre portail, rubrique « ${rubrique} » :
       elle remplacera la précédente et sera vérifiée à son tour.</p>
       <p style="margin:22px 0">
-        <a href="${appUrl}/portail/enquete"
+        <a href="${lien}"
            style="background:#355717;color:#fff;padding:12px 22px;border-radius:6px;text-decoration:none;font-weight:bold">
           Déposer une nouvelle version
         </a>

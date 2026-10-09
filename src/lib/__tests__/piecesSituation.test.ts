@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { CATALOGUE } from "../enqueteCatalogue";
-import { piecesAttendues, PIECES_SITUATION, REPONSE_DEUX_AVIS, REPONSE_USUFRUITIER } from "../piecesSituation";
+import {
+  bulletinsSignes,
+  piecesAttendues,
+  piecesDossierPret,
+  piecesEnquete,
+  PIECES_SITUATION,
+  REPONSE_DEUX_AVIS,
+  REPONSE_USUFRUITIER,
+} from "../piecesSituation";
 import { Constants } from "../database.types";
 
 const types = (rep: Parameters<typeof piecesAttendues>[0]) => piecesAttendues(rep).map((p) => p.type);
@@ -74,5 +82,48 @@ describe("questions ajoutées le 30/09/2026 (feedback Marius MAZZANTE)", () => {
       "Vacant (entre deux locations)",
     ]);
     expect(q("type-residence").cond).toContainEqual({ qid: "type-occupation", vals: ["Propriétaire occupant"], defaut: true });
+  });
+});
+
+describe("pièces du prêt après la signature des bulletins (retour de A CHELGHAM, 09/10/2026)", () => {
+  const t = (l: { type: string }[]) => l.map((p) => p.type);
+  const sciIr = { "type-coproprietaire": "SCI soumise à l'impôt sur le revenu" };
+
+  it("l'enquête ne demande jamais les pièces de la banque", () => {
+    expect(t(piecesEnquete(null, { pretCollectif: true }))).toEqual(["avis_imposition"]);
+    expect(t(piecesEnquete(null, { pretCollectif: true, sci: true }))).toEqual([]);
+  });
+
+  it("« Mon financement » reçoit les pièces de la banque, sans l'avis du ménage", () => {
+    expect(t(piecesDossierPret(null, { pretCollectif: true }))).toEqual(["justificatif_domicile", "taxe_fonciere"]);
+    expect(t(piecesDossierPret(null, { pretCollectif: true, sci: true }))).toEqual([
+      "justificatif_domicile", "kbis_sci", "statuts_sci", "avis_associes_sci", "taxe_fonciere",
+    ]);
+    expect(piecesDossierPret(null, {})).toEqual([]);
+  });
+
+  it("SCI à l'IR occupée par un associé : Kbis, statuts et avis restent dans l'enquête, une seule fois", () => {
+    const rep = { copro: sciIr, lots: { L1: { "associes-occupants": 1 } } };
+    expect(t(piecesEnquete(rep, { pretCollectif: true }))).toEqual([
+      "pret_usage_notarie", "kbis_sci", "statuts_sci", "avis_associes_sci",
+    ]);
+    expect(t(piecesDossierPret(rep, { pretCollectif: true }))).toEqual(["justificatif_domicile", "taxe_fonciere"]);
+  });
+
+  it("les deux listes réunies = la liste complète de l'espace AMO", () => {
+    const rep = { copro: { "curatelle-tutelle": "Tutelle", "nb-avis-imposition": REPONSE_DEUX_AVIS } };
+    const ctx = { pretCollectif: true };
+    expect(new Set([...t(piecesEnquete(rep, ctx)), ...t(piecesDossierPret(rep, ctx))])).toEqual(new Set(t(piecesAttendues(rep, ctx))));
+  });
+
+  it("bulletins signés : aucun en préparation, ou ancien dossier signé", () => {
+    expect(bulletinsSignes([])).toBe(false);
+    expect(bulletinsSignes(null)).toBe(false);
+    expect(bulletinsSignes([{ statut: "brouillon" }])).toBe(false);
+    expect(bulletinsSignes([{ statut: "en_signature" }, { statut: "brouillon" }])).toBe(false);
+    expect(bulletinsSignes([{ statut: "en_signature" }, { statut: "complet" }])).toBe(true);
+    expect(bulletinsSignes([{ statut: "annule" }, { statut: "expire" }])).toBe(true);
+    expect(bulletinsSignes([{ statut: "annule" }])).toBe(false);
+    expect(bulletinsSignes([], true)).toBe(true);
   });
 });
