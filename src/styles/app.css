@@ -1014,7 +1014,7 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .portal-header .ph-spacer { flex: 1; }
 .portal-header .ph-user { display: flex; align-items: center; gap: 10px; }
 .portal-header .ph-user .nm { font-size: 13px; font-weight: 600; }
-.portal-header .ph-user .rl { font-size: 12px; color: var(--fg-muted); }
+.portal-header .ph-user .rl { display: block; max-width: 260px; font-size: 12px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .portal-nav {
   position: sticky; top: 68px; z-index: 15; background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
@@ -1773,6 +1773,7 @@ table.dossiers.sf-table tfoot td:first-child { text-align: left; }
 .cp-choix .cp-txt { flex: 1; min-width: 0; }
 .cp-choix .cp-nom { display: block; font-family: var(--font-display); font-weight: 700; font-size: 20px; }
 .cp-choix .cp-sub { display: block; font-size: 13px; color: var(--fg3); }
+.cp-choix .cp-lots { display: block; margin-top: 4px; font-size: 14px; font-weight: 600; color: var(--color-primary-700); }
 /* Portail - « Votre choix est transmis » (Mon financement) */
 .card-xl .cx-body.choix-transmis { text-align: center; padding: 34px 40px 30px; }
 /* Portail - plafonds Anah : sur un écran étroit, le tableau défile au lieu de déborder */

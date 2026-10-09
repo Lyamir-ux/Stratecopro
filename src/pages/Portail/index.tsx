@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { piecesAttendues, type ReponsesPieces } from "@/lib/piecesSituation";
+import { libelleLotsPortail } from "@/lib/lotsPortail";
 import { Avatar, PhaseBadge, THUMB_BG } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
 import { compteNonLus, useLectures, useMessagesPortail } from "@/api/messages";
@@ -238,7 +239,8 @@ function CoproSelect({
             Bonjour {userName.trim()}
           </h1>
           <p className="se-body" style={{ marginTop: 0, marginBottom: 28 }}>
-            Sélectionnez votre copropriété pour accéder au suivi de votre projet de rénovation.
+            Vous êtes rattaché à plusieurs logements ou copropriétés. Sélectionnez celui dont vous voulez
+            suivre le projet de rénovation : vous pourrez en changer à tout moment.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {memberships.map((m) => (
@@ -249,9 +251,11 @@ function CoproSelect({
                 <span className="cp-txt">
                   <span className="cp-nom">{m.copro.name}</span>
                   <span className="cp-sub">
-                    {[m.copro.code_postal, m.copro.city].filter(Boolean).join(" ")}
-                    {m.lots.length > 0 && " · " + (m.lots.length > 1 ? m.lots.length + " lots" : "Lot n°" + m.lots[0].num)}
+                    {[m.copro.adresse, [m.copro.code_postal, m.copro.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")}
                   </span>
+                  {m.lots.length > 0 && (
+                    <span className="cp-lots">{libelleLotsPortail(m.lots, m.copro.denomination_batiments)}</span>
+                  )}
                 </span>
                 <PhaseBadge phase={m.copro.phase} />
                 <Icon name="arrowRight" size={20} className="cp-fleche" style={{ color: "var(--accent)" }} />
@@ -447,12 +451,10 @@ export default function Portail() {
           <Avatar who={initials} name={userName} />
           <span>
             <span className="nm" style={{ display: "block" }}>{userName}</span>
-            <span className="rl">
-              {membership.lots.length > 1
-                ? membership.lots.length + " lots"
-                : membership.lots.length === 1
-                  ? "Lot n°" + membership.lots[0].num
-                  : "Copropriétaire"}
+            <span className="rl" title={libelleLotsPortail(membership.lots, copro.denomination_batiments, 12)}>
+              {membership.lots.length > 0
+                ? libelleLotsPortail(membership.lots, copro.denomination_batiments, 2)
+                : "Copropriétaire"}
             </span>
           </span>
           <button className="icon-btn" onClick={() => void signOut()} title="Se déconnecter">
