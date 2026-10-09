@@ -8,8 +8,11 @@
 // nom commence par le terme de la colonne D de sa « nomenclature de
 // numérisation » (NOMENCLATURE_CEGEE), le nom de la copropriété vient après :
 //   {TERME CEGEE} - {COPRO} - {Objet} - {ÉMETTEUR} - {AAAA-MM-JJ}[ - {état}].ext
-// Les deux formats coexistent : les fichiers déjà déposés gardent l'ancien et
-// sont toujours reconnus (typesDepuisNom, champsDepuisNom).
+// Devis et contrats (feedback Amir du 09/10/2026) : l'entreprise suit le terme,
+// la copropriété vient ensuite (TERMES_ENTREPRISE_EN_TETE) :
+//   DEVIS ENTREPRISE - {ÉMETTEUR} - {COPRO} - {Objet} - {AAAA-MM-JJ}[ - {état}].ext
+// Les formats coexistent : les fichiers déjà déposés sont toujours reconnus
+// (typesDepuisNom, champsDepuisNom).
 
 /** Types de documents reconnus, avec le dossier de classement suggéré par défaut. */
 export const TYPES_DOCUMENT: { id: string; label: string; dossier: string }[] = [
@@ -158,8 +161,10 @@ export const typeLabel = (id: string): string => TYPES_DOCUMENT.find((t) => t.id
  * commence par ce terme, la copropriété vient après. Orthographe de la banque
  * conservée (« Mail CEGC », « PROJET de CONTRAT »).
  *
- * - Deux types peuvent partager un terme (le RIB du compte de la copropriété et
- *   celui du compte travaux : « RIB COMPTE TRAVAUX » chez la banque).
+ * - Plusieurs types peuvent partager un terme (le RIB du compte de la copropriété et
+ *   celui du compte travaux : « RIB COMPTE TRAVAUX » chez la banque ; tous les devis
+ *   et marchés de travaux : « DEVIS ENTREPRISE » ; devis d'honoraires et contrats
+ *   AMO, MOE, DO, contrôle technique : « DEVIS HONORAIRES »).
  * - Une cellule à « / » de la banque (« KBIS SYNDIC / STATUTS SYNDIC ») désigne
  *   deux pièces : « / » est interdit dans un nom de fichier, chaque pièce
  *   prend son terme.
@@ -190,8 +195,19 @@ export const NOMENCLATURE_CEGEE: Record<string, string> = {
   attestation_non_recours: "ATT. NON RECOURS",
   annexes_comptables: "ANNEXES COMPTABLES",
   attestation_mri: "MRI",
+  // « Devis détaillés des travaux - 1 an / Marché de travaux »
   devis_travaux: "DEVIS ENTREPRISE",
+  devis: "DEVIS ENTREPRISE", // devis du dossier des études : DEVIS HONORAIRES (termeNomenclature)
+  devis_fenetres: "DEVIS ENTREPRISE",
+  marche_travaux: "DEVIS ENTREPRISE",
+  // « Devis des honoraires (syndic, maîtrise d'oeuvre, SPS, DO, bureau de contrôle,
+  // diagnostic amiante...) » : contrats AMO et MOE compris (feedback Amir 09/10/2026)
   devis_honoraires_moe: "DEVIS HONORAIRES",
+  contrat_amo: "DEVIS HONORAIRES",
+  contrat_moe: "DEVIS HONORAIRES",
+  offre_moe: "DEVIS HONORAIRES",
+  offre_assurance: "DEVIS HONORAIRES",
+  convention_ct: "DEVIS HONORAIRES",
   // 05 - Éco-PTZ copropriété
   audit_energetique: "AUDIT",
   cerfa_ecoptz_emprunteur: "FORMULAIRE EMPRUNTEUR",
@@ -210,10 +226,23 @@ export const NOMENCLATURE_CEGEE: Record<string, string> = {
 /** « RIB XX » : le terme est complété par l'entreprise émettrice (XX), au lieu de la suivre. */
 const TERME_AVEC_EMETTEUR = new Set(["rib_entreprises"]);
 
+/** Devis et contrats : l'entreprise vient juste après le terme, avant la copropriété
+ *  (« DEVIS ENTREPRISE - DECOPEINT - 53 RUE DE LA COURSE - ITE - … », Amir 09/10/2026). */
+const TERMES_ENTREPRISE_EN_TETE = new Set(["DEVIS ENTREPRISE", "DEVIS HONORAIRES"]);
+
+/** Entreprise d'un type quand le déposant ne la saisit pas : le contrat AMO est le nôtre. */
+const EMETTEUR_PAR_DEFAUT: Record<string, string> = { contrat_amo: "STRAT ECO" };
+
+/** Dossier des devis d'études : un « Devis » qui y est classé est un devis d'honoraires. */
+const DOSSIER_ETUDES = "Devis des études techniques et Frais Annexes";
+
 const egalBase = (a: string, b: string) => a.localeCompare(b, "fr", { sensitivity: "base" }) === 0;
 
-/** Terme de la nomenclature de la banque pour ce type de document, ou null. */
-export const termeNomenclature = (typeId: string): string | null => NOMENCLATURE_CEGEE[typeId] ?? null;
+/** Terme de la nomenclature de la banque pour ce type de document, ou null. Un
+ *  « Devis » du dossier des études est un devis d'honoraires (SPS, contrôle
+ *  technique, diagnostics…), ailleurs un devis d'entreprise. */
+export const termeNomenclature = (typeId: string, dossier?: string | null): string | null =>
+  typeId === "devis" && dossier === DOSSIER_ETUDES ? "DEVIS HONORAIRES" : (NOMENCLATURE_CEGEE[typeId] ?? null);
 
 /** Lit un premier segment de nom comme terme de la nomenclature : types concernés
  *  (plusieurs si le terme est partagé) et, pour « RIB XX », l'entreprise. */
@@ -268,6 +297,8 @@ export interface ChampsNom {
   emetteur: string | null;
   date: string | null;
   etat: string | null;
+  /** Dossier de classement : départage un « Devis » d'entreprise d'un devis d'honoraires. */
+  dossier?: string | null;
 }
 
 /** Caractères interdits dans un nom de fichier (Windows + Storage), compactés. */
@@ -285,19 +316,23 @@ export function extensionDe(filename: string): string {
 
 /** Assemble le nom final : segments non vides joints par « - », extension conservée.
  *  Un type de la nomenclature bancaire (NOMENCLATURE_CEGEE) ouvre le nom par son
- *  terme, la copropriété vient ensuite ; sinon l'ancien ordre « {COPRO} - {Type} ». */
+ *  terme, la copropriété vient ensuite (après l'entreprise pour un devis ou un
+ *  contrat) ; sinon l'ancien ordre « {COPRO} - {Type} ». */
 export function construireNomFichier(champs: ChampsNom, extension: string): string {
   const prefixe = champs.prefixe ? nettoyerSegment(champs.prefixe).toUpperCase() : null;
   const objet = champs.objet ? nettoyerSegment(champs.objet) : null;
-  const emetteur = champs.emetteur ? nettoyerSegment(champs.emetteur).toUpperCase() : null;
+  const saisi = champs.emetteur ? nettoyerSegment(champs.emetteur) : "";
+  const emetteur = (saisi || EMETTEUR_PAR_DEFAUT[champs.type] || "").toUpperCase() || null;
   const date = champs.date && /^\d{4}-\d{2}-\d{2}$/.test(champs.date) ? champs.date : null;
   const etat = champs.etat ? nettoyerSegment(champs.etat) : null;
-  const terme = termeNomenclature(champs.type);
+  const terme = termeNomenclature(champs.type, champs.dossier);
   const emetteurDansTerme = !!terme && TERME_AVEC_EMETTEUR.has(champs.type);
   const segments = (
-    terme
-      ? [emetteurDansTerme && emetteur ? `${terme} ${emetteur}` : terme, prefixe, objet, emetteurDansTerme ? null : emetteur, date, etat]
-      : [prefixe, typeLabel(champs.type), objet, emetteur, date, etat]
+    !terme
+      ? [prefixe, typeLabel(champs.type), objet, emetteur, date, etat]
+      : TERMES_ENTREPRISE_EN_TETE.has(terme)
+        ? [terme, emetteur, prefixe, objet, date, etat]
+        : [emetteurDansTerme && emetteur ? `${terme} ${emetteur}` : terme, prefixe, objet, emetteurDansTerme ? null : emetteur, date, etat]
   ).filter((s): s is string => !!s && s.length > 0);
   const nom = segments.join(" - ");
   return extension ? `${nom}.${extension}` : nom;
@@ -345,22 +380,37 @@ export function nomRenomme(saisie: string, ancienNom: string): string | null {
 }
 
 /** Relit les champs d'un nom normalisé ({COPRO} - {Type} - {Objet} - {ÉMETTEUR} - {Date},
- *  ou {TERME CEGEE} - {COPRO} - {Objet} - {ÉMETTEUR} - {Date}) :
- *  sert à vérifier après coup un devis déjà déposé (vérification RGE, 07/10/2026).
- *  L'émetteur est le segment en majuscules qui précède la date ; null si absent. */
-export function champsDepuisNom(name: string): { type: string | null; objet: string | null; emetteur: string | null; date: string | null } {
+ *  {TERME CEGEE} - {COPRO} - {Objet} - {ÉMETTEUR} - {Date}, ou pour un devis
+ *  {TERME} - {ÉMETTEUR} - {COPRO} - {Objet} - {Date}) : sert à vérifier après coup
+ *  un devis déjà déposé (vérification RGE, 07/10/2026). `copro` (nom de la
+ *  copropriété du dossier) situe la copropriété dans le nom d'un devis ; sans lui,
+ *  deux segments en majuscules après le terme se lisent « ENTREPRISE - COPRO ».
+ *  Sinon l'émetteur est le segment en majuscules qui précède la date ; null si absent. */
+export function champsDepuisNom(
+  name: string,
+  copro?: string | null
+): { type: string | null; objet: string | null; emetteur: string | null; date: string | null } {
   const vide = { type: null, objet: null, emetteur: null, date: null };
   const segs = nomSansExtension(name)
     .split(" - ")
     .map((s) => s.trim())
     .filter(Boolean);
   const egal = egalBase;
+  const majuscules = (s: string) => s === s.toUpperCase() && /[A-Z]/.test(s);
   let type: string | null = null;
   let suite = -1;
   let emetteurTerme: string | null = null;
   // nomenclature de la banque : le terme ouvre le nom, la copropriété est le segment suivant
   const terme = segs.length ? lireTerme(segs[0]) : null;
   if (terme) [type, suite, emetteurTerme] = [terme.types[0], 2, terme.emetteur];
+  if (terme && TERMES_ENTREPRISE_EN_TETE.has(segs[0].toUpperCase())) {
+    // devis : « {TERME} - {ÉMETTEUR} - {COPRO} - … » ; avant le 09/10/2026 « {TERME} - {COPRO} - … »
+    const c = copro ? nomFichierSansAccents(nettoyerSegment(copro).toUpperCase()).split(" - ") : null;
+    const coproEn = (i: number) => !!c && egal(segs.slice(i, i + c.length).join(" - "), c.join(" - "));
+    if (c && coproEn(2)) [suite, emetteurTerme] = [2 + c.length, segs[1]];
+    else if (c && coproEn(1)) suite = 1 + c.length;
+    else if (segs.length >= 3 && majuscules(segs[1]) && majuscules(segs[2])) [suite, emetteurTerme] = [3, segs[1]];
+  }
   // libellé à « / » coupé en deux au dépôt (« Devis / DPGF des travaux » -> « Devis - DPGF des travaux »)
   for (let i = 0; i < Math.min(2, segs.length) && !type; i++) {
     const double = segs[i + 1] ? TYPES_DOCUMENT.find((t) => egal(nomFichierSansAccents(t.label), `${segs[i]} - ${segs[i + 1]}`)) : undefined;
@@ -372,11 +422,10 @@ export function champsDepuisNom(name: string): { type: string | null; objet: str
   const reste = segs.slice(suite);
   const iDate = reste.findIndex((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
   const avant = iDate >= 0 ? reste.slice(0, iDate) : reste;
-  const majuscules = (s: string) => s === s.toUpperCase() && /[A-Z]/.test(s);
   let objet: string | null = null;
   let emetteur: string | null = null;
   if (emetteurTerme) {
-    // « RIB XX » : l'entreprise est dans le terme, le reste est l'objet
+    // « RIB XX » ou devis : l'entreprise est déjà lue, le reste est l'objet
     emetteur = emetteurTerme;
     objet = avant.length ? avant.join(" - ") : null;
   } else if (avant.length >= 2 && majuscules(avant[avant.length - 1])) {

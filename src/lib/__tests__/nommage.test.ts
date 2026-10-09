@@ -104,11 +104,30 @@ describe("nomenclature de la Caisse d'Épargne Grand Est", () => {
 
   it("garde objet, émetteur, date et état après la copropriété", () => {
     expect(
-      construireNomFichier(
-        champs("devis_travaux", { objet: "Isolation ITE", emetteur: "Soprema", date: "2026-09-12", etat: "signé" }),
-        "pdf"
-      )
-    ).toBe("DEVIS ENTREPRISE - LE FORUM - Isolation ITE - SOPREMA - 2026-09-12 - signé.pdf");
+      construireNomFichier(champs("audit_energetique", { objet: "Audit réglementaire", emetteur: "Ingedair", date: "2026-09-12" }), "pdf")
+    ).toBe("AUDIT - LE FORUM - Audit réglementaire - INGEDAIR - 2026-09-12.pdf");
+  });
+
+  // Amir 09/10/2026 : « DEVIS ENTREPRISE, ensuite le nom de l'entreprise, puis le nom de
+  // la copro, et ensuite le reste » ; « DEVIS HONORAIRES » de même pour le contrat d'AMO.
+  it("devis : l'entreprise suit le terme, la copropriété vient ensuite", () => {
+    const devis = { objet: "ITE", emetteur: "Decopeint", date: "2026-10-09", etat: "signe" };
+    for (const type of ["devis", "devis_travaux", "devis_fenetres", "marche_travaux"])
+      expect(construireNomFichier(champs(type, devis), "pdf"), type).toBe("DEVIS ENTREPRISE - DECOPEINT - LE FORUM - ITE - 2026-10-09 - signe.pdf");
+    for (const type of ["devis_honoraires_moe", "contrat_moe", "offre_moe", "offre_assurance", "convention_ct"])
+      expect(construireNomFichier(champs(type, { emetteur: "Ingedair" }), "pdf"), type).toBe("DEVIS HONORAIRES - INGEDAIR - LE FORUM.pdf");
+    expect(construireNomFichier(champs("devis_travaux"), "pdf")).toBe("DEVIS ENTREPRISE - LE FORUM.pdf");
+  });
+
+  it("contrat d'AMO : Strat Eco par défaut, l'entreprise saisie sinon", () => {
+    expect(construireNomFichier(champs("contrat_amo", { etat: "signe" }), "pdf")).toBe("DEVIS HONORAIRES - STRAT ECO - LE FORUM - signe.pdf");
+    expect(construireNomFichier(champs("contrat_amo", { emetteur: "Autre AMO" }), "pdf")).toBe("DEVIS HONORAIRES - AUTRE AMO - LE FORUM.pdf");
+  });
+
+  it("un « Devis » du dossier des études est un devis d'honoraires", () => {
+    const sps = champs("devis", { objet: "SPS", emetteur: "Qualiconsult", dossier: "Devis des études techniques et Frais Annexes" });
+    expect(construireNomFichier(sps, "pdf")).toBe("DEVIS HONORAIRES - QUALICONSULT - LE FORUM - SPS.pdf");
+    expect(construireNomFichier({ ...sps, dossier: "Marchés de travaux" }, "pdf")).toBe("DEVIS ENTREPRISE - QUALICONSULT - LE FORUM - SPS.pdf");
   });
 
   it("« RIB XX » : l'entreprise est dans le terme", () => {
@@ -117,7 +136,7 @@ describe("nomenclature de la Caisse d'Épargne Grand Est", () => {
   });
 
   it("garde l'ancien ordre pour un type absent de la nomenclature", () => {
-    expect(construireNomFichier(champs("devis", { objet: "Ventilation" }), "pdf")).toBe("LE FORUM - Devis - Ventilation.pdf");
+    expect(construireNomFichier(champs("facture", { objet: "Ventilation" }), "pdf")).toBe("LE FORUM - Facture - Ventilation.pdf");
     expect(construireNomFichier(champs("reglement_copropriete"), "pdf")).toBe("LE FORUM - Règlement de copropriété.pdf");
   });
 
@@ -145,21 +164,42 @@ describe("nomenclature de la Caisse d'Épargne Grand Est", () => {
   it("un terme partagé par deux types les renvoie tous les deux, sans en choisir un", () => {
     expect(typesDepuisNom("RIB COMPTE TRAVAUX - LE FORUM.pdf").sort()).toEqual(["rib_compte_copro", "rib_compte_travaux"]);
     expect(typeDepuisNom("RIB COMPTE TRAVAUX - LE FORUM.pdf")).toBeNull();
+    expect(typesDepuisNom("DEVIS ENTREPRISE - SOPREMA - LE FORUM.pdf").sort()).toEqual(
+      ["devis", "devis_fenetres", "devis_travaux", "marche_travaux"]
+    );
+    expect(typesDepuisNom("DEVIS HONORAIRES - STRAT ECO - LE FORUM.pdf")).toContain("contrat_amo");
   });
 
-  it("relit objet, émetteur et date d'un nom au format de la banque", () => {
+  it("relit objet, émetteur et date d'un devis : entreprise puis copropriété", () => {
+    const attendu = { type: "devis_travaux", objet: "ITE", emetteur: "DECOPEINT", date: "2026-10-09" };
+    const nom = "DEVIS ENTREPRISE - DECOPEINT - 53 RUE DE LA COURSE - ITE - 2026-10-09 - signe.pdf";
+    expect(champsDepuisNom(nom, "53 rue de la Course")).toEqual(attendu);
+    expect(champsDepuisNom(nom)).toEqual(attendu);
+    // copropriété à « - » dans son nom
+    expect(champsDepuisNom("DEVIS HONORAIRES - ANBRA - 34 RUE WIMPHELING - 34 RUE GEILER - Ventilation.pdf", "34 rue Wimpheling - 34 rue Geiler"))
+      .toEqual({ type: "devis_honoraires_moe", objet: "Ventilation", emetteur: "ANBRA", date: null });
+    // sans entreprise
+    expect(champsDepuisNom("DEVIS ENTREPRISE - LE FORUM - Ventilation.pdf", "Le Forum")).toEqual({
+      type: "devis_travaux", objet: "Ventilation", emetteur: null, date: null,
+    });
+  });
+
+  it("relit encore un devis à l'ordre du 08/10 (copropriété avant l'entreprise)", () => {
+    expect(champsDepuisNom("DEVIS ENTREPRISE - 53 RUE DE LA COURSE - ITE - DECOPEINT - 2026-10-09.pdf", "53 RUE DE LA COURSE")).toEqual({
+      type: "devis_travaux",
+      objet: "ITE",
+      emetteur: "DECOPEINT",
+      date: "2026-10-09",
+    });
     expect(champsDepuisNom("DEVIS ENTREPRISE - LE FORUM - Isolation ITE - SOPREMA - 2026-09-12 - signe.pdf")).toEqual({
       type: "devis_travaux",
       objet: "Isolation ITE",
       emetteur: "SOPREMA",
       date: "2026-09-12",
     });
-    expect(champsDepuisNom("DEVIS ENTREPRISE - LE FORUM - SOPREMA.pdf")).toEqual({
-      type: "devis_travaux",
-      objet: null,
-      emetteur: "SOPREMA",
-      date: null,
-    });
+  });
+
+  it("relit objet, émetteur et date d'un nom au format de la banque", () => {
     expect(champsDepuisNom("RIB SOPREMA - LE FORUM - Isolation ITE - 2026-09-12.pdf")).toEqual({
       type: "rib_entreprises",
       objet: "Isolation ITE",
@@ -173,6 +213,7 @@ describe("nomenclature de la Caisse d'Épargne Grand Est", () => {
       champs("devis_travaux", { objet: "Isolation ITE", emetteur: "Soprema", date: "2026-09-12" }),
       "pdf"
     );
+    expect(champsDepuisNom(nom, "Le Forum")).toMatchObject({ type: "devis_travaux", objet: "Isolation ITE", emetteur: "SOPREMA", date: "2026-09-12" });
     expect(champsDepuisNom(nom)).toMatchObject({ type: "devis_travaux", objet: "Isolation ITE", emetteur: "SOPREMA", date: "2026-09-12" });
   });
 });

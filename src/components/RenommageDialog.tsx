@@ -3,7 +3,8 @@
 // en direct - {PREFIXE} - {Type} - {Objet} - {ÉMETTEUR} - {Date}[ - {état}].
 // Pour une pièce du dossier de prêt de la Caisse d'Épargne Grand Est, le nom
 // ouvre par le terme de sa nomenclature, la copropriété vient après (nommage.ts,
-// NOMENCLATURE_CEGEE, 08/10/2026).
+// NOMENCLATURE_CEGEE, 08/10/2026) ; pour un devis ou un contrat, l'entreprise
+// s'intercale entre les deux (« DEVIS ENTREPRISE - {ÉMETTEUR} - {COPRO} », 09/10/2026).
 // Saisie entièrement manuelle (pas d'analyse automatique) ; « Garder le nom
 // d'origine » reste toujours possible.
 // Éco-PTZ (02/10/2026) : avec `ecoPtz`, le dépôt d'un audit, d'un devis ou d'un
@@ -128,7 +129,15 @@ export function RenommageDialog({
   // sans accent ni caractère spécial : ce que l'utilisateur voit est exactement le nom enregistré
   const nomPropose = nomFichierSansAccents(
     construireNomFichier(
-      { prefixe, type: champs.type, objet: champs.objet || null, emetteur: champs.emetteur || null, date: champs.date || null, etat: champs.etat || null },
+      {
+        prefixe,
+        type: champs.type,
+        objet: champs.objet || null,
+        emetteur: champs.emetteur || null,
+        date: champs.date || null,
+        etat: champs.etat || null,
+        dossier: dossiers ? dossier : (dossierInitial ?? null),
+      },
       extensionDe(file.name)
     )
   );

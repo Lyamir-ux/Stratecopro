@@ -25,7 +25,7 @@ import {
   type Fichier,
 } from "@/api/fichiers";
 import { derniereParFichier, siretDuFichier, useVerificationsRge } from "@/api/rge";
-import { champsDepuisNom, typeDepuisNom, typesDepuisNom, typeLabel } from "@/lib/nommage";
+import { champsDepuisNom, typesDepuisNom, typeLabel } from "@/lib/nommage";
 import { verificationRgePour } from "@/lib/rge";
 import type { CoproWithStats } from "@/api/copros";
 
@@ -95,7 +95,7 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
 
   // Devis et DPGF de travaux : état RGE de l'entreprise (dernière vérification), ou bouton pour vérifier
   const boutonRge = (f: Fichier) =>
-    verificationRgePour(typeDepuisNom(f.name)) ? <BoutonRge verification={derniereRge.get(f.id)} onClick={() => setRgeDe(f)} /> : null;
+    typesDepuisNom(f.name).some(verificationRgePour) ? <BoutonRge verification={derniereRge.get(f.id)} onClick={() => setRgeDe(f)} /> : null;
 
   const selectFolder = (f: string) => {
     setOpenFolder(openFolder === f ? null : f);
@@ -488,7 +488,7 @@ export function FichiersTab({ c }: { c: CoproWithStats }) {
 
       {rgeDe && (() => {
         const v = derniereRge.get(rgeDe.id);
-        const lu = champsDepuisNom(rgeDe.name);
+        const lu = champsDepuisNom(rgeDe.name, c.name);
         return (
           <VerificationRgeDialog
             nomFichier={rgeDe.name}
