@@ -25,6 +25,7 @@ import {
   isValidBic,
   isValidIban,
   nomDebiteurMandat,
+  nomPrenomComplet,
   normalizeIban,
   type Adherent,
   type AdhesionForm,
@@ -98,6 +99,12 @@ const emptyAdherent = (nom = ""): Adherent => ({
   situation: "celibataire",
   situationDepuis: "",
 });
+
+/** « NOM Prénom » d'après le libellé de la fiche quand on peut le trancher, sinon le libellé tel quel. */
+const nomPrenomDeLaFiche = (libelle: string): string => {
+  const d = decouperNomPrenom(libelle);
+  return d?.nom && d.prenom ? `${d.nom} ${d.prenom}` : libelle;
+};
 
 const emptyForm = (nom: string, email: string, ville: string): AdhesionForm => ({
   adherent1: emptyAdherent(nom),
@@ -228,10 +235,19 @@ function AdherentFields({ a, onChange, titre }: { a: Adherent; onChange: (a: Adh
     <>
       <div className="se-eyebrow" style={{ gridColumn: "1 / -1", marginTop: 6 }}>{titre}</div>
       <Fld label="Nom et prénom *">
-        <input value={a.nomPrenom} onChange={(e) => set({ nomPrenom: e.target.value })} />
+        <input
+          placeholder="NOM Prénom (ex. : DUPONT Marie)"
+          value={a.nomPrenom}
+          onChange={(e) => set({ nomPrenom: e.target.value })}
+        />
+        <span className="hint">Le nom, puis le prénom.</span>
       </Fld>
-      <Fld label="Nom de naissance">
+      <Fld label="Nom de naissance (si différent)">
         <input value={a.nomNaissance} onChange={(e) => set({ nomNaissance: e.target.value })} />
+        <span className="hint">
+          À remplir seulement si votre nom de naissance n'est pas celui ci-contre (par exemple une personne
+          mariée qui porte le nom de son conjoint). Jamais le prénom : laissez vide sinon.
+        </span>
       </Fld>
       <ChampsNaissance requis valeur={a.dateLieuNaissance} onChange={(v) => set({ dateLieuNaissance: v })} />
       <Fld label="Profession">
@@ -354,7 +370,7 @@ export function Adhesion({
   const save = useSaveAdhesion(copro.id, membership.coproprietaireId);
   const relancer = useRelancerSignataire();
 
-  const [form, setForm] = useState<AdhesionForm>(() => emptyForm(membership.nom, email, copro.city ?? ""));
+  const [form, setForm] = useState<AdhesionForm>(() => emptyForm(nomPrenomDeLaFiche(membership.nom), email, copro.city ?? ""));
   // Signataire principal : prénom et nom séparés d'après le libellé de la fiche (retour de Pierre
   // MAXTAFF, 09/10/2026 : le nom complet arrivait dans « Nom ») ; vides si le libellé est celui
   // d'un couple, d'une indivision ou d'une société - la personne qui signe les saisit elle-même
@@ -499,12 +515,21 @@ export function Adhesion({
       if (typeof r.url === "string") window.open(r.url, "_blank");
     }, "dl");
 
-  const brouillonAdhesion = () =>
-    save.mutateAsync({
+  /** Formulaire avec « Nom et prénom » de l'adhérent 1 complété d'après le signataire principal
+   *  (nom puis prénom) : c'est lui qui est imprimé sur le bulletin et enregistré au brouillon. */
+  const formComplet = (principal: { nom?: string | null; prenom?: string | null }): AdhesionForm => ({
+    ...form,
+    adherent1: { ...form.adherent1, nomPrenom: nomPrenomComplet(form.adherent1.nomPrenom, principal) },
+  });
+
+  const brouillonAdhesion = () => {
+    const f = formComplet({ nom: nomPrincipal, prenom: prenomPrincipal });
+    return save.mutateAsync({
       scenarioId: scenario.id,
-      form: form as unknown as Json,
-      lieuSignature: form.lieuSignature,
+      form: f as unknown as Json,
+      lieuSignature: f.lieuSignature,
     });
+  };
 
   // La préparation crée d'abord le bulletin en base, puis dépose son PDF et
   // enregistre les CGU et l'attestation du principal. Si la page est rechargée
@@ -529,9 +554,15 @@ export function Adhesion({
   /** PDF du bulletin (non signé : les blocs de signature sont apposés au
    *  scellement), déposé côté serveur qui calcule l'empreinte de référence, puis
    *  CGU et attestation du principal enregistrées. */
-  const finaliserBulletin = async (bulletinId: string, lotNum: string, tantiemes: number | null, date: Date) => {
+  const finaliserBulletin = async (
+    bulletinId: string,
+    lotNum: string,
+    tantiemes: number | null,
+    date: Date,
+    principal: { nom?: string | null; prenom?: string | null }
+  ) => {
     const bytes = await genBulletin(
-      form,
+      formComplet(principal),
       {
         adresseImmeuble: copro.adresse ?? copro.name,
         nomSyndic: copro.syndic_name ?? "",
@@ -601,7 +632,7 @@ export function Adhesion({
           });
           aFinir.push({ id, lotNum: lot.num, tantiemes });
         }
-        for (const x of aFinir) await finaliserBulletin(x.id, x.lotNum, x.tantiemes, date);
+        for (const x of aFinir) await finaliserBulletin(x.id, x.lotNum, x.tantiemes, date, { nom: sPrincipal?.nom, prenom: sPrincipal?.prenom });
       } finally {
         await refetchBulletins().catch(() => null);
       }
@@ -1407,7 +1438,7 @@ export function Adhesion({
               telephone: normaliserTelephone(c.telephone),
             })),
           });
-          await finaliserBulletin(bulletinId, lot.num, tantiemes, date);
+          await finaliserBulletin(bulletinId, lot.num, tantiemes, date, { nom: nomPrincipal, prenom: prenomPrincipal });
         }
       } finally {
         // même en cas d'échec : un bulletin déjà créé doit apparaître (écran de

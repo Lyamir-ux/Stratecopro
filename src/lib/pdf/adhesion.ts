@@ -171,6 +171,34 @@ export function nomDebiteurMandat(
   return nom || prenom || repli.trim();
 }
 
+const sansAccent = (s: string): string => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+const motsDe = (s: string): string[] => sansAccent(s).split(/[\s'’-]+/).filter(Boolean);
+
+/**
+ * « Nom et prénom » de l'adhérent 1 imprimé sur le bulletin : toujours le nom PUIS le prénom
+ * (retour de A CHELGHAM, 10/10/2026 : « il faut mettre Chelgham Amir, nom et prénom »). Le champ
+ * libre est gardé tel quel s'il contient déjà le nom en tête et le prénom (prénoms composés
+ * conservés) ; sinon il est complété ou remis dans l'ordre d'après le nom et le prénom du
+ * signataire principal, qui est l'adhérent 1. Sans nom ou sans prénom connu, rien n'est changé.
+ *   « CHELGHAM »      + { CHELGHAM, Amir } → « CHELGHAM Amir »
+ *   « Amir CHELGHAM » + { CHELGHAM, Amir } → « CHELGHAM Amir »
+ *   « DUPONT Jean-Pierre » + { DUPONT, Jean-Pierre } → inchangé
+ */
+export function nomPrenomComplet(
+  saisie: string,
+  principal: { nom?: string | null; prenom?: string | null }
+): string {
+  const brut = saisie.trim();
+  const nom = (principal.nom ?? "").trim();
+  const prenom = (principal.prenom ?? "").trim();
+  if (!nom || !prenom) return brut;
+  const mots = motsDe(brut);
+  const motsNom = motsDe(nom);
+  const contientPrenom = motsDe(prenom).every((m) => mots.includes(m));
+  const nomEnTete = motsNom.every((m, i) => mots[i] === m);
+  return contientPrenom && nomEnTete ? brut : `${nom} ${prenom}`;
+}
+
 /** Mandat SEPA pré-rempli, sans signature : déposé sur le bulletin, il est signé
  *  avec le même code que lui et la mention de signature est apposée au scellement. */
 export async function genMandatSepa(input: {

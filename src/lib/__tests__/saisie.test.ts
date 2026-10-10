@@ -13,7 +13,7 @@ import {
   positionCurseur,
 } from "../saisie";
 import { erreurFormatPiece, typeMimePiece } from "../formatPiece";
-import { casesIban, isValidIban, nomDebiteurMandat } from "../pdf/adhesion";
+import { casesIban, isValidIban, nomDebiteurMandat, nomPrenomComplet } from "../pdf/adhesion";
 
 const IBAN = "FR7630001007941234567890185";
 
@@ -209,5 +209,30 @@ describe("nomDebiteurMandat : « Nom / Prénoms du débiteur » du mandat SEPA",
   });
   it("sans prénom, n'écrit que le nom (sans espace parasite)", () => {
     expect(nomDebiteurMandat({ nom: "CHELGHAM", prenom: "" }, "autre")).toBe("CHELGHAM");
+  });
+});
+
+describe("nomPrenomComplet : « Nom et prénom » de l'adhérent 1 sur le bulletin", () => {
+  const principal = { nom: "CHELGHAM", prenom: "Amir" };
+  it("complète un champ qui ne contient que le nom", () => {
+    expect(nomPrenomComplet("CHELGHAM", principal)).toBe("CHELGHAM Amir");
+    expect(nomPrenomComplet("", principal)).toBe("CHELGHAM Amir");
+  });
+  it("remet le nom avant le prénom", () => {
+    expect(nomPrenomComplet("Amir CHELGHAM", principal)).toBe("CHELGHAM Amir");
+    expect(nomPrenomComplet("M. CHELGHAM Amir", principal)).toBe("CHELGHAM Amir");
+  });
+  it("garde tel quel un champ déjà complet, prénoms composés compris", () => {
+    expect(nomPrenomComplet("CHELGHAM Amir", principal)).toBe("CHELGHAM Amir");
+    expect(nomPrenomComplet(" CHELGHAM Amir Karim ", principal)).toBe("CHELGHAM Amir Karim");
+    expect(nomPrenomComplet("DUPONT Jean-Pierre", { nom: "DUPONT", prenom: "Jean-Pierre" })).toBe("DUPONT Jean-Pierre");
+    expect(nomPrenomComplet("DE LA FONTAINE Jean", { nom: "DE LA FONTAINE", prenom: "Jean" })).toBe("DE LA FONTAINE Jean");
+  });
+  it("ignore la casse et les accents", () => {
+    expect(nomPrenomComplet("lévêque élodie", { nom: "LEVEQUE", prenom: "Elodie" })).toBe("lévêque élodie");
+  });
+  it("ne change rien sans nom ou sans prénom du signataire", () => {
+    expect(nomPrenomComplet(" CHELGHAM ", { nom: "CHELGHAM", prenom: "" })).toBe("CHELGHAM");
+    expect(nomPrenomComplet("Amir", {})).toBe("Amir");
   });
 });
