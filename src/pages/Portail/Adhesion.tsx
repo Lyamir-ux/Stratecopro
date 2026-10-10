@@ -508,10 +508,19 @@ export function Adhesion({
     }
   };
 
-  /** Ouvre un document du principal (URL signée 60 s) dans un nouvel onglet. */
+  /** Ouvre un document du dossier (URL signée 60 s) dans un nouvel onglet. Le principal lit les
+   *  siens ; dans l'aperçu du portail, l'équipe AMO lit ceux du copropriétaire pour les transmettre
+   *  à la banque (retour du 10/10/2026) : bulletin et certificat par `amo_document_url` (tous les
+   *  niveaux), mandat SEPA par `amo_piece_url` (il porte l'IBAN : niveau 1, consultation journalisée). */
   const ouvrir = (bulletinId: string, quoi: "signe" | "certificat" | "mandat_signe") =>
     void agir(async () => {
-      const r = await appelSignature({ action: "principal_document_url", bulletin_id: bulletinId, quoi });
+      const r = await appelSignature(
+        apercuAmo
+          ? quoi === "mandat_signe"
+            ? { action: "amo_piece_url", bulletin_id: bulletinId, quoi: "mandat" }
+            : { action: "amo_document_url", bulletin_id: bulletinId, quoi }
+          : { action: "principal_document_url", bulletin_id: bulletinId, quoi }
+      );
       if (typeof r.url === "string") window.open(r.url, "_blank");
     }, "dl");
 
@@ -744,15 +753,17 @@ export function Adhesion({
                   ))}
                 </div>
                 {/* Le mandat SEPA est scellé dès la signature du principal : il se
-                    télécharge sans attendre les cosignataires. */}
-                {!apercuAmo && (b.statut === "complet" || (!!b.mandat_path && !!principalDe(b)?.signe_le)) && (
+                    télécharge sans attendre les cosignataires. L'équipe AMO retrouve ici les
+                    mêmes documents (aperçu du portail), à transmettre à la banque ; pour elle le
+                    mandat n'est proposé qu'une fois scellé. */}
+                {(b.statut === "complet" || (!!b.mandat_path && !!principalDe(b)?.signe_le)) && (
                   <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                     {b.statut === "complet" && (
                       <button className="se-btn se-btn-secondary btn-sm" disabled={!!busy} onClick={() => ouvrir(b.id, "signe")}>
                         <Icon name="download" size={14} />Bulletin signé
                       </button>
                     )}
-                    {b.mandat_path && (
+                    {(apercuAmo ? !!b.mandat_signe_path : !!b.mandat_path) && (
                       <button className="se-btn se-btn-secondary btn-sm" disabled={!!busy} onClick={() => ouvrir(b.id, "mandat_signe")}>
                         <Icon name="download" size={14} />Mandat SEPA signé
                       </button>
