@@ -41,6 +41,7 @@ import {
 import { useDonnees } from "@/api/donnees";
 import { useProfilsCopro } from "@/api/enquete";
 import { Modal } from "@/components/Modal";
+import { VerificationSignature } from "@/components/VerificationSignature";
 import { fmtDate } from "@/lib/format";
 import type { CoproWithStats } from "@/api/copros";
 import { StatutPill } from "@/pages/Ingenierie/ScenarioMenu";
@@ -1274,12 +1275,37 @@ function SignaturesElectroniquesPanel({ coproId }: { coproId: string }) {
                   </button>
                 )}
               </div>
+              {/* validation du RIB par le niveau 1 (0155) */}
+              {!b.purge_effectuee_le && b.rib_path && (
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 8, fontSize: 12.5 }}>
+                  <Icon name="euro" size={13} style={{ marginTop: 3 }} />
+                  <span style={{ marginTop: 2 }}>RIB{b.rib_remplace_le ? ` (remplacé le ${fmtDate(b.rib_remplace_le)})` : ""}</span>
+                  <VerificationSignature
+                    key={"rib" + b.id + (b.rib_statut ?? "") + (b.rib_qualification ?? "")}
+                    coproId={coproId}
+                    quoi="rib"
+                    bulletinId={b.id}
+                    statut={b.rib_statut}
+                    qualification={b.rib_qualification}
+                    motif={b.rib_motif_refus}
+                    verifieeLe={b.rib_verifiee_le}
+                    emailStatut={b.rib_refus_email_statut}
+                  />
+                </div>
+              )}
+              {b.rib_nouveau_path && (
+                <p className="se-small" style={{ margin: "6px 0 0", color: "var(--color-warning-700, #8a5a00)" }}>
+                  Changement de compte demandé (IBAN ····{b.iban_nouveau_dernier4 ?? ""}) : nouveau mandat SEPA en attente de
+                  signature par le copropriétaire ; le mandat signé actuel reste en vigueur.
+                </p>
+              )}
               <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
                 {b.signataires
                   .slice()
                   .sort((x, y) => x.ordre - y.ordre)
                   .map((s) => (
-                    <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
+                    <div key={s.id} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
                       <Icon
                         name={s.statut === "signe" ? "checkCircle" : "clock"}
                         size={13}
@@ -1308,6 +1334,26 @@ function SignaturesElectroniquesPanel({ coproId }: { coproId: string }) {
                           <Icon name="send" size={12} />Relancer
                         </button>
                       )}
+                    </div>
+                    {/* validation de la pièce d'identité par le niveau 1 (0155) */}
+                    {!b.purge_effectuee_le && s.piece_identite_path && (
+                      <div style={{ paddingLeft: 21, display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12 }}>
+                        <span style={{ color: "var(--fg-muted)", marginTop: 2 }}>
+                          Pièce d'identité{s.piece_remplacee_le ? ` (remplacée le ${fmtDate(s.piece_remplacee_le)})` : ""}
+                        </span>
+                        <VerificationSignature
+                          key={"piece" + s.id + (s.piece_statut ?? "") + (s.piece_qualification ?? "")}
+                          coproId={coproId}
+                          quoi="piece"
+                          signataireId={s.id}
+                          statut={s.piece_statut}
+                          qualification={s.piece_qualification}
+                          motif={s.piece_motif_refus}
+                          verifieeLe={s.piece_verifiee_le}
+                          emailStatut={s.piece_refus_email_statut}
+                        />
+                      </div>
+                    )}
                     </div>
                   ))}
               </div>

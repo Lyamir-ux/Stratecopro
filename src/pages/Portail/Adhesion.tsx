@@ -756,7 +756,7 @@ export function Adhesion({
           {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}
         </div>
         {/* les pièces du prêt suivent la signature des bulletins (retour de A CHELGHAM, 09/10/2026) */}
-        <PiecesDossierPret membership={membership} go={go} />
+        <PiecesDossierPret membership={membership} />
       </>
     );
   }
@@ -1309,7 +1309,7 @@ export function Adhesion({
           </div>
           {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}
         </div>
-        <PiecesDossierPret membership={membership} go={go} />
+        <PiecesDossierPret membership={membership} />
       </>
     );
   }

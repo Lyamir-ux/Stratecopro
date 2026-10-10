@@ -246,6 +246,20 @@ export type Database = {
           statut: Database["public"]["Enums"]["bulletin_statut"]
           tantiemes: number | null
           transmission_banque_le: string | null
+          iban_nouveau_chiffre: string | null
+          iban_nouveau_dernier4: string | null
+          mandat_nouveau_hash: string | null
+          mandat_nouveau_lu_le: string | null
+          mandat_nouveau_path: string | null
+          rib_motif_refus: string | null
+          rib_nouveau_hash: string | null
+          rib_nouveau_path: string | null
+          rib_qualification: string | null
+          rib_refus_email_statut: string | null
+          rib_remplace_le: string | null
+          rib_statut: Database["public"]["Enums"]["statut_piece"] | null
+          rib_verifiee_le: string | null
+          rib_verifiee_par: string | null
         }
         Insert: {
           adhesion_id?: string | null
@@ -284,6 +298,20 @@ export type Database = {
           statut?: Database["public"]["Enums"]["bulletin_statut"]
           tantiemes?: number | null
           transmission_banque_le?: string | null
+          iban_nouveau_chiffre?: string | null
+          iban_nouveau_dernier4?: string | null
+          mandat_nouveau_hash?: string | null
+          mandat_nouveau_lu_le?: string | null
+          mandat_nouveau_path?: string | null
+          rib_motif_refus?: string | null
+          rib_nouveau_hash?: string | null
+          rib_nouveau_path?: string | null
+          rib_qualification?: string | null
+          rib_refus_email_statut?: string | null
+          rib_remplace_le?: string | null
+          rib_statut?: Database["public"]["Enums"]["statut_piece"] | null
+          rib_verifiee_le?: string | null
+          rib_verifiee_par?: string | null
         }
         Update: {
           adhesion_id?: string | null
@@ -322,6 +350,20 @@ export type Database = {
           statut?: Database["public"]["Enums"]["bulletin_statut"]
           tantiemes?: number | null
           transmission_banque_le?: string | null
+          iban_nouveau_chiffre?: string | null
+          iban_nouveau_dernier4?: string | null
+          mandat_nouveau_hash?: string | null
+          mandat_nouveau_lu_le?: string | null
+          mandat_nouveau_path?: string | null
+          rib_motif_refus?: string | null
+          rib_nouveau_hash?: string | null
+          rib_nouveau_path?: string | null
+          rib_qualification?: string | null
+          rib_refus_email_statut?: string | null
+          rib_remplace_le?: string | null
+          rib_statut?: Database["public"]["Enums"]["statut_piece"] | null
+          rib_verifiee_le?: string | null
+          rib_verifiee_par?: string | null
         }
         Relationships: [
           {
@@ -4457,6 +4499,13 @@ export type Database = {
           token_expire_le: string | null
           token_hash: string | null
           ville: string | null
+          piece_motif_refus: string | null
+          piece_qualification: string | null
+          piece_refus_email_statut: string | null
+          piece_remplacee_le: string | null
+          piece_statut: Database["public"]["Enums"]["statut_piece"] | null
+          piece_verifiee_le: string | null
+          piece_verifiee_par: string | null
         }
         Insert: {
           adresse_ligne1?: string | null
@@ -4495,6 +4544,13 @@ export type Database = {
           token_expire_le?: string | null
           token_hash?: string | null
           ville?: string | null
+          piece_motif_refus?: string | null
+          piece_qualification?: string | null
+          piece_refus_email_statut?: string | null
+          piece_remplacee_le?: string | null
+          piece_statut?: Database["public"]["Enums"]["statut_piece"] | null
+          piece_verifiee_le?: string | null
+          piece_verifiee_par?: string | null
         }
         Update: {
           adresse_ligne1?: string | null
@@ -4533,6 +4589,13 @@ export type Database = {
           token_expire_le?: string | null
           token_hash?: string | null
           ville?: string | null
+          piece_motif_refus?: string | null
+          piece_qualification?: string | null
+          piece_refus_email_statut?: string | null
+          piece_remplacee_le?: string | null
+          piece_statut?: Database["public"]["Enums"]["statut_piece"] | null
+          piece_verifiee_le?: string | null
+          piece_verifiee_par?: string | null
         }
         Relationships: [
           {

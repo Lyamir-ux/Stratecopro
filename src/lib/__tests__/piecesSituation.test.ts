@@ -130,17 +130,25 @@ describe("pièces du prêt après la signature des bulletins (retour de A CHELGH
   });
 });
 
-describe("pièces déjà fournies, rappelées dans le dossier de prêt (retour de A CHELGHAM, 09/10/2026)", () => {
-  const signataire = (role: string, ordre: number, prenom: string, email: string, deposee: string | null) => ({
-    role, ordre, prenom, nom: "CHELGHAM", email, piece_deposee_le: deposee, piece_identite_type: deposee ? "cni" : null,
+describe("pièces de la signature dans le dossier de prêt : validation AMO et remplacement (retours de A CHELGHAM, 09/10/2026)", () => {
+  type Sig = BulletinPieces["signataires"][number];
+  const signataire = (role: string, ordre: number, prenom: string, email: string, deposee: string | null, patch: Partial<Sig> = {}): Sig => ({
+    id: `${prenom}-${ordre}`, role, ordre, prenom, nom: "CHELGHAM", email,
+    signe_le: deposee ? "2026-10-09T19:00:00Z" : null,
+    piece_identite_path: deposee ? `b/${prenom}/piece.pdf` : null,
+    piece_deposee_le: deposee, piece_identite_type: deposee ? "cni" : null,
+    piece_statut: deposee ? "a_verifier" : null, piece_motif_refus: null, piece_verifiee_le: null, piece_remplacee_le: null,
+    ...patch,
   });
-  const bulletin = (statut: string, signataires: BulletinPieces["signataires"], dernier4 = "0197"): BulletinPieces => ({
-    statut, rib_path: "b/rib.pdf", iban_dernier4: dernier4, mandat_signe_le: "2026-10-09T18:59:52Z", signataires,
+  const bulletin = (id: string, statut: string, signataires: Sig[], patch: Partial<BulletinPieces> = {}): BulletinPieces => ({
+    id, statut, purge_effectuee_le: null, rib_path: `${id}/rib.pdf`, iban_dernier4: "0197",
+    mandat_signe_le: "2026-10-09T18:59:52Z", rib_statut: "a_verifier", rib_motif_refus: null, rib_verifiee_le: null,
+    signataires, ...patch,
   });
 
-  it("une pièce d'identité par signataire, principal en tête, puis le RIB", () => {
+  it("une pièce d'identité par signataire, principal en tête, puis le RIB, en attente de validation", () => {
     const l = piecesFourniesSignature([
-      bulletin("complet", [
+      bulletin("b1", "complet", [
         signataire("cosignataire", 2, "Hassina", "h@x.fr", "2026-10-09T19:13:23Z"),
         signataire("principal", 1, "Amir", "a@x.fr", "2026-10-09T18:57:14Z"),
       ]),
@@ -150,30 +158,71 @@ describe("pièces déjà fournies, rappelées dans le dossier de prêt (retour d
       "Pièce d'identité de Hassina CHELGHAM",
       "RIB du compte de prélèvement",
     ]);
-    expect(l.every((p) => p.deposee)).toBe(true);
-    expect(l[0].detail).toMatch(/^Carte nationale d'identité · déposée le 9 octobre 2026/);
-    expect(l[2].detail).toBe("IBAN se terminant par 0197 · mandat SEPA signé le 9 octobre 2026");
+    expect(l.map((p) => p.statut)).toEqual(["a_verifier", "a_verifier", "a_verifier"]);
+    expect(l[0].detail).toBe("Carte nationale d'identité · déposée le 9 octobre 2026, à la signature · en attente de validation par Strat Eco");
+    expect(l[2].detail).toBe("IBAN se terminant par 0197 · mandat SEPA signé le 9 octobre 2026 · en attente de validation par Strat Eco");
+    expect(l.every((p) => p.remplacable)).toBe(true);
+    expect(l[1].cibles).toEqual([{ bulletinId: "b1", signataireId: "Hassina-2", path: "b/Hassina/piece.pdf" }]);
   });
 
-  it("plusieurs bulletins : chaque personne une seule fois, déposée si elle l'a fait sur l'un d'eux", () => {
+  it("validée, refusée (avec motif), remplacée", () => {
     const l = piecesFourniesSignature([
-      bulletin("en_signature", [signataire("principal", 1, "Amir", "a@x.fr", "2026-10-09T18:57:14Z"), signataire("cosignataire", 2, "Hassina", "H@x.fr", null)]),
-      bulletin("en_signature", [signataire("principal", 1, "Amir", "A@x.fr", "2026-10-09T18:58:00Z"), signataire("cosignataire", 2, "Hassina", "h@x.fr", "2026-10-10T08:00:00Z")], "4321"),
+      bulletin("b1", "complet", [
+        signataire("principal", 1, "Amir", "a@x.fr", "2026-10-09T18:57:14Z", { piece_statut: "valide", piece_verifiee_le: "2026-10-10T08:00:00Z" }),
+        signataire("cosignataire", 2, "Hassina", "h@x.fr", "2026-10-09T19:13:23Z", {
+          piece_statut: "refuse", piece_motif_refus: "la pièce est illisible", piece_verifiee_le: "2026-10-10T08:00:00Z",
+          piece_remplacee_le: "2026-10-09T21:00:00Z",
+        }),
+      ], { rib_statut: "refuse", rib_motif_refus: "le RIB est illisible", rib_verifiee_le: "2026-10-10T08:00:00Z" }),
     ]);
-    expect(l.filter((p) => p.cle.startsWith("identite:"))).toHaveLength(2);
-    expect(l[1].deposee).toBe(true);
-    expect(l[2].detail).toMatch(/^IBAN se terminant par 0197, 4321/);
+    expect(l[0].detail).toMatch(/validée par Strat Eco le 10 octobre 2026$/);
+    expect(l[1].statut).toBe("refuse");
+    expect(l[1].motif).toBe("la pièce est illisible");
+    expect(l[1].detail).toMatch(/remplacée le 9 octobre 2026 · refusée le 10 octobre 2026$/);
+    expect(l[2].statut).toBe("refuse");
+    expect(l[2].motif).toBe("le RIB est illisible");
   });
 
-  it("cosignataire qui n'a pas encore déposé : en attente, depuis son lien", () => {
-    const l = piecesFourniesSignature([bulletin("en_signature", [signataire("principal", 1, "Amir", "a@x.fr", "2026-10-09T18:57:14Z"), signataire("cosignataire", 2, "Hassina", "h@x.fr", null)])]);
-    expect(l[1].deposee).toBe(false);
+  it("plusieurs bulletins : chaque personne une seule fois, le statut le moins avancé l'emporte", () => {
+    const l = piecesFourniesSignature([
+      bulletin("b1", "en_signature", [
+        signataire("principal", 1, "Amir", "a@x.fr", "2026-10-09T18:57:14Z", { piece_statut: "valide" }),
+        signataire("cosignataire", 2, "Hassina", "H@x.fr", null),
+      ]),
+      bulletin("b2", "en_signature", [
+        signataire("principal", 1, "Amir", "A@x.fr", "2026-10-09T18:58:00Z", { id: "Amir-b2", piece_statut: "refuse" }),
+        signataire("cosignataire", 2, "Hassina", "h@x.fr", "2026-10-10T08:00:00Z", { id: "Hassina-b2" }),
+      ], { iban_dernier4: "4321", rib_statut: "valide" }),
+    ]);
+    expect(l.filter((p) => p.quoi === "piece")).toHaveLength(2);
+    expect(l[0].statut).toBe("refuse");
+    expect(l[0].cibles.map((c) => c.bulletinId)).toEqual(["b1", "b2"]);
+    // Hassina n'a signé que le second bulletin : seul celui-là se remplace
+    expect(l[1].statut).toBe("a_verifier");
+    expect(l[1].cibles.map((c) => c.bulletinId)).toEqual(["b2"]);
+    expect(l[2].detail).toMatch(/^IBAN se terminant par 0197, 4321/);
+    expect(l[2].statut).toBe("a_verifier");
+  });
+
+  it("cosignataire qui n'a pas encore déposé : sans statut, depuis son lien, pas remplaçable", () => {
+    const l = piecesFourniesSignature([bulletin("b1", "en_signature", [signataire("principal", 1, "Amir", "a@x.fr", "2026-10-09T18:57:14Z"), signataire("cosignataire", 2, "Hassina", "h@x.fr", null)])]);
+    expect(l[1].statut).toBeNull();
+    expect(l[1].remplacable).toBe(false);
     expect(l[1].detail).toMatch(/lien personnel de signature/);
   });
 
+  it("pièces purgées après l'instruction : signalées, plus remplaçables", () => {
+    const l = piecesFourniesSignature([
+      bulletin("b1", "complet", [signataire("principal", 1, "Amir", "a@x.fr", "2026-10-09T18:57:14Z", { piece_identite_path: null })], { purge_effectuee_le: "2026-12-01T00:00:00Z" }),
+    ]);
+    expect(l[0].purgee).toBe(true);
+    expect(l[0].remplacable).toBe(false);
+    expect(l[0].detail).toMatch(/^Supprimée après l'instruction/);
+  });
+
   it("bulletins annulés ou en préparation ignorés ; rien sans bulletin", () => {
-    expect(piecesFourniesSignature([bulletin("annule", [signataire("principal", 1, "Amir", "a@x.fr", "2026-10-09T18:57:14Z")])])).toEqual([]);
-    expect(piecesFourniesSignature([bulletin("brouillon", [signataire("principal", 1, "Amir", "a@x.fr", null)])])).toEqual([]);
+    expect(piecesFourniesSignature([bulletin("b1", "annule", [signataire("principal", 1, "Amir", "a@x.fr", "2026-10-09T18:57:14Z")])])).toEqual([]);
+    expect(piecesFourniesSignature([bulletin("b1", "brouillon", [signataire("principal", 1, "Amir", "a@x.fr", null)])])).toEqual([]);
     expect(piecesFourniesSignature(null)).toEqual([]);
   });
 });

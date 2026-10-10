@@ -18,6 +18,16 @@ import { nomPiece, urlApercuPiece, usePiecesAVerifier } from "@/api/portail";
 import { downloadAdhesionDoc } from "@/api/financement";
 import { ApercuDocument } from "@/components/ApercuDocument";
 import { VerificationPiece } from "@/components/VerificationPiece";
+import { VerificationSignature } from "@/components/VerificationSignature";
+import { useAuth } from "@/auth/AuthProvider";
+import { fmtDate } from "@/lib/format";
+import {
+  clePieceSignature,
+  telechargerPieceSignature,
+  urlApercuPieceSignatureAmo,
+  usePiecesSignatureAVerifier,
+  type PieceSignatureAVerifier,
+} from "@/api/signature";
 import { StatusDot } from "./CoproDetail/ProjetTab";
 
 type TacheRow = Tables<"taches"> & { assignee: { initials: string; full_name: string } | null };
@@ -61,6 +71,12 @@ export default function MesTaches() {
   const portee = libellePerimetre(perimetre);
   // pièce affichée dans la fenêtre d'aperçu (idée d'Amir du 07/10 : voir sans télécharger)
   const [apercu, setApercu] = useState<{ name: string; path: string } | null>(null);
+  // pièces d'identité et RIB des bulletins signés, à valider par le niveau 1 (0155)
+  const { profile } = useAuth();
+  const niveau1 = profile?.niveau_pieces === 1;
+  const { data: piecesSignatureBrutes } = usePiecesSignatureAVerifier(niveau1);
+  const piecesSignature = piecesSignatureBrutes ?? [];
+  const [apercuSignature, setApercuSignature] = useState<PieceSignatureAVerifier | null>(null);
 
   const groups = copros
     .map((c) => ({
@@ -147,6 +163,79 @@ export default function MesTaches() {
             ))}
           </div>
         </div>
+      )}
+
+      {niveau1 && piecesSignature.length > 0 && (
+        <div className="panel" style={{ marginBottom: 18 }}>
+          <div className="p-head">
+            <Icon name="fileCheck" size={18} />
+            <h3>Pièces de la signature à vérifier</h3>
+            <span style={{ flex: 1 }}></span>
+            <Badge kind="warn" dot>
+              {piecesSignature.length} pièce{piecesSignature.length > 1 ? "s" : ""}
+            </Badge>
+          </div>
+          <div className="p-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
+            <p className="se-small" style={{ margin: "0 0 4px", color: "var(--fg-muted)" }}>
+              Pièces d'identité des signataires et RIB déposés avec les bulletins d'adhésion (tous les dossiers ;
+              niveau 1, chaque ouverture est journalisée). « Conforme » valide ; tout autre choix refuse et prévient
+              le signataire par e-mail (un cosignataire reçoit un lien pour redéposer sa pièce).
+            </p>
+            {piecesSignature.map((p) => (
+              <div key={p.quoi + p.bulletinId + (p.signataireId ?? "")} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 600 }}>{p.libelle}</span>
+                  {p.remplaceeLe && <span style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>remplacée le {fmtDate(p.remplaceeLe)}</span>}
+                  <span style={{ flex: 1 }}></span>
+                  <button
+                    className="se-btn se-btn-ghost btn-sm"
+                    title="Ouvrir le panneau « Signatures électroniques » du dossier"
+                    onClick={() => navigate(`/copros/${p.coproId}/financement`)}
+                  >
+                    <Icon name="building" size={13} />
+                    {p.coproNom} · {p.lot}
+                  </button>
+                  <button
+                    className="se-btn se-btn-secondary btn-sm"
+                    title="Ouvrir la pièce (aperçu sans téléchargement, consultation journalisée)"
+                    onClick={() => setApercuSignature(p)}
+                  >
+                    <Icon name="eye" size={13} />
+                    Ouvrir
+                  </button>
+                </div>
+                <div style={{ marginTop: 6 }}>
+                  <VerificationSignature
+                    coproId={p.coproId}
+                    quoi={p.quoi}
+                    bulletinId={p.bulletinId}
+                    signataireId={p.signataireId ?? undefined}
+                    statut="a_verifier"
+                    qualification={null}
+                    motif={null}
+                    verifieeLe={null}
+                    emailStatut={null}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {apercuSignature && (
+        <ApercuDocument
+          name={`${apercuSignature.libelle}.${apercuSignature.path?.split(".").pop() ?? "pdf"}`}
+          path={clePieceSignature(apercuSignature.bulletinId, apercuSignature.quoi, apercuSignature.signataireId)}
+          urlSignee={urlApercuPieceSignatureAmo}
+          onClose={() => setApercuSignature(null)}
+          onTelecharger={() =>
+            void telechargerPieceSignature(
+              clePieceSignature(apercuSignature.bulletinId, apercuSignature.quoi, apercuSignature.signataireId),
+              apercuSignature.libelle,
+              true,
+            ).catch(() => null)
+          }
+        />
       )}
 
       {groups.length === 0 && (

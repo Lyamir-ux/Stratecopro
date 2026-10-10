@@ -45,6 +45,15 @@ export const ERREURS_SIGNATURE: Record<string, string> = {
   email_compte_absent: "Votre compte n'a pas d'adresse e-mail : impossible d'envoyer le code.",
   interdit: "Action non autorisée sur ce dossier.",
   envoi_echec: "L'e-mail n'a pas pu être envoyé. Réessayez dans quelques minutes ou contactez admin@strateco.fr.",
+  // pièces de la signature : validation et remplacement (0155)
+  pas_encore_signe: "Cette pièce se remplace une fois le bulletin signé ; avant, elle se dépose dans le parcours de signature.",
+  pieces_purgees: "Les pièces de ce dossier ont été supprimées après son instruction : elles ne se remplacent plus.",
+  signataire_introuvable: "Signataire introuvable sur ce bulletin.",
+  qualification_inconnue: "Qualification inconnue.",
+  motif_requis: "Précisez le motif du refus : il est communiqué par e-mail.",
+  scellement_echec: "Le nouveau mandat n'a pas pu être scellé. Réessayez ou contactez admin@strateco.fr.",
+  maj_echec: "L'enregistrement a échoué. Réessayez.",
+  chemin_invalide: "Le dépôt du fichier a échoué - réessayez.",
 };
 
 export function messageErreurSignature(code: string | undefined): string {
@@ -296,6 +305,209 @@ export function useMarquerInstruction(coproId: string | undefined) {
         ...(input.ecoPtzDemande !== undefined ? { eco_ptz_demande: input.ecoPtzDemande } : {}),
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["signature", "bulletins-copro", coproId] }),
+  });
+}
+
+// ========== Pièces de la signature : consultation, remplacement, validation (0155) ==========
+// Retour de A CHELGHAM du 09/10/2026 : la pièce d'identité de chaque signataire et le
+// RIB se consultent et se remplacent depuis le portail, et sont validés par l'AMO.
+
+const TYPES_APERCU: Record<string, string> = {
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+};
+
+/** Clé d'aperçu d'une pièce de la signature, passée à ApercuDocument comme « path ». */
+export const clePieceSignature = (bulletinId: string, quoi: "piece" | "rib", signataireId?: string | null) =>
+  [bulletinId, quoi, signataireId ?? ""].join("|");
+
+async function blobPieceSignature(cle: string, amo: boolean): Promise<{ blob: Blob; ext: string }> {
+  const [bulletinId, quoi, signataireId] = cle.split("|");
+  const r = amo
+    ? await appelSignature({ action: "amo_piece_url", bulletin_id: bulletinId, signataire_id: signataireId || undefined, quoi })
+    : await appelSignature({ action: "principal_piece_url", bulletin_id: bulletinId, signataire_id: signataireId || undefined, quoi });
+  const url = r.url as string;
+  const ext = ((r.ext as string | undefined) ?? new URL(url).pathname.split(".").pop() ?? "").toLowerCase();
+  const reponse = await fetch(url);
+  if (!reponse.ok) throw new Error("Document indisponible");
+  return { blob: await reponse.blob(), ext };
+}
+
+/**
+ * Aperçu d'une pièce de la signature sans téléchargement : récupérée en mémoire et
+ * affichée par un lien « blob: » typé (PDF ou image seulement, jamais SVG ni HTML :
+ * la pièce vient d'un signataire). Variante AMO : consultation journalisée, niveau 1.
+ */
+export async function urlApercuPieceSignature(cle: string): Promise<string> {
+  const { blob, ext } = await blobPieceSignature(cle, false);
+  const type = TYPES_APERCU[ext];
+  if (!type) throw new Error("Format non affichable");
+  return URL.createObjectURL(new Blob([blob], { type }));
+}
+export async function urlApercuPieceSignatureAmo(cle: string): Promise<string> {
+  const { blob, ext } = await blobPieceSignature(cle, true);
+  const type = TYPES_APERCU[ext];
+  if (!type) throw new Error("Format non affichable");
+  return URL.createObjectURL(new Blob([blob], { type }));
+}
+
+/** Télécharge une pièce de la signature sous un nom lisible. */
+export async function telechargerPieceSignature(cle: string, nom: string, amo = false): Promise<void> {
+  const { blob, ext } = await blobPieceSignature(cle, amo);
+  const lien = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = lien;
+  a.download = /\.[a-z0-9]+$/i.test(nom) ? nom : `${nom}.${ext || "pdf"}`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(lien), 10_000);
+}
+
+/** Remplace la pièce d'identité d'un signataire sur chacun de ses bulletins signés. */
+export async function remplacerPieceIdentite(input: {
+  cibles: { bulletinId: string; signataireId: string | null }[];
+  typePiece: string;
+  piece: { blob: Blob; ext: string };
+}): Promise<void> {
+  for (const c of input.cibles) {
+    const up = await appelSignature({
+      action: "principal_piece_remplacer_upload", bulletin_id: c.bulletinId, signataire_id: c.signataireId, ext: input.piece.ext,
+    });
+    await uploadVersBucket("signature-pieces", up.path as string, up.token as string, input.piece.blob);
+    await appelSignature({
+      action: "principal_piece_remplacer",
+      bulletin_id: c.bulletinId,
+      signataire_id: c.signataireId,
+      path: up.path,
+      type_piece: input.typePiece,
+      attestation: true,
+    });
+  }
+}
+
+/**
+ * Remplace le RIB de chaque bulletin signé. Même compte : c'est fait. Autre compte :
+ * renvoie les bulletins qui attendent un nouveau mandat SEPA à signer.
+ */
+export async function remplacerRib(input: {
+  bulletinIds: string[];
+  fichier: Blob;
+  ext: string;
+  iban: string;
+}): Promise<string[]> {
+  const aSigner: string[] = [];
+  for (const id of input.bulletinIds) {
+    const up = await appelSignature({ action: "principal_rib_upload", bulletin_id: id, ext: input.ext });
+    await uploadVersBucket("signature-pieces", up.path as string, up.token as string, input.fichier);
+    const r = await appelSignature({ action: "principal_rib_remplacer", bulletin_id: id, path: up.path, iban: input.iban });
+    if (r.nouveau_mandat) aSigner.push(id);
+  }
+  return aSigner;
+}
+
+/** Dépose le nouveau mandat SEPA pré-rempli d'un changement de compte. */
+export async function deposerNouveauMandat(bulletinId: string, mandat: Blob): Promise<void> {
+  const up = await appelSignature({ action: "principal_mandat_nouveau_upload", bulletin_id: bulletinId });
+  await uploadVersBucket("signature-docs", up.path as string, up.token as string, mandat);
+  await appelSignature({ action: "principal_mandat_nouveau_confirmer", bulletin_id: bulletinId });
+}
+
+/** Formulaire d'adhésion d'un bulletin (nom et adresse du nouveau mandat SEPA). */
+export function useFormulaireAdhesion(adhesionId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["signature", "formulaire-adhesion", adhesionId],
+    enabled: !!adhesionId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("adhesions_pret").select("form").eq("id", adhesionId!).maybeSingle();
+      if (error) throw error;
+      return (data?.form ?? null) as Record<string, unknown> | null;
+    },
+  });
+}
+
+/** Pièce de la signature en attente de validation, pour la file « Vos tâches » (niveau 1). */
+export interface PieceSignatureAVerifier {
+  quoi: "piece" | "rib";
+  bulletinId: string;
+  signataireId: string | null;
+  coproId: string;
+  coproNom: string;
+  coproprietaireId: string;
+  lot: string;
+  libelle: string;
+  path: string | null;
+  remplaceeLe: string | null;
+}
+
+export function usePiecesSignatureAVerifier(actif: boolean) {
+  return useQuery({
+    queryKey: ["signature", "pieces-a-verifier"],
+    enabled: actif,
+    queryFn: async (): Promise<PieceSignatureAVerifier[]> => {
+      type B = { id: string; copro_id: string; coproprietaire_id: string; lot_reference: string; statut: string; purge_effectuee_le: string | null; coproprietes: { name: string } | null };
+      const [sigs, ribs] = await Promise.all([
+        supabase
+          .from("signataires")
+          .select("id, prenom, nom, role, piece_identite_path, piece_remplacee_le, bulletins!inner(id, copro_id, coproprietaire_id, lot_reference, statut, purge_effectuee_le, coproprietes(name))")
+          .eq("piece_statut", "a_verifier"),
+        supabase
+          .from("bulletins")
+          .select("id, copro_id, coproprietaire_id, lot_reference, statut, purge_effectuee_le, rib_path, rib_remplace_le, coproprietes(name)")
+          .eq("rib_statut", "a_verifier"),
+      ]);
+      if (sigs.error) throw sigs.error;
+      if (ribs.error) throw ribs.error;
+      const vivant = (b: B) => b.statut !== "annule" && b.statut !== "brouillon" && !b.purge_effectuee_le;
+      const out: PieceSignatureAVerifier[] = [];
+      for (const s of (sigs.data ?? []) as unknown as {
+        id: string; prenom: string; nom: string; role: string; piece_identite_path: string | null; piece_remplacee_le: string | null; bulletins: B;
+      }[]) {
+        if (!vivant(s.bulletins) || !s.piece_identite_path) continue;
+        out.push({
+          quoi: "piece", bulletinId: s.bulletins.id, signataireId: s.id, coproId: s.bulletins.copro_id,
+          coproNom: s.bulletins.coproprietes?.name ?? "Dossier", coproprietaireId: s.bulletins.coproprietaire_id,
+          lot: s.bulletins.lot_reference,
+          libelle: `Pièce d'identité de ${s.prenom} ${s.nom} (${s.role === "principal" ? "signataire principal" : "cosignataire"})`,
+          path: s.piece_identite_path, remplaceeLe: s.piece_remplacee_le,
+        });
+      }
+      for (const b of (ribs.data ?? []) as unknown as (B & { rib_path: string | null; rib_remplace_le: string | null })[]) {
+        if (!vivant(b) || !b.rib_path) continue;
+        out.push({
+          quoi: "rib", bulletinId: b.id, signataireId: null, coproId: b.copro_id,
+          coproNom: b.coproprietes?.name ?? "Dossier", coproprietaireId: b.coproprietaire_id,
+          lot: b.lot_reference, libelle: "RIB du compte de prélèvement", path: b.rib_path, remplaceeLe: b.rib_remplace_le,
+        });
+      }
+      return out.sort((a, b) => a.coproNom.localeCompare(b.coproNom, "fr") || a.lot.localeCompare(b.lot, "fr"));
+    },
+  });
+}
+
+/** Validation par l'AMO (niveau 1) de la pièce d'identité d'un signataire ou du RIB. */
+export function useVerifierPieceSignature(coproId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      quoi: "piece" | "rib";
+      bulletinId?: string;
+      signataireId?: string;
+      qualification: string | null;
+      motif?: string | null;
+    }) =>
+      appelSignature({
+        action: "amo_verifier",
+        quoi: input.quoi,
+        bulletin_id: input.bulletinId,
+        signataire_id: input.signataireId,
+        qualification: input.qualification,
+        motif: input.motif ?? null,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["signature", "bulletins-copro", coproId] });
+      void qc.invalidateQueries({ queryKey: ["signature", "pieces-a-verifier"] });
+    },
   });
 }
 

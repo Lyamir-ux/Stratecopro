@@ -182,28 +182,61 @@ export function bulletinsSignes(bulletins: { statut: string }[] | null | undefin
 
 /** Ce que le dossier de prêt lit d'un bulletin et de ses signataires. */
 export interface BulletinPieces {
+  id: string;
   statut: string;
+  purge_effectuee_le: string | null;
   rib_path: string | null;
   iban_dernier4: string | null;
   mandat_signe_le: string | null;
+  rib_statut: StatutPieceSignature | null;
+  rib_motif_refus: string | null;
+  rib_verifiee_le: string | null;
   signataires: {
+    id: string;
     role: string;
     ordre: number;
     prenom: string;
     nom: string;
     email: string;
+    signe_le: string | null;
+    piece_identite_path: string | null;
     piece_deposee_le: string | null;
     piece_identite_type: string | null;
+    piece_statut: StatutPieceSignature | null;
+    piece_motif_refus: string | null;
+    piece_verifiee_le: string | null;
+    piece_remplacee_le: string | null;
   }[];
 }
 
-/** Pièce du dossier de prêt fournie à la signature des bulletins (lecture seule au portail). */
+export type StatutPieceSignature = "a_verifier" | "valide" | "refuse";
+
+/** Une ligne concernée par une pièce de la signature : un bulletin (et son signataire). */
+export interface CiblePieceSignature {
+  bulletinId: string;
+  signataireId: string | null;
+  path: string | null;
+}
+
+/** Pièce du dossier de prêt fournie à la signature, avec sa validation par l'AMO (0155). */
 export interface PieceSignature {
   cle: string;
+  quoi: "piece" | "rib";
   nom: string;
-  /** déposée ; sinon attendue d'un cosignataire, depuis son propre lien */
-  deposee: boolean;
+  /** null : pas encore déposée (un cosignataire la dépose depuis son lien) */
+  statut: StatutPieceSignature | null;
+  motif: string | null;
   detail: string;
+  /** le signataire a signé : sa pièce (ou le RIB) se remplace depuis le portail */
+  remplacable: boolean;
+  /** pièce effacée après l'instruction du dossier (CGU art. 7.4.1) */
+  purgee: boolean;
+  principal: boolean;
+  personne: string;
+  /** une par bulletin signé : même personne, ou même RIB */
+  cibles: CiblePieceSignature[];
+  /** fichier à montrer pour « Voir » (null : rien de déposé, ou pièce purgée) */
+  apercu: CiblePieceSignature | null;
 }
 
 const LIBELLES_PIECE_IDENTITE: Record<string, string> = {
@@ -212,55 +245,108 @@ const LIBELLES_PIECE_IDENTITE: Record<string, string> = {
   titre_sejour: "Titre de séjour",
 };
 
+/** Statut d'une pièce déposée sur plusieurs bulletins : le moins avancé l'emporte. */
+function statutCommun(statuts: (StatutPieceSignature | null)[]): StatutPieceSignature | null {
+  const deposes = statuts.filter((x): x is StatutPieceSignature => !!x);
+  if (deposes.length === 0) return null;
+  if (deposes.includes("refuse")) return "refuse";
+  if (deposes.includes("a_verifier")) return "a_verifier";
+  return "valide";
+}
+
+/** Fin du détail d'une pièce : où en est sa validation par Strat Eco. */
+function suiteStatut(statut: StatutPieceSignature | null, verifieeLe: string | null, e: "" | "e"): string {
+  if (statut === "valide") return `validé${e} par Strat Eco le ${fmtDate(verifieeLe)}`;
+  if (statut === "refuse") return `refusé${e} le ${fmtDate(verifieeLe)}`;
+  return "en attente de validation par Strat Eco";
+}
+
 /**
- * Pièces du dossier de prêt déjà fournies à la signature : la pièce d'identité de
- * chaque signataire (une fois par personne, quel que soit le nombre de bulletins) et
- * le RIB du prélèvement (retour de A CHELGHAM, 09/10/2026 : « remettre dans
- * l'encadré les pièces déjà fournies, en vert »).
+ * Pièces du dossier de prêt fournies à la signature : la pièce d'identité de chaque
+ * signataire (une fois par personne, quel que soit le nombre de bulletins) et le RIB
+ * du prélèvement, chacune avec sa validation par l'AMO (retours de A CHELGHAM,
+ * 09/10/2026 : « remettre dans l'encadré les pièces déjà fournies », puis « pouvoir
+ * les visualiser et les remplacer ; elles doivent être validées par l'AMO »).
  */
 export function piecesFourniesSignature(bulletins: BulletinPieces[] | null | undefined): PieceSignature[] {
   const actifs = (bulletins ?? []).filter((b) => b.statut !== "annule" && b.statut !== "brouillon");
-  const personnes = new Map<string, { principal: boolean; ordre: number; nom: string; deposee: string | null; type: string | null }>();
+  type Ligne = BulletinPieces["signataires"][number] & { bulletin: BulletinPieces };
+  const personnes = new Map<string, Ligne[]>();
   for (const b of actifs) {
     for (const s of b.signataires) {
       const cle = (s.email || `${s.prenom} ${s.nom}`).trim().toLowerCase();
-      const avant = personnes.get(cle);
-      // la même personne signe chaque bulletin : son premier dépôt fait foi
-      const depot = avant?.deposee ? avant : { deposee: s.piece_deposee_le, type: s.piece_identite_type };
-      personnes.set(cle, {
-        principal: (avant?.principal ?? false) || s.role === "principal",
-        ordre: Math.min(avant?.ordre ?? s.ordre, s.ordre),
-        nom: `${s.prenom} ${s.nom}`.trim(),
-        deposee: depot.deposee,
-        type: depot.type,
-      });
+      personnes.set(cle, [...(personnes.get(cle) ?? []), { ...s, bulletin: b }]);
     }
   }
   const out: PieceSignature[] = [...personnes.entries()]
-    .sort(([, a], [, b]) => Number(b.principal) - Number(a.principal) || a.ordre - b.ordre)
-    .map(([cle, p]) => ({
-      cle: "identite:" + cle,
-      nom: `Pièce d'identité de ${p.nom}${p.principal ? " (vous)" : ""}`,
-      deposee: !!p.deposee,
-      detail: p.deposee
-        ? `${LIBELLES_PIECE_IDENTITE[p.type ?? ""] ?? "Pièce d'identité"} · déposée le ${fmtDate(p.deposee)}, à la signature`
-        : "À déposer depuis le lien personnel de signature reçu par e-mail",
-    }));
+    .map(([cle, lignes]) => ({
+      cle,
+      lignes,
+      principal: lignes.some((l) => l.role === "principal"),
+      ordre: Math.min(...lignes.map((l) => l.ordre)),
+    }))
+    .sort((a, b) => Number(b.principal) - Number(a.principal) || a.ordre - b.ordre)
+    .map(({ cle, lignes, principal }) => {
+      const personne = `${lignes[0].prenom} ${lignes[0].nom}`.trim();
+      const deposees = lignes.filter((l) => !!l.piece_deposee_le);
+      const statut = statutCommun(deposees.map((l) => l.piece_statut ?? "a_verifier"));
+      // la ligne de référence : la pièce la moins avancée dans sa validation
+      const ref = deposees.find((l) => (l.piece_statut ?? "a_verifier") === statut) ?? lignes[0];
+      const purgee = lignes.every((l) => !!l.bulletin.purge_effectuee_le);
+      const type = LIBELLES_PIECE_IDENTITE[ref.piece_identite_type ?? ""] ?? "Pièce d'identité";
+      const depot = ref.piece_remplacee_le
+        ? `remplacée le ${fmtDate(ref.piece_remplacee_le)}`
+        : `déposée le ${fmtDate(ref.piece_deposee_le)}, à la signature`;
+      return {
+        cle: "identite:" + cle,
+        quoi: "piece" as const,
+        nom: `Pièce d'identité de ${personne}${principal ? " (vous)" : ""}`,
+        statut,
+        motif: statut === "refuse" ? ref.piece_motif_refus : null,
+        detail: purgee
+          ? "Supprimée après l'instruction de votre dossier (conservation limitée)"
+          : deposees.length === 0
+            ? "À déposer depuis le lien personnel de signature reçu par e-mail"
+            : `${type} · ${depot} · ${suiteStatut(statut, ref.piece_verifiee_le, "e")}`,
+        remplacable: !purgee && lignes.some((l) => !!l.signe_le && !!l.piece_identite_path),
+        purgee,
+        principal,
+        personne,
+        cibles: lignes
+          .filter((l) => !!l.signe_le && !l.bulletin.purge_effectuee_le)
+          .map((l) => ({ bulletinId: l.bulletin.id, signataireId: l.id, path: l.piece_identite_path })),
+        apercu: ref.piece_identite_path && !ref.bulletin.purge_effectuee_le
+          ? { bulletinId: ref.bulletin.id, signataireId: ref.id, path: ref.piece_identite_path }
+          : null,
+      };
+    });
 
   const avecRib = actifs.filter((b) => !!b.rib_path);
   if (avecRib.length > 0) {
     const fins = [...new Set(avecRib.map((b) => b.iban_dernier4).filter((x): x is string => !!x))];
     const mandats = avecRib.map((b) => b.mandat_signe_le).filter((x): x is string => !!x).sort();
+    const statut = statutCommun(avecRib.map((b) => b.rib_statut ?? "a_verifier"));
+    const ref = avecRib.find((b) => (b.rib_statut ?? "a_verifier") === statut) ?? avecRib[0];
+    const principalSigne = (b: BulletinPieces) => b.signataires.some((s) => s.role === "principal" && !!s.signe_le);
     out.push({
       cle: "rib",
+      quoi: "rib",
       nom: "RIB du compte de prélèvement",
-      deposee: true,
+      statut,
+      motif: statut === "refuse" ? ref.rib_motif_refus : null,
       detail: [
         fins.length ? `IBAN se terminant par ${fins.join(", ")}` : "Déposé avec votre bulletin",
-        mandats.length ? `mandat SEPA signé le ${fmtDate(mandats[0])}` : "",
+        mandats.length ? `mandat SEPA signé le ${fmtDate(mandats[mandats.length - 1])}` : "",
+        suiteStatut(statut, ref.rib_verifiee_le, ""),
       ]
         .filter(Boolean)
         .join(" · "),
+      remplacable: avecRib.some(principalSigne),
+      purgee: false,
+      principal: true,
+      personne: "",
+      cibles: avecRib.filter(principalSigne).map((b) => ({ bulletinId: b.id, signataireId: null, path: b.rib_path })),
+      apercu: { bulletinId: ref.id, signataireId: null, path: ref.rib_path },
     });
   }
   return out;

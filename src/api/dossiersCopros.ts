@@ -345,12 +345,30 @@ export function assemblerDossiers(input: {
       !p ? "manquant" : p.statut === "valide" ? "ok" : p.statut === "refuse" ? "manquant" : "en_cours";
     const suffixe = (p: PieceJustificative | undefined) =>
       !p ? "" : p.statut === "refuse" ? " (refusée, à redéposer)" : p.statut === "a_verifier" ? " (déposée, à vérifier)" : "";
-    const ribBulletin = bulletinsElec.some((b) => !!b.rib_path && !b.purge_effectuee_le);
-    const etatRib: EtatItem = ribBulletin ? "ok" : etatPiece(pieces.rib);
-    if (etatRib !== "ok") manquants.push("RIB" + suffixe(pieces.rib));
-    const cniBulletin = bulletinsElec.some((b) => b.signataires.some((sg) => !!sg.piece_identite_path));
-    const etatCni: EtatItem = cniBulletin ? "ok" : etatPiece(pieces.piece_identite);
-    if (etatCni !== "ok") manquants.push("pièce d'identité" + suffixe(pieces.piece_identite));
+    // RIB et pièces d'identité déposés à la signature, validés par le niveau 1 (0155) :
+    // même règle (refusé = manquant, à vérifier = en cours) ; null si rien de déposé
+    const etatSignature = (statuts: (string | null)[]): EtatItem | null =>
+      statuts.length === 0
+        ? null
+        : statuts.includes("refuse")
+          ? "manquant"
+          : statuts.every((s) => s === "valide")
+            ? "ok"
+            : "en_cours";
+    const suffixeSignature = (e: EtatItem) =>
+      e === "manquant" ? " (refusé, à remplacer)" : e === "en_cours" ? " (déposé, à vérifier)" : "";
+    const etatRibSignature = etatSignature(
+      bulletinsElec.filter((b) => !!b.rib_path && !b.purge_effectuee_le).map((b) => b.rib_statut)
+    );
+    const etatRib: EtatItem = etatRibSignature ?? etatPiece(pieces.rib);
+    if (etatRib !== "ok") manquants.push("RIB" + (etatRibSignature ? suffixeSignature(etatRibSignature) : suffixe(pieces.rib)));
+    const etatCniSignature = etatSignature(
+      bulletinsElec.flatMap((b) => b.signataires.filter((sg) => !!sg.piece_identite_path).map((sg) => sg.piece_statut))
+    );
+    const etatCni: EtatItem = etatCniSignature ?? etatPiece(pieces.piece_identite);
+    if (etatCni !== "ok") {
+      manquants.push("pièce d'identité" + (etatCniSignature ? suffixeSignature(etatCniSignature) : suffixe(pieces.piece_identite)));
+    }
     // pièces demandées selon la situation déclarée (feedback Marius MAZZANTE 30/09/2026) et,
     // pour un adhérent au prêt collectif, selon la nomenclature de la banque (08/10/2026)
     const nature: NatureAdherent = estSci(reponses?.copro?.["type-coproprietaire"], cp.nom) ? "sci" : "physique";

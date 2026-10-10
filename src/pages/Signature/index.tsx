@@ -29,6 +29,9 @@ interface EtatLien {
     document_lu: boolean;
     signe: boolean;
     expire_le: string | null;
+    /** pièce refusée par l'AMO après la signature : le lien ne sert qu'à en déposer une nouvelle (0155) */
+    piece_a_redeposer?: boolean;
+    motif_refus?: string | null;
   };
 }
 
@@ -93,6 +96,8 @@ export default function SignaturePublique() {
   const [otp, setOtp] = useState<{ canal: string; codeTest?: string } | null>(null);
   const [code, setCode] = useState("");
   const [nouveauLienEnvoye, setNouveauLienEnvoye] = useState(false);
+  // nouvelle pièce déposée après un refus : le lien est consommé, on n'y revient pas
+  const [redeposee, setRedeposee] = useState(false);
 
   const recharger = useCallback(async (premiere = false) => {
     try {
@@ -125,6 +130,21 @@ export default function SignaturePublique() {
     return (
       <Cadre>
         <p className="se-small" style={{ color: "var(--fg-muted)" }}>Vérification du lien…</p>
+      </Cadre>
+    );
+  }
+
+  if (redeposee) {
+    return (
+      <Cadre>
+        <div className="card-xl" style={{ padding: 26, textAlign: "center" }}>
+          <Icon name="checkCircle" size={44} style={{ color: "var(--color-success-500)" }} />
+          <h2 style={{ fontSize: 20, margin: "12px 0 6px" }}>Nouvelle pièce transmise</h2>
+          <p className="se-body" style={{ margin: 0 }}>
+            Merci. Votre nouvelle pièce d'identité est transmise à l'équipe Strat Eco, qui va la vérifier. Votre
+            signature du bulletin reste valable : vous n'avez rien d'autre à faire.
+          </p>
+        </div>
       </Cadre>
     );
   }
@@ -170,6 +190,64 @@ export default function SignaturePublique() {
   }
 
   const s = etat.signataire;
+
+  // ---------- pièce refusée après la signature : nouvelle pièce seulement (0155) ----------
+  if (s.signe && s.piece_a_redeposer) {
+    const { complet, erreur: erreurFichiers } = verifierFacesPiece(typePiece, recto, verso);
+    return (
+      <Cadre>
+        <div className="card-xl" style={{ padding: 26 }}>
+          <h2 style={{ fontSize: 19, marginTop: 0 }}>Votre pièce d'identité est à redéposer</h2>
+          <p className="se-body">
+            Bonjour {s.prenom}, votre signature du bulletin d'adhésion ({etat.lot}, copropriété {etat.copro}) reste
+            valable, mais votre pièce d'identité n'a pas pu être validée par l'équipe Strat Eco
+            {s.motif_refus ? <> : <b>{s.motif_refus}</b></> : null}.
+          </p>
+          <p className="se-body">
+            Déposez <b>votre propre pièce</b>, en cours de validité : une photo (ou un PDF) du <b>recto</b> et une du{" "}
+            <b>verso</b>, bien lisibles.
+          </p>
+          <PieceIdentiteChamps
+            type={typePiece}
+            onType={setTypePiece}
+            recto={recto}
+            verso={verso}
+            onRecto={setRecto}
+            onVerso={setVerso}
+          />
+          {erreurFichiers && <p className="se-small" style={{ color: "var(--color-error-700)" }}>{erreurFichiers}</p>}
+          <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, cursor: "pointer", margin: "16px 0" }}>
+            <input type="checkbox" checked={attestation} onChange={(e) => setAttestation(e.target.checked)} style={{ marginTop: 3 }} />
+            <span>Je certifie que la pièce d'identité que je téléverse est <b>la mienne</b> et qu'elle est en cours de validité.</span>
+          </label>
+          {erreur && <p className="se-small" style={{ color: "var(--color-error-700)" }}>{erreur}</p>}
+          <button
+            className="se-btn se-btn-primary"
+            style={{ width: "100%", justifyContent: "center" }}
+            disabled={!complet || !attestation || !!busy}
+            onClick={() =>
+              void agir(async () => {
+                const piece = await assemblerPieceIdentite(facesADeposer(typePiece, recto, verso));
+                const up = await appelSignaturePublique({ action: "lien_piece_upload", token, ext: piece.ext });
+                await uploadVersBucket("signature-pieces", up.path as string, up.token as string, piece.blob);
+                await appelSignaturePublique({
+                  action: "lien_piece_confirmer",
+                  token,
+                  path: up.path,
+                  type_piece: typePiece,
+                  attestation: true,
+                });
+                setRedeposee(true);
+              }, "piece")
+            }
+          >
+            {busy ? "Dépôt en cours…" : "Déposer ma nouvelle pièce d'identité"}
+            <Icon name="arrowRight" size={16} />
+          </button>
+        </div>
+      </Cadre>
+    );
+  }
 
   // ---------- déjà signé ----------
   if (s.signe) {

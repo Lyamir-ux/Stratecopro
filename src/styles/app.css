@@ -1381,6 +1381,14 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .dropzone.lecture { cursor: default; }
 .dropzone.lecture:not(.filled):not(.refus):hover { border-color: var(--border-strong); background: var(--bg-soft); }
 .champ-depot.survol { outline: 2px dashed var(--accent); outline-offset: 4px; border-radius: var(--radius-sm); background: var(--accent-soft); }
+/* Voir / Remplacer d'une pièce de la signature (0155) : sous le texte sur téléphone */
+.dropzone .dz-actions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; flex: none; }
+.dropzone .dz-actions .se-btn { white-space: nowrap; }
+@media (max-width: 760px) {
+  .dropzone.lecture { flex-wrap: wrap; }
+  .dropzone.lecture .spacer { display: none; }
+  .dropzone.lecture .dz-actions { width: 100%; justify-content: flex-start; padding-left: 52px; }
+}
 .dropzone .dz-name { font-weight: 600; font-size: 14px; }
 .dropzone .dz-hint { font-size: 12px; color: var(--fg-muted); }
 .dropzone .spacer { flex: 1; }

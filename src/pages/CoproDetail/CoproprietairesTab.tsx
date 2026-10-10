@@ -935,8 +935,9 @@ function FicheCoproprietaire({
           })}
           {d.bulletinsElec.some((b) => b.rib_path && !b.purge_effectuee_le) && (
             <p className="se-small" style={{ margin: "8px 0 0", color: "var(--fg-muted)" }}>
-              RIB et pièce d'identité déposés lors de la signature électronique : consultables depuis le panneau
-              « Signatures électroniques » de l'onglet Plans de financement (niveau 1, journalisé).
+              RIB et pièce d'identité déposés lors de la signature électronique : à consulter et à valider depuis le
+              panneau « Signatures électroniques » de l'onglet Plans de financement, ou depuis « Vos tâches » (niveau 1,
+              journalisé).
             </p>
           )}
         </Bloc>
