@@ -13,7 +13,7 @@ import {
   positionCurseur,
 } from "../saisie";
 import { erreurFormatPiece, typeMimePiece } from "../formatPiece";
-import { casesIban, isValidIban } from "../pdf/adhesion";
+import { casesIban, isValidIban, nomDebiteurMandat } from "../pdf/adhesion";
 
 const IBAN = "FR7630001007941234567890185";
 
@@ -193,5 +193,21 @@ describe("casesIban : placement dans la grille du mandat SEPA", () => {
   });
   it("un IBAN plus court garde le même découpage par 4", () => {
     expect(casesIban(14, 33)).toEqual([0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16]);
+  });
+});
+
+describe("nomDebiteurMandat : « Nom / Prénoms du débiteur » du mandat SEPA", () => {
+  it("écrit le nom puis le prénom du signataire principal à la suite", () => {
+    expect(nomDebiteurMandat({ nom: "CHELGHAM", prenom: "Amir" })).toBe("CHELGHAM Amir");
+  });
+  it("l'emporte sur le champ libre du bulletin, qui peut ne contenir que le nom", () => {
+    expect(nomDebiteurMandat({ nom: " CHELGHAM ", prenom: " Amir " }, "CHELGHAM")).toBe("CHELGHAM Amir");
+  });
+  it("à défaut de nom et de prénom, retombe sur le repli", () => {
+    expect(nomDebiteurMandat({ nom: "", prenom: null }, " Pierre MAXTAFF ")).toBe("Pierre MAXTAFF");
+    expect(nomDebiteurMandat({})).toBe("");
+  });
+  it("sans prénom, n'écrit que le nom (sans espace parasite)", () => {
+    expect(nomDebiteurMandat({ nom: "CHELGHAM", prenom: "" }, "autre")).toBe("CHELGHAM");
   });
 });

@@ -154,6 +154,23 @@ function drawInBox(page: PDFPage, font: PDFFont, ch: string, x: number, w: numbe
   page.drawText(ch, { x: x + (w - cw) / 2, y, size, font, color: INK });
 }
 
+/**
+ * Nom du débiteur du mandat SEPA (case « Nom / Prénoms du débiteur ») : nom puis prénom à la
+ * suite du titulaire du compte, soit le signataire principal (retour de A CHELGHAM, 10/10/2026 :
+ * seul « CHELGHAM » était imprimé). Le champ libre « Nom et prénom » du bulletin n'est qu'un
+ * repli, car il arrive incomplet ; il n'est utilisé qu'à défaut de nom et de prénom du signataire.
+ *   { nom: « CHELGHAM », prenom: « Amir » } → « CHELGHAM Amir »
+ */
+export function nomDebiteurMandat(
+  principal: { nom?: string | null; prenom?: string | null },
+  repli = ""
+): string {
+  const nom = (principal.nom ?? "").trim();
+  const prenom = (principal.prenom ?? "").trim();
+  if (nom && prenom) return `${nom} ${prenom}`;
+  return nom || prenom || repli.trim();
+}
+
 /** Mandat SEPA pré-rempli, sans signature : déposé sur le bulletin, il est signé
  *  avec le même code que lui et la mention de signature est apposée au scellement. */
 export async function genMandatSepa(input: {

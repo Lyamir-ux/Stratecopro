@@ -24,6 +24,7 @@ import {
   genMandatSepa,
   isValidBic,
   isValidIban,
+  nomDebiteurMandat,
   normalizeIban,
   type Adherent,
   type AdhesionForm,
@@ -1015,7 +1016,10 @@ export function Adhesion({
                   const mandat = new Blob(
                     [
                       (await genMandatSepa({
-                        nom: form.adherent1.nomPrenom || `${prenomPrincipal} ${nomPrincipal}`,
+                        nom: nomDebiteurMandat(
+                          { nom: nomPrincipal, prenom: prenomPrincipal },
+                          form.adherent1.nomPrenom
+                        ),
                         rue: form.adresse,
                         cp: form.cp,
                         ville: form.ville,

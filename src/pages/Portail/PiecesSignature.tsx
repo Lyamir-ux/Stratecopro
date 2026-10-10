@@ -23,7 +23,7 @@ import { useGlisserDeposer } from "@/components/useGlisserDeposer";
 import { fmtDate } from "@/lib/format";
 import { messageErreur } from "@/lib/erreurs";
 import { diagnosticBic, diagnosticIban } from "@/lib/saisie";
-import { genMandatSepa, isValidBic, isValidIban, normalizeIban } from "@/lib/pdf/adhesion";
+import { genMandatSepa, isValidBic, isValidIban, nomDebiteurMandat, normalizeIban } from "@/lib/pdf/adhesion";
 import { assemblerPieceIdentite, facesADeposer, verifierFacesPiece } from "@/lib/pdf/pieceIdentite";
 import { ACCEPT_PIECE, erreurFormatPiece, LIBELLE_FORMATS_PIECE, typeMimePiece } from "@/lib/formatPiece";
 import type { PieceSignature } from "@/lib/piecesSituation";
@@ -343,7 +343,7 @@ function FenetreRib({
                 const p = b?.signataires.find((s) => s.role === "principal");
                 const f = (form ?? {}) as { adherent1?: { nomPrenom?: string }; adresse?: string; cp?: string; ville?: string; lieuSignature?: string };
                 const mandat = await genMandatSepa({
-                  nom: f.adherent1?.nomPrenom || `${p?.prenom ?? ""} ${p?.nom ?? ""}`.trim() || membership.nom,
+                  nom: nomDebiteurMandat({ nom: p?.nom, prenom: p?.prenom }, f.adherent1?.nomPrenom || membership.nom),
                   rue: f.adresse || p?.adresse_ligne1 || "",
                   cp: f.cp || p?.code_postal || "",
                   ville: f.ville || p?.ville || "",
