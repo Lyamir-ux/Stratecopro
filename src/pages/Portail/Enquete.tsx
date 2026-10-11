@@ -325,9 +325,10 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
   const { data: enquete, isLoading } = useEnquetePortail(membership.copro.id);
   const { data: reponse, isFetched } = useMaReponse(enquete?.id, membership.coproprietaireId);
   const save = useSaveMaReponse(enquete?.id ?? "", membership.coproprietaireId);
-  // Aperçu AMO : la transmission n'envoie pas d'e-mail au copropriétaire
-  const { profile } = useAuth();
-  const apercuAmo = profile?.role === "amo";
+  // Aperçu AMO : la transmission n'envoie pas d'e-mail au copropriétaire (un compte AMO
+  // connecté par la tuile « Copropriétaire » répond, lui, pour sa propre fiche)
+  const { espace } = useAuth();
+  const apercuAmo = espace === "amo";
 
   const questions = useMemo(
     () => (enquete ? resolveQuestions(normalizeConfig(enquete.questions)) : []),

@@ -81,23 +81,30 @@ export function useRattacherLot() {
 /** Les rattachements du user connecté : fiche copropriétaire + copro + lots.
  *  En aperçu AMO, la RLS ouvre toutes les fiches (plus de 1 000) : lecture par
  *  pages, sinon le plafond de l'API tronquait la liste sans prévenir et les
- *  fiches les plus récentes manquaient (bug Amir 30/09/2026, Parc des Cigognes). */
-export function useMesCopros() {
+ *  fiches les plus récentes manquaient (bug Amir 30/09/2026, Parc des Cigognes).
+ *  `proprietaire` : session en copropriétaire, seules les fiches reliées au compte ; un compte
+ *  AMO entré par la tuile « Copropriétaire » fait d'abord relier les fiches qui portent son
+ *  adresse (RPC relier_mes_fiches_coproprietaire, 0159, demande d'Amir du 11/10/2026). */
+export function useMesCopros(proprietaire?: { userId: string; compteAmo: boolean } | null) {
   return useQuery({
-    queryKey: ["portail", "mes-copros"],
+    queryKey: ["portail", "mes-copros", proprietaire?.userId ?? null, proprietaire?.compteAmo ?? false],
     queryFn: async (): Promise<Membership[]> => {
-      const data = await toutesLesLignes((debut, fin) =>
-        supabase
+      if (proprietaire?.compteAmo) {
+        const { error } = await supabase.rpc("relier_mes_fiches_coproprietaire");
+        if (error) throw error;
+      }
+      const data = await toutesLesLignes((debut, fin) => {
+        let requete = supabase
           .from("coproprietaires")
           .select(
             `id, nom, adresse,
              coproprietes (*),
              lots ( id, num, usage, rattache_a, batiment_id, batiments ( code ),
                     lot_tantiemes ( tantiemes, cles_repartition ( code ) ) )`
-          )
-          .order("id")
-          .range(debut, fin)
-      );
+          );
+        if (proprietaire) requete = requete.eq("user_id", proprietaire.userId);
+        return requete.order("id").range(debut, fin);
+      });
       type Row = Tables<"coproprietaires"> & {
         coproprietes: Copro | null;
         lots: (Tables<"lots"> & {

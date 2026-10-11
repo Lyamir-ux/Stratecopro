@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthProvider";
 
 export default function Login() {
-  const { session, loading } = useAuth();
+  const { session, espace, loading, choisirEspace } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [role, setRole] = useState<RoleId>("amo");
@@ -22,18 +22,21 @@ export default function Login() {
   // page demandée avant la redirection vers /login (lien profond d'un e-mail)
   const from = (location.state as { from?: string } | null)?.from;
 
-  if (!loading && session) return <Navigate to={from ?? "/"} replace />;
+  if (!loading && session) return <Navigate to={from ?? homeFor(espace ?? undefined)} replace />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (err) {
       setError("Identifiants incorrects. Vérifiez votre e-mail et votre mot de passe.");
       return;
     }
+    // tuile retenue pour la session : un compte AMO entré par « Copropriétaire » est
+    // traité en copropriétaire, sur la fiche qui porte son adresse (11/10/2026)
+    choisirEspace(data.user.id, role);
     // page demandée avant connexion, sinon l'espace de la tuile choisie ;
     // RequireRole renvoie vers le bon espace si le compte n'y a pas droit
     // (seul l'AMO accède à tous les espaces)

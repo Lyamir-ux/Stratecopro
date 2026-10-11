@@ -79,8 +79,13 @@ Deno.serve(async (req: Request) => {
   if (!["message_copro", "message_amo_copro"].includes(typeNotif)) {
     return json(400, { error: "type inconnu" });
   }
-  // message_copro : émis par le copropriétaire ; message_amo_copro : par l'AMO
-  if (typeNotif === "message_copro" ? profile.role !== "copro" : profile.role !== "amo") {
+  // message_copro : émis par le copropriétaire (ou par un compte AMO entré dans le portail en
+  // copropriétaire, depuis SA fiche : 0159, contrôlé plus bas) ; message_amo_copro : par l'AMO
+  if (
+    typeNotif === "message_copro"
+      ? profile.role !== "copro" && profile.role !== "amo"
+      : profile.role !== "amo"
+  ) {
     return json(403, { error: "Rôle de l'appelant incompatible avec ce type d'alerte" });
   }
 
@@ -100,7 +105,7 @@ Deno.serve(async (req: Request) => {
   if (!coproprietaire || coproprietaire.copro_id !== copro_id) {
     return json(404, { error: "Copropriétaire introuvable sur ce dossier" });
   }
-  // un copropriétaire n'alerte que depuis son propre fil
+  // un copropriétaire n'alerte que depuis son propre fil (un compte AMO aussi : sa fiche à lui)
   if (typeNotif === "message_copro" && coproprietaire.user_id !== userData.user.id) {
     return json(403, { error: "Ce fil n'est pas le vôtre" });
   }
@@ -159,7 +164,10 @@ Deno.serve(async (req: Request) => {
       });
     }
   }
-  cibles.delete(userData.user.id); // on n'alerte pas l'auteur du message
+  // L'auteur n'est jamais parmi les destinataires d'un autre rôle que le sien, sauf un compte AMO
+  // qui écrit en copropriétaire depuis sa fiche (0159) : il reçoit alors l'alerte de l'autre
+  // côté (chef de projet du dossier, ou copropriétaire de la fiche), comme pendant un vrai
+  // parcours - c'est ce qu'il vient tester.
 
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const from = Deno.env.get("RESEND_FROM") ?? "Strat Eco <onboarding@resend.dev>";

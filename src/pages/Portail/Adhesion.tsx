@@ -466,8 +466,9 @@ export function Adhesion({
 }) {
   // Aperçu AMO du portail : lecture seule - le dossier se remplit et se signe
   // depuis le compte du copropriétaire, jamais à sa place.
-  const { profile } = useAuth();
-  const apercuAmo = profile?.role === "amo";
+  // (un compte AMO connecté par la tuile « Copropriétaire » signe, lui, son propre dossier)
+  const { espace } = useAuth();
+  const apercuAmo = espace === "amo";
   const copro = membership.copro;
   const { data: adhesion, isLoading } = useMonAdhesion(copro.id, membership.coproprietaireId);
   const { data: bulletins, isLoading: chargeBulletins, refetch: refetchBulletins } = useMesBulletins(membership.coproprietaireId);

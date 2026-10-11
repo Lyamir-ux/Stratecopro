@@ -19,6 +19,14 @@ export function EspaceBadge({ espace }: { espace: EspaceCoproprietaire | undefin
   if (!espace) return <span style={{ color: "var(--fg-muted)" }}>-</span>;
   switch (espace.etat) {
     case "actif":
+      // fiche reliée au compte d'un membre de l'équipe par son adresse (0159, 11/10/2026)
+      if (espace.roleCompte === "amo") {
+        return (
+          <span title="Fiche reliée à un compte Strat Eco par son adresse : connecté avec la tuile « Copropriétaire », ce compte voit le portail de cette fiche">
+            <Badge kind="blue">Compte Strat Eco</Badge>
+          </span>
+        );
+      }
       return <Badge kind="success">Activé</Badge>;
     case "invite":
       return (

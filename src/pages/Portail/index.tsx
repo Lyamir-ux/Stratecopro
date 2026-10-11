@@ -271,15 +271,60 @@ function CoproSelect({
   );
 }
 
+// ---------- Compte AMO entré en copropriétaire, sans fiche à son adresse ----------
+function SansFicheCompteAmo({
+  email,
+  onEspaceAmo,
+  onLogout,
+}: {
+  email: string;
+  onEspaceAmo: () => void;
+  onLogout: () => void;
+}) {
+  return (
+    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "var(--bg-soft)", padding: 24 }}>
+      <div style={{ textAlign: "center", maxWidth: 520 }}>
+        <img src="/logo-strateco-pro.png" alt="Strat Eco" style={{ height: 36, marginBottom: 22 }} />
+        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 26, margin: "0 0 10px" }}>
+          Aucune fiche copropriétaire à votre adresse
+        </h1>
+        <p className="se-body">
+          Vous vous êtes connecté avec la tuile « Copropriétaire » et votre compte Strat Eco
+          {email ? <> (<strong>{email}</strong>)</> : null}, mais aucune fiche copropriétaire ne porte cette adresse.
+        </p>
+        <p className="se-body">
+          Pour suivre le parcours d'un copropriétaire, inscrivez cette adresse dans la colonne « Mail » d'un
+          copropriétaire sans espace (onglet Données d'un dossier, par exemple un dossier de test), puis revenez ici.
+        </p>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 16 }}>
+          <button className="se-btn se-btn-primary" onClick={onEspaceAmo}>
+            <Icon name="gauge" size={16} />Revenir à l'espace AMO
+          </button>
+          <button className="se-btn se-btn-secondary" onClick={onLogout}>
+            <Icon name="logOut" size={16} />Se déconnecter
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Portail (conteneur) ----------
 export default function Portail() {
-  const { profile, session, signOut } = useAuth();
+  const { profile, session, espace, choisirEspace, signOut } = useAuth();
   const navigate = useNavigate();
   const { section: sectionParam } = useParams();
   const section: SectionId = (SECTIONS.some((s) => s.id === sectionParam) ? sectionParam : "accueil") as SectionId;
 
-  const isAmo = profile?.role === "amo";
-  const { data: memberships, isLoading } = useMesCopros();
+  // Aperçu AMO : un compte AMO dans son espace. Connecté par la tuile « Copropriétaire »,
+  // il est un copropriétaire comme un autre : ses seules fiches, sans bandeau d'aperçu
+  // (demande d'Amir du 11/10/2026, lib/espaceConnexion.ts).
+  const isAmo = espace === "amo";
+  const compteAmoEnCopro = espace === "copro" && profile?.role === "amo";
+  const userId = session?.user.id ?? null;
+  const { data: memberships, isLoading } = useMesCopros(
+    espace === "copro" && userId ? { userId, compteAmo: compteAmoEnCopro } : null
+  );
   const [cpId, setCpId] = useState<string | null>(null);
   // Aperçu AMO : copropriété dont on choisit le copropriétaire (bouton « Vue
   // copropriétaire » d'un dossier, idée d'Amir du 08/10/2026)
@@ -345,6 +390,19 @@ export default function Portail() {
 
   const userName = profile.full_name;
   const initials = profile.initials;
+
+  if ((!memberships || memberships.length === 0) && compteAmoEnCopro) {
+    return (
+      <SansFicheCompteAmo
+        email={session?.user.email ?? ""}
+        onEspaceAmo={() => {
+          if (userId) choisirEspace(userId, "amo");
+          navigate("/", { replace: true });
+        }}
+        onLogout={() => void signOut()}
+      />
+    );
+  }
 
   if (!memberships || memberships.length === 0) {
     return (

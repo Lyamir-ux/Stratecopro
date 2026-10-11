@@ -28,8 +28,10 @@ export function verdictEmail(saisie: string, actuel: string | null | undefined):
   return stockee === avant ? { etat: "inchange" } : { etat: "modifie", email: stockee };
 }
 
-/** Ce que le serveur a fait du compte du portail de la fiche. */
-export type EtatCompteEmail = "aucun" | "suit" | "garde" | "introuvable" | "relie";
+/** Ce que le serveur a fait du compte du portail de la fiche. « equipe » : la fiche porte
+ *  désormais l'adresse d'un compte Strat Eco et lui est reliée ; « delie » : elle ne porte plus
+ *  l'adresse du compte Strat Eco qui lui était relié et en est détachée (0159, 11/10/2026). */
+export type EtatCompteEmail = "aucun" | "suit" | "garde" | "introuvable" | "relie" | "equipe" | "delie";
 
 /** Phrase affichée sous l'adresse après un changement, selon le sort du compte (null = rien à dire).
  *  `nomCompte` : titulaire du compte repris quand la fiche a été reliée à un compte existant. */
@@ -48,6 +50,13 @@ export function noteApresChangement(
   if (compte === "relie") {
     const qui = nomCompte ? ` (${nomCompte})` : "";
     return `Cette adresse avait déjà un compte${qui}, sans aucune fiche : il est maintenant relié à cette fiche. Il retrouvera cette copropriété à sa prochaine connexion avec son mot de passe habituel, aucun e-mail n'est envoyé. L'ancien compte de la fiche, jamais utilisé, est laissé sans fiche.`;
+  }
+  if (compte === "equipe") {
+    const qui = nomCompte ? ` (${nomCompte})` : "";
+    return `Adresse d'un compte Strat Eco${qui} : la fiche est reliée à ce compte. Connecté avec la tuile « Copropriétaire », il voit le portail de ce copropriétaire et en suit le parcours ; aucun e-mail n'est envoyé.`;
+  }
+  if (compte === "delie") {
+    return "La fiche n'est plus reliée au compte Strat Eco de l'ancienne adresse : « Créer l'espace » ouvrira celui de la nouvelle adresse.";
   }
   if (compte === "garde") {
     return "Ce copropriétaire s'est déjà connecté : il garde son ancien identifiant de connexion, seule l'adresse de la fiche a changé.";

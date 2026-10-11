@@ -13,7 +13,8 @@ export type EtatEspace = "actif" | "invite" | "a_creer" | "sans_email" | "email_
 export interface EspaceCoproprietaire {
   etat: EtatEspace;
   inviteLe: string | null;
-  /** Rôle du compte qui détient déjà l'adresse (état email_pris). */
+  /** Rôle du compte qui détient déjà l'adresse (état email_pris), ou du compte relié à la
+   *  fiche (« amo » : fiche reliée à un compte Strat Eco par son adresse, 0159). */
   roleCompte: string | null;
 }
 

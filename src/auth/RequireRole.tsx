@@ -1,7 +1,9 @@
 // Garde de route par rôle : chaque espace n'est accessible qu'à son rôle,
 // les autres utilisateurs connectés sont renvoyés vers leur espace.
 // Exception : l'AMO accède à TOUS les espaces (aperçu syndic / copropriétaire /
-// prestataire pour le pilotage et les démonstrations).
+// prestataire pour le pilotage et les démonstrations) - sauf quand il s'est connecté
+// par la tuile « Copropriétaire » : la session est alors celle d'un copropriétaire
+// (espace effectif, lib/espaceConnexion.ts, demande d'Amir du 11/10/2026).
 import { useEffect } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
@@ -16,7 +18,7 @@ export function homeFor(role: RoleId | undefined): string {
 }
 
 export function RequireRole({ role }: { role: RoleId }) {
-  const { profile, loading, signOut } = useAuth();
+  const { profile, espace, loading, signOut } = useAuth();
 
   // session sans profil : compte non provisionné - déconnexion après un délai
   // de grâce. L'état « session sans profil » est transitoire pendant une
@@ -38,8 +40,9 @@ export function RequireRole({ role }: { role: RoleId }) {
       </div>
     );
   }
-  if (profile.role !== role && profile.role !== "amo") {
-    return <Navigate to={homeFor(profile.role as RoleId)} replace />;
+  const espaceSession = espace ?? (profile.role as RoleId);
+  if (espaceSession !== role && espaceSession !== "amo") {
+    return <Navigate to={homeFor(espaceSession)} replace />;
   }
   return <Outlet />;
 }

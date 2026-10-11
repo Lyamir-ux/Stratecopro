@@ -22,7 +22,11 @@
 //   portée par un compte qui a encore des fiches, ou par un compte AMO, syndic ou
 //   prestataire, reste refusée (409) : on n'ouvre pas une fiche à un espace actif sur une
 //   simple faute de frappe ;
-// - un compte qui n'est pas un compte copropriétaire n'est jamais touché.
+// - un compte qui n'est pas un compte copropriétaire n'est jamais touché ;
+// - adresse d'un compte AMO actif sur une fiche sans espace (demande d'Amir du 11/10/2026,
+//   0159) : le déclencheur relie la fiche à ce compte, qui entre dans le portail en
+//   copropriétaire par la tuile « Copropriétaire » ; une fiche ainsi reliée qui change
+//   d'adresse (ou la perd) est détachée du compte. La réponse le dit (« equipe », « delie »).
 // L'adresse de la fiche peut porter plusieurs adresses (« a@x.fr / b@y.fr ») : la
 // première sert (même règle que adresseEmail.ts, creer-espace-coproprietaire et la
 // fonction SQL premiere_adresse, 0145 : à garder alignées à la main).
@@ -53,7 +57,7 @@ function nettoyer(texte: string): string {
   return texte.replace(/\s+/g, " ").trim();
 }
 
-type EtatCompte = "aucun" | "suit" | "garde" | "introuvable" | "relie";
+type EtatCompte = "aucun" | "suit" | "garde" | "introuvable" | "relie" | "equipe" | "delie";
 
 const ROLE_LIBELLE: Record<string, string> = {
   amo: "un compte Strat Eco",
@@ -107,7 +111,15 @@ Deno.serve(async (req: Request) => {
     .maybeSingle();
   // deno-lint-ignore no-explicit-any
   if (!fiche || (fiche as any).coproprietes?.deleted_at) return json(404, { error: "Copropriétaire introuvable" });
-  if (!stockee && fiche.user_id) {
+  // fiche reliée au compte d'un membre de l'équipe par son adresse (0159) : la fiche suit son
+  // adresse, le déclencheur la détache du compte si elle ne porte plus la sienne ; le compte
+  // lui-même n'est jamais touché
+  let ficheEquipe = false;
+  if (fiche.user_id) {
+    const { data: p } = await admin.from("profiles").select("role").eq("user_id", fiche.user_id).maybeSingle();
+    ficheEquipe = p?.role === "amo";
+  }
+  if (!stockee && fiche.user_id && !ficheEquipe) {
     return json(400, {
       error: "Ce copropriétaire a un espace : son adresse ne peut pas être vide",
     });
@@ -121,7 +133,7 @@ Deno.serve(async (req: Request) => {
   let ancienneConnexion: string | null = null;
   let autresFiches = 0;
   let compteRelie: { user_id: string; nom: string | null } | null = null;
-  if (fiche.user_id) {
+  if (fiche.user_id && !ficheEquipe) {
     const [{ data: u }, { data: profil }] = await Promise.all([
       admin.auth.admin.getUserById(fiche.user_id),
       admin.from("profiles").select("role").eq("user_id", fiche.user_id).maybeSingle(),
@@ -200,8 +212,8 @@ Deno.serve(async (req: Request) => {
   // l'ancien user_id pour ne rien écraser si la fiche a bougé entre-temps
   const maj = admin.from("coproprietaires").update(compteRelie ? { email: stockee, user_id: compteRelie.user_id } : { email: stockee }).eq("id", id);
   const { data: lignes, error: ficheErr } = compteRelie
-    ? await maj.eq("user_id", fiche.user_id).select("id")
-    : await maj.select("id");
+    ? await maj.eq("user_id", fiche.user_id).select("id, user_id")
+    : await maj.select("id, user_id");
   if (!ficheErr && compteRelie && (lignes ?? []).length === 0) {
     return json(409, { error: "La fiche a changé entre-temps : rechargez la page et réessayez" });
   }
@@ -224,11 +236,25 @@ Deno.serve(async (req: Request) => {
     return json(500, { error: "La modification a échoué, l'ancienne adresse est conservée. Réessayez." });
   }
 
+  // compte de l'équipe (0159) : le déclencheur a relié la fiche à l'adresse d'un compte AMO
+  // actif, ou l'a détachée du compte AMO dont elle ne porte plus l'adresse
+  let compteNom: string | null = compteRelie?.nom ?? null;
+  const apres = ((lignes ?? [])[0] as { user_id: string | null } | undefined)?.user_id ?? null;
+  if (!compteRelie && apres !== fiche.user_id) {
+    if (apres) {
+      const { data: p } = await admin.from("profiles").select("full_name").eq("user_id", apres).maybeSingle();
+      compte = "equipe";
+      compteNom = p?.full_name ?? null;
+    } else if (ficheEquipe) {
+      compte = "delie";
+    }
+  }
+
   return json(200, {
     email: stockee,
     inchange: false,
     compte,
     autres_fiches: autresFiches,
-    ...(compteRelie ? { compte_nom: compteRelie.nom } : {}),
+    ...(compteNom ? { compte_nom: compteNom } : {}),
   });
 });

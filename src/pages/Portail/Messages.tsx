@@ -30,10 +30,11 @@ const initiales = (nom: string) =>
     .toUpperCase();
 
 export function Messages({ membership }: { membership: Membership }) {
-  const { session, profile } = useAuth();
-  // Aperçu AMO : lecture seule (la RLS refuse l'envoi) et on ne touche pas au
-  // repère de lecture, qui sert à la pastille de l'onglet Communications.
-  const isApercu = profile?.role === "amo";
+  const { session, espace } = useAuth();
+  // Aperçu AMO : lecture seule et on ne touche pas au repère de lecture, qui sert
+  // à la pastille de l'onglet Communications. Un compte AMO connecté par la tuile
+  // « Copropriétaire » écrit, lui, depuis son propre fil (0159).
+  const isApercu = espace === "amo";
   const { data: messages, isLoading } = useMessagesPortail(membership.copro.id, membership.coproprietaireId);
   const { data: lectures } = useLectures();
   const marquerLu = useMarquerLu();

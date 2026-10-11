@@ -2,12 +2,26 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import type { Tables } from "@/lib/database.types";
+import type { RoleId } from "@/lib/referentiels";
+import {
+  CLE_ESPACE_CONNEXION,
+  espaceEffectif,
+  lireEspace,
+  lireEspaceMemorise,
+  memoriserEspace,
+  type EspaceMemorise,
+} from "@/lib/espaceConnexion";
 
 export type Profile = Tables<"profiles">;
 
 interface AuthState {
   session: Session | null;
   profile: Profile | null;
+  /** Espace de la session : le rôle du compte, sauf un compte AMO entré par la tuile
+   *  « Copropriétaire » (traité en copropriétaire, demande d'Amir du 11/10/2026). */
+  espace: RoleId | null;
+  /** Tuile choisie sur la page de connexion, pour ce compte. */
+  choisirEspace: (userId: string, espace: RoleId) => void;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -15,6 +29,8 @@ interface AuthState {
 const AuthContext = createContext<AuthState>({
   session: null,
   profile: null,
+  espace: null,
+  choisirEspace: () => {},
   loading: true,
   signOut: async () => {},
 });
@@ -23,8 +39,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [espaceMemorise, setEspaceMemorise] = useState<EspaceMemorise | null>(lireEspaceMemorise);
   // Utilisateur dont le profil est chargé (ou en cours de chargement).
   const userIdRef = useRef<string | null>(null);
+
+  // le choix d'espace vaut pour tous les onglets, comme la session : un autre onglet qui se
+  // reconnecte ou se déconnecte le met à jour ici
+  useEffect(() => {
+    const surStockage = (e: StorageEvent) => {
+      if (e.key === CLE_ESPACE_CONNEXION) setEspaceMemorise(lireEspace(e.newValue));
+    };
+    window.addEventListener("storage", surStockage);
+    return () => window.removeEventListener("storage", surStockage);
+  }, []);
+
+  const choisirEspace = useCallback((userId: string, espace: RoleId) => {
+    const choix = { userId, espace };
+    memoriserEspace(choix);
+    setEspaceMemorise(choix);
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -97,6 +130,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // portée locale : on ne révoque que la session de ce navigateur
     // (pas celles des autres appareils / onglets d'un autre navigateur)
     await supabase.auth.signOut({ scope: "local" });
+    // la prochaine connexion repart de la tuile choisie ce jour-là
+    memoriserEspace(null);
+    setEspaceMemorise(null);
     // copies de secours des enquêtes en cours de saisie (PREFIXE_SECOURS_ENQUETE,
     // Portail/Enquete.tsx) : rien ne reste dans l'onglet après la déconnexion
     try {
@@ -108,8 +144,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const espace = espaceEffectif(profile?.role, session?.user.id, espaceMemorise);
+
   return (
-    <AuthContext.Provider value={{ session, profile, loading, signOut }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ session, profile, espace, choisirEspace, loading, signOut }}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 

@@ -72,6 +72,18 @@ describe("noteApresChangement", () => {
     expect(noteApresChangement("relie", 0)).not.toContain("()");
   });
 
+  it("adresse d'un compte Strat Eco : fiche reliée, tuile Copropriétaire, sans e-mail (0159)", () => {
+    const n = noteApresChangement("equipe", 0, "Camille DURAND");
+    expect(n).toContain("(Camille DURAND)");
+    expect(n).toContain("tuile « Copropriétaire »");
+    expect(n).toContain("aucun e-mail n'est envoyé");
+    expect(noteApresChangement("equipe", 0)).not.toContain("()");
+  });
+
+  it("fiche détachée du compte Strat Eco quand son adresse change", () => {
+    expect(noteApresChangement("delie", 0)).toContain("n'est plus reliée au compte Strat Eco");
+  });
+
   it("sans espace ou compte introuvable : rien à dire", () => {
     expect(noteApresChangement("aucun", 0)).toBeNull();
     expect(noteApresChangement("introuvable", 0)).toBeNull();

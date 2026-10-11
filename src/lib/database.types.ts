@@ -5577,6 +5577,7 @@ export type Database = {
         Args: { p_cible_id: string | null; p_lot_id: string }
         Returns: undefined
       }
+      relier_mes_fiches_coproprietaire: { Args: never; Returns: number }
       seed_syndic_taches: {
         Args: { p_copro_ids: string[] }
         Returns: undefined
