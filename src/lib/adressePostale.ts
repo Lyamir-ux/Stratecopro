@@ -1,8 +1,8 @@
 // Adresse postale d'un copropriétaire découpée en rue / code postal / ville, pour
 // pré-remplir les coordonnées du dossier d'adhésion (idée de A CHELGHAM,
 // 09/10/2026 : « proposez l'adresse postale qui est dans l'enquête ou dans
-// l'import »). Les deux sources sont du texte libre : « 9 rue Fabert, 57000 Metz »
-// (import), « N°, rue, code postal, ville » (réponse de l'enquête).
+// l'import »). L'import est du texte libre (« 9 rue Fabert, 57000 Metz ») ; l'enquête pose
+// rue, code postal et ville en trois questions depuis le 11/10/2026 (un seul champ avant).
 
 export interface AdresseDecoupee {
   adresse: string;
@@ -32,14 +32,37 @@ export type SourceAdresse = "enquete" | "import";
 /** L'adresse que le copropriétaire a donnée dans l'enquête l'emporte (adresse de
  *  contact, qui peut différer du lot) ; à défaut celle de la fiche importée. */
 export function adresseConnue(
-  reponseEnquete: unknown,
+  adresseEnquete: AdresseDecoupee | null,
   adresseFiche: string | null | undefined,
-): { texte: string; source: SourceAdresse } | null {
-  if (typeof reponseEnquete === "string" && reponseEnquete.trim()) {
-    return { texte: reponseEnquete.trim(), source: "enquete" };
-  }
-  if (adresseFiche && adresseFiche.trim()) return { texte: adresseFiche.trim(), source: "import" };
+): (AdresseDecoupee & { source: SourceAdresse }) | null {
+  if (adresseEnquete) return { ...adresseEnquete, source: "enquete" };
+  if (adresseFiche && adresseFiche.trim()) return { ...decouperAdressePostale(adresseFiche), source: "import" };
   return null;
+}
+
+/** Adresse postale donnée dans l'enquête : rue, code postal et ville sont trois questions
+ *  depuis le 11/10/2026 (retour de A CHELGHAM) ; une réponse plus ancienne tient en un seul
+ *  champ « N°, rue, code postal, ville », découpé ici. Null sans aucune réponse. */
+export function adresseDeLEnquete(reponses: unknown): AdresseDecoupee | null {
+  const rue = reponseIdentiteEnquete(reponses, "adresse");
+  const cp = reponseIdentiteEnquete(reponses, "code-postal");
+  const ville = reponseIdentiteEnquete(reponses, "ville");
+  if (!rue && !cp && !ville) return null;
+  const d = decouperAdressePostale(rue);
+  return { adresse: d.adresse, cp: cp ?? d.cp, ville: ville ?? d.ville };
+}
+
+/** Ancienne réponse « N°, rue, code postal, ville » rangée dans les trois questions de
+ *  l'enquête, sans rien écraser : seulement si ni le code postal ni la ville ne sont répondus
+ *  et que l'adresse se découpe en entier. Seules les clés à changer sont renvoyées. */
+export function adresseEnqueteSeparee(
+  copro: Record<string, unknown>,
+): { adresse?: string; "code-postal"?: string; ville?: string } {
+  const texte = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  if (texte(copro["code-postal"]) || texte(copro.ville)) return {};
+  const d = decouperAdressePostale(texte(copro.adresse));
+  if (!d.adresse || !d.cp || !d.ville) return {};
+  return { adresse: d.adresse, "code-postal": d.cp, ville: d.ville };
 }
 
 /** Réponse à une question d'identité de l'enquête (« adresse », « telephone »…) : le

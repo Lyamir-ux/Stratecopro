@@ -137,10 +137,12 @@ export function decouperNomPrenom(nom: string): { prenom: string; nom: string } 
  * les erreurs futures »). Une réponse déjà enregistrée est gardée ; un ancien « nom complet »
  * sans prénom est séparé quand on peut le trancher ; sans réponse, on part du libellé de la
  * fiche, mais seulement s'il s'agit d'une personne (ni couple, ni indivision, ni société : la
- * personne qui répond saisit alors elle-même ses nom et prénom). Seules les clés connues sont
+ * personne qui répond saisit alors elle-même ses nom et prénom). Une initiale tirée d'un libellé
+ * (« A CHELGHAM ») n'est pas un prénom : seul le nom est proposé. Seules les clés connues sont
  * renvoyées, pour ne pas écraser une réponse par du vide.
  *   (rien, « Pierre MAXTAFF »)               → { nom: « MAXTAFF », prenom: « Pierre » }
  *   ({ nom: « Pierre MAXTAFF » }, …)         → { nom: « MAXTAFF », prenom: « Pierre » }
+ *   (rien, « A CHELGHAM »)                   → { nom: « CHELGHAM » }
  *   (rien, « SCI DU PLATEAU DE HAYE »)       → {}
  */
 export function nomPrenomEnquete(
@@ -156,8 +158,25 @@ export function nomPrenomEnquete(
   });
   if (prenom) return resultat(nom, prenom);
   const d = decouperNomPrenom(nom || libelleFiche);
-  if (nom) return d?.prenom ? resultat(d.nom, d.prenom) : resultat(nom, undefined);
-  return d ? resultat(d.nom, d.prenom) : {};
+  const prenomTire = d?.prenom && !initialesSeules(d.prenom) ? d.prenom : undefined;
+  if (nom) return prenomTire ? resultat(d!.nom, prenomTire) : resultat(nom, undefined);
+  return d ? resultat(d.nom, prenomTire) : {};
+}
+
+/** « A », « A. », « J.-P. » : des initiales, pas un prénom. */
+function initialesSeules(prenom: string): boolean {
+  return /^\p{L}\.?(?:[\s-]+\p{L}\.?)*$/u.test(prenom.trim());
+}
+
+/**
+ * Nom et prénom que le copropriétaire a donnés dans l'enquête sociale (réponses rangées sous
+ * `reponses.copro`), pour préremplir son dossier d'adhésion au prêt collectif (retour de
+ * A CHELGHAM du 11/10/2026 : « nom et prénom n'ont pas été repris de l'enquête sociale »).
+ * Vide sans réponse : le libellé de la fiche reste alors la seule source.
+ */
+export function identiteEnquete(reponses: unknown): { nom?: string; prenom?: string } {
+  const copro = (reponses as { copro?: { nom?: unknown; prenom?: unknown } } | null | undefined)?.copro;
+  return copro ? nomPrenomEnquete(copro, "") : {};
 }
 
 /**

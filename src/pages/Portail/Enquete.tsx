@@ -30,6 +30,7 @@ import { PROFILS_MPR } from "@/lib/referentiels";
 import { MOTIF_SANS_ENQUETE } from "@/lib/financement";
 import { determineProfil } from "@/lib/finance";
 import { nomPrenomEnquete } from "@/lib/nomFamille";
+import { adresseEnqueteSeparee } from "@/lib/adressePostale";
 import {
   SECTIONS,
   normalizeConfig,
@@ -191,7 +192,7 @@ function Champ({
           type={q.type === "tel" ? "tel" : q.type === "email" ? "email" : "text"}
           className="eq-inp"
           value={typeof value === "string" ? value : ""}
-          placeholder={q.type === "adresse" ? "N°, rue, code postal, ville" : "Votre réponse…"}
+          placeholder={q.placeholder ?? "Votre réponse…"}
           onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)}
         />
       );
@@ -370,8 +371,10 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
     } else {
       if (secours) ecrireSecours(cleSecours, null);
       // nom et prénom : deux questions séparées (11/10/2026), proposées d'après la fiche
-      // quand c'est une personne, sans écraser une réponse déjà enregistrée
-      setRep({ copro: { ...(stored?.copro ?? {}), ...nomPrenomEnquete(stored?.copro ?? {}, membership.nom) }, lots });
+      // quand c'est une personne, sans écraser une réponse déjà enregistrée ; une ancienne
+      // adresse en un seul champ est rangée dans les questions rue / code postal / ville
+      const copro = { ...(stored?.copro ?? {}), ...nomPrenomEnquete(stored?.copro ?? {}, membership.nom) };
+      setRep({ copro: { ...copro, ...adresseEnqueteSeparee(copro) }, lots });
     }
     setProfilSauve((reponse?.profil_mpr as Profil | null) ?? null);
   }, [enquete, isFetched, rep, reponse, membership, cleSecours]);
@@ -873,9 +876,10 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
             {info ? (
               <div className="card-xl fade">
                 <div className="profil-result" style={{ background: info.color }}>
+                  {/* le type de revenus seul : la ligne « Aides MaPrimeRénov' jusqu'à 15 % » n'était pas
+                      comprise (retour d'Amir du 11/10/2026) */}
                   <div className="pr-meta">
                     <div className="t">{info.menage}</div>
-                    <div className="s">Aides MaPrimeRénov' {info.taux}</div>
                   </div>
                 </div>
                 <div className="cx-body" style={{ paddingTop: 18 }}>

@@ -2,7 +2,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, toutesLesLignes } from "@/lib/supabase";
 import { nomFichierSansAccents } from "@/lib/nommage";
-import { adresseConnue, reponseIdentiteEnquete } from "@/lib/adressePostale";
+import { adresseConnue, adresseDeLEnquete, reponseIdentiteEnquete } from "@/lib/adressePostale";
+import { identiteEnquete } from "@/lib/nomFamille";
 import { erreurFormatPiece } from "@/lib/formatPiece";
 import type { Tables, Enums, Json } from "@/lib/database.types";
 import { determineProfil, type Bareme, type FinanceParams, type Profil } from "@/lib/finance";
@@ -440,11 +441,12 @@ export function useMaReponse(enqueteId: string | undefined, coproprietaireId: st
 }
 
 /**
- * Coordonnées déjà connues du copropriétaire : l'adresse postale (texte libre) de sa
- * réponse à l'enquête de la copropriété, à défaut celle de l'import (`adresseFiche`), et
- * le téléphone qu'il y a donné. Sert à pré-remplir le dossier d'adhésion (idées du
- * 09/10/2026). L'enquête range ses réponses sous `reponses.copro` : la première version
- * lisait la racine et ne retrouvait jamais l'adresse.
+ * Coordonnées déjà connues du copropriétaire : l'adresse postale (rue, code postal, ville) de
+ * sa réponse à l'enquête de la copropriété, à défaut celle de l'import (`adresseFiche`), le
+ * téléphone, le nom et le prénom qu'il y a donnés. Sert à pré-remplir le dossier d'adhésion
+ * (idées du 09/10/2026, nom, prénom et lieu de signature le 11/10/2026). L'enquête range ses
+ * réponses sous `reponses.copro` : la première version lisait la racine et ne retrouvait
+ * jamais l'adresse.
  */
 export function useCoordonneesConnues(
   coproId: string | undefined,
@@ -464,8 +466,9 @@ export function useCoordonneesConnues(
       // l'enquête est facultative : une erreur de lecture ne doit pas masquer l'adresse de la fiche
       const reponses = error ? null : data?.reponses;
       return {
-        adresse: adresseConnue(reponseIdentiteEnquete(reponses, "adresse"), adresseFiche),
+        adresse: adresseConnue(adresseDeLEnquete(reponses), adresseFiche),
         telephone: reponseIdentiteEnquete(reponses, "telephone"),
+        identite: identiteEnquete(reponses),
       };
     },
   });

@@ -32,7 +32,7 @@ import {
   type SituationMatrimoniale,
 } from "@/lib/pdf/adhesion";
 import { checkRibConcordance } from "@/lib/pdf/ribCheck";
-import { decouperAdressePostale, type SourceAdresse } from "@/lib/adressePostale";
+import type { SourceAdresse } from "@/lib/adressePostale";
 import {
   ChampBic,
   ChampDate,
@@ -43,7 +43,14 @@ import {
 } from "@/components/ChampsSaisie";
 import { classerTelephone, dateLieuComplet, diagnosticBic, diagnosticIban } from "@/lib/saisie";
 import { ACCEPT_PIECE, erreurFormatPiece, LIBELLE_FORMATS_PIECE, typeMimePiece } from "@/lib/formatPiece";
-import { decouperNomPrenom, nomEtPrenomRenseignes } from "@/lib/nomFamille";
+import { nomEtPrenomRenseignes } from "@/lib/nomFamille";
+import {
+  identiteDeLaFiche,
+  identiteProposee,
+  lieuParDefaut,
+  lieuSignaturePropose,
+  nomPrenomDeLaFiche,
+} from "@/lib/preremplissageAdhesion";
 import { signataireDepuisAdherent2 } from "@/lib/signataireAdherent2";
 import { adhesionDepassee, limiteAdhesion } from "@/lib/financement";
 import { assemblerPieceIdentite, facesADeposer, verifierFacesPiece } from "@/lib/pdf/pieceIdentite";
@@ -113,12 +120,6 @@ function libelleSignataires(adherent2: boolean, supplementaires: number): string
   if (autres.length === 0) return "(vous seul)";
   return `(vous${autres.length === 1 ? " et " : ", "}${autres.join(" et ")})`;
 }
-
-/** « NOM Prénom » d'après le libellé de la fiche quand on peut le trancher, sinon le libellé tel quel. */
-const nomPrenomDeLaFiche = (libelle: string): string => {
-  const d = decouperNomPrenom(libelle);
-  return d?.nom && d.prenom ? `${d.nom} ${d.prenom}` : libelle;
-};
 
 const emptyForm = (nom: string, email: string, ville: string): AdhesionForm => ({
   adherent1: emptyAdherent(nom),
@@ -251,11 +252,14 @@ function AdherentFields({
   onChange,
   titre,
   emailSeul = false,
+  repris = false,
 }: {
   a: Adherent;
   onChange: (a: Adherent) => void;
   titre: string;
   emailSeul?: boolean;
+  /** nom et prénom repris de l'enquête sociale */
+  repris?: boolean;
 }) {
   const set = (patch: Partial<Adherent>) => onChange({ ...a, ...patch });
   return (
@@ -267,7 +271,7 @@ function AdherentFields({
           value={a.nomPrenom}
           onChange={(e) => set({ nomPrenom: e.target.value })}
         />
-        <span className="hint">Le nom, puis le prénom.</span>
+        <span className="hint">Le nom, puis le prénom.{repris ? " Repris de votre réponse au questionnaire : vérifiez-les." : ""}</span>
         {emailSeul && a.nomPrenom.trim() !== "" && !nomEtPrenomRenseignes(a.nomPrenom) && (
           <span className="hint" style={{ color: "var(--color-error-700)" }}>
             Indiquez le nom <b>et</b> le prénom (ex. : DUPONT Marie).
@@ -479,8 +483,9 @@ export function Adhesion({
   // Signataire principal : prénom et nom séparés d'après le libellé de la fiche (retour de Pierre
   // MAXTAFF, 09/10/2026 : le nom complet arrivait dans « Nom ») ; vides si le libellé est celui
   // d'un couple, d'une indivision ou d'une société - la personne qui signe les saisit elle-même
-  const [prenomPrincipal, setPrenomPrincipal] = useState(() => decouperNomPrenom(membership.nom)?.prenom ?? "");
-  const [nomPrincipal, setNomPrincipal] = useState(() => decouperNomPrenom(membership.nom)?.nom ?? "");
+  // (repris ensuite de l'enquête sociale quand elle est répondue)
+  const [prenomPrincipal, setPrenomPrincipal] = useState(() => identiteDeLaFiche(membership.nom).prenom ?? "");
+  const [nomPrincipal, setNomPrincipal] = useState(() => identiteDeLaFiche(membership.nom).nom ?? "");
   // adhérents supplémentaires (indivision, SCI…) et, hors couple, fiche de signature de l'adhérent 2
   const [cosignataires, setCosignataires] = useState<CosignataireDeclare[]>([]);
   const [ficheAdherent2, setFicheAdherent2] = useState<CosignataireDeclare>(emptyCosignataire);
@@ -491,6 +496,9 @@ export function Adhesion({
   // qu'on ne l'a pas modifiée à la main
   const [situation2Libre, setSituation2Libre] = useState(false);
   const [adresseProposee, setAdresseProposee] = useState<SourceAdresse | null>(null);
+  // nom et prénom, lieu de signature repris de l'enquête (ou de l'adresse importée pour le lieu)
+  const [identiteReprise, setIdentiteReprise] = useState(false);
+  const [lieuRepris, setLieuRepris] = useState<SourceAdresse | null>(null);
   // champ où le téléphone de l'enquête a été repris (portable, ou domicile s'il s'agit d'un fixe)
   const [telephoneRepris, setTelephoneRepris] = useState<"portable" | "domicile" | null>(null);
   const [coordonneesTraitees, setCoordonneesTraitees] = useState(false);
@@ -541,9 +549,31 @@ export function Adhesion({
     setCoordonneesTraitees(true);
     const f = adhesion?.form as Partial<AdhesionForm> | null;
     if (connues.adresse && !f?.adresse?.trim() && !f?.cp?.trim() && !f?.ville?.trim()) {
-      const proposee = decouperAdressePostale(connues.adresse.texte);
-      setForm((prev) => (prev.adresse.trim() || prev.cp.trim() || prev.ville.trim() ? prev : { ...prev, ...proposee }));
+      const { adresse, cp, ville } = connues.adresse;
+      setForm((prev) => (prev.adresse.trim() || prev.cp.trim() || prev.ville.trim() ? prev : { ...prev, adresse, cp, ville }));
       setAdresseProposee(connues.adresse.source);
+    }
+    // Lieu de signature : la ville de l'adresse postale (enquête, à défaut import) plutôt que celle
+    // de la copropriété, tant qu'il n'a pas été changé (idée de A CHELGHAM du 11/10/2026)
+    const lieu = lieuSignaturePropose(f?.lieuSignature, copro.city, connues.adresse?.ville);
+    if (lieu && connues.adresse) {
+      setForm((prev) => (lieuParDefaut(prev.lieuSignature, copro.city) ? { ...prev, lieuSignature: lieu } : prev));
+      setLieuRepris(connues.adresse.source);
+    }
+    // Nom et prénom : ceux de l'enquête sociale l'emportent sur le libellé de la fiche, jamais sur ce
+    // que le copropriétaire a saisi (retours de A CHELGHAM du 11/10/2026)
+    const fiche = identiteDeLaFiche(membership.nom);
+    const nomPrenomFiche = nomPrenomDeLaFiche(membership.nom).trim();
+    const { principal, adherent1 } = identiteProposee(membership.nom, f?.adherent1?.nomPrenom, connues.identite);
+    if (principal) {
+      setPrenomPrincipal((cur) => (cur.trim() === (fiche.prenom ?? "") ? principal.prenom : cur));
+      setNomPrincipal((cur) => (cur.trim() === (fiche.nom ?? "") ? principal.nom : cur));
+    }
+    if (adherent1) {
+      setForm((prev) =>
+        prev.adherent1.nomPrenom.trim() === nomPrenomFiche ? { ...prev, adherent1: { ...prev.adherent1, nomPrenom: adherent1 } } : prev,
+      );
+      setIdentiteReprise(true);
     }
     if (connues.telephone && !f?.portable?.trim() && !f?.telDomicile?.trim()) {
       const champ = classerTelephone(connues.telephone) === "fixe" ? "domicile" : "portable";
@@ -554,7 +584,7 @@ export function Adhesion({
       );
       setTelephoneRepris(champ);
     }
-  }, [isLoading, coordonneesTraitees, connues, adhesion]);
+  }, [isLoading, coordonneesTraitees, connues, adhesion, copro.city, membership.nom]);
 
   const cle = readParams(scenario.params, bareme).cle;
   const lotsHab = useMemo(() => {
@@ -1647,7 +1677,7 @@ export function Adhesion({
         </p>
 
         <div className="form-grid">
-          <AdherentFields a={form.adherent1} onChange={changerAdherent1} titre="Adhérent 1" />
+          <AdherentFields a={form.adherent1} onChange={changerAdherent1} titre="Adhérent 1" repris={identiteReprise} />
 
           {form.adherent2 ? (
             <>
@@ -1735,12 +1765,18 @@ export function Adhesion({
 
           <Fld label="Fait à (lieu de signature) *">
             <input value={form.lieuSignature} onChange={(e) => setForm({ ...form, lieuSignature: e.target.value })} />
+            {lieuRepris && (
+              <span className="hint">
+                Ville de votre adresse postale{lieuRepris === "enquete" ? " donnée dans le questionnaire" : ""} : modifiez-la si besoin.
+              </span>
+            )}
           </Fld>
 
           {/* ---------- signataires ---------- */}
           <div className="se-eyebrow" style={{ gridColumn: "1 / -1", marginTop: 6 }}>Signataire principal (vous)</div>
           <Fld label="Prénom *">
             <input value={prenomPrincipal} onChange={(e) => setPrenomPrincipal(e.target.value)} />
+            {identiteReprise && <span className="hint">Nom et prénom repris de votre réponse au questionnaire.</span>}
           </Fld>
           <Fld label="Nom *">
             <input value={nomPrincipal} onChange={(e) => setNomPrincipal(e.target.value)} />

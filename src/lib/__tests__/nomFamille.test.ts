@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleNomFamille, conventionNoms, decouperNomPrenom, nomPrenomEnquete, trierParNomFamille } from "../nomFamille";
+import { cleNomFamille, conventionNoms, decouperNomPrenom, identiteEnquete, nomPrenomEnquete, trierParNomFamille } from "../nomFamille";
 
 describe("cleNomFamille", () => {
   it("met devant le nom en capitales d'un libellé « Prénom NOM »", () => {
@@ -110,6 +110,12 @@ describe("nomPrenomEnquete : nom et prénom séparés dans l'enquête sociale", 
     expect(nomPrenomEnquete({}, "SCHNEIDER Delphine")).toEqual({ nom: "SCHNEIDER", prenom: "Delphine" });
     expect(nomPrenomEnquete({}, "AVENEL")).toEqual({ nom: "AVENEL" });
   });
+  it("une initiale n'est pas un prénom (« A CHELGHAM », 11/10/2026)", () => {
+    expect(nomPrenomEnquete({}, "A CHELGHAM")).toEqual({ nom: "CHELGHAM" });
+    expect(nomPrenomEnquete({}, "J.-P. MARTIN")).toEqual({ nom: "MARTIN" });
+    expect(nomPrenomEnquete({ nom: "A. CHELGHAM" }, "")).toEqual({ nom: "A. CHELGHAM" });
+    expect(nomPrenomEnquete({}, "Al CHELGHAM")).toEqual({ nom: "CHELGHAM", prenom: "Al" });
+  });
   it("ne propose rien pour un couple, une indivision ou une société", () => {
     expect(nomPrenomEnquete({}, "M. et Mme DURAND")).toEqual({});
     expect(nomPrenomEnquete({}, "SCI DU PLATEAU DE HAYE")).toEqual({});
@@ -125,5 +131,19 @@ describe("nomPrenomEnquete : nom et prénom séparés dans l'enquête sociale", 
   });
   it("ignore les valeurs qui ne sont pas du texte", () => {
     expect(nomPrenomEnquete({ nom: 12, prenom: undefined }, "Pierre MAXTAFF")).toEqual({ nom: "MAXTAFF", prenom: "Pierre" });
+  });
+});
+
+describe("identiteEnquete : nom et prénom de l'enquête pour le dossier d'adhésion", () => {
+  it("lit les réponses rangées sous « copro »", () => {
+    expect(identiteEnquete({ copro: { nom: "CHELGHAM", prenom: "Amir" }, lots: {} })).toEqual({ nom: "CHELGHAM", prenom: "Amir" });
+  });
+  it("sépare un ancien nom complet", () => {
+    expect(identiteEnquete({ copro: { nom: "Pierre MAXTAFF" } })).toEqual({ nom: "MAXTAFF", prenom: "Pierre" });
+  });
+  it("rien sans réponse (pas de repli sur la fiche)", () => {
+    expect(identiteEnquete({ copro: {} })).toEqual({});
+    expect(identiteEnquete(null)).toEqual({});
+    expect(identiteEnquete({ nom: "CHELGHAM", prenom: "Amir" })).toEqual({});
   });
 });

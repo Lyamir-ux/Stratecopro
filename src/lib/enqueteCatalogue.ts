@@ -47,6 +47,8 @@ export interface CatalogueQuestion {
   facultatif?: boolean;
   /** Activée par défaut dans une nouvelle enquête. */
   defaultOn: boolean;
+  /** Exemple affiché dans le champ vide (questions à saisie libre). */
+  placeholder?: string;
 }
 
 export const SECTIONS: { id: SectionId; label: string; desc: string; scope: Scope }[] = [
@@ -108,7 +110,11 @@ export const CATALOGUE: CatalogueQuestion[] = [
   { id: "nom", section: "identite", tag: "Nom", q: "Quel est votre nom de famille ?", type: "texte", locked: true, defaultOn: true },
   { id: "prenom", section: "identite", tag: "Prénom", q: "Quel est votre prénom ?", type: "texte", locked: true, defaultOn: true },
   { id: "telephone", section: "identite", tag: "Numéro de téléphone", q: "Quel est votre numéro de téléphone ?", type: "tel", locked: true, defaultOn: true },
-  { id: "adresse", section: "identite", tag: "Adresse postale", q: "À quelle adresse postale êtes-vous joignable ?", type: "adresse", aide: "Adresse de contact, qui peut différer de celle du lot (propriétaires bailleurs).", locked: true, defaultOn: true },
+  { id: "adresse", section: "identite", tag: "Adresse postale", q: "À quelle adresse postale êtes-vous joignable ?", type: "adresse", placeholder: "N°, rue", aide: "Adresse de contact, qui peut différer de celle du lot (propriétaires bailleurs).", locked: true, defaultOn: true },
+  // code postal et ville en questions à part (retour de A CHELGHAM du 11/10/2026) : la ville sert
+  // de lieu de signature du dossier d'adhésion au prêt collectif
+  { id: "code-postal", section: "identite", tag: "Code postal", q: "Code postal", type: "texte", placeholder: "Ex. : 68000", locked: true, defaultOn: true },
+  { id: "ville", section: "identite", tag: "Ville", q: "Ville", type: "texte", placeholder: "Ex. : Colmar", locked: true, defaultOn: true },
   { id: "email", section: "identite", tag: "Email", q: "Quelle est votre adresse email ?", type: "email", locked: true, defaultOn: true },
   { id: "type-coproprietaire", section: "identite", tag: "Type de copropriétaire", q: "Quel type de copropriétaire êtes-vous ?", type: "choix", options: TYPES_COPRO, locked: true, defaultOn: true },
   { id: "nb-indivisaires", section: "identite", tag: "Nombre d'indivisaires", q: "Combien y a-t-il d'indivisaires ?", type: "nombre", cond: [{ qid: "type-coproprietaire", vals: ["Indivision"] }], locked: true, defaultOn: true },

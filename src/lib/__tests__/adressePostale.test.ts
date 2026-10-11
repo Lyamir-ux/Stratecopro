@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { adresseConnue, decouperAdressePostale, reponseIdentiteEnquete } from "../adressePostale";
+import {
+  adresseConnue,
+  adresseDeLEnquete,
+  adresseEnqueteSeparee,
+  decouperAdressePostale,
+  reponseIdentiteEnquete,
+} from "../adressePostale";
 
 describe("decouperAdressePostale", () => {
   it("découpe une adresse d'import « rue, code postal ville »", () => {
@@ -51,23 +57,80 @@ describe("decouperAdressePostale", () => {
 
 describe("adresseConnue", () => {
   it("la réponse de l'enquête l'emporte sur l'import", () => {
-    expect(adresseConnue("3 rue A, 10000 Troyes", "9 rue Fabert, 57000 Metz")).toEqual({
-      texte: "3 rue A, 10000 Troyes",
+    expect(adresseConnue({ adresse: "3 rue A", cp: "10000", ville: "Troyes" }, "9 rue Fabert, 57000 Metz")).toEqual({
+      adresse: "3 rue A",
+      cp: "10000",
+      ville: "Troyes",
       source: "enquete",
     });
   });
 
-  it("à défaut, l'adresse de l'import", () => {
-    expect(adresseConnue(undefined, "9 rue Fabert, 57000 Metz")).toEqual({
-      texte: "9 rue Fabert, 57000 Metz",
+  it("à défaut, l'adresse de l'import, découpée", () => {
+    expect(adresseConnue(null, "9 rue Fabert, 57000 Metz")).toEqual({
+      adresse: "9 rue Fabert",
+      cp: "57000",
+      ville: "Metz",
       source: "import",
     });
-    expect(adresseConnue("  ", "9 rue Fabert, 57000 Metz")?.source).toBe("import");
   });
 
   it("rien de connu", () => {
-    expect(adresseConnue(undefined, null)).toBeNull();
-    expect(adresseConnue(42, "")).toBeNull();
+    expect(adresseConnue(null, null)).toBeNull();
+    expect(adresseConnue(null, "  ")).toBeNull();
+  });
+});
+
+describe("adresseDeLEnquete : rue, code postal et ville (11/10/2026)", () => {
+  it("lit les trois questions", () => {
+    const reponses = { copro: { adresse: "8 allée de la Houblonnière", "code-postal": "68000", ville: "Colmar" } };
+    expect(adresseDeLEnquete(reponses)).toEqual({ adresse: "8 allée de la Houblonnière", cp: "68000", ville: "Colmar" });
+  });
+
+  it("découpe une ancienne réponse en un seul champ", () => {
+    expect(adresseDeLEnquete({ copro: { adresse: "3 rue A, 10000 Troyes" } })).toEqual({
+      adresse: "3 rue A",
+      cp: "10000",
+      ville: "Troyes",
+    });
+  });
+
+  it("les questions code postal et ville l'emportent sur ce que contient la rue", () => {
+    const reponses = { copro: { adresse: "3 rue A, 10000 Troyes", "code-postal": "10120", ville: "Saint-André-les-Vergers" } };
+    expect(adresseDeLEnquete(reponses)).toEqual({ adresse: "3 rue A", cp: "10120", ville: "Saint-André-les-Vergers" });
+  });
+
+  it("rue sans ville : ville vide", () => {
+    expect(adresseDeLEnquete({ copro: { adresse: "8 allée de la Houblonnière" } })).toEqual({
+      adresse: "8 allée de la Houblonnière",
+      cp: "",
+      ville: "",
+    });
+  });
+
+  it("aucune réponse d'adresse", () => {
+    expect(adresseDeLEnquete({ copro: { telephone: "0612345678" } })).toBeNull();
+    expect(adresseDeLEnquete(null)).toBeNull();
+  });
+});
+
+describe("adresseEnqueteSeparee : ancienne réponse rangée dans les trois questions", () => {
+  it("découpe une adresse complète", () => {
+    expect(adresseEnqueteSeparee({ adresse: "9 rue Fabert, 57000 Metz" })).toEqual({
+      adresse: "9 rue Fabert",
+      "code-postal": "57000",
+      ville: "Metz",
+    });
+  });
+
+  it("ne touche à rien si le code postal ou la ville est déjà répondu", () => {
+    expect(adresseEnqueteSeparee({ adresse: "9 rue Fabert, 57000 Metz", ville: "Metz" })).toEqual({});
+    expect(adresseEnqueteSeparee({ adresse: "9 rue Fabert, 57000 Metz", "code-postal": "57000" })).toEqual({});
+  });
+
+  it("ne découpe pas une adresse incomplète", () => {
+    expect(adresseEnqueteSeparee({ adresse: "8 allée de la Houblonnière" })).toEqual({});
+    expect(adresseEnqueteSeparee({ adresse: "57000 Metz, 9 rue Fabert" })).toEqual({});
+    expect(adresseEnqueteSeparee({})).toEqual({});
   });
 });
 
