@@ -16,18 +16,11 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Enums, Tables } from "@/lib/database.types";
-import {
-  computePlanDefinitif,
-  readPlanDefinitif,
-  repartirPfDepuisLots,
-  round2,
-  type Bareme,
-  type Profil,
-} from "@/lib/finance";
+import { repartirPfs, round2, type Bareme, type Profil } from "@/lib/finance";
 import { useDonnees, type DonneesCopro, type LotFull } from "./donnees";
 import { useEnquete, useReponses, type Reponse } from "./enquete";
 import { readParams, useBareme, useChoixFinancementScenario, usePlansIndividuels, useScenarios } from "./scenarios";
-import { usePlansDefinitifs, type PlanDefinitif } from "./planDefinitif";
+import { pfARepartir, plansValides, usePlansDefinitifs, type PlanDefinitif } from "./planDefinitif";
 import { useAdhesions, useFinancementConfigAmo, type AdhesionAvecNom } from "./financement";
 import { useBulletinsCopro, type BulletinAvecSignataires } from "./signature";
 import type { CoproWithStats } from "./copros";
@@ -142,6 +135,8 @@ export interface DossiersCopro {
   /** Scénario partagé au portail (ou importé) qui porte les plans individuels. */
   scenario: Tables<"scenarios_financiers"> | null;
   planValide: PlanDefinitif | null;
+  /** Tous les PF validés (un par bâtiment, ou le seul) - les plans individuels les additionnent. */
+  plansValides: PlanDefinitif[];
   /** Codes des bâtiments du dossier, dans l'ordre. */
   batiments: string[];
   cleRef: string | null;
@@ -173,6 +168,8 @@ export function assemblerDossiers(input: {
   plansIndiv: (Tables<"plans_individuels"> & { coproprietaires?: { nom: string } | null })[];
   choix: ChoixRow[];
   planValide: PlanDefinitif | null;
+  /** PF validés par bâtiment : prioritaires sur `planValide`, additionnés par copropriétaire. */
+  plansValides?: PlanDefinitif[];
   adhesions: AdhesionAvecNom[];
   bulletins: BulletinAvecSignataires[];
   pieces: PieceJustificative[];
@@ -203,22 +200,25 @@ export function assemblerDossiers(input: {
     bulletinsById.set(b.coproprietaire_id, [...(bulletinsById.get(b.coproprietaire_id) ?? []), b]);
   }
 
-  // Plans individuels du PF définitif validé (même moteur que l'onglet Financement).
+  // Plans individuels du PF définitif validé (même moteur que l'onglet Financement) ;
+  // un PF par bâtiment : chacun réparti sur son périmètre, parts additionnées.
   let pfPlans: Map<string, { quotePartAvant: number; aidesEtFonds: number; primeCee: number; reste: number }> | null = null;
   let cleRef: string | null = null;
-  if (input.planValide?.data) {
-    const pdata = readPlanDefinitif(input.planValide.data);
-    const rep = repartirPfDepuisLots(pdata, computePlanDefinitif(pdata), donnees.lots, donnees.cles);
+  const valides = (input.plansValides ?? (input.planValide ? [input.planValide] : [])).filter((p) => p.data);
+  if (valides.length) {
+    const rep = repartirPfs(valides.map(pfARepartir), donnees.lots, donnees.cles);
     cleRef = rep.cleRef;
-    if (rep.manquants.length === 0) pfPlans = new Map(rep.plans.map((p) => [p.coproprietaireId, p]));
+    if (rep.complet) pfPlans = new Map(rep.plans.map((p) => [p.coproprietaireId, p]));
   }
   if (!cleRef) cleRef = donnees.cles.find((k) => k.is_default)?.code ?? donnees.cles[0]?.code ?? null;
   const params = scenario && bareme ? readParams(scenario.params, bareme) : null;
   const partage = scenario?.statut === "partage";
   const publieLe = partage ? scenario!.updated_at : null;
   // Le PF validé n'est « publié » que si le scénario pont partagé en est issu
-  // (un PF revalidé après coup attend un nouveau partage).
-  const partagePf = partage && !!input.planValide && scenario!.plan_definitif_id === input.planValide.id;
+  // (un PF revalidé après coup attend un nouveau partage) - tous les PF par bâtiment.
+  const idsPont = scenario?.pf_ids?.length ? scenario.pf_ids : scenario?.plan_definitif_id ? [scenario.plan_definitif_id] : [];
+  const partagePf =
+    partage && valides.length > 0 && idsPont.length === valides.length && valides.every((p) => idsPont.includes(p.id));
 
   const lotsByCp = new Map<string, LotFull[]>();
   for (const l of donnees.lots) {
@@ -470,13 +470,8 @@ export function useDossiersCoproprietaires(c: CoproWithStats): DossiersCopro {
   );
   const { data: plansIndiv } = usePlansIndividuels(scenario?.id);
   const { data: choix } = useChoixFinancementScenario(scenario?.id);
-  const planValide = useMemo(
-    () =>
-      (pfPlans ?? [])
-        .filter((p) => p.statut === "valide")
-        .sort((a, b) => (b.updated_at > a.updated_at ? 1 : -1))[0] ?? null,
-    [pfPlans]
-  );
+  const valides = useMemo(() => plansValides(pfPlans), [pfPlans]);
+  const planValide = valides[0] ?? null;
 
   const chargement = !donnees || !enquete || !scenarios || !pfPlans || !adhesions || !bulletins || !pieces || !bareme;
 
@@ -489,6 +484,7 @@ export function useDossiersCoproprietaires(c: CoproWithStats): DossiersCopro {
       plansIndiv: (plansIndiv ?? []) as DossiersCoproInput["plansIndiv"],
       choix: (choix ?? []) as ChoixRow[],
       planValide,
+      plansValides: valides,
       adhesions: adhesions ?? [],
       bulletins: bulletins ?? [],
       pieces: pieces ?? [],
@@ -499,12 +495,13 @@ export function useDossiersCoproprietaires(c: CoproWithStats): DossiersCopro {
         ...donnees.batiments.filter((b) => b.adresse).map((b) => ({ adresse: b.adresse, cp: c.code_postal })),
       ],
     });
-  }, [donnees, reponses, scenario, plansIndiv, choix, planValide, adhesions, bulletins, pieces, bareme, finConfig, c.adresse, c.code_postal]);
+  }, [donnees, reponses, scenario, plansIndiv, choix, planValide, valides, adhesions, bulletins, pieces, bareme, finConfig, c.adresse, c.code_postal]);
 
   return {
     dossiers: assemble.dossiers,
     scenario,
     planValide,
+    plansValides: valides,
     batiments: (donnees?.batiments ?? []).map((b) => b.code),
     cleRef: assemble.cleRef,
     bareme: bareme ?? null,

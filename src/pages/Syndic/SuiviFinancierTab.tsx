@@ -9,7 +9,8 @@ import { Fragment, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { fmtDate, fmtEuroFull } from "@/lib/format";
 import { telechargerCsv } from "@/lib/csv";
-import { usePlansDefinitifs } from "@/api/planDefinitif";
+import { libellePerimetre, pfARepartir, plansValides, usePlansDefinitifs } from "@/api/planDefinitif";
+import { useDonnees } from "@/api/donnees";
 import {
   AIDES_SUIVI,
   NB_SITUATIONS,
@@ -20,11 +21,23 @@ import {
   type AideSuiviId,
   type PaiementsSuivi,
 } from "@/api/suiviFinancier";
-import { computePlanDefinitif, readPlanDefinitif, regrouperAnnexes } from "@/lib/finance";
+import { couvreToutLaCopro, regrouperAnnexes, type PerimetrePf } from "@/lib/finance";
 import type { SyndicCopro } from "@/api/syndic";
 
+/**
+ * Préfixe des clés de paiement d'un PF de bâtiment (plans par bâtiment du
+ * 11/10/2026) : les numéros de lot se répètent d'un bâtiment à l'autre. Un PF
+ * de toute la copropriété garde les clés historiques, sans préfixe ; le
+ * préfixe suit le périmètre, pas le plan, pour qu'une nouvelle version du PF
+ * d'un bâtiment retrouve les paiements déjà saisis.
+ */
+function prefixeSuivi(perimetre: PerimetrePf): string {
+  if (couvreToutLaCopro(perimetre)) return "";
+  return `bat:${[...perimetre!].sort().map((id) => id.slice(0, 8)).join("+")}|`;
+}
+
 interface LigneSuivi {
-  /** « lot:<numero> » / « moe:<index> » / « mission:<id> » - clé des paiements. */
+  /** « lot:<numero> » / « moe:<index> » / « mission:<id> », préfixés par bâtiment - clé des paiements. */
   key: string;
   libelle: string;
   entreprise: string | null;
@@ -39,16 +52,16 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
   // Le PF définitif validé est partagé avec le syndic (RLS) - même source que
   // l'onglet Financement.
   const { data: pfPlans, isLoading } = usePlansDefinitifs(c.id);
-  const planValide = (pfPlans ?? [])
-    .filter((p) => p.statut === "valide")
-    .sort((a, b) => (b.updated_at > a.updated_at ? 1 : -1))[0];
+  const { data: donnees } = useDonnees(c.id);
+  // Un PF par bâtiment (11/10/2026) : toutes leurs lignes, bâtiment par bâtiment
+  const valides = useMemo(() => plansValides(pfPlans), [pfPlans]);
+  const planValide = valides[0];
   // Recalcul depuis les données (moteur pur) plutôt que l'instantané `resultat` :
   // les champs récents (entreprise des lignes MOE) sont ainsi disponibles même
   // si le plan n'a pas été réenregistré depuis leur ajout.
-  const pv = useMemo(
-    () => (planValide ? computePlanDefinitif(readPlanDefinitif(planValide.data)) : null),
-    [planValide]
-  );
+  const pfs = useMemo(() => valides.map(pfARepartir), [valides]);
+  const pv = pfs[0]?.resultat ?? null;
+  const parBatiment = pfs.length > 1 || pfs.some((p) => !couvreToutLaCopro(p.batimentIds));
 
   // Montants notifiés par dispositif : aides du PF définitif validé regroupées
   // par groupe (ANAH = MaPrimeRénov', EMS, Climaxion) ; la prime CEE est le
@@ -56,17 +69,18 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
   const aidesNotifiees = useMemo(() => {
     const m = new Map<AideSuiviId, number>();
     for (const a of AIDES_SUIVI) {
-      if (!pv) {
-        m.set(a.id, 0);
-        continue;
-      }
       m.set(
         a.id,
-        a.groupe === "CEE" ? pv.primeCee : pv.aides.reduce((s, x) => s + (x.groupe === a.groupe ? (x.montant ?? 0) : 0), 0)
+        pfs.reduce(
+          (total, { resultat: r }) =>
+            total +
+            (a.groupe === "CEE" ? r.primeCee : r.aides.reduce((s, x) => s + (x.groupe === a.groupe ? (x.montant ?? 0) : 0), 0)),
+          0
+        )
       );
     }
     return m;
-  }, [pv]);
+  }, [pfs]);
 
   const { data: serveur, isLoading: suiviLoading } = useSuiviFinancier(c.id);
   const save = useSaveSuiviFinancier(c.id);
@@ -75,27 +89,35 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
   const paiements = brouillon ?? serveur ?? {};
   const dirty = brouillon != null && JSON.stringify(brouillon) !== JSON.stringify(serveur ?? {});
 
-  const groupes = useMemo(() => {
-    if (!pv) return [];
-    const travaux: LigneSuivi[] = pv.lots.map((l) => ({
-      key: `lot:${l.numero}`,
-      libelle: `Lot ${String(l.numero).padStart(2, "0")} - ${l.titre}`,
-      entreprise: l.entreprise ?? null,
-      vote: l.totalTtc,
-    }));
-    // Une ligne par mission (montants additionnés), puis les frais restants
-    // ligne à ligne dans l'ordre du plan (module partagé avec l'onglet Financement).
-    const annexes: LigneSuivi[] = regrouperAnnexes(pv.moe).map((l) => ({
-      key: l.key,
-      libelle: l.libelle,
-      entreprise: l.entreprise,
-      vote: l.montantTtc,
-    }));
-    return [
-      { titre: "Travaux - marchés des entreprises", lignes: travaux },
-      { titre: "Maîtrise d'œuvre & frais annexes", lignes: annexes },
-    ].filter((g) => g.lignes.length > 0);
-  }, [pv]);
+  const groupes = useMemo(
+    () =>
+      pfs.flatMap((pf) => {
+        const r = pf.resultat;
+        const prefixe = prefixeSuivi(pf.batimentIds);
+        const suffixe = parBatiment
+          ? ` - ${libellePerimetre(pf.batimentIds, donnees?.batiments ?? [], c.denomination_batiments)}`
+          : "";
+        const travaux: LigneSuivi[] = r.lots.map((l) => ({
+          key: `${prefixe}lot:${l.numero}`,
+          libelle: `Lot ${String(l.numero).padStart(2, "0")} - ${l.titre}`,
+          entreprise: l.entreprise ?? null,
+          vote: l.totalTtc,
+        }));
+        // Une ligne par mission (montants additionnés), puis les frais restants
+        // ligne à ligne dans l'ordre du plan (module partagé avec l'onglet Financement).
+        const annexes: LigneSuivi[] = regrouperAnnexes(r.moe).map((l) => ({
+          key: `${prefixe}${l.key}`,
+          libelle: l.libelle,
+          entreprise: l.entreprise,
+          vote: l.montantTtc,
+        }));
+        return [
+          { titre: `Travaux - marchés des entreprises${suffixe}`, lignes: travaux },
+          { titre: `Maîtrise d'œuvre & frais annexes${suffixe}`, lignes: annexes },
+        ].filter((g) => g.lignes.length > 0);
+      }),
+    [pfs, parBatiment, donnees?.batiments, c.denomination_batiments]
+  );
 
   if (isLoading || suiviLoading) {
     return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
@@ -194,7 +216,7 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
       <div className="panel">
         <div className="p-head">
           <Icon name="euro" size={18} />
-          <h3>Suivi financier - {planValide.nom}</h3>
+          <h3>Suivi financier - {pfs.length > 1 ? `${pfs.length} plans par bâtiment` : planValide.nom}</h3>
           <span style={{ flex: 1 }}></span>
           {save.isError && (
             <span style={{ fontSize: 12.5, color: "var(--color-error-700)" }}>
@@ -359,7 +381,7 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
           </div>
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
             <Icon name="help" size={13} /> Les montants votés TTC reprennent le plan de financement définitif
-            validé le {fmtDate(planValide.updated_at)}. Saisissez le montant réglé à chaque situation de
+            validé le {fmtDate(valides.reduce((d, p) => (p.updated_at > d ? p.updated_at : d), planValide.updated_at))}. Saisissez le montant réglé à chaque situation de
             travaux (1 à 10) - total payé et restant se calculent automatiquement, puis « Enregistrer ». Les montants
             d'aides notifiés (MPR, Climaxion, EMS, CEE) reprennent le plan de financement définitif validé ;
             saisissez le montant payé à réception de chaque versement.

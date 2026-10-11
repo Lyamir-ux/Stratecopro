@@ -16,7 +16,7 @@ import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { QuestionnaireEcoPtzDialog } from "@/components/EcoPtzQuestionnaire";
 import { useCopro } from "@/api/copros";
 import { useDonnees } from "@/api/donnees";
-import { usePlansDefinitifs } from "@/api/planDefinitif";
+import { plansValides, usePlansDefinitifs } from "@/api/planDefinitif";
 import { useChoixFinancementScenario, useScenarios } from "@/api/scenarios";
 import {
   emailValide,
@@ -34,9 +34,11 @@ import {
   type ResultatEnvoiEcoPtz,
 } from "@/api/ecoPtzIndividuel";
 import { readPlanDefinitif } from "@/lib/finance/planDefinitif";
+import { lotsDuPerimetre } from "@/lib/finance/repartitionPf";
 import {
   cleReference,
   fmtMontantCerfa,
+  fusionnerEcoPtzParBatiment,
   logementsEcoPtz,
   postesEligiblesEcoPtz,
   type LogementEcoPtz,
@@ -75,14 +77,13 @@ export function useEcoPtzIndividuel(coproId: string | undefined) {
   const { data: dossier } = useDossierEcoPtz(coproId);
   const { data: envois } = useEnvoisEcoPtz(coproId);
 
-  const planValide = (pfPlans ?? [])
-    .filter((p) => p.statut === "valide")
-    .sort((a, b) => (b.updated_at > a.updated_at ? 1 : -1))[0];
+  // Un PF par bâtiment (11/10/2026) : postes et quotes-parts de chaque PF,
+  // calculés sur les lots de son périmètre, puis regroupés
+  const valides = useMemo(() => plansValides(pfPlans), [pfPlans]);
+  const planValide = valides[0];
 
   const calc = useMemo(() => {
-    if (!planValide || !donnees) return null;
-    const data = readPlanDefinitif(planValide.data);
-    const postes = postesEligiblesEcoPtz(data, donnees.cles);
+    if (!valides.length || !donnees) return null;
     const demandes = (choix ?? [])
       .filter((x) => x.type === "individuel")
       .map((x) => ({
@@ -90,23 +91,32 @@ export function useEcoPtzIndividuel(coproId: string | undefined) {
         nom: (x as { coproprietaires?: { nom: string } | null }).coproprietaires?.nom ?? "-",
         lotIds: x.lot_ids ?? [],
       }));
-    const logements = logementsEcoPtz({
-      postes,
-      lots: donnees.lots.map((l) => ({
-        id: l.id,
-        num: l.num,
-        usage: l.usage,
-        coproprietaire_id: l.coproprietaire_id,
-        rattache_a: l.rattache_a,
-        tantiemes: l.tantiemes,
-        batiment: l.batiment,
-      })),
-      demandes,
+    const parPf = valides.map((p) => {
+      const postes = postesEligiblesEcoPtz(readPlanDefinitif(p.data), donnees.cles);
+      // Lots hors périmètre gardés sans tantièmes : le logement et ses annexes
+      // se retrouvent, mais seuls les lots du bâtiment portent une quote-part
+      // et entrent dans le total de la clé.
+      const dedans = new Set(lotsDuPerimetre(donnees.lots, p.batiment_ids).map((l) => l.id));
+      const logements = logementsEcoPtz({
+        postes,
+        lots: donnees.lots.map((l) => ({
+          id: l.id,
+          num: l.num,
+          usage: l.usage,
+          coproprietaire_id: l.coproprietaire_id,
+          rattache_a: l.rattache_a,
+          tantiemes: dedans.has(l.id) ? l.tantiemes : {},
+          batiment: l.batiment,
+        })),
+        demandes,
+      });
+      return { postes, logements };
     });
-    return { postes, logements, cleRef: cleReference(donnees.cles) };
-  }, [planValide, donnees, choix]);
+    const { postes, logements, conflits } = fusionnerEcoPtzParBatiment(parPf);
+    return { postes, logements, conflits, cleRef: cleReference(donnees.cles) };
+  }, [valides, donnees, choix]);
 
-  return { c, planValide, chargePf, scenarioPartage: partage, dossier, envois: envois ?? [], calc };
+  return { c, planValide, plansValides: valides, chargePf, scenarioPartage: partage, dossier, envois: envois ?? [], calc };
 }
 
 /** État d'un logement dans les envois (le plus récent non annulé). */
@@ -187,6 +197,18 @@ export default function EcoPtzIndividuelPage() {
           </button>
         ) : null}
       </div>
+
+      {(calc?.conflits.length ?? 0) > 0 && (
+        <div className="cc-next">
+          <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
+          <span>
+            PF par bâtiment : le lot{calc!.conflits.length > 1 ? "s" : ""} n°{calc!.conflits.join(", ")} porte
+            {calc!.conflits.length > 1 ? "nt" : ""} des entreprises différentes d'un plan à l'autre, alors que le
+            dossier éco-PTZ ne garde qu'une entreprise par numéro de lot. Numérotez différemment ces lots dans l'un
+            des plans avant de préparer les CERFA.
+          </span>
+        </div>
+      )}
 
       {!planValide && (
         <div className="cc-next">

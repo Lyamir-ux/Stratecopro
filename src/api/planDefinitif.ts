@@ -4,14 +4,21 @@ import { supabase } from "@/lib/supabase";
 import type { Json, Tables, TablesUpdate } from "@/lib/database.types";
 import {
   computePlanDefinitif,
+  couvreToutLaCopro,
+  perimetresSeChevauchent,
   readPlanDefinitif,
+  repartitionParLot,
+  repartirPfs,
   round2,
+  syntheseEnergetiquePfs,
   type Bareme,
   type FinanceParams,
+  type LotPourRepartition,
+  type PfARepartir,
+  type PerimetrePf,
   type PlanDefinitifData,
-  type PlanDefinitifResult,
-  type PlanIndividuelPf,
 } from "@/lib/finance";
+import { libellesBatiments } from "@/lib/referentiels";
 import { makeDefaultParams } from "./scenarios";
 import { uploadFichierDirect } from "./fichiers";
 import { construireNomFichier } from "@/lib/nommage";
@@ -19,6 +26,49 @@ import { exportPlanDefinitif } from "@/lib/finance/exportPlanDefinitif";
 import { exportPlanEstimatif, libelleDepuisNom, nomScenario, type ScenarioEstimatif } from "@/lib/finance/planEstimatif";
 
 export type PlanDefinitif = Tables<"plans_definitifs">;
+
+/**
+ * PF définitifs validés de la copropriété, du plus ancien au plus récent : un
+ * seul pour toute la copropriété, ou un par bâtiment (périmètres disjoints,
+ * plans par bâtiment du 11/10/2026). Les scénarios estimatifs n'en font jamais partie.
+ */
+export function plansValides(plans: PlanDefinitif[] | null | undefined): PlanDefinitif[] {
+  return (plans ?? [])
+    .filter((p) => p.statut === "valide" && !estPlanEstimatif(p))
+    .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
+}
+
+/** PF prêt à répartir : recalculé depuis ses données (jamais l'instantané `resultat`). */
+export function pfARepartir(p: PlanDefinitif): PfARepartir {
+  const data = readPlanDefinitif(p.data);
+  return { id: p.id, nom: p.nom, data, resultat: computePlanDefinitif(data), batimentIds: p.batiment_ids };
+}
+
+/** « Toute la copropriété » ou « Bât. 01 + Bât. Commun » (dénomination du dossier). */
+export function libellePerimetre(
+  perimetre: PerimetrePf,
+  batiments: { id: string; code: string; position?: number | null }[],
+  denomination?: string | null
+): string {
+  if (couvreToutLaCopro(perimetre)) return "Toute la copropriété";
+  const court = libellesBatiments(denomination).court;
+  const ids = new Set(perimetre);
+  const connus = batiments
+    .filter((b) => ids.has(b.id))
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.code.localeCompare(b.code, "fr", { numeric: true }))
+    .map((b) => `${court} ${b.code}`);
+  const inconnus = perimetre!.filter((id) => !batiments.some((b) => b.id === id)).length;
+  return [...connus, ...(inconnus ? [`${inconnus} bâtiment${inconnus > 1 ? "s" : ""} supprimé${inconnus > 1 ? "s" : ""}`] : [])].join(" + ");
+}
+
+/** PF validés (autres que `planId`) dont le périmètre chevauche `perimetre` : ils repassent en brouillon à la validation. */
+export function plansValidesEnConflit(
+  plans: PlanDefinitif[] | null | undefined,
+  planId: string,
+  perimetre: PerimetrePf
+): PlanDefinitif[] {
+  return plansValides(plans).filter((p) => p.id !== planId && perimetresSeChevauchent(p.batiment_ids, perimetre));
+}
 
 const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -313,12 +363,40 @@ export function useArchiverPlanDefinitif(coproId: string) {
 export function useUpdatePlanDefinitif(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { id: string; data?: PlanDefinitifData; nom?: string; statut?: string }) => {
+    mutationFn: async (input: {
+      id: string;
+      data?: PlanDefinitifData;
+      nom?: string;
+      statut?: string;
+      /** Périmètre du PF (bâtiments couverts) ; null ou vide = toute la copropriété. */
+      batimentIds?: string[] | null;
+    }) => {
+      if (input.batimentIds !== undefined) {
+        // Un PF validé ne peut pas déborder sur le bâtiment d'un autre PF validé
+        // (les plans individuels compteraient deux fois les mêmes lots).
+        const { data: freres, error: errFreres } = await supabase
+          .from("plans_definitifs")
+          .select("*")
+          .eq("copro_id", coproId);
+        if (errFreres) throw errFreres;
+        const moi = (freres ?? []).find((p) => p.id === input.id);
+        if (moi?.statut === "valide") {
+          const conflits = plansValidesEnConflit(freres, input.id, input.batimentIds);
+          if (conflits.length)
+            throw new Error(
+              `Ce périmètre chevauche celui d'un autre PF validé (« ${conflits.map((p) => p.nom).join(" », « ")} »). ` +
+                "Retirez d'abord le bâtiment commun de l'autre plan, ou repassez l'un des deux en brouillon."
+            );
+        }
+      }
       const { error } = await supabase
         .from("plans_definitifs")
         .update({
           ...(input.nom !== undefined ? { nom: input.nom } : {}),
           ...(input.statut !== undefined ? { statut: input.statut } : {}),
+          ...(input.batimentIds !== undefined
+            ? { batiment_ids: input.batimentIds && input.batimentIds.length ? input.batimentIds : null }
+            : {}),
           ...(input.data !== undefined
             ? {
                 data: input.data as unknown as Json,
@@ -335,7 +413,9 @@ export function useUpdatePlanDefinitif(coproId: string) {
 
 /**
  * Valide (ou repasse en brouillon) un plan définitif. Un seul plan validé par
- * copropriété : valider un plan repasse les autres plans validés en brouillon.
+ * périmètre : valider un plan repasse en brouillon les plans validés dont le
+ * périmètre chevauche le sien (un PF de toute la copropriété chevauche tout ;
+ * des PF de bâtiments différents restent validés ensemble, 11/10/2026).
  * Le plan validé alimente automatiquement les panneaux de l'onglet Financement,
  * est partagé avec le syndic (RLS) et reporte gain et étiquettes sur le dossier
  * (tableau de bord, portefeuille).
@@ -345,13 +425,23 @@ export function useValiderPlanDefinitif(coproId: string) {
   return useMutation({
     mutationFn: async (input: { id: string; valider: boolean; coproNom?: string }) => {
       if (input.valider) {
-        const { error: errAutres } = await supabase
+        const { data: freres, error: errFreres } = await supabase
           .from("plans_definitifs")
-          .update({ statut: "brouillon" })
-          .eq("copro_id", coproId)
-          .eq("statut", "valide")
-          .neq("id", input.id);
-        if (errAutres) throw errAutres;
+          .select("*")
+          .eq("copro_id", coproId);
+        if (errFreres) throw errFreres;
+        const moi = (freres ?? []).find((p) => p.id === input.id);
+        const conflits = plansValidesEnConflit(freres, input.id, moi?.batiment_ids);
+        if (conflits.length) {
+          const { error: errAutres } = await supabase
+            .from("plans_definitifs")
+            .update({ statut: "brouillon" })
+            .in(
+              "id",
+              conflits.map((p) => p.id)
+            );
+          if (errAutres) throw errAutres;
+        }
       }
       const { error } = await supabase
         .from("plans_definitifs")
@@ -364,13 +454,12 @@ export function useValiderPlanDefinitif(coproId: string) {
         // remontent sur le dossier (cartes du tableau de bord, hero, exports).
         const { data: row, error: errRow } = await supabase
           .from("plans_definitifs")
-          .select("data, resultat, version, nom")
+          .select("data, version, nom, batiment_ids")
           .eq("id", input.id)
           .single();
         if (errRow) throw errRow;
         const pdata = readPlanDefinitif(row.data);
         const infos = pdata.infos;
-        const res = row.resultat as unknown as PlanDefinitifResult | null;
 
         // Archivage et versionnage automatiques de l'état validé (feedback
         // Théa 03/09/2026) : un export .xlsx daté par validation dans Fichiers.
@@ -382,6 +471,10 @@ export function useValiderPlanDefinitif(coproId: string) {
             data: pdata,
             version,
             etat: "validé",
+            // PF d'un bâtiment : son nom distingue l'archive de celle des autres bâtiments
+            ...(couvreToutLaCopro(row.batiment_ids)
+              ? {}
+              : { objet: `${/^PF\b/i.test(row.nom) ? row.nom : `PF définitif ${row.nom}`} v${version}` }),
           });
           await supabase
             .from("plans_definitifs")
@@ -390,16 +483,24 @@ export function useValiderPlanDefinitif(coproId: string) {
         } catch {
           /* l'archivage ne bloque pas la validation */
         }
-        const lireEtiquette = (s: string): string | null => {
-          const l = (s ?? "").trim().toUpperCase().slice(0, 1);
-          return l && "ABCDEFG".includes(l) ? l : null;
-        };
+        // Gain et étiquettes du dossier : ceux du PF validé, ou la synthèse de
+        // tous les PF validés quand il y en a un par bâtiment.
+        const { data: valides, error: errValides } = await supabase
+          .from("plans_definitifs")
+          .select("data")
+          .eq("copro_id", coproId)
+          .eq("statut", "valide");
+        if (errValides) throw errValides;
+        const synthese = syntheseEnergetiquePfs(
+          (valides ?? []).map((v) => {
+            const data = readPlanDefinitif(v.data);
+            return { data, resultat: computePlanDefinitif(data) };
+          })
+        );
         const patch: TablesUpdate<"coproprietes"> = {};
-        if (res?.performancePct) patch.gain_pct = Math.round(res.performancePct * 10) / 10;
-        const avant = lireEtiquette(infos.etiquetteInitiale);
-        const apres = lireEtiquette(infos.etiquetteProjet);
-        if (avant) patch.energy_before = avant;
-        if (apres) patch.energy_after = apres;
+        if (synthese.gainPct) patch.gain_pct = synthese.gainPct;
+        if (synthese.etiquetteAvant) patch.energy_before = synthese.etiquetteAvant;
+        if (synthese.etiquetteApres) patch.energy_after = synthese.etiquetteApres;
         if (Object.keys(patch).length) {
           const { error: errCopro } = await supabase.from("coproprietes").update(patch).eq("id", coproId);
           if (errCopro) throw errCopro;
@@ -429,132 +530,257 @@ export function useDeletePlanDefinitif(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      // Scénario pont qui cumule ce PF avec d'autres (plans par bâtiment) : il
+      // est réancré sur un autre PF, sinon la suppression en cascade emporterait
+      // le partage et les choix de financement des autres bâtiments.
+      const { data: ponts, error: errPonts } = await supabase
+        .from("scenarios_financiers")
+        .select("id, plan_definitif_id, pf_ids")
+        .eq("copro_id", coproId)
+        .contains("pf_ids", [id]);
+      if (errPonts) throw errPonts;
+      for (const s of ponts ?? []) {
+        const reste = s.pf_ids.filter((x) => x !== id);
+        if (!reste.length) continue;
+        const { error: errPont } = await supabase
+          .from("scenarios_financiers")
+          .update({ pf_ids: reste, ...(s.plan_definitif_id === id ? { plan_definitif_id: reste[0] } : {}) })
+          .eq("id", s.id);
+        if (errPont) throw errPont;
+      }
       const { error } = await supabase.from("plans_definitifs").delete().eq("id", id);
       if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidate(qc, coproId);
+      void qc.invalidateQueries({ queryKey: ["pf-partage"] });
+      void qc.invalidateQueries({ queryKey: ["scenarios", coproId] });
+    },
+  });
+}
+
+/**
+ * Duplique un PF définitif en brouillon (même contenu, sans périmètre) : point
+ * de départ du plan d'un autre bâtiment quand les programmes se ressemblent.
+ */
+export function useDupliquerPlanDefinitif(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (plan: PlanDefinitif) => {
+      const data = readPlanDefinitif(plan.data);
+      const { data: row, error } = await supabase
+        .from("plans_definitifs")
+        .insert({
+          copro_id: coproId,
+          nom: `${plan.nom} (copie)`,
+          data: data as unknown as Json,
+          resultat: computePlanDefinitif(data) as unknown as Json,
+          source_fichier: plan.source_fichier,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return row;
     },
     onSuccess: () => invalidate(qc, coproId),
   });
 }
 
 /**
- * Scénario « pont » créé par le partage du PF définitif au portail
- * copropriétaire (null si jamais partagé ; statut ≠ partage = partage retiré).
+ * Scénario « pont » qui publie les PF définitifs validés au portail
+ * copropriétaire, pour un ensemble de PF (null si jamais partagé ; statut ≠
+ * partage = partage retiré). Plans par bâtiment (11/10/2026) : un seul pont
+ * cumule tous les PF validés (pf_ids), plan_definitif_id en est l'ancre.
  */
-export function usePfPartage(planId: string | undefined) {
+export function usePontPf(coproId: string, planIds: string[]) {
+  const ids = [...planIds].sort();
   return useQuery({
-    queryKey: ["pf-partage", planId],
-    enabled: !!planId,
+    queryKey: ["pf-partage", coproId, ids.join(",")],
+    enabled: ids.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("scenarios_financiers")
-        .select("*")
-        .eq("plan_definitif_id", planId!)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
+      const ponts = await pontsDesPf(coproId, ids);
+      return ponts.find((s) => s.statut === "partage") ?? ponts[0] ?? null;
     },
   });
 }
 
+async function pontsDesPf(coproId: string, ids: string[]) {
+  const { data, error } = await supabase
+    .from("scenarios_financiers")
+    .select("*")
+    .eq("copro_id", coproId)
+    .or(`plan_definitif_id.in.(${ids.join(",")}),pf_ids.ov.{${ids.join(",")}}`)
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** Le pont partagé publie exactement ces PF (sinon un nouveau partage est attendu). */
+export function pontAJour(pont: { statut: string; pf_ids: string[] } | null | undefined, planIds: string[]): boolean {
+  if (!pont || pont.statut !== "partage") return false;
+  const a = new Set(pont.pf_ids);
+  return a.size === planIds.length && planIds.every((id) => a.has(id));
+}
+
+/** Part d'un lot dans le plan publié au portail (somme sur les PF qui le couvrent). */
+export interface PartLotPortail {
+  quotePart: number;
+  cee: number;
+  /** Aides collectives hors CEE et fonds travaux. */
+  subvColl: number;
+}
+
 /**
- * Partage (ou retire) le PF définitif validé aux copropriétaires. Le partage
- * matérialise les plans individuels du PF dans le circuit du portail : un
- * scénario financier verrouillé (statut partage, relié au plan par
- * plan_definitif_id) + une ligne plans_individuels par copropriétaire.
- * Tout le portail (accueil, quotes-parts, plan de la copro, choix de
- * financement) fonctionne alors sans autre branchement.
+ * Partage (ou retire) les PF définitifs validés aux copropriétaires. Le partage
+ * matérialise les plans individuels dans le circuit du portail : un scénario
+ * financier verrouillé (statut partage, relié aux PF par plan_definitif_id et
+ * pf_ids) + une ligne plans_individuels par copropriétaire. Tout le portail
+ * (accueil, quotes-parts, plan de la copro, choix de financement) fonctionne
+ * alors sans autre branchement.
+ * Plusieurs PF (un par bâtiment) : chacun est réparti entre les lots de son
+ * périmètre et le copropriétaire reçoit un seul plan cumulé (choix d'Amir du
+ * 11/10/2026), avec le détail lot par lot pour « Mes quotes-parts ».
  */
 export function usePartagerPfCopros(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
-      plan: PlanDefinitif;
-      pv: PlanDefinitifResult;
-      pvData: PlanDefinitifData;
-      plans: PlanIndividuelPf[];
-      /** Tantièmes par copropriétaire sur la clé de référence (mise à l'échelle par lot côté portail). */
-      tantiemesRef: Record<string, number>;
-      /** Code de la clé de référence (clé unique ou clé par défaut de la copro). */
-      cleRef: string;
-      /** Total de la clé de référence sur toute la copro (dénominateur des tantièmes). */
-      totalCle: number;
+      /** Tous les PF validés de la copropriété. */
+      pfs: PfARepartir[];
+      lots: (LotPourRepartition & { id: string; batiment_id: string | null })[];
+      cles: { code: string; is_default: boolean }[];
       bareme: Bareme;
       partager: boolean;
     }) => {
-      const { data: existant, error: errSel } = await supabase
-        .from("scenarios_financiers")
-        .select("id")
-        .eq("plan_definitif_id", input.plan.id)
-        .maybeSingle();
-      if (errSel) throw errSel;
+      const ids = input.pfs.map((p) => p.id);
+      if (!ids.length) return;
+      const ponts = await pontsDesPf(coproId, ids);
+      const existant = ponts.find((s) => s.statut === "partage") ?? ponts[0] ?? null;
+      const autresOuverts = ponts.filter((s) => s.statut === "partage" && s.id !== existant?.id);
 
       if (!input.partager) {
-        if (existant) {
-          const { error } = await supabase
-            .from("scenarios_financiers")
-            .update({ statut: "brouillon" })
-            .eq("id", existant.id);
+        const ouverts = ponts.filter((s) => s.statut === "partage").map((s) => s.id);
+        if (ouverts.length) {
+          const { error } = await supabase.from("scenarios_financiers").update({ statut: "brouillon" }).in("id", ouverts);
           if (error) throw error;
         }
         return;
       }
 
+      const rep = repartirPfs(input.pfs, input.lots, input.cles);
+      const cleRef = rep.cleRef;
+      if (!rep.complet || !cleRef) throw new Error("Chaque PF validé doit être entièrement réparti avant le partage.");
+
+      // Tantièmes de référence sur tous les lots du copropriétaire : le portail
+      // affiche le cumul de ses lots sans mise à l'échelle (rapport 1).
+      const totalCle = input.lots.reduce((s, l) => s + (l.tantiemes[cleRef] ?? 0), 0);
+      const tantiemesRef = new Map<string, number>();
+      const proprietaire = new Map<string, string>();
+      for (const l of input.lots) {
+        if (!l.coproprietaire_id) continue;
+        proprietaire.set(l.id, l.coproprietaire_id);
+        tantiemesRef.set(l.coproprietaire_id, (tantiemesRef.get(l.coproprietaire_id) ?? 0) + (l.tantiemes[cleRef] ?? 0));
+      }
+      // Détail lot par lot, chaque lot recevant la part du PF de son bâtiment
+      const parLot = new Map<string, Record<string, PartLotPortail>>();
+      for (const { pf, lots } of rep.parPf) {
+        for (const [lotId, p] of repartitionParLot(pf.data, pf.resultat, lots, input.cles)) {
+          const cp = proprietaire.get(lotId);
+          if (!cp) continue;
+          const rec = parLot.get(cp) ?? {};
+          const cur = rec[lotId] ?? { quotePart: 0, cee: 0, subvColl: 0 };
+          rec[lotId] = {
+            quotePart: round2(cur.quotePart + p.quotePartAvant),
+            cee: round2(cur.cee + p.primeCee),
+            subvColl: round2(cur.subvColl + p.aidesEtFonds - p.primeCee),
+          };
+          parLot.set(cp, rec);
+        }
+      }
+
       // Paramètres choisis pour que les cascades du portail (« Plan de la
-      // copropriété », estimations de repli) retombent sur les montants du PF :
-      // travaux × mprCoproPct = aides publiques, cee = prime CEE.
-      const { pv, pvData } = input;
-      const travaux = round2(pv.totalTravauxTtc);
+      // copropriété », estimations de repli) retombent sur les montants des PF :
+      // travaux × mprCoproPct = aides publiques, cee = prime CEE (sommes des PF).
+      const somme = (f: (p: PfARepartir) => number) => round2(input.pfs.reduce((s, p) => s + f(p), 0));
+      const travaux = somme((p) => p.resultat.totalTravauxTtc);
+      const totalAides = somme((p) => p.resultat.totalAides);
+      const primeCee = somme((p) => p.resultat.primeCee);
       const params: FinanceParams = {
         ...makeDefaultParams(input.bareme),
         travaux,
-        honoraires: round2(pv.totalMoeTtc),
-        aleas: round2(pv.totalTravauxTtcImprevus - pv.totalTravauxTtc),
-        cle: input.cleRef,
-        totalCle: input.totalCle || 1000,
-        mprCoproPct: travaux > 0 ? round2(((pv.totalAides - pv.primeCee) / travaux) * 100) : 0,
+        honoraires: somme((p) => p.resultat.totalMoeTtc),
+        aleas: somme((p) => p.resultat.totalTravauxTtcImprevus - p.resultat.totalTravauxTtc),
+        cle: cleRef,
+        totalCle: totalCle || 1000,
+        mprCoproPct: travaux > 0 ? round2(((totalAides - primeCee) / travaux) * 100) : 0,
         bonusPassoire: false,
-        cee: round2(pv.primeCee),
-        fonds: pvData.params.fondsTravaux,
+        cee: primeCee,
+        fonds: somme((p) => p.data.params.fondsTravaux),
         ecoPtz: true,
-        ecoPtzDuree: pvData.params.dureeEcoPtzAns,
+        ecoPtzDuree: input.pfs[0].data.params.dureeEcoPtzAns,
       };
       // Le nom du plan importé commence déjà par « PF définitif - … » : pas de double préfixe.
-      const nom = /^PF d[ée]finitif/i.test(input.plan.nom) ? input.plan.nom : `PF définitif - ${input.plan.nom}`;
+      const nom =
+        input.pfs.length === 1
+          ? /^PF d[ée]finitif/i.test(input.pfs[0].nom)
+            ? input.pfs[0].nom
+            : `PF définitif - ${input.pfs[0].nom}`
+          : `PF définitifs par bâtiment - ${input.pfs.map((p) => p.nom.replace(/^PF d[ée]finitif\s*-?\s*/i, "")).join(" + ")}`;
 
+      // Ancre : celle du pont existant si elle fait partie des PF, sinon un PF
+      // qui n'ancre pas déjà un autre pont (index unique).
+      const ancres = new Set(ponts.filter((s) => s.id !== existant?.id).map((s) => s.plan_definitif_id));
+      const ancre =
+        existant?.plan_definitif_id && ids.includes(existant.plan_definitif_id)
+          ? existant.plan_definitif_id
+          : ids.find((id) => !ancres.has(id));
+      if (!ancre) throw new Error("Chaque PF validé est déjà relié à un autre partage : retirez ces partages puis recommencez.");
+
+      const champs = {
+        name: nom,
+        statut: "partage" as const,
+        locked: true,
+        // PF par bâtiment : un copropriétaire sans ligne n'est concerné par aucun PF (portail, computeIndiv)
+        params: (input.pfs.some((p) => !couvreToutLaCopro(p.batimentIds))
+          ? { ...params, parBatiment: true }
+          : params) as unknown as Json,
+        plan_definitif_id: ancre,
+        pf_ids: ids,
+      };
       let scenarioId: string;
       if (existant) {
-        const { error } = await supabase
-          .from("scenarios_financiers")
-          .update({ name: nom, statut: "partage", locked: true, params: params as unknown as Json })
-          .eq("id", existant.id);
+        const { error } = await supabase.from("scenarios_financiers").update(champs).eq("id", existant.id);
         if (error) throw error;
         scenarioId = existant.id;
       } else {
         const { data: cree, error } = await supabase
           .from("scenarios_financiers")
-          .insert({
-            copro_id: coproId,
-            name: nom,
-            statut: "partage",
-            locked: true,
-            bareme_millesime: input.bareme.millesime,
-            params: params as unknown as Json,
-            plan_definitif_id: input.plan.id,
-          })
+          .insert({ ...champs, copro_id: coproId, bareme_millesime: input.bareme.millesime })
           .select("id")
           .single();
         if (error) throw error;
         scenarioId = cree.id;
       }
+      // Un seul plan partagé à la fois pour ces PF (anciens partages séparés)
+      if (autresOuverts.length) {
+        const { error } = await supabase
+          .from("scenarios_financiers")
+          .update({ statut: "brouillon" })
+          .in(
+            "id",
+            autresOuverts.map((s) => s.id)
+          );
+        if (error) throw error;
+      }
 
       const { error: eDel } = await supabase.from("plans_individuels").delete().eq("scenario_id", scenarioId);
       if (eDel) throw eDel;
-      if (input.plans.length) {
+      if (rep.plans.length) {
         const { error: eIns } = await supabase.from("plans_individuels").insert(
-          input.plans.map((p) => ({
+          rep.plans.map((p) => ({
             scenario_id: scenarioId,
             coproprietaire_id: p.coproprietaireId,
-            tantiemes: input.tantiemesRef[p.coproprietaireId] ?? 0,
+            tantiemes: tantiemesRef.get(p.coproprietaireId) ?? 0,
             quote_part: p.quotePartAvant,
             mpr_indiv: 0,
             // La prime CEE (versée en fin de chantier) est isolée : elle ne doit
@@ -564,14 +790,19 @@ export function usePartagerPfCopros(coproId: string) {
             eco_ptz_part: 0,
             reste: p.reste,
             mensualite: 0,
-            detail: { source: "pf", planDefinitifId: input.plan.id } as unknown as Json,
+            detail: {
+              source: "pf",
+              planDefinitifId: ancre,
+              planDefinitifIds: ids,
+              parLot: parLot.get(p.coproprietaireId) ?? {},
+            } as unknown as Json,
           }))
         );
         if (eIns) throw eIns;
       }
     },
-    onSuccess: (_r, v) => {
-      void qc.invalidateQueries({ queryKey: ["pf-partage", v.plan.id] });
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["pf-partage"] });
       void qc.invalidateQueries({ queryKey: ["scenarios", coproId] });
       void qc.invalidateQueries({ queryKey: ["portail"] });
     },

@@ -2973,6 +2973,7 @@ export type Database = {
       }
       plans_definitifs: {
         Row: {
+          batiment_ids: string[] | null
           copro_id: string
           created_at: string
           data: Json
@@ -2992,6 +2993,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          batiment_ids?: string[] | null
           copro_id: string
           created_at?: string
           data?: Json
@@ -3011,6 +3013,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          batiment_ids?: string[] | null
           copro_id?: string
           created_at?: string
           data?: Json
@@ -4403,6 +4406,7 @@ export type Database = {
           locked: boolean
           name: string
           params: Json
+          pf_ids: string[]
           plan_definitif_id: string | null
           resultat: Json | null
           statut: Database["public"]["Enums"]["statut_scenario"]
@@ -4417,6 +4421,7 @@ export type Database = {
           locked?: boolean
           name: string
           params: Json
+          pf_ids?: string[]
           plan_definitif_id?: string | null
           resultat?: Json | null
           statut?: Database["public"]["Enums"]["statut_scenario"]
@@ -4431,6 +4436,7 @@ export type Database = {
           locked?: boolean
           name?: string
           params?: Json
+          pf_ids?: string[]
           plan_definitif_id?: string | null
           resultat?: Json | null
           statut?: Database["public"]["Enums"]["statut_scenario"]

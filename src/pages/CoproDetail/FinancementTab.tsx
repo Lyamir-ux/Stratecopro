@@ -12,13 +12,16 @@ import {
   useSaveFinancementConfig,
 } from "@/api/financement";
 import { fmtEuro, fmtEuroFull } from "@/lib/format";
-import type { DpeClass } from "@/lib/referentiels";
+import { libellesBatiments, type DpeClass } from "@/lib/referentiels";
 import {
   computeFinance,
   computePlanDefinitif,
+  couvreToutLaCopro,
   itemsARepartirPf,
   readPlanDefinitif,
+  lotsDuPerimetre,
   repartirPfDepuisLots,
+  repartirPfs,
   tableauDepuisRepartition,
   type FinanceResult,
   type PlanDefinitifData,
@@ -31,9 +34,15 @@ import {
   groupesEstimatifs,
   useDeleteGroupeEstimatif,
   useDeletePlanDefinitif,
+  libellePerimetre,
+  pfARepartir,
+  plansValides,
+  plansValidesEnConflit,
+  pontAJour,
+  useDupliquerPlanDefinitif,
   usePartagerPfCopros,
-  usePfPartage,
   usePlansDefinitifs,
+  usePontPf,
   useUpdatePlanDefinitif,
   useValiderPlanDefinitif,
   type PlanDefinitif,
@@ -69,6 +78,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   const { data: finConfig } = useFinancementConfigAmo(c.id);
   const { data: adhesions } = useAdhesions(c.id);
   const { data: pfPlans } = usePlansDefinitifs(c.id);
+  const [pfChoisi, setPfChoisi] = useState<string | null>(null);
   const saveConfig = useSaveFinancementConfig(c.id);
   const [banque, setBanque] = useState<string>("CEGEE");
   const [duree, setDuree] = useState(15);
@@ -105,10 +115,10 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   const openAssistant = () => navigate(`/copros/${c.id}/ingenierie${active ? `/${active.id}` : ""}`);
 
   // Le PF définitif validé fait foi : il remplit automatiquement les panneaux
-  // de l'onglet (coût d'opération, aides, reste à charge, indicateurs).
-  const planValide = (pfPlans ?? [])
-    .filter((p) => p.statut === "valide")
-    .sort((a, b) => (b.updated_at > a.updated_at ? 1 : -1))[0];
+  // de l'onglet (coût d'opération, aides, reste à charge, indicateurs). Un PF
+  // par bâtiment (11/10/2026) : les panneaux suivent le plan choisi.
+  const valides = plansValides(pfPlans);
+  const planValide = valides.find((p) => p.id === pfChoisi) ?? valides[0];
   // Recalcul depuis les données du plan (moteur pur) plutôt que l'instantané
   // `resultat` : un instantané figé avec une ancienne version du moteur
   // afficherait des montants périmés.
@@ -120,14 +130,15 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
     return (
       <div className="fade" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <PlanEstimatifPanel coproId={c.id} coproNom={c.name} />
-        <PlanDefinitifPanel coproId={c.id} coproNom={c.name} />
+        <PlanDefinitifPanel coproId={c.id} coproNom={c.name} denomination={c.denomination_batiments} />
+        <ChoixPlanBatimentPanel c={c} valides={valides} choisi={planValide?.id ?? null} onChoisir={setPfChoisi} />
         {planValide && pv && pvData ? (
           <div className="detail-grid">
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               <PanelCoutOperationPf plan={planValide} pv={pv} />
               <PanelIngenieriePf pv={pv} fondsTravaux={pvData.params.fondsTravaux} onOpen={openPfValide} />
             </div>
-            <PlansIndividuelsPfPanel coproId={c.id} coproNom={c.name} plan={planValide} pv={pv} pvData={pvData} />
+            <PlansIndividuelsPfPanel coproId={c.id} coproNom={c.name} plan={planValide} pv={pv} pvData={pvData} valides={valides} />
           </div>
         ) : (
           <div className="placeholder-screen">
@@ -165,7 +176,8 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
     <div className="detail-grid fade">
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <PlanEstimatifPanel coproId={c.id} coproNom={c.name} />
-        <PlanDefinitifPanel coproId={c.id} coproNom={c.name} />
+        <PlanDefinitifPanel coproId={c.id} coproNom={c.name} denomination={c.denomination_batiments} />
+        <ChoixPlanBatimentPanel c={c} valides={valides} choisi={planValide?.id ?? null} onChoisir={setPfChoisi} />
         {planValide && pv ? (
           <PanelCoutOperationPf plan={planValide} pv={pv} />
         ) : (
@@ -401,7 +413,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
         <div className="panel">
           <div className="p-head">
             <Icon name="trendingUp" size={18} />
-            <h3>Indicateurs</h3>
+            <h3>Indicateurs{valides.length > 1 && planValide ? ` · ${planValide.nom}` : ""}</h3>
           </div>
           <div className="p-body">
             <div className="kv">
@@ -437,7 +449,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
           </div>
         </div>
         {planValide && pv && pvData ? (
-          <PlansIndividuelsPfPanel coproId={c.id} coproNom={c.name} plan={planValide} pv={pv} pvData={pvData} />
+          <PlansIndividuelsPfPanel coproId={c.id} coproNom={c.name} plan={planValide} pv={pv} pvData={pvData} valides={valides} />
         ) : (
         <div className="panel">
           <div className="p-head">
@@ -547,14 +559,43 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
  * Plans de financement définitifs (nomenclature chef de projet) : import du
  * classeur Excel, liste des plans, ouverture de l'éditeur avec recalcul.
  */
-function PlanDefinitifPanel({ coproId, coproNom }: { coproId: string; coproNom: string }) {
+function PlanDefinitifPanel({
+  coproId,
+  coproNom,
+  denomination,
+}: {
+  coproId: string;
+  coproNom: string;
+  denomination: string | null;
+}) {
   const navigate = useNavigate();
   // Les scénarios d'un PF estimatif ont leur propre panneau (comparatif)
   const { data: tous } = usePlansDefinitifs(coproId);
   const plans = (tous ?? []).filter((p) => !estPlanEstimatif(p));
+  const { data: donnees } = useDonnees(coproId);
+  const batiments = donnees?.batiments ?? [];
   const del = useDeletePlanDefinitif(coproId);
   const valider = useValiderPlanDefinitif(coproId);
+  const dupliquer = useDupliquerPlanDefinitif(coproId);
   const [importOpen, setImportOpen] = useState(false);
+  // Un seul plan validé par périmètre : valider repasse en brouillon les plans
+  // validés du même bâtiment (ou de toute la copropriété) - confirmé avant dans
+  // une copropriété à plusieurs bâtiments (ailleurs, une nouvelle version
+  // remplace l'ancienne sans question, comme avant).
+  const validerPlan = (p: PlanDefinitif) => {
+    const conflits = plansValidesEnConflit(tous, p.id, p.batiment_ids);
+    if (
+      batiments.length > 1 &&
+      conflits.length > 0 &&
+      !window.confirm(
+        `Valider « ${p.nom} » repassera en brouillon : « ${conflits.map((x) => x.nom).join(" », « ")} ».\n\n` +
+          "Pour garder un plan validé par bâtiment, ouvrez chaque plan et choisissez les bâtiments qu'il couvre (périmètre). " +
+          "Continuer ?"
+      )
+    )
+      return;
+    valider.mutate({ id: p.id, valider: true, coproNom });
+  };
 
   return (
     <div className="panel">
@@ -574,6 +615,8 @@ function PlanDefinitifPanel({ coproId, coproNom }: { coproId: string; coproNom: 
             collectif / individuel » + lots avec colonne « Retenu ») : le logiciel reconnaît la nomenclature et
             recalcule le plan à chaque modification. Un PF estimatif à plusieurs scénarios (une colonne par
             scénario) s'importe par le même bouton.
+            {batiments.length > 1 &&
+              " Plusieurs bâtiments : un plan peut couvrir toute la copropriété ou seulement certains bâtiments (périmètre choisi dans le plan), avec un plan validé par bâtiment."}
           </p>
         ) : (
           (plans ?? []).map((p, i, arr) => {
@@ -591,6 +634,9 @@ function PlanDefinitifPanel({ coproId, coproNom }: { coproId: string; coproNom: 
                     {p.nom}
                   </div>
                   <div className="t-copro">
+                    {batiments.length > 1 && (
+                      <b style={{ fontWeight: 600 }}>{libellePerimetre(p.batiment_ids, batiments, denomination)} · </b>
+                    )}
                     {res
                       ? `Opération ${fmtEuro(res.totalOperationTtc)} · aides ${fmtEuro(res.totalAides)} · reste à charge ${fmtEuro(res.resteACharge)}`
                       : "À compléter"}
@@ -624,11 +670,24 @@ function PlanDefinitifPanel({ coproId, coproNom }: { coproId: string; coproNom: 
                     disabled={valider.isPending}
                     onClick={(e) => {
                       e.stopPropagation();
-                      valider.mutate({ id: p.id, valider: true, coproNom });
+                      validerPlan(p);
                     }}
                   >
                     <Icon name="checkCircle" size={14} />
                     Valider
+                  </button>
+                )}
+                {batiments.length > 1 && (
+                  <button
+                    className="icon-btn"
+                    title="Dupliquer ce plan en brouillon - point de départ du plan d'un autre bâtiment"
+                    disabled={dupliquer.isPending}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      dupliquer.mutate(p, { onSuccess: (row) => navigate(`/copros/${coproId}/plan-definitif/${row.id}`) });
+                    }}
+                  >
+                    <Icon name="copy" size={15} />
                   </button>
                 )}
                 <button
@@ -647,6 +706,82 @@ function PlanDefinitifPanel({ coproId, coproNom }: { coproId: string; coproNom: 
         )}
       </div>
       {importOpen && <ImportPlanDefinitifDialog coproId={coproId} coproNom={coproNom} onClose={() => setImportOpen(false)} />}
+    </div>
+  );
+}
+
+/**
+ * Plans par bâtiment (demande d'Amir, 11/10/2026) : choix du PF validé que
+ * suivent les panneaux de l'onglet, totaux de tous les PF validés et bâtiments
+ * dont les lots ne relèvent encore d'aucun PF validé. Masqué tant qu'un seul
+ * PF couvre toute la copropriété.
+ */
+function ChoixPlanBatimentPanel({
+  c,
+  valides,
+  choisi,
+  onChoisir,
+}: {
+  c: CoproWithStats;
+  valides: PlanDefinitif[];
+  choisi: string | null;
+  onChoisir: (id: string) => void;
+}) {
+  const { data: donnees } = useDonnees(c.id);
+  if (valides.length === 0 || (valides.length === 1 && couvreToutLaCopro(valides[0].batiment_ids))) return null;
+  const batiments = donnees?.batiments ?? [];
+  const lots = donnees?.lots ?? [];
+  const resultats = valides.map((p) => pfARepartir(p).resultat);
+  const somme = (f: (r: PlanDefinitifResult) => number) => resultats.reduce((s, r) => s + f(r), 0);
+  const totalOperation = somme((r) => r.totalOperationTtc);
+  const toutCouvert = valides.some((p) => couvreToutLaCopro(p.batiment_ids));
+  const couverts = new Set(valides.flatMap((p) => p.batiment_ids ?? []));
+  const avecLots = new Set(lots.map((l) => l.batiment_id).filter((id): id is string => !!id));
+  const nonCouverts = toutCouvert ? [] : batiments.filter((b) => avecLots.has(b.id) && !couverts.has(b.id));
+  const lotsSansBatiment = toutCouvert ? 0 : lots.filter((l) => !l.batiment_id).length;
+  const lb = libellesBatiments(c.denomination_batiments);
+
+  return (
+    <div className="panel">
+      <div className="p-head">
+        <Icon name="building" size={18} />
+        <h3>Plans par {lb.singulier.toLowerCase()}</h3>
+        <span style={{ flex: 1 }}></span>
+        <Badge kind="success" dot>
+          {valides.length} PF validé{valides.length > 1 ? "s" : ""}
+        </Badge>
+      </div>
+      <div className="p-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {valides.length > 1 && (
+          <div className="seg" style={{ alignSelf: "flex-start", flexWrap: "wrap" }}>
+            {valides.map((p) => (
+              <button
+                key={p.id}
+                className={p.id === choisi ? "on" : ""}
+                title={p.nom}
+                onClick={() => onChoisir(p.id)}
+              >
+                {libellePerimetre(p.batiment_ids, batiments, c.denomination_batiments)}
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="se-small" style={{ margin: 0, color: "var(--fg-muted)" }}>
+          Les panneaux ci-dessous suivent le plan choisi ; chaque plan est réparti entre les seuls lots de son
+          périmètre. Ensemble des PF validés : opération {fmtEuro(totalOperation)} · aides{" "}
+          {fmtEuro(somme((r) => r.totalAides))} · reste à charge {fmtEuro(somme((r) => r.resteACharge))}. Le
+          syndic, les appels de fonds et le portail additionnent les plans (un plan cumulé par copropriétaire).
+        </p>
+        {(nonCouverts.length > 0 || lotsSansBatiment > 0) && (
+          <p className="se-small" style={{ margin: 0, color: "var(--color-warning-700)" }}>
+            <Icon name="alert" size={12} />{" "}
+            {nonCouverts.length > 0 &&
+              `Sans PF validé : ${nonCouverts.map((b) => `${lb.court} ${b.code}`).join(", ")} - leurs copropriétaires n'ont pas de quote-part. `}
+            {lotsSansBatiment > 0 &&
+              `${lotsSansBatiment} lot${lotsSansBatiment > 1 ? "s" : ""} sans bâtiment n'entre${lotsSansBatiment > 1 ? "nt" : ""} dans aucun plan par bâtiment (onglet Données).`}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -820,6 +955,8 @@ function PanelIngenieriePf({
  * répartition dans la copropriété → tout est réparti automatiquement avec
  * elle ; plusieurs clés → l'AMO choisit, ligne par ligne, la clé à appliquer
  * (choix porté par les lignes du PF définitif, modifiable ici ou dans l'éditeur du plan).
+ * Plan d'un bâtiment (11/10/2026) : réparti entre les seuls lots de son
+ * périmètre ; le partage au portail publie tous les PF validés ensemble.
  */
 function PlansIndividuelsPfPanel({
   coproId,
@@ -827,18 +964,22 @@ function PlansIndividuelsPfPanel({
   plan,
   pv,
   pvData,
+  valides,
 }: {
   coproId: string;
   coproNom: string;
   plan: PlanDefinitif;
   pv: PlanDefinitifResult;
   pvData: PlanDefinitifData;
+  /** Tous les PF validés de la copropriété (un par bâtiment, ou le seul). */
+  valides: PlanDefinitif[];
 }) {
   const navigate = useNavigate();
   const { data: donnees } = useDonnees(coproId);
   const { data: bareme } = useBareme();
   const { data: profils } = useProfilsCopro(coproId);
-  const { data: scenarioPf } = usePfPartage(plan.id);
+  const idsValides = valides.map((p) => p.id);
+  const { data: pont } = usePontPf(coproId, idsValides);
   const update = useUpdatePlanDefinitif(coproId);
   const partagerMut = usePartagerPfCopros(coproId);
   const [configOpen, setConfigOpen] = useState(false);
@@ -846,10 +987,16 @@ function PlansIndividuelsPfPanel({
   const [erreurTableau, setErreurTableau] = useState<string | null>(null);
 
   const cles = donnees?.cles ?? [];
+  const tousLesLots = donnees?.lots ?? [];
   // Même répartition que la vue Copropriétaires et les exports (une seule
-  // fonction) : tantièmes par copropriétaire, clé unique ou clé par ligne.
-  const repartition = repartirPfDepuisLots(pvData, pv, donnees?.lots ?? [], cles);
-  const { plans, manquants, items, cleUnique, cleRef, totauxCles, parCopro } = repartition;
+  // fonction) : tantièmes par copropriétaire, clé unique ou clé par ligne,
+  // sur les lots du périmètre du plan.
+  const lotsPf = lotsDuPerimetre(tousLesLots, plan.batiment_ids);
+  const repartition = repartirPfDepuisLots(pvData, pv, lotsPf, cles);
+  const { plans, manquants, items, cleUnique, totauxCles } = repartition;
+  const plusieurs = valides.length > 1;
+  const pfs = valides.map(pfARepartir);
+  const tous = repartirPfs(pfs, tousLesLots, cles);
 
   // Tableau PDF de tous les copropriétaires (feedback Amir 05/10/2026) : une
   // ligne par copropriétaire, prêt collectif ou éco-PTZ individuel.
@@ -864,7 +1011,8 @@ function PlansIndividuelsPfPanel({
         planNom: plan.nom,
         tableau: tableauDepuisRepartition(variante, pvData, repartition),
       });
-      telechargerPdfBytes(bytes, nomFichierTableauCoproprietaires(coproNom, variante));
+      // un tableau par bâtiment quand chaque bâtiment a son PF : le nom du plan les distingue
+      telechargerPdfBytes(bytes, nomFichierTableauCoproprietaires(plusieurs ? `${coproNom} - ${plan.nom}` : coproNom, variante));
     } catch (e) {
       setErreurTableau(messageErreur(e, "Export du tableau impossible"));
     } finally {
@@ -874,6 +1022,7 @@ function PlansIndividuelsPfPanel({
   // Copropriétaires dont le profil de ressources n'est pas renseigné : leur
   // aide individuelle s'affichera « à déterminer » au portail (feedback Théa).
   const sansProfil = plans.filter((p) => !profils?.has(p.coproprietaireId));
+  const sansProfilTous = tous.plans.filter((p) => !profils?.has(p.coproprietaireId));
 
   // Le choix est porté par les lignes du PF définitif (ids « lot:<numero>:<index> »
   // / « moe:<index> ») - il reste ainsi visible et modifiable dans l'éditeur du plan.
@@ -892,37 +1041,26 @@ function PlansIndividuelsPfPanel({
     update.mutate({ id: plan.id, data }, { onSuccess: () => setConfigOpen(false) });
   };
 
-  // Partage au portail copropriétaire : clé de référence pour la mise à
-  // l'échelle par lot (clé unique, sinon clé par défaut de la copro).
-  const partage = scenarioPf?.statut === "partage";
-  const partageable = plans.length > 0 && manquants.length === 0 && !!cleRef && !!bareme;
+  // Partage au portail copropriétaire : tous les PF validés ensemble, un plan
+  // cumulé par copropriétaire (plans par bâtiment, choix d'Amir du 11/10/2026).
+  const partage = pont?.statut === "partage";
+  const aJour = pontAJour(pont, idsValides);
+  const partageable = tous.plans.length > 0 && tous.complet && !!tous.cleRef && !!bareme;
+  const pfsIncomplets = tous.parPf.filter((x) => x.repartition.manquants.length > 0 || x.repartition.plans.length === 0);
   const togglePartage = (partager: boolean) => {
-    if (!cleRef || !bareme) return;
+    if (!bareme || !donnees) return;
     // Verrou souple : publier sans profil de ressources fait apparaître des
     // aides individuelles « à déterminer » - l'AMO confirme en connaissance de cause.
-    if (partager && sansProfil.length > 0) {
-      const noms = sansProfil.slice(0, 8).map((p) => p.nom).join(", ") + (sansProfil.length > 8 ? "…" : "");
+    if (partager && sansProfilTous.length > 0) {
+      const noms = sansProfilTous.slice(0, 8).map((p) => p.nom).join(", ") + (sansProfilTous.length > 8 ? "…" : "");
       const ok = window.confirm(
-        `${sansProfil.length} copropriétaire${sansProfil.length > 1 ? "s" : ""} sur ${plans.length} n'${sansProfil.length > 1 ? "ont" : "a"} pas de profil de ressources (enquête sociale non renseignée) : ${noms}.\n\n` +
+        `${sansProfilTous.length} copropriétaire${sansProfilTous.length > 1 ? "s" : ""} sur ${tous.plans.length} n'${sansProfilTous.length > 1 ? "ont" : "a"} pas de profil de ressources (enquête sociale non renseignée) : ${noms}.\n\n` +
           "Leur portail affichera la quote-part et les aides collectives, mais une aide individuelle « à déterminer ». " +
           "Publier quand même ? (Les profils peuvent être saisis ensuite dans l'onglet Copropriétaires : le portail se met à jour.)"
       );
       if (!ok) return;
     }
-    const tantiemesRef = Object.fromEntries(
-      [...parCopro.values()].map((co) => [co.coproprietaireId, co.tantiemes[cleRef] ?? 0])
-    );
-    partagerMut.mutate({
-      plan,
-      pv,
-      pvData,
-      plans,
-      tantiemesRef,
-      cleRef,
-      totalCle: totauxCles[cleRef] || 1000,
-      bareme,
-      partager,
-    });
+    partagerMut.mutate({ pfs, lots: tousLesLots, cles, bareme, partager });
   };
   const openPortail = (coproprietaireId: string) => navigate(`/portail?cp=${coproprietaireId}`);
 
@@ -930,43 +1068,78 @@ function PlansIndividuelsPfPanel({
     <div className="panel">
       <div className="p-head">
         <Icon name="fileText" size={18} />
-        <h3>Plans individuels</h3>
-        {partage && (
-          <Badge kind="success" dot>
-            Partagé au portail
-          </Badge>
-        )}
+        <h3>Plans individuels{plusieurs ? ` · ${libellePerimetre(plan.batiment_ids, donnees?.batiments ?? [], null)}` : ""}</h3>
+        {partage &&
+          (aJour ? (
+            <Badge kind="success" dot>
+              Partagé au portail
+            </Badge>
+          ) : (
+            <Badge kind="warn" dot>
+              Partage à mettre à jour
+            </Badge>
+          ))}
         <span style={{ flex: 1 }}></span>
         {cles.length > 1 && (
           <button className="se-btn se-btn-ghost btn-sm" onClick={() => setConfigOpen(true)}>
             Clés de répartition
           </button>
         )}
-        {partageable &&
-          (partage ? (
-            <button
-              className="se-btn se-btn-ghost btn-sm"
-              disabled={partagerMut.isPending}
-              onClick={() => togglePartage(false)}
-            >
-              Ne plus partager
-            </button>
-          ) : (
-            <button
-              className="se-btn se-btn-primary btn-sm"
-              disabled={partagerMut.isPending}
-              onClick={() => togglePartage(true)}
-              title="Publier les quotes-parts sur le portail des copropriétaires"
-            >
-              <Icon name="eye" size={14} />
-              {partagerMut.isPending ? "Partage…" : "Partager aux copropriétaires"}
-            </button>
-          ))}
+        {partage && (
+          <button
+            className="se-btn se-btn-ghost btn-sm"
+            disabled={partagerMut.isPending}
+            onClick={() => togglePartage(false)}
+          >
+            Ne plus partager
+          </button>
+        )}
+        {partageable && (!partage || !aJour) && (
+          <button
+            className="se-btn se-btn-primary btn-sm"
+            disabled={partagerMut.isPending}
+            onClick={() => togglePartage(true)}
+            title={
+              plusieurs
+                ? "Publier sur le portail le plan cumulé de chaque copropriétaire (tous les PF validés)"
+                : "Publier les quotes-parts sur le portail des copropriétaires"
+            }
+          >
+            <Icon name="eye" size={14} />
+            {partagerMut.isPending ? "Partage…" : partage ? "Mettre à jour le partage" : "Partager aux copropriétaires"}
+          </button>
+        )}
         <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{plans.length}</span>
       </div>
+      {(partagerMut.isError || (plusieurs && pfsIncomplets.length > 0) || (partage && !aJour)) && (
+        <div className="p-body" style={{ paddingBottom: 0 }}>
+          {partagerMut.isError && (
+            <p className="se-small" style={{ margin: "0 0 6px", color: "var(--color-error-700)" }}>
+              {messageErreur(partagerMut.error, "Partage impossible")}
+            </p>
+          )}
+          {plusieurs && pfsIncomplets.length > 0 && (
+            <p className="se-small" style={{ margin: "0 0 6px", color: "var(--color-warning-700)" }}>
+              <Icon name="alert" size={12} /> Le partage au portail publie tous les PF validés ensemble : il attend
+              la répartition complète de « {pfsIncomplets.map((x) => x.pf.nom).join(" », « ")} ».
+            </p>
+          )}
+          {partage && !aJour && (
+            <p className="se-small" style={{ margin: "0 0 6px", color: "var(--color-warning-700)" }}>
+              <Icon name="alert" size={12} /> Le portail publie d'autres PF que ceux validés aujourd'hui : mettez à
+              jour le partage pour que chaque copropriétaire voie son plan cumulé à jour.
+            </p>
+          )}
+        </div>
+      )}
       <div className="p-body" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {!donnees ? (
           <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>Chargement…</p>
+        ) : !couvreToutLaCopro(plan.batiment_ids) && lotsPf.length === 0 ? (
+          <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
+            Aucun lot n'est rattaché aux bâtiments de ce plan : vérifiez son périmètre (éditeur du plan) ou le
+            bâtiment des lots (onglet Données de la copro).
+          </p>
         ) : cles.length === 0 ? (
           <p className="se-body" style={{ margin: 0, color: "var(--fg-muted)" }}>
             Importez le tableau des lots (onglet Données de la copro) : les clés de tantièmes du fichier
@@ -999,7 +1172,8 @@ function PlansIndividuelsPfPanel({
             {cleUnique && (
               <p className="se-small" style={{ margin: "0 0 6px", color: "var(--fg-muted)" }}>
                 Répartition automatique - clé unique « {cles[0].label || cles[0].code} »
-                {" "}(total {totauxCles[cleUnique] ?? 0}).
+                {" "}(total {totauxCles[cleUnique] ?? 0}
+                {couvreToutLaCopro(plan.batiment_ids) ? "" : ` sur les ${lotsPf.length} lots du périmètre`}).
               </p>
             )}
             {sansProfil.length > 0 && (

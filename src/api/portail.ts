@@ -11,6 +11,7 @@ import { estSci, libellePieceSituation, type ContextePieces } from "@/lib/pieces
 import { useMesBulletins } from "@/api/signature";
 import type { TachePortail } from "@/lib/recapPhases";
 import { computePlanDefinitif, readPlanDefinitif, type PlanDefinitifData, type PlanDefinitifResult } from "@/lib/finance/planDefinitif";
+import type { PartLotPortail } from "./planDefinitif";
 
 export type Copro = Tables<"coproprietes">;
 export type Scenario = Tables<"scenarios_financiers">;
@@ -25,6 +26,8 @@ export interface PortalLot {
   num: string;
   usage: string;
   batiment: string | null;
+  /** identifiant du bâtiment (périmètre des PF par bâtiment) */
+  batimentId?: string | null;
   /** lot d'habitation auquel ce lot annexe est rattaché (bulletins, tantièmes cumulés) */
   rattacheA: string | null;
   /** tantièmes par code de clé ('MUN'…) */
@@ -90,7 +93,7 @@ export function useMesCopros() {
           .select(
             `id, nom, adresse,
              coproprietes (*),
-             lots ( id, num, usage, rattache_a, batiments ( code ),
+             lots ( id, num, usage, rattache_a, batiment_id, batiments ( code ),
                     lot_tantiemes ( tantiemes, cles_repartition ( code ) ) )`
           )
           .order("id")
@@ -117,6 +120,7 @@ export function useMesCopros() {
               usage: l.usage,
               rattacheA: l.rattache_a,
               batiment: l.batiments?.code ?? null,
+              batimentId: l.batiment_id,
               tantiemes: Object.fromEntries(
                 (l.lot_tantiemes ?? [])
                   .filter((t) => t.cles_repartition)
@@ -134,6 +138,8 @@ export interface PlanDefinitifPartage {
   nom: string;
   data: PlanDefinitifData;
   resultat: PlanDefinitifResult;
+  /** Périmètre du PF (bâtiments couverts) ; null = toute la copropriété. */
+  batimentIds: string[] | null;
 }
 
 /**
@@ -149,22 +155,58 @@ export function usePlanDefinitifPartage(planId: string | null | undefined) {
     queryFn: async (): Promise<PlanDefinitifPartage | null> => {
       const { data, error } = await supabase
         .from("plans_definitifs")
-        .select("id, nom, data, resultat")
+        .select("id, nom, data, batiment_ids")
         .eq("id", planId!)
         .maybeSingle();
       if (error) throw error;
       if (!data?.data) return null;
-      // Recalcul depuis les données (moteur pur) plutôt que l'instantané
-      // `resultat`, qui peut être figé avec une ancienne version du moteur.
-      const plan = readPlanDefinitif(data.data);
-      return {
-        id: data.id,
-        nom: data.nom,
-        data: plan,
-        resultat: computePlanDefinitif(plan),
-      };
+      return lirePlanPartage(data);
     },
   });
+}
+
+// Recalcul depuis les données (moteur pur) plutôt que l'instantané `resultat`,
+// qui peut être figé avec une ancienne version du moteur.
+function lirePlanPartage(row: { id: string; nom: string; data: Json; batiment_ids: string[] | null }): PlanDefinitifPartage {
+  const plan = readPlanDefinitif(row.data);
+  return { id: row.id, nom: row.nom, data: plan, resultat: computePlanDefinitif(plan), batimentIds: row.batiment_ids };
+}
+
+/** PF publiés par un scénario pont : ancre seule, ou un PF par bâtiment (pf_ids, 11/10/2026). */
+export function pfIdsDuScenario(scenario: Pick<Scenario, "plan_definitif_id" | "pf_ids"> | null | undefined): string[] {
+  if (!scenario) return [];
+  if (scenario.pf_ids?.length) return scenario.pf_ids;
+  return scenario.plan_definitif_id ? [scenario.plan_definitif_id] : [];
+}
+
+/** Tous les PF publiés par le scénario pont, dans l'ordre du partage. */
+export function usePlansDefinitifsPartages(ids: string[]) {
+  return useQuery({
+    queryKey: ["portail", "pf-definitifs", ids.join(",")],
+    enabled: ids.length > 0,
+    queryFn: async (): Promise<PlanDefinitifPartage[]> => {
+      const { data, error } = await supabase.from("plans_definitifs").select("id, nom, data, batiment_ids").in("id", ids);
+      if (error) throw error;
+      const parId = new Map((data ?? []).filter((r) => r.data).map((r) => [r.id, lirePlanPartage(r)]));
+      return ids.flatMap((id) => (parId.has(id) ? [parId.get(id)!] : []));
+    },
+  });
+}
+
+/**
+ * PF du copropriétaire parmi les PF publiés : celui qui couvre le bâtiment de
+ * son logement, sinon d'un de ses lots, sinon le premier.
+ */
+export function pfDuCoproprietaire(pfs: PlanDefinitifPartage[], lots: PortalLot[]): PlanDefinitifPartage | null {
+  const couvre = (pf: PlanDefinitifPartage, l: PortalLot) =>
+    !pf.batimentIds?.length || (!!l.batimentId && pf.batimentIds.includes(l.batimentId));
+  const habitations = lots.filter((l) => l.usage === "habitation");
+  return (
+    pfs.find((pf) => habitations.some((l) => couvre(pf, l))) ??
+    pfs.find((pf) => lots.some((l) => couvre(pf, l))) ??
+    pfs[0] ??
+    null
+  );
 }
 
 /** Scénarios partagés par l'AMO pour cette copro (les seuls visibles côté portail). */
@@ -240,7 +282,13 @@ export function computeIndiv(
   bareme: Bareme,
   plan: PlanIndiv | null,
   tantiemes: number,
-  profil: Profil | null
+  profil: Profil | null,
+  /**
+   * Lots concernés. Avec le détail lot par lot publié par le partage des PF
+   * (plans par bâtiment, 11/10/2026), la décomposition est la somme exacte de
+   * ces lots ; sinon mise à l'échelle par les tantièmes.
+   */
+  lotIds?: string[]
 ): IndivBreakdown {
   const params: FinanceParams = readParams(scenario.params, bareme);
   const tauxMpr = params.mprCoproPct + (params.bonusPassoire ? bareme.mprCopro.bonusPassoire : 0);
@@ -249,8 +297,35 @@ export function computeIndiv(
   // part indicative du fonds au prorata de sa place dans l'agrégat.
   const shareFonds = mprCopro + params.fonds > 0 ? params.fonds / (mprCopro + params.fonds) : 0;
 
-  if (plan && Number(plan.tantiemes) > 0) {
-    const f = tantiemes / Number(plan.tantiemes);
+  const parLot = (plan?.detail as { parLot?: Record<string, PartLotPortail> } | null)?.parLot;
+  if (plan && parLot && lotIds && Object.keys(parLot).some((id) => !lotIds.includes(id))) {
+    // Une partie des lots seulement : somme de leurs parts publiées
+    let quotePart = 0;
+    let cee = 0;
+    let subvColl = 0;
+    for (const id of lotIds) {
+      quotePart += parLot[id]?.quotePart ?? 0;
+      cee += parLot[id]?.cee ?? 0;
+      subvColl += parLot[id]?.subvColl ?? 0;
+    }
+    const f = Number(plan.quote_part) > 0 ? quotePart / Number(plan.quote_part) : 0;
+    const mprIndiv = profil ? Number(plan.mpr_indiv) * f : 0;
+    return {
+      quotePart,
+      mprIndiv,
+      cee,
+      subvColl,
+      fondsPart: subvColl * shareFonds,
+      resteAvantTravaux: Math.max(0, quotePart - mprIndiv - subvColl),
+      reste: Math.max(0, quotePart - mprIndiv - cee - subvColl),
+      exact: true,
+      mprIndetermine: !profil,
+    };
+  }
+
+  if (plan && (Number(plan.tantiemes) > 0 || (parLot && lotIds))) {
+    // Tous les lots du détail publié : le plan tel quel
+    const f = parLot && lotIds ? 1 : tantiemes / Number(plan.tantiemes);
     const quotePart = Number(plan.quote_part) * f;
     // Sans profil de ressources, aucune prime individuelle n'est affichée même
     // si le plan en portait une (calculée sur un profil depuis effacé).
@@ -265,6 +340,21 @@ export function computeIndiv(
       fondsPart: subvColl * shareFonds,
       resteAvantTravaux: Math.max(0, quotePart - mprIndiv - subvColl),
       reste: Math.max(0, quotePart - mprIndiv - cee - subvColl),
+      exact: true,
+      mprIndetermine: !profil,
+    };
+  }
+  // PF par bâtiment sans ligne pour ce copropriétaire : aucun de ses lots n'est
+  // dans le périmètre d'un PF partagé - pas de quote-part à estimer.
+  if ((scenario.params as { parBatiment?: boolean } | null)?.parBatiment) {
+    return {
+      quotePart: 0,
+      mprIndiv: 0,
+      cee: 0,
+      subvColl: 0,
+      fondsPart: 0,
+      resteAvantTravaux: 0,
+      reste: 0,
       exact: true,
       mprIndetermine: !profil,
     };

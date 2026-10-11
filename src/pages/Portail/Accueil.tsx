@@ -14,7 +14,9 @@ import {
   computeIndiv,
   totalTantiemes,
   useFichiersPartages,
-  usePlanDefinitifPartage,
+  pfDuCoproprietaire,
+  pfIdsDuScenario,
+  usePlansDefinitifsPartages,
   usePortailTaches,
   type ChoixFinancement,
   type Membership,
@@ -22,7 +24,7 @@ import {
   type Scenario,
 } from "@/api/portail";
 import { readParams } from "@/api/scenarios";
-import type { Bareme, Profil } from "@/lib/finance";
+import { lireEtiquette, type Bareme, type Profil } from "@/lib/finance";
 import type { Tables } from "@/lib/database.types";
 import { messageErreur } from "@/lib/erreurs";
 import { ecoPtzPossible, peutRepondreEnquete } from "@/lib/financement";
@@ -66,12 +68,18 @@ export function Accueil({
   // l'enquête sociale ne concerne que les propriétaires d'un logement (retour du 09/10/2026)
   const enqueteOuverte = peutRepondreEnquete(membership.lots);
   const phaseIdx = PHASES.findIndex((p) => p.id === copro.phase);
-  const dpeAvant = (copro.energy_before as DpeClass | null) ?? null;
-  const dpeApres = (copro.energy_after as DpeClass | null) ?? null;
   // Consommations du PF définitif partagé (kWhep/m².an) : elles placent les
   // flèches avant / après au bon endroit de la graduation (même requête que
-  // « Plan de financement global », donc mise en cache)
-  const { data: pfPartage } = usePlanDefinitifPartage(scenario?.plan_definitif_id ?? null);
+  // « Plan de financement global », donc mise en cache) ; un PF par bâtiment :
+  // celui du logement du copropriétaire
+  const { data: pfsPartages } = usePlansDefinitifsPartages(pfIdsDuScenario(scenario));
+  const pfPartage = pfsPartages ? pfDuCoproprietaire(pfsPartages, membership.lots) : null;
+  // Étiquettes du dossier, ou celles du bâtiment quand il y a un PF par bâtiment
+  const parBatiment = (pfsPartages?.length ?? 0) > 1;
+  const dpeAvant =
+    ((parBatiment ? lireEtiquette(pfPartage?.data.infos.etiquetteInitiale) : null) ?? copro.energy_before) as DpeClass | null;
+  const dpeApres =
+    ((parBatiment ? lireEtiquette(pfPartage?.data.infos.etiquetteProjet) : null) ?? copro.energy_after) as DpeClass | null;
   const cepAvant = pfPartage?.data.infos.cepInitial ?? null;
   const cepApres = pfPartage?.data.infos.cepProjet ?? null;
   // Tâches du dossier : ce qui est en cours et ce qui reste, sous l'étape courante
@@ -87,7 +95,8 @@ export function Accueil({
           bareme,
           plan,
           totalTantiemes(membership.lots, readParams(scenario.params, bareme).cle),
-          profil
+          profil,
+          membership.lots.map((l) => l.id)
         )
       : null;
   // Aide collective publique (MPR Copro et aides locales, prorata des

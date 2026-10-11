@@ -8,9 +8,13 @@ import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { useCopro } from "@/api/copros";
-import { useDonnees } from "@/api/donnees";
+import { useDonnees, type DonneesCopro } from "@/api/donnees";
 import {
   estPlanEstimatif,
+  libellePerimetre,
+  plansValides,
+  plansValidesEnConflit,
+  type PlanDefinitif,
   scenariosDuGroupe,
   scenariosEstimatifs,
   useArchiverPlanDefinitif,
@@ -20,11 +24,15 @@ import {
   useValiderPlanDefinitif,
 } from "@/api/planDefinitif";
 import { fmtEuro, fmtEuroFull } from "@/lib/format";
+import { libellesBatiments } from "@/lib/referentiels";
+import { messageErreur } from "@/lib/erreurs";
 import {
   computePlanDefinitif,
+  couvreToutLaCopro,
   exportPlanDefinitif,
   exportPlanEstimatif,
   itemsARepartirPf,
+  lotsDuPerimetre,
   makeAidesDefaut,
   PHASES_MOE,
   readPlanDefinitif,
@@ -113,6 +121,119 @@ function CleSelect({
         </option>
       ))}
     </select>
+  );
+}
+
+// ---------- périmètre (plans par bâtiment) ----------
+
+/**
+ * Bâtiments couverts par le plan (demande d'Amir, 11/10/2026) : dans une
+ * copropriété à plusieurs bâtiments, chaque bâtiment peut avoir son propre
+ * programme de travaux, donc son propre PF, réparti entre ses seuls lots.
+ * Enregistré tout de suite, indépendamment des autres modifications du plan.
+ */
+function PerimetrePanel({
+  plan,
+  tousPlans,
+  donnees,
+  denomination,
+  nbLogementsPlan,
+  onReprendreLogements,
+}: {
+  plan: PlanDefinitif;
+  tousPlans: PlanDefinitif[] | undefined;
+  donnees: DonneesCopro;
+  denomination: string | null | undefined;
+  nbLogementsPlan: number;
+  onReprendreLogements: (n: number) => void;
+}) {
+  const update = useUpdatePlanDefinitif(plan.copro_id);
+  const lb = libellesBatiments(denomination);
+  const perimetre = plan.batiment_ids ?? [];
+  const tout = couvreToutLaCopro(perimetre);
+  // Bâtiments déjà couverts par un autre PF validé
+  const pris = new Map<string, string>();
+  for (const p of plansValides(tousPlans))
+    if (p.id !== plan.id) for (const id of p.batiment_ids ?? []) pris.set(id, p.nom);
+  const autreToutLaCopro = plansValides(tousPlans).find((p) => p.id !== plan.id && couvreToutLaCopro(p.batiment_ids));
+  const lotsPerimetre = lotsDuPerimetre(donnees.lots, plan.batiment_ids);
+  const logements = lotsPerimetre.filter((l) => l.usage === "habitation").length;
+  const enregistrer = (ids: string[] | null) => update.mutate({ id: plan.id, batimentIds: ids });
+  const basculer = (id: string, coche: boolean) => {
+    const suivant = coche ? [...perimetre, id] : perimetre.filter((x) => x !== id);
+    enregistrer(suivant.length ? suivant : null);
+  };
+
+  return (
+    <div className="panel">
+      <div className="p-head">
+        <Icon name="building" size={18} />
+        <h3>Périmètre du plan</h3>
+        <span style={{ flex: 1 }}></span>
+        <span className="se-small" style={{ color: "var(--fg-muted)" }}>
+          {libellePerimetre(plan.batiment_ids, donnees.batiments, denomination)} · {lotsPerimetre.length} lot
+          {lotsPerimetre.length > 1 ? "s" : ""} dont {logements} logement{logements > 1 ? "s" : ""}
+        </span>
+      </div>
+      <div className="p-body" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <p className="se-small" style={{ margin: 0, color: "var(--fg-muted)" }}>
+          Le plan est réparti entre les seuls lots de son périmètre. Quand les programmes de travaux diffèrent
+          d'un {lb.singulier.toLowerCase()} à l'autre, créez un plan par {lb.singulier.toLowerCase()} (bouton
+          « Dupliquer » de la liste des plans) : chacun peut être validé, et le portail additionne les plans qui
+          concernent les lots d'un copropriétaire.
+        </p>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, cursor: "pointer" }}>
+            <input type="radio" checked={tout} disabled={update.isPending} onChange={() => enregistrer(null)} />
+            Toute la copropriété
+          </label>
+          {donnees.batiments.map((b) => {
+            const nb = donnees.lots.filter((l) => l.batiment_id === b.id).length;
+            const autre = pris.get(b.id);
+            return (
+              <label
+                key={b.id}
+                style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, cursor: "pointer" }}
+                title={autre ? `Déjà couvert par le PF validé « ${autre} »` : undefined}
+              >
+                <input
+                  type="checkbox"
+                  checked={!tout && perimetre.includes(b.id)}
+                  disabled={update.isPending}
+                  onChange={(e) => basculer(b.id, e.target.checked)}
+                />
+                {lb.court} {b.code}
+                <span style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>
+                  ({nb} lot{nb > 1 ? "s" : ""}{autre ? " · autre PF validé" : ""})
+                </span>
+              </label>
+            );
+          })}
+        </div>
+        {autreToutLaCopro && plan.statut !== "valide" && (
+          <p className="se-small" style={{ margin: 0, color: "var(--color-warning-700)" }}>
+            <Icon name="alert" size={12} /> « {autreToutLaCopro.nom} » est validé pour toute la copropriété : valider ce
+            plan le repassera en brouillon. Donnez-lui d'abord son propre périmètre pour garder les deux.
+          </p>
+        )}
+        {nbLogementsPlan !== logements && logements > 0 && (
+          <p className="se-small" style={{ margin: 0, color: "var(--color-warning-700)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span>
+              <Icon name="alert" size={12} /> Le plan compte {nbLogementsPlan} logement{nbLogementsPlan > 1 ? "s" : ""} principaux,
+              le périmètre {logements} (plafonds MaPrimeRénov' et AMO, aides par logement).
+            </span>
+            <button className="se-btn se-btn-ghost btn-sm" onClick={() => onReprendreLogements(logements)}>
+              Reprendre {logements}
+            </button>
+          </p>
+        )}
+        {update.isError && (
+          <p className="se-small" style={{ margin: 0, color: "var(--color-error-700)" }}>
+            {messageErreur(update.error, "Enregistrement du périmètre impossible")}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -279,7 +400,20 @@ export default function PlanDefinitifPage() {
                 ? "Enregistrez d'abord vos modifications pour pouvoir valider"
                 : "Valider ce plan : les panneaux du financement se remplissent automatiquement"
             }
-            onClick={() => valider.mutate({ id: plan.id, valider: true, coproNom: c?.name })}
+            onClick={() => {
+              // Un seul plan validé par périmètre (même bâtiment ou toute la copropriété),
+              // confirmé dans une copropriété à plusieurs bâtiments
+              const conflits = plansValidesEnConflit(tousPlans, plan.id, plan.batiment_ids);
+              if (
+                (donnees?.batiments.length ?? 0) > 1 &&
+                conflits.length &&
+                !window.confirm(
+                  `Valider ce plan repassera en brouillon : « ${conflits.map((x) => x.nom).join(" », « ")} ». Continuer ?`
+                )
+              )
+                return;
+              valider.mutate({ id: plan.id, valider: true, coproNom: c?.name });
+            }}
           >
             <Icon name="checkCircle" size={15} />
             Valider
@@ -294,6 +428,18 @@ export default function PlanDefinitifPage() {
           {update.isPending ? "Enregistrement…" : dirty ? "Enregistrer" : "Enregistré"}
         </button>
       </div>
+
+      {/* ---- périmètre : plans par bâtiment ---- */}
+      {!estimatif && donnees && donnees.batiments.length > 1 && (
+        <PerimetrePanel
+          plan={plan}
+          tousPlans={tousPlans}
+          donnees={donnees}
+          denomination={c?.denomination_batiments}
+          nbLogementsPlan={data.infos.nbLogements}
+          onReprendreLogements={(n) => edit((d) => ((d.infos.nbLogements = n), d))}
+        />
+      )}
 
       {/* ---- infos générales ---- */}
       <div className="panel">

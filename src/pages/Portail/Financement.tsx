@@ -117,7 +117,7 @@ export function Financement({
   const cle = params.cle;
   // On finance le reste avant travaux : les CEE, versés à la fin du chantier,
   // n'en font pas partie (ils arrivent après).
-  const indiv = computeIndiv(scenario, bareme, plan, totalTantiemes(lots, cle), profil);
+  const indiv = computeIndiv(scenario, bareme, plan, totalTantiemes(lots, cle), profil, lots.map((l) => l.id));
   const montant = indiv.resteAvantTravaux;
   const dureeCollectif = config?.duree_annees ?? 15;
   const lienBanque = config?.lien_adhesion ?? null;

@@ -225,6 +225,69 @@ export function logementsEcoPtz(input: {
 }
 
 /**
+ * Plans par bâtiment (11/10/2026) : chaque PF validé donne ses postes et les
+ * quotes-parts des logements calculées sur les lots de son périmètre. Les
+ * postes de même numéro de lot sont regroupés (le dossier éco-PTZ range les
+ * entreprises par numéro de lot) ; pour un logement, chaque ligne vient du PF
+ * qui couvre ses lots (montant du poste dans ce bâtiment, tantièmes et total
+ * de la clé de ce bâtiment). `conflits` : numéros de lot portés par des
+ * entreprises différentes d'un PF à l'autre - le dossier ne peut en garder qu'une.
+ */
+export function fusionnerEcoPtzParBatiment(parPf: { postes: PosteEcoPtz[]; logements: LogementEcoPtz[] }[]): {
+  postes: PosteEcoPtz[];
+  logements: LogementEcoPtz[];
+  conflits: number[];
+} {
+  if (parPf.length === 1) return { ...parPf[0], conflits: [] };
+  const postes = new Map<number, PosteEcoPtz>();
+  const conflits = new Set<number>();
+  for (const { postes: ps } of parPf)
+    for (const p of ps) {
+      const cur = postes.get(p.lotNumero);
+      if (!cur) {
+        postes.set(p.lotNumero, { ...p, parCle: { ...p.parCle } });
+        continue;
+      }
+      const a = (cur.entreprisePf ?? "").trim().toLowerCase();
+      const b = (p.entreprisePf ?? "").trim().toLowerCase();
+      if (a && b && a !== b) conflits.add(p.lotNumero);
+      for (const [cle, m] of Object.entries(p.parCle)) cur.parCle[cle] = (cur.parCle[cle] ?? 0) + m;
+      cur.montantTtc += p.montantTtc;
+      cur.nbLignes += p.nbLignes;
+      cur.lignesSansCle += p.lignesSansCle;
+      cur.entreprisePf = cur.entreprisePf ?? p.entreprisePf;
+    }
+
+  const logements = new Map<string, LogementEcoPtz>();
+  for (const { logements: ls } of parPf)
+    for (const l of ls) {
+      const cur = logements.get(l.lotId);
+      if (!cur) {
+        logements.set(l.lotId, { ...l, lignes: [...l.lignes] });
+        continue;
+      }
+      for (const ligne of l.lignes) {
+        const i = cur.lignes.findIndex((x) => x.lotNumero === ligne.lotNumero);
+        if (i === -1) cur.lignes.push(ligne);
+        else {
+          // la ligne du bâtiment qui porte la plus grosse part décrit le calcul
+          const garde = cur.lignes[i].quotePart >= ligne.quotePart ? cur.lignes[i] : ligne;
+          cur.lignes[i] = { ...garde, quotePart: cur.lignes[i].quotePart + ligne.quotePart };
+        }
+      }
+    }
+  const tous = [...logements.values()].map((l) => {
+    const lignes = l.lignes.sort((a, b) => a.lotNumero - b.lotNumero);
+    return { ...l, lignes, total: lignes.reduce((s, x) => s + x.quotePart, 0) };
+  });
+  return {
+    postes: [...postes.values()].sort((a, b) => a.lotNumero - b.lotNumero),
+    logements: tous.sort((a, b) => a.nom.localeCompare(b.nom, "fr") || trierNum({ num: a.lotNum }, { num: b.lotNum })),
+    conflits: [...conflits].sort((a, b) => a - b),
+  };
+}
+
+/**
  * Montant au format du CERFA : séparateur de milliers = espace simple (les
  * polices standard des PDF n'ont pas l'espace fine insécable), virgule et
  * toujours deux décimales. L'arrondi au centime n'intervient qu'ici.

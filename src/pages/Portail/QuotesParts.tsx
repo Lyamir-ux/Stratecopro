@@ -72,8 +72,8 @@ export function QuotesParts({
   const lotT = lot ? lotTantiemes(lot, cle) : 0;
   const totalT = totalTantiemes(lots, cle);
 
-  const indiv = computeIndiv(scn, bareme, plan ?? null, lotT, profil);
-  const totalIndiv = computeIndiv(scn, bareme, plan ?? null, totalT, profil);
+  const indiv = computeIndiv(scn, bareme, plan ?? null, lotT, profil, lot ? [lot.id] : []);
+  const totalIndiv = computeIndiv(scn, bareme, plan ?? null, totalT, profil, lots.map((l) => l.id));
   // Rappel propre à certains dossiers (Armorial : hors vente des combles), sans calcul
   const noteReste = noteResteAFinancer(membership.copro.id);
 

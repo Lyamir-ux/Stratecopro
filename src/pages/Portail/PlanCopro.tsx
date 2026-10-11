@@ -8,7 +8,13 @@ import { Badge } from "@/components/ui";
 import { Cascade } from "@/components/Cascade";
 import { fmtEuro, fmtEuroFull } from "@/lib/format";
 import { readParams } from "@/api/scenarios";
-import { usePlanDefinitifPartage, type Membership, type Scenario } from "@/api/portail";
+import {
+  pfDuCoproprietaire,
+  pfIdsDuScenario,
+  usePlansDefinitifsPartages,
+  type Membership,
+  type Scenario,
+} from "@/api/portail";
 import type { Bareme } from "@/lib/finance";
 import { PHASES_MOE, type AideResult } from "@/lib/finance/planDefinitif";
 
@@ -99,7 +105,13 @@ export function PlanCopro({
   const [scnId, setScnId] = useState<string | null>(null);
   const scn = scenarios.find((s) => s.id === scnId) ?? scenarios[0] ?? null;
   const copro = membership.copro;
-  const { data: pf } = usePlanDefinitifPartage(scn?.plan_definitif_id ?? null);
+  // PF publiés : un seul, ou un par bâtiment (11/10/2026) - le détail se lit
+  // bâtiment par bâtiment, en commençant par celui du copropriétaire
+  const pfIds = pfIdsDuScenario(scn);
+  const parBatiment = pfIds.length > 1;
+  const { data: pfs } = usePlansDefinitifsPartages(pfIds);
+  const [pfId, setPfId] = useState<string | null>(null);
+  const pf = pfs ? (pfs.find((p) => p.id === pfId) ?? pfDuCoproprietaire(pfs, membership.lots)) : null;
   // Lots de travaux dépliés (lignes de devis)
   const [lotsOuverts, setLotsOuverts] = useState<Set<number>>(new Set());
   const toggleLot = (n: number) =>
@@ -123,10 +135,23 @@ export function PlanCopro({
   }
 
   const params = readParams(scn.params, bareme);
+  // Un PF par bâtiment : chaque plan se lit avec ses propres montants (même
+  // construction que les paramètres du scénario pont, pour un seul PF).
+  if (parBatiment && pf) {
+    const r = pf.resultat;
+    params.travaux = r.totalTravauxTtc;
+    params.honoraires = r.totalMoeTtc;
+    params.aleas = r.totalTravauxTtcImprevus - r.totalTravauxTtc;
+    params.mprCoproPct = r.totalTravauxTtc > 0 ? Math.round(((r.totalAides - r.primeCee) / r.totalTravauxTtc) * 10000) / 100 : 0;
+    params.bonusPassoire = false;
+    params.cee = r.primeCee;
+    params.fonds = pf.data.params.fondsTravaux;
+  }
   const coutTotal = params.travaux + params.honoraires + params.aleas;
   const tauxMpr = params.mprCoproPct + (params.bonusPassoire ? bareme.mprCopro.bonusPassoire : 0);
   const mprCopro = (params.travaux * tauxMpr) / 100;
   const deductions = mprCopro + params.cee + params.fonds;
+  const gainPct = parBatiment && pf ? Math.round(pf.resultat.performancePct * 10) / 10 : copro.gain_pct != null ? Number(copro.gain_pct) : null;
   const resteCollectif = coutTotal - deductions;
 
   const resultat = (scn.resultat ?? {}) as { aidesIndiv?: number };
@@ -154,6 +179,24 @@ export function PlanCopro({
         {pf ? " · d'après le plan de financement définitif validé par votre AMO" : ""}
       </p>
 
+      {parBatiment && pfs && pfs.length > 1 && (
+        <div className="qp-controls">
+          <div className="qp-group">
+            <span className="qp-lbl">Plan</span>
+            <div className="seg">
+              {pfs.map((p) => (
+                <button key={p.id} className={p.id === pf?.id ? "on" : ""} onClick={() => setPfId(p.id)}>
+                  {p.nom.replace(/^PF d[ée]finitif\s*-?\s*/i, "") || p.nom}
+                </button>
+              ))}
+            </div>
+          </div>
+          <span className="se-small" style={{ color: "var(--fg-muted)" }}>
+            Un plan de financement par bâtiment : vos quotes-parts additionnent ceux qui concernent vos lots.
+          </span>
+        </div>
+      )}
+
       {scenarios.length > 1 && (
         <div className="qp-controls">
           <div className="qp-group">
@@ -175,8 +218,8 @@ export function PlanCopro({
             <Icon name="barChart" size={20} style={{ color: "var(--accent)" }} />
             <h2>Du coût total au reste à charge</h2>
             <span style={{ flex: 1 }}></span>
-            {copro.gain_pct != null && (
-              <Badge kind="primary"><Icon name="trendingUp" size={12} />+{Number(copro.gain_pct)} %</Badge>
+            {gainPct != null && (
+              <Badge kind="primary"><Icon name="trendingUp" size={12} />+{gainPct} %</Badge>
             )}
           </div>
           <div className="cx-body">
@@ -370,12 +413,12 @@ export function PlanCopro({
               />
             </div>
           </div>
-          {copro.gain_pct != null && Number(copro.gain_pct) >= bareme.mprCopro.seuilMin && (
+          {gainPct != null && gainPct >= bareme.mprCopro.seuilMin && (
             <div className="cc-next">
               <Icon name="checkCircle" size={15} className="ico" />
               <span>
                 Gain énergétique supérieur au seuil de {bareme.mprCopro.seuilMin} % :
-                {Number(copro.gain_pct) >= bareme.mprCopro.seuilMajore ? " taux d'aides majorés." : " copropriété éligible aux aides collectives."}
+                {gainPct >= bareme.mprCopro.seuilMajore ? " taux d'aides majorés." : " copropriété éligible aux aides collectives."}
               </span>
             </div>
           )}

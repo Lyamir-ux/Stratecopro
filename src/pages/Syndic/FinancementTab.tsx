@@ -12,14 +12,14 @@ import { useAuth } from "@/auth/AuthProvider";
 import { useDonnees } from "@/api/donnees";
 import { useChoixFinancementScenario } from "@/api/scenarios";
 import { useScenariosPartages, useFinancementConfig, useSaveChoixGestionnaire } from "@/api/portail";
-import { usePlansDefinitifs, type PlanDefinitif } from "@/api/planDefinitif";
 import {
-  computePlanDefinitif,
-  readPlanDefinitif,
-  regrouperAnnexes,
-  repartirPfDepuisLots,
-  type PlanDefinitifResult,
-} from "@/lib/finance";
+  libellePerimetre,
+  pfARepartir,
+  plansValides,
+  usePlansDefinitifs,
+  type PlanDefinitif,
+} from "@/api/planDefinitif";
+import { regrouperAnnexes, repartirPfs, type PlanDefinitifResult } from "@/lib/finance";
 import type { Enums } from "@/lib/database.types";
 import { appelsDepuisInscrits, useAppelsDeFondsInscrits, type SyndicCopro } from "@/api/syndic";
 import { round2 } from "@/lib/finance";
@@ -67,7 +67,18 @@ const ORDRE_GROUPES_AIDES = ["ANAH", "EMS", "Climaxion"];
  * déroulable - travaux regroupés par entreprise, frais annexes par mission,
  * aides de l'État par dispositif (MaPrimeRénov', EMS, Climaxion).
  */
-function PfDefinitifPanel({ plan, pv, fondsTravaux }: { plan: PlanDefinitif; pv: PlanDefinitifResult; fondsTravaux: number }) {
+function PfDefinitifPanel({
+  plan,
+  pv,
+  fondsTravaux,
+  perimetre,
+}: {
+  plan: PlanDefinitif;
+  pv: PlanDefinitifResult;
+  fondsTravaux: number;
+  /** Bâtiments couverts quand la copropriété a un PF par bâtiment. */
+  perimetre?: string;
+}) {
   const [ouverts, setOuverts] = useState<Set<string>>(new Set());
   const toggle = (id: string) =>
     setOuverts((prev) => {
@@ -125,7 +136,7 @@ function PfDefinitifPanel({ plan, pv, fondsTravaux }: { plan: PlanDefinitif; pv:
     <div className="panel">
       <div className="p-head">
         <Icon name="fileCheck" size={18} />
-        <h3>Plan de financement définitif</h3>
+        <h3>Plan de financement définitif{perimetre ? ` · ${perimetre}` : ""}</h3>
         <span style={{ flex: 1 }}></span>
         <Badge kind="success" dot>
           Validé
@@ -204,21 +215,15 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
   // Recherche d'un copropriétaire par son nom (feedback Amir du 15/09/2026) :
   // la liste en dessous ne garde que les noms qui correspondent.
   const [recherche, setRecherche] = useState("");
-  // Le PF définitif validé est automatiquement partagé avec le syndic (RLS).
+  // Le PF définitif validé est automatiquement partagé avec le syndic (RLS) ;
+  // plusieurs PF quand chaque bâtiment a le sien (11/10/2026).
   const { data: pfPlans } = usePlansDefinitifs(c.id);
-  const planValide = (pfPlans ?? [])
-    .filter((p) => p.statut === "valide")
-    .sort((a, b) => (b.updated_at > a.updated_at ? 1 : -1))[0];
+  const valides = useMemo(() => plansValides(pfPlans), [pfPlans]);
+  const planValide = valides[0];
   // Recalcul depuis les données du plan (moteur pur) plutôt que l'instantané
   // `resultat` : mêmes montants, mais les champs récents (entreprise des lignes
   // MOE) sont disponibles sans réenregistrement du plan.
-  const pf = useMemo(
-    () =>
-      planValide
-        ? { data: readPlanDefinitif(planValide.data), pv: computePlanDefinitif(readPlanDefinitif(planValide.data)) }
-        : null,
-    [planValide]
-  );
+  const pfs = useMemo(() => valides.map(pfARepartir), [valides]);
 
   const coproprietaires = donnees?.coproprietaires ?? [];
   const lots = donnees?.lots ?? [];
@@ -236,11 +241,12 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
   // partagé (montants de la banque ou de l'appel du syndic) - RPC 0071.
   const appelsDeFonds = useMemo(() => {
     const inscrits = appelsInscrits?.length ? appelsDepuisInscrits(appelsInscrits) : null;
-    if (!pf || !donnees) return inscrits;
-    const { plans, manquants } = repartirPfDepuisLots(pf.data, pf.pv, donnees.lots, donnees.cles);
+    if (!pfs.length || !donnees) return inscrits;
+    // Un PF par bâtiment : chacun réparti sur ses lots, parts additionnées
+    const { plans, complet } = repartirPfs(pfs, donnees.lots, donnees.cles);
     // Répartition incomplète (clé manquante sur une ligne) : montants inscrits
     // s'il y en a, sinon rien plutôt que des montants faux.
-    if (manquants.length > 0) return inscrits;
+    if (!complet) return inscrits;
     return new Map(
       plans.map((p) => {
         // mêmes arrondis que la fiche AMO (api/dossiersCopros)
@@ -249,7 +255,7 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
         return [p.coproprietaireId, { appel, primeCee: p.primeCee }];
       })
     );
-  }, [pf, donnees, appelsInscrits]);
+  }, [pfs, donnees, appelsInscrits]);
 
   const lotsByCp = useMemo(() => {
     const m = new Map<string, number>();
@@ -561,8 +567,20 @@ export function FinancementTabSyndic({ c }: { c: SyndicCopro }) {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          {planValide && pf ? (
-            <PfDefinitifPanel plan={planValide} pv={pf.pv} fondsTravaux={pf.data.params.fondsTravaux} />
+          {pfs.length > 0 ? (
+            pfs.map((pf, i) => (
+              <PfDefinitifPanel
+                key={pf.id}
+                plan={valides[i]}
+                pv={pf.resultat}
+                fondsTravaux={pf.data.params.fondsTravaux}
+                perimetre={
+                  pfs.length > 1 || valides[i].batiment_ids?.length
+                    ? libellePerimetre(valides[i].batiment_ids, donnees?.batiments ?? [], c.denomination_batiments)
+                    : undefined
+                }
+              />
+            ))
           ) : scenario ? (
             <div className="panel">
               <div className="p-head">
