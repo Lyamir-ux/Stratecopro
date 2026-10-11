@@ -82,6 +82,12 @@ const SCI = ["SCI soumise à l'impôt sur le revenu", "SCI soumise à l'impôt s
 const MENAGE: Condition = { qid: "type-coproprietaire", vals: ["Personne physique", "Indivision"], defaut: true };
 const HAB = { qid: "usage-lot", vals: ["Habitation"] };
 const BAILLEUR = { qid: "type-occupation", vals: ["Propriétaire bailleur (logement loué)"] };
+/** Logement occupé par son propriétaire (ou vacant), pas loué : les questions sur ses occupants
+ *  (confort, nombre d'habitants…) ne se posent pas à un bailleur, qui renseigne les coordonnées de
+ *  son locataire à la place (feedback d'Amir du 11/10/2026). Posée tant que le type n'est pas répondu. */
+const NON_BAILLEUR: Condition = { qid: "type-occupation", vals: ["Propriétaire occupant", "Logement vacant"], defaut: true };
+/** Logement loué à l'année : seul cas où l'on a un locataire à contacter. */
+const LOUE_A_L_ANNEE: Condition = { qid: "mode-location", vals: ["Loué à l'année (résidence principale du locataire)"], defaut: true };
 /** Nomenclature INSEE simplifiée des catégories socioprofessionnelles. */
 const CSP_INSEE = [
   "Agriculteur", "Artisan, commerçant, chef d'entreprise", "Cadre, profession intellectuelle supérieure",
@@ -97,7 +103,10 @@ const EMETTEURS_RADIATEURS: Condition = {
 
 export const CATALOGUE: CatalogueQuestion[] = [
   // ========== Identité & coordonnées ==========
-  { id: "nom", section: "identite", tag: "Nom ou raison sociale", q: "Quel est votre nom complet (ou raison sociale) ?", type: "texte", locked: true, defaultOn: true },
+  // nom et prénom séparés, sans raison sociale (retour de A CHELGHAM du 11/10/2026 : « pour la base
+  // de données et pour éviter les erreurs futures ») ; une SCI ou une indivision indique la personne
+  { id: "nom", section: "identite", tag: "Nom", q: "Quel est votre nom de famille ?", type: "texte", locked: true, defaultOn: true },
+  { id: "prenom", section: "identite", tag: "Prénom", q: "Quel est votre prénom ?", type: "texte", locked: true, defaultOn: true },
   { id: "telephone", section: "identite", tag: "Numéro de téléphone", q: "Quel est votre numéro de téléphone ?", type: "tel", locked: true, defaultOn: true },
   { id: "adresse", section: "identite", tag: "Adresse postale", q: "À quelle adresse postale êtes-vous joignable ?", type: "adresse", aide: "Adresse de contact, qui peut différer de celle du lot (propriétaires bailleurs).", locked: true, defaultOn: true },
   { id: "email", section: "identite", tag: "Email", q: "Quelle est votre adresse email ?", type: "email", locked: true, defaultOn: true },
@@ -211,7 +220,7 @@ export const CATALOGUE: CatalogueQuestion[] = [
   { id: "usage-lot", section: "lot", tag: "Usage du lot", q: "Quel est l'usage de ce lot ?", type: "choix", options: USAGES_LOT, locked: true, defaultOn: true },
   { id: "lot-parent", section: "lot", tag: "Lot parent", q: "À quel lot principal est lié ce lot secondaire ?", type: "lotParent", cond: [{ qid: "usage-lot", vals: ["Stationnement", "Garage", "Cave", "Box", "Autre"] }], locked: true, defaultOn: true },
   { id: "type-occupation", section: "lot", tag: "Type d'occupation", q: "Êtes-vous propriétaire bailleur ou propriétaire occupant de ce lot ?", type: "choix", options: ["Propriétaire occupant", "Propriétaire bailleur (logement loué)", "Logement vacant"], cond: [HAB], locked: true, defaultOn: true },
-  { id: "nb-habitants", section: "lot", tag: "Nombre d'habitants", q: "Combien de personnes habitent dans ce logement ?", type: "nombre", cond: [HAB], locked: true, defaultOn: true },
+  { id: "nb-habitants", section: "lot", tag: "Nombre d'habitants", q: "Combien de personnes habitent dans ce logement ?", type: "nombre", cond: [HAB, NON_BAILLEUR], locked: true, defaultOn: true },
   {
     id: "type-residence", section: "lot", tag: "Type de résidence", q: "Ce logement est-il votre résidence principale ou secondaire ?", type: "choix",
     options: ["Résidence principale", "Résidence secondaire"],
@@ -224,6 +233,21 @@ export const CATALOGUE: CatalogueQuestion[] = [
     cond: [HAB, BAILLEUR],
     aide: "L'aide aux propriétaires bailleurs de l'Eurométropole de Strasbourg dépend du mode de location.",
     locked: true, defaultOn: true,
+  },
+  // Locataire d'un logement loué à l'année : ses coordonnées remplacent, pour un bailleur, les
+  // questions sur les occupants (nombre d'habitants, confort, occupation) - feedback d'Amir du
+  // 11/10/2026. Nom, prénom et nombre de personnes sont obligatoires ; un bailleur n'a pas
+  // toujours le téléphone ou l'e-mail de son locataire.
+  { id: "locataire-nom", section: "lot", tag: "Locataire : nom", q: "Quel est le nom de votre locataire ?", type: "texte", cond: [HAB, BAILLEUR, LOUE_A_L_ANNEE], locked: true, defaultOn: true },
+  { id: "locataire-prenom", section: "lot", tag: "Locataire : prénom", q: "Quel est le prénom de votre locataire ?", type: "texte", cond: [HAB, BAILLEUR, LOUE_A_L_ANNEE], locked: true, defaultOn: true },
+  { id: "locataire-nb-personnes", section: "lot", tag: "Locataire : nombre de personnes", q: "Combien de personnes vivent dans le logement (locataire compris) ?", type: "nombre", cond: [HAB, BAILLEUR, LOUE_A_L_ANNEE], locked: true, defaultOn: true },
+  {
+    id: "locataire-telephone", section: "lot", tag: "Locataire : téléphone", q: "Quel est le numéro de téléphone de votre locataire ?", type: "tel",
+    cond: [HAB, BAILLEUR, LOUE_A_L_ANNEE], aide: "Pour que l'équipe Strat Eco puisse le contacter au sujet des travaux et des visites.", facultatif: true, locked: true, defaultOn: true,
+  },
+  {
+    id: "locataire-email", section: "lot", tag: "Locataire : e-mail", q: "Quelle est l'adresse e-mail de votre locataire ?", type: "email",
+    cond: [HAB, BAILLEUR, LOUE_A_L_ANNEE], aide: "Pour que l'équipe Strat Eco puisse le contacter au sujet des travaux et des visites.", facultatif: true, locked: true, defaultOn: true,
   },
   { id: "commodat", section: "lot", tag: "Mise à disposition du logement", q: "Le logement est-il mis à disposition gratuitement (modèle du commodat) ?", type: "choix", options: ["Oui", "Non"], cond: [HAB], defaultOn: true },
   { id: "associes-occupants", section: "lot", tag: "Associés occupants le logement", q: "Combien y a-t-il d'associés de la SCI occupants le logement ?", type: "nombre", cond: [HAB, { qid: "type-coproprietaire", vals: SCI }], aide: "L'occupation par un associé conditionne certaines aides individuelles.", defaultOn: true },
@@ -297,57 +321,57 @@ export const CATALOGUE: CatalogueQuestion[] = [
     id: "difficultes-logement", section: "confort", tag: "Difficultés dans le logement", q: "Ce logement présente-t-il l'une de ces difficultés ?", type: "multi",
     options: ["Logement trop petit", "Sur-occupation", "Insalubre ou très dégradé", "Difficile à chauffer", "Aucune difficulté particulière"],
     aide: "Plusieurs réponses possibles - volet social du rapport d'enquête.",
-    cond: [HAB], locked: true, defaultOn: true,
+    cond: [HAB, NON_BAILLEUR], locked: true, defaultOn: true,
   },
   {
     id: "inconforts", section: "confort", tag: "Inconforts", q: "Ressentez-vous un inconfort particulier ?", type: "multi",
     options: ["Froid en hiver", "Chaleur excessive en été", "Courants d'air", "Parois ou sols froids", "Humidité", "Bruits (voisinage, extérieur)", "Odeurs / qualité de l'air", "Aucun inconfort particulier"],
     aide: "Plusieurs réponses possibles - ces ressentis alimentent le diagnostic.",
-    cond: [HAB_COM], defaultOn: true,
+    cond: [HAB_COM, NON_BAILLEUR], defaultOn: true,
   },
   {
     id: "duree-occupation", section: "confort", tag: "Durée occupation du logement", q: "Depuis combien de temps ce logement est-il habité par ses occupants ?", type: "choix",
     options: ["Moins de 2 ans", "2 à 5 ans", "5 à 10 ans", "10 à 20 ans", "Plus de 20 ans"],
     aide: "L'ancienneté d'occupation éclaire la fiabilité des ressentis exprimés.",
-    cond: [HAB], defaultOn: false,
+    cond: [HAB, NON_BAILLEUR], defaultOn: false,
   },
   {
     id: "tranches-age", section: "confort", tag: "Tranche d'âge des occupants", q: "Quelle est la tranche d'âge des personnes vivant dans le logement ?", type: "multi",
     options: ["Moins de 18 ans", "18 à 30 ans", "31 à 45 ans", "46 à 60 ans", "61 à 75 ans", "Plus de 75 ans"],
     aide: "Plusieurs réponses possibles - utile pour identifier les publics sensibles (enfants, personnes âgées).",
-    cond: [HAB], defaultOn: false,
+    cond: [HAB, NON_BAILLEUR], defaultOn: false,
   },
   {
     id: "csp", section: "confort", tag: "CSP des personnes occupantes", q: "Quelle est la catégorie socio-professionnelle principale des personnes occupantes ?", type: "choix",
     options: CSP_INSEE,
     aide: "Nomenclature INSEE simplifiée - donnée statistique pour le volet social.",
-    cond: [HAB], defaultOn: false,
+    cond: [HAB, NON_BAILLEUR], defaultOn: false,
   },
   {
     id: "ressenti-ete", section: "confort", tag: "Ressenti dans le logement en été", q: "Quel est votre ressenti dans le logement en été ?", type: "choix",
     options: ["Très chaud, difficilement supportable", "Chaud mais supportable", "Confortable", "Frais"],
-    cond: [HAB], defaultOn: false,
+    cond: [HAB, NON_BAILLEUR], defaultOn: false,
   },
   {
     id: "ressenti-hiver", section: "confort", tag: "Ressenti dans le logement en hiver", q: "Quel est votre ressenti dans le logement en hiver ?", type: "choix",
     options: ["Très froid malgré le chauffage", "Froid par moments (matin, grand froid…)", "Confortable", "Trop chauffé"],
-    cond: [HAB], defaultOn: false,
+    cond: [HAB, NON_BAILLEUR], defaultOn: false,
   },
   {
     id: "confort-phonique", section: "confort", tag: "Confort phonique", q: "Quel est votre ressenti au niveau du confort phonique dans votre logement ?", type: "choix",
     options: ["Très satisfaisant", "Satisfaisant", "Moyen", "Mauvais", "Très mauvais"],
-    cond: [HAB], defaultOn: false,
+    cond: [HAB, NON_BAILLEUR], defaultOn: false,
   },
   {
     id: "detecteurs", section: "confort", tag: "Détecteur de fumée", q: "Votre logement est-il équipé d'un détecteur de fumée et d'un détecteur de monoxyde de carbone ?", type: "choix",
     options: ["Oui, les deux (fumée + CO)", "Détecteur de fumée uniquement", "Détecteur de CO uniquement", "Aucun"],
-    cond: [HAB], defaultOn: false,
+    cond: [HAB, NON_BAILLEUR], defaultOn: false,
   },
   {
     id: "projet-travaux", section: "confort", tag: "Projet de travaux", q: "Avez-vous un projet de travaux dans ce logement ?", type: "multi",
     options: ["Isolation (murs, plafonds, sols)", "Remplacement des fenêtres", "Chauffage / eau chaude", "Ventilation", "Salle de bain / cuisine", "Rafraîchissement (peinture, sols…)", "Autre (précisez)", "Aucun projet"], precision: ["Autre (précisez)"],
     aide: "Permet de proposer un accompagnement sur les travaux privatifs en complément des travaux collectifs.",
-    cond: [HAB], defaultOn: false,
+    cond: [HAB, NON_BAILLEUR], defaultOn: false,
   },
 ];
 
@@ -411,6 +435,26 @@ export function resolveQuestions(config: ConfigItem[]): ResolvedQuestion[] {
       defaultOn: true,
     }));
   return [...catalogue, ...customs];
+}
+
+/** Réponse à une question : texte, nombre ou choix multiples. */
+export type ReponseVal = string | number | string[];
+
+/** La question est-elle posée, compte tenu des réponses déjà données ? */
+export function estVisible(
+  q: Pick<ResolvedQuestion, "on" | "cond">,
+  get: (qid: string) => ReponseVal | undefined
+): boolean {
+  if (!q.on) return false;
+  return (q.cond ?? []).every((c) => {
+    const v = get(c.qid);
+    if (typeof v === "string" && v !== "") return c.vals.includes(v);
+    // réponse numérique (ex. RFR = 0 → justification demandée)
+    if (typeof v === "number") return c.vals.includes(String(v));
+    if (Array.isArray(v) && v.length > 0) return v.some((x) => c.vals.includes(x));
+    // question de référence pas encore répondue
+    return c.defaut === true;
+  });
 }
 
 // ========== Aides à l'affichage ==========

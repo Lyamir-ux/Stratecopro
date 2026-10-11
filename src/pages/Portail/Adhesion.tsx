@@ -43,7 +43,8 @@ import {
 } from "@/components/ChampsSaisie";
 import { classerTelephone, dateLieuComplet, diagnosticBic, diagnosticIban } from "@/lib/saisie";
 import { ACCEPT_PIECE, erreurFormatPiece, LIBELLE_FORMATS_PIECE, typeMimePiece } from "@/lib/formatPiece";
-import { decouperNomPrenom } from "@/lib/nomFamille";
+import { decouperNomPrenom, nomEtPrenomRenseignes } from "@/lib/nomFamille";
+import { signataireDepuisAdherent2 } from "@/lib/signataireAdherent2";
 import { assemblerPieceIdentite, facesADeposer, verifierFacesPiece } from "@/lib/pdf/pieceIdentite";
 import { PieceIdentiteChamps } from "@/components/PieceIdentiteChamps";
 import { useGlisserDeposer } from "@/components/useGlisserDeposer";
@@ -99,6 +100,18 @@ const emptyAdherent = (nom = ""): Adherent => ({
   situation: "celibataire",
   situationDepuis: "",
 });
+
+/** « (vous seul) », « (vous et votre adhérent 2) », « (vous, votre adhérent 2 et 2 adhérents supplémentaires) »… */
+function libelleSignataires(adherent2: boolean, supplementaires: number): string {
+  const autres = [
+    ...(adherent2 ? ["votre adhérent 2"] : []),
+    ...(supplementaires > 0
+      ? [`${supplementaires} adhérent${supplementaires > 1 ? "s" : ""} supplémentaire${supplementaires > 1 ? "s" : ""}`]
+      : []),
+  ];
+  if (autres.length === 0) return "(vous seul)";
+  return `(vous${autres.length === 1 ? " et " : ", "}${autres.join(" et ")})`;
+}
 
 /** « NOM Prénom » d'après le libellé de la fiche quand on peut le trancher, sinon le libellé tel quel. */
 const nomPrenomDeLaFiche = (libelle: string): string => {
@@ -229,7 +242,20 @@ function CasesAttestations({
   );
 }
 
-function AdherentFields({ a, onChange, titre }: { a: Adherent; onChange: (a: Adherent) => void; titre: string }) {
+/** `emailSeul` : adhérent 2 d'un couple marié ou pacsé. Il signe lui aussi, depuis un lien envoyé à son
+ *  adresse e-mail, et c'est la seule information qu'on lui demande en plus de ce bloc (retour de
+ *  A CHELGHAM du 11/10/2026, limité au couple le même jour). Hors couple, une fiche complète est demandée. */
+function AdherentFields({
+  a,
+  onChange,
+  titre,
+  emailSeul = false,
+}: {
+  a: Adherent;
+  onChange: (a: Adherent) => void;
+  titre: string;
+  emailSeul?: boolean;
+}) {
   const set = (patch: Partial<Adherent>) => onChange({ ...a, ...patch });
   return (
     <>
@@ -241,6 +267,11 @@ function AdherentFields({ a, onChange, titre }: { a: Adherent; onChange: (a: Adh
           onChange={(e) => set({ nomPrenom: e.target.value })}
         />
         <span className="hint">Le nom, puis le prénom.</span>
+        {emailSeul && a.nomPrenom.trim() !== "" && !nomEtPrenomRenseignes(a.nomPrenom) && (
+          <span className="hint" style={{ color: "var(--color-error-700)" }}>
+            Indiquez le nom <b>et</b> le prénom (ex. : DUPONT Marie).
+          </span>
+        )}
       </Fld>
       <Fld label="Nom de naissance (si différent)">
         <input value={a.nomNaissance} onChange={(e) => set({ nomNaissance: e.target.value })} />
@@ -268,7 +299,79 @@ function AdherentFields({ a, onChange, titre }: { a: Adherent; onChange: (a: Adh
           <ChampDate valeur={a.situationDepuis} onChange={(v) => set({ situationDepuis: v })} min="1900-01-01" />
         </Fld>
       )}
+      {emailSeul && (
+        <Fld label="Adresse e-mail de l'adhérent 2 *" span>
+          <input
+            type="email"
+            autoComplete="off"
+            placeholder="prenom.nom@exemple.fr"
+            value={a.email ?? ""}
+            onChange={(e) => set({ email: e.target.value })}
+          />
+          <span className="hint">
+            C'est la seule information à ajouter : l'adhérent 2 recevra à cette adresse un lien personnel
+            pour déposer sa pièce d'identité (recto et verso) et signer le bulletin avec son propre code.
+            Une adresse différente de la vôtre est nécessaire.
+          </span>
+        </Fld>
+      )}
     </>
+  );
+}
+
+/** Fiche complète d'un signataire déclaré à la main : adhérent 2 hors couple, adhérents
+ *  supplémentaires (indivision, SCI…). Chacun signe depuis son propre lien. */
+function FicheSignataire({
+  c,
+  onChange,
+  autoFocus = true,
+}: {
+  c: CosignataireDeclare;
+  onChange: (patch: Partial<CosignataireDeclare>) => void;
+  /** Curseur dans l'e-mail à l'ouverture de la fiche (faux quand elle est déjà affichée au chargement). */
+  autoFocus?: boolean;
+}) {
+  return (
+    <div className="form-grid">
+      <Fld label="E-mail *">
+        <input type="email" autoFocus={autoFocus} placeholder="prenom.nom@exemple.fr" value={c.email} onChange={(e) => onChange({ email: e.target.value })} />
+      </Fld>
+      <Fld label="Téléphone mobile *">
+        <input type="tel" placeholder="06 12 34 56 78" value={c.telephone} onChange={(e) => onChange({ telephone: e.target.value })} />
+      </Fld>
+      <Fld label="Civilité">
+        <select value={c.civilite} onChange={(e) => onChange({ civilite: e.target.value })}>
+          <option value="">-</option>
+          <option value="Madame">Madame</option>
+          <option value="Monsieur">Monsieur</option>
+        </select>
+      </Fld>
+      <Fld label="Prénom *">
+        <input value={c.prenom} onChange={(e) => onChange({ prenom: e.target.value })} />
+      </Fld>
+      <Fld label="Nom *">
+        <input value={c.nom} onChange={(e) => onChange({ nom: e.target.value })} />
+      </Fld>
+      <Fld label="Date de naissance">
+        <input type="date" value={c.date_naissance} onChange={(e) => onChange({ date_naissance: e.target.value })} />
+      </Fld>
+      <Fld label="Lieu de naissance">
+        <input value={c.lieu_naissance} onChange={(e) => onChange({ lieu_naissance: e.target.value })} />
+      </Fld>
+      <Fld label="Adresse postale" span>
+        <input value={c.adresse_ligne1} onChange={(e) => onChange({ adresse_ligne1: e.target.value })} />
+      </Fld>
+      <CpVilleFields
+        cp={c.code_postal}
+        ville={c.ville}
+        onChange={(patch) =>
+          onChange({
+            ...(patch.cp !== undefined ? { code_postal: patch.cp } : {}),
+            ...(patch.ville !== undefined ? { ville: patch.ville } : {}),
+          })
+        }
+      />
+    </div>
   );
 }
 
@@ -376,7 +479,9 @@ export function Adhesion({
   // d'un couple, d'une indivision ou d'une société - la personne qui signe les saisit elle-même
   const [prenomPrincipal, setPrenomPrincipal] = useState(() => decouperNomPrenom(membership.nom)?.prenom ?? "");
   const [nomPrincipal, setNomPrincipal] = useState(() => decouperNomPrenom(membership.nom)?.nom ?? "");
+  // adhérents supplémentaires (indivision, SCI…) et, hors couple, fiche de signature de l'adhérent 2
   const [cosignataires, setCosignataires] = useState<CosignataireDeclare[]>([]);
+  const [ficheAdherent2, setFicheAdherent2] = useState<CosignataireDeclare>(emptyCosignataire);
   const [cguCochee, setCguCochee] = useState(false);
   const [attestHonneur, setAttestHonneur] = useState(false);
   const [infoAvis, setInfoAvis] = useState(false);
@@ -491,9 +596,8 @@ export function Adhesion({
       ? { ...emptyAdherent(), situation: a1.situation, situationDepuis: a1.situationDepuis }
       : emptyAdherent();
     setSituation2Libre(false);
-    setForm({ ...form, adherent2: nouveau });
-    // le co-emprunteur signe aussi : sa fiche de cosignataire est ouverte d'office
-    if (cosignataires.length === 0) setCosignataires([emptyCosignataire()]);
+    // le co-emprunteur signe aussi : on ne lui demande que son adresse e-mail, le reste est dans son bloc
+    setForm({ ...form, adherent2: { ...nouveau, email: "" } });
   };
 
   const agir = async (fn: () => Promise<void>, label: string) => {
@@ -837,9 +941,9 @@ export function Adhesion({
               <div className="cc-next" style={{ marginBottom: 12 }}>
                 <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
                 <span>
-                  Vous avez déclaré un adhérent 2 (co-emprunteur) sans cosignataire : il doit lui aussi signer le
-                  bulletin et déposer sa pièce d'identité. Recommencez la préparation pour l'ajouter comme
-                  cosignataire.
+                  Vous avez déclaré un adhérent 2 (co-emprunteur), mais il n'a pas été enregistré comme signataire :
+                  il doit lui aussi signer le bulletin et déposer sa pièce d'identité. Recommencez la préparation
+                  pour renseigner ses informations de signature.
                 </span>
               </div>
             )}
@@ -1161,7 +1265,7 @@ export function Adhesion({
             Lisez en entier votre bulletin d'adhésion puis votre mandat de prélèvement SEPA : un seul code à
             usage unique, qui vous sera transmis, les signe tous les deux.{" "}
             {bulletinCourant.signataires.length > 1
-              ? "Votre signature déclenche l'envoi des liens de signature du bulletin à vos cosignataires ; le mandat SEPA, lui, n'est signé que par vous."
+              ? "Votre signature déclenche l'envoi des liens de signature du bulletin aux autres adhérents ; le mandat SEPA, lui, n'est signé que par vous."
               : "Vous êtes l'unique signataire : les documents seront scellés dès votre signature."}
           </p>
 
@@ -1405,18 +1509,35 @@ export function Adhesion({
 
   const principalOk =
     prenomPrincipal.trim() && nomPrincipal.trim() && emailValide(form.email) && telValide(form.portable);
+  // adhérents supplémentaires (indivision, SCI…) : fiche complète, chacun signe depuis son lien
   const cosignatairesOk = cosignataires.every(
     (c) => c.nom.trim() && c.prenom.trim() && emailValide(c.email) && telValide(c.telephone)
   );
+  // Titulaires du prêt et signataires vont de pair : l'adhérent 2 (co-emprunteur) signe le bulletin
+  // comme le principal et dépose sa propre pièce d'identité (recto + verso, feedback du 09/10/2026).
+  // Couple marié ou pacsé : son nom, sa naissance et son adresse sont déjà dans le formulaire, seule
+  // son adresse e-mail manque pour lui envoyer son lien (retour de A CHELGHAM du 11/10/2026).
+  // Hors couple (indivision…) : fiche complète, comme un adhérent supplémentaire.
+  const couple = enCouple(form.adherent1.situation);
+  const adherent2Couple = !!form.adherent2 && couple;
+  const adherent2Fiche = !!form.adherent2 && !couple;
+  const ficheAdherent2Ok =
+    !!ficheAdherent2.nom.trim() && !!ficheAdherent2.prenom.trim() && emailValide(ficheAdherent2.email) && telValide(ficheAdherent2.telephone);
+  const adherent2Incomplet = adherent2Couple
+    ? !(emailValide((form.adherent2?.email ?? "").trim()) && nomEtPrenomRenseignes(form.adherent2?.nomPrenom ?? ""))
+    : adherent2Fiche && !ficheAdherent2Ok;
   // garde-fou anti auto-signature : e-mails et téléphones tous distincts
-  const emails = [form.email, ...cosignataires.map((c) => c.email)].map((e) => e.trim().toLowerCase()).filter(Boolean);
-  const tels = [form.portable, ...cosignataires.map((c) => c.telephone)].map(normaliserTelephone).filter(Boolean);
+  const emails = [
+    form.email,
+    adherent2Couple ? (form.adherent2?.email ?? "") : adherent2Fiche ? ficheAdherent2.email : "",
+    ...cosignataires.map((c) => c.email),
+  ]
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  const tels = [form.portable, adherent2Fiche ? ficheAdherent2.telephone : "", ...cosignataires.map((c) => c.telephone)]
+    .map(normaliserTelephone)
+    .filter(Boolean);
   const doublons = new Set(emails).size !== emails.length || new Set(tels).size !== tels.length;
-
-  // Titulaires du prêt et signataires vont de pair : un adhérent 2 (co-emprunteur)
-  // signe le bulletin comme le principal et dépose sa propre pièce d'identité
-  // (recto + verso), donc il est forcément cosignataire (feedback du 09/10/2026).
-  const adherent2SansSignataire = !!form.adherent2 && cosignataires.length === 0;
 
   const saveBrouillon = () => void brouillonAdhesion().catch((e) => setError(messageErreur(e, "Enregistrement impossible.")));
 
@@ -1443,11 +1564,19 @@ export function Adhesion({
               email: form.email.trim(),
               telephone: normaliserTelephone(form.portable),
             },
-            cosignataires: cosignataires.map((c) => ({
-              ...c,
-              email: c.email.trim(),
-              telephone: normaliserTelephone(c.telephone),
-            })),
+            cosignataires: [
+              ...(adherent2Couple && form.adherent2
+                ? [signataireDepuisAdherent2(form.adherent2, { adresse: form.adresse, cp: form.cp, ville: form.ville })]
+                : []),
+              ...(adherent2Fiche
+                ? [{ ...ficheAdherent2, email: ficheAdherent2.email.trim(), telephone: normaliserTelephone(ficheAdherent2.telephone) }]
+                : []),
+              ...cosignataires.map((c) => ({
+                ...c,
+                email: c.email.trim(),
+                telephone: normaliserTelephone(c.telephone),
+              })),
+            ],
           });
           await finaliserBulletin(bulletinId, lot.num, tantiemes, date, { nom: nomPrincipal, prenom: prenomPrincipal });
         }
@@ -1479,7 +1608,17 @@ export function Adhesion({
 
           {form.adherent2 ? (
             <>
-              <AdherentFields a={form.adherent2} onChange={changerAdherent2} titre="Adhérent 2 (co-emprunteur)" />
+              <AdherentFields a={form.adherent2} onChange={changerAdherent2} titre="Adhérent 2 (co-emprunteur)" emailSeul={couple} />
+              {!couple && (
+                <div style={{ gridColumn: "1 / -1", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: 14 }}>
+                  <b style={{ fontSize: 14 }}>Adhérent 2 : informations pour sa signature</b>
+                  <p className="se-small" style={{ color: "var(--fg-muted)", margin: "4px 0 10px" }}>
+                    Il recevra son propre lien par e-mail, déposera lui-même sa pièce d'identité (recto et verso) et
+                    signera avec son propre code.
+                  </p>
+                  <FicheSignataire c={ficheAdherent2} autoFocus={false} onChange={(patch) => setFicheAdherent2((prev) => ({ ...prev, ...patch }))} />
+                </div>
+              )}
               {!situation2Libre && enCouple(form.adherent1.situation) && (
                 <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>
                   Situation matrimoniale et date reprises de l'adhérent 1 (couple {form.adherent1.situation === "mariee" ? "marié" : "pacsé"}) :
@@ -1569,76 +1708,37 @@ export function Adhesion({
           </p>
 
           <div className="se-eyebrow" style={{ gridColumn: "1 / -1", marginTop: 6 }}>
-            Cosignataires (indivision, couple, SCI…)
+            Adhérents supplémentaires (indivision, SCI…)
           </div>
           <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>
-            Si le lot a plusieurs propriétaires, <b>tous doivent signer</b>. Chaque cosignataire recevra
-            son propre lien par e-mail, déposera lui-même sa pièce d'identité et signera avec son propre
-            code : vous ne pouvez pas signer à sa place.
+            Si le lot a d'autres propriétaires que vous et votre adhérent 2 (indivision, associés d'une SCI…),
+            <b> tous doivent signer</b>. Chaque adhérent supplémentaire recevra son propre lien par e-mail,
+            déposera lui-même sa pièce d'identité et signera avec son propre code : vous ne pouvez pas
+            signer à sa place.
           </p>
           <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>
-            Signataires de ce dossier : <b>{1 + cosignataires.length}</b>{" "}
-            {cosignataires.length === 0 ? "(vous seul)" : `(vous et ${cosignataires.length} cosignataire${cosignataires.length > 1 ? "s" : ""})`}
+            Signataires de ce dossier : <b>{1 + (form.adherent2 ? 1 : 0) + cosignataires.length}</b>{" "}
+            {libelleSignataires(!!form.adherent2, cosignataires.length)}
             . Chacun dépose sa propre pièce d'identité, <b>recto et verso</b>.
-            {form.adherent2 && " L'adhérent 2 (co-emprunteur) fait partie des signataires : renseignez-le ci-dessous."}
           </p>
           {cosignataires.map((c, i) => (
             <div key={i} style={{ gridColumn: "1 / -1", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: 14 }}>
               <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
-                <b style={{ fontSize: 14 }}>Cosignataire {i + 1}</b>
+                <b style={{ fontSize: 14 }}>Adhérent supplémentaire {i + 1}</b>
                 <span style={{ flex: 1 }}></span>
                 <button className="se-btn se-btn-ghost btn-sm" onClick={() => setCosignataires(cosignataires.filter((_, j) => j !== i))}>
                   <Icon name="trash" size={13} />Retirer
                 </button>
               </div>
-              <div className="form-grid">
-                <Fld label="E-mail *">
-                  <input type="email" autoFocus placeholder="prenom.nom@exemple.fr" value={c.email} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)))} />
-                </Fld>
-                <Fld label="Téléphone mobile *">
-                  <input type="tel" placeholder="06 12 34 56 78" value={c.telephone} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, telephone: e.target.value } : x)))} />
-                </Fld>
-                <Fld label="Civilité">
-                  <select value={c.civilite} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, civilite: e.target.value } : x)))}>
-                    <option value="">-</option>
-                    <option value="Madame">Madame</option>
-                    <option value="Monsieur">Monsieur</option>
-                  </select>
-                </Fld>
-                <Fld label="Prénom *">
-                  <input value={c.prenom} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, prenom: e.target.value } : x)))} />
-                </Fld>
-                <Fld label="Nom *">
-                  <input value={c.nom} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, nom: e.target.value } : x)))} />
-                </Fld>
-                <Fld label="Date de naissance">
-                  <input type="date" value={c.date_naissance} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, date_naissance: e.target.value } : x)))} />
-                </Fld>
-                <Fld label="Lieu de naissance">
-                  <input value={c.lieu_naissance} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, lieu_naissance: e.target.value } : x)))} />
-                </Fld>
-                <Fld label="Adresse postale" span>
-                  <input value={c.adresse_ligne1} onChange={(e) => setCosignataires(cosignataires.map((x, j) => (j === i ? { ...x, adresse_ligne1: e.target.value } : x)))} />
-                </Fld>
-                <CpVilleFields
-                  cp={c.code_postal}
-                  ville={c.ville}
-                  onChange={(patch) =>
-                    setCosignataires((prev) =>
-                      prev.map((x, j) =>
-                        j === i
-                          ? { ...x, ...(patch.cp !== undefined ? { code_postal: patch.cp } : {}), ...(patch.ville !== undefined ? { ville: patch.ville } : {}) }
-                          : x,
-                      ),
-                    )
-                  }
-                />
-              </div>
+              <FicheSignataire
+                c={c}
+                onChange={(patch) => setCosignataires((prev) => prev.map((x, j) => (j === i ? { ...x, ...patch } : x)))}
+              />
             </div>
           ))}
           <div style={{ gridColumn: "1 / -1" }}>
             <button className="se-btn se-btn-ghost btn-sm" onClick={() => setCosignataires([...cosignataires, emptyCosignataire()])}>
-              <Icon name="plus" size={14} />Ajouter un cosignataire
+              <Icon name="plus" size={14} />Ajouter un adhérent supplémentaire
             </button>
           </div>
           {doublons && (
@@ -1665,7 +1765,7 @@ export function Adhesion({
           </button>
           <button
             className="se-btn se-btn-primary"
-            disabled={!champsOk || !principalOk || !cosignatairesOk || adherent2SansSignataire || doublons || !attestHonneur || !infoAvis || !!busy}
+            disabled={!champsOk || !principalOk || !cosignatairesOk || adherent2Incomplet || doublons || !attestHonneur || !infoAvis || !!busy}
             onClick={() => void preparerSignature()}
           >
             {busy ? "Préparation des bulletins…" : "Passer à la signature"}
@@ -1677,10 +1777,13 @@ export function Adhesion({
             Renseignez tous les champs marqués * - la banque rejette les dossiers incomplets.
           </p>
         )}
-        {adherent2SansSignataire && (
+        {adherent2Incomplet && (
           <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 10 }}>
-            Vous avez déclaré un adhérent 2 (co-emprunteur) : il doit aussi signer le bulletin. Ajoutez-le comme
-            cosignataire - il recevra son propre lien et déposera sa pièce d'identité, recto et verso.
+            Vous avez déclaré un adhérent 2 (co-emprunteur) : il doit aussi signer le bulletin.{" "}
+            {couple
+              ? "Indiquez son nom, son prénom et son adresse e-mail"
+              : "Complétez ses informations de signature (e-mail, téléphone mobile, nom et prénom)"}{" "}
+            - il recevra son propre lien et déposera sa pièce d'identité, recto et verso.
           </p>
         )}
         {champsOk && !principalOk && (

@@ -5,6 +5,7 @@ import {
   condTexts,
   defaultConfig,
   describeType,
+  estVisible,
   normalizeConfig,
   resolveQuestions,
 } from "../enqueteCatalogue";
@@ -151,5 +152,84 @@ describe("émetteurs de chauffage (feedback 30/09/2026)", () => {
       expect(c.vals).not.toContain("Plancher chauffant");
       expect(c.vals).toContain("Radiateurs à eau chaude");
     }
+  });
+});
+
+describe("bailleur : locataire à la place des occupants (feedback d'Amir du 11/10/2026)", () => {
+  const BAILLEUR = "Propriétaire bailleur (logement loué)";
+  const A_L_ANNEE = "Loué à l'année (résidence principale du locataire)";
+  const resolved = resolveQuestions(defaultConfig());
+  const visibles = (reponses: Record<string, string | number | string[]>) =>
+    new Set(resolved.filter((q) => q.section !== "identite" && q.section !== "situation" && q.section !== "avis")
+      .filter((q) => estVisible(q, (id) => reponses[id])).map((q) => q.id));
+  const lot = { "usage-lot": "Habitation" };
+  const CONFORT = CATALOGUE.filter((q) => q.section === "confort").map((q) => q.id);
+  const LOCATAIRE = ["locataire-nom", "locataire-prenom", "locataire-nb-personnes", "locataire-telephone", "locataire-email"];
+
+  it("un bailleur n'a ni questions de confort et d'occupation, ni nombre d'habitants", () => {
+    const v = visibles({ ...lot, "type-occupation": BAILLEUR });
+    expect(CONFORT.length).toBeGreaterThan(5);
+    for (const id of [...CONFORT, "nb-habitants"]) expect(v.has(id), id).toBe(false);
+  });
+
+  it("un bailleur garde les autres questions (mode de location, technique, vente, démembrement…)", () => {
+    const v = visibles({ ...lot, "type-occupation": BAILLEUR });
+    for (const id of ["mode-location", "nb-fenetres", "type-chauffage", "pathologies", "projet-vente", "demembrement", "commodat"]) {
+      expect(v.has(id), id).toBe(true);
+    }
+  });
+
+  it("un propriétaire occupant, un logement vacant ou une question sans réponse gardent confort et habitants", () => {
+    const cas: Record<string, string>[] = [{ "type-occupation": "Propriétaire occupant" }, { "type-occupation": "Logement vacant" }, {}];
+    for (const occ of cas) {
+      const v = visibles({ ...lot, ...occ });
+      for (const id of ["nb-habitants", "difficultes-logement", "inconforts"]) expect(v.has(id), `${id} ${JSON.stringify(occ)}`).toBe(true);
+      for (const id of LOCATAIRE) expect(v.has(id), id).toBe(false);
+    }
+  });
+
+  it("logement loué à l'année : coordonnées du locataire (nom, prénom, personnes, téléphone, e-mail)", () => {
+    const v = visibles({ ...lot, "type-occupation": BAILLEUR, "mode-location": A_L_ANNEE });
+    for (const id of LOCATAIRE) expect(v.has(id), id).toBe(true);
+    // posées dès que le bailleur a répondu, tant que le mode de location n'est pas choisi
+    const avant = visibles({ ...lot, "type-occupation": BAILLEUR });
+    for (const id of LOCATAIRE) expect(avant.has(id), id).toBe(true);
+  });
+
+  it("pas de locataire à contacter pour une location saisonnière ou un logement entre deux locations", () => {
+    for (const mode of ["Location saisonnière ou meublé de tourisme", "Vacant (entre deux locations)"]) {
+      const v = visibles({ ...lot, "type-occupation": BAILLEUR, "mode-location": mode });
+      for (const id of LOCATAIRE) expect(v.has(id), `${id} ${mode}`).toBe(false);
+    }
+  });
+
+  it("nom, prénom et nombre de personnes du locataire obligatoires ; téléphone et e-mail facultatifs", () => {
+    const q = (id: string) => CATALOGUE.find((x) => x.id === id)!;
+    for (const id of ["locataire-nom", "locataire-prenom", "locataire-nb-personnes"]) expect(q(id).facultatif, id).toBeUndefined();
+    for (const id of ["locataire-telephone", "locataire-email"]) expect(q(id).facultatif, id).toBe(true);
+    expect(q("locataire-telephone").type).toBe("tel");
+    expect(q("locataire-email").type).toBe("email");
+    for (const id of LOCATAIRE) expect(q(id).locked, id).toBe(true);
+  });
+
+  it("une enquête déjà configurée reçoit les nouvelles questions", () => {
+    const ids = normalizeConfig([{ id: "inconforts", on: true }]).map((it) => it.id);
+    for (const id of [...LOCATAIRE, "prenom"]) expect(ids, id).toContain(id);
+  });
+});
+
+describe("nom et prénom de l'enquête (retour de A CHELGHAM du 11/10/2026)", () => {
+  it("deux questions séparées, sans raison sociale", () => {
+    const nom = CATALOGUE.find((q) => q.id === "nom")!;
+    const prenom = CATALOGUE.find((q) => q.id === "prenom")!;
+    expect(nom.q).toBe("Quel est votre nom de famille ?");
+    expect(prenom.q).toBe("Quel est votre prénom ?");
+    for (const q of [nom, prenom]) {
+      expect(q.q + q.tag).not.toMatch(/raison sociale/i);
+      expect(q.locked).toBe(true);
+      expect(q.section).toBe("identite");
+    }
+    const ids = CATALOGUE.map((q) => q.id);
+    expect(ids.indexOf("prenom")).toBe(ids.indexOf("nom") + 1);
   });
 });

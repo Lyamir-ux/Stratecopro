@@ -29,9 +29,11 @@ import { fmtDate, fmtEuro } from "@/lib/format";
 import { PROFILS_MPR } from "@/lib/referentiels";
 import { MOTIF_SANS_ENQUETE } from "@/lib/financement";
 import { determineProfil } from "@/lib/finance";
+import { nomPrenomEnquete } from "@/lib/nomFamille";
 import {
   SECTIONS,
   normalizeConfig,
+  estVisible as isVisible,
   resolveQuestions,
   type ResolvedQuestion,
   type SectionId,
@@ -150,20 +152,6 @@ function dureeEstimee(nbQuestions: number): number {
 function answered(v: Val | undefined): boolean {
   if (v === undefined || v === "") return false;
   return !(Array.isArray(v) && v.length === 0);
-}
-
-/** La question est-elle posée, compte tenu des réponses déjà données ? */
-function isVisible(q: ResolvedQuestion, get: (qid: string) => Val | undefined): boolean {
-  if (!q.on) return false;
-  return (q.cond ?? []).every((c) => {
-    const v = get(c.qid);
-    if (typeof v === "string" && v !== "") return c.vals.includes(v);
-    // réponse numérique (ex. RFR = 0 → justification demandée)
-    if (typeof v === "number") return c.vals.includes(String(v));
-    if (Array.isArray(v) && v.length > 0) return v.some((x) => c.vals.includes(x));
-    // question de référence pas encore répondue
-    return c.defaut === true;
-  });
 }
 
 function Champ({
@@ -380,7 +368,9 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
       setRestaure(true);
     } else {
       if (secours) ecrireSecours(cleSecours, null);
-      setRep({ copro: { nom: membership.nom, ...(stored?.copro ?? {}) }, lots });
+      // nom et prénom : deux questions séparées (11/10/2026), proposées d'après la fiche
+      // quand c'est une personne, sans écraser une réponse déjà enregistrée
+      setRep({ copro: { ...(stored?.copro ?? {}), ...nomPrenomEnquete(stored?.copro ?? {}, membership.nom) }, lots });
     }
     setProfilSauve((reponse?.profil_mpr as Profil | null) ?? null);
   }, [enquete, isFetched, rep, reponse, membership, cleSecours]);

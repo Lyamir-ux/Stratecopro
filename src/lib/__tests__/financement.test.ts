@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ecoPtzPossible, idsNonConcernesParEnquete, peutRepondreEnquete } from "../financement";
+import { accesFinancement, ecoPtzPossible, idsNonConcernesParEnquete, MOTIF_FINANCEMENT_VERROUILLE, peutRepondreEnquete } from "../financement";
 
 describe("ecoPtzPossible", () => {
   it("ouvert dès qu'un lot d'habitation est à son nom", () => {
@@ -48,5 +48,40 @@ describe("idsNonConcernesParEnquete", () => {
 
   it("une fiche sans lot n'y figure pas", () => {
     expect(idsNonConcernesParEnquete([]).size).toBe(0);
+  });
+});
+
+describe("accesFinancement : « Mon financement » après l'enquête (règle d'Amir du 11/10/2026)", () => {
+  const base = { enqueteConcerne: true, enqueteExiste: true, enqueteTransmise: false, dossierEngage: false, chargement: false };
+
+  it("verrouillé tant que l'enquête n'est pas transmise complète", () => {
+    expect(accesFinancement(base)).toBe("verrouille");
+  });
+
+  it("ouvert une fois l'enquête transmise", () => {
+    expect(accesFinancement({ ...base, enqueteTransmise: true })).toBe("ouvert");
+  });
+
+  it("ouvert pour un copropriétaire que l'enquête ne concerne pas (garages, caves…)", () => {
+    expect(accesFinancement({ ...base, enqueteConcerne: false })).toBe("ouvert");
+    expect(accesFinancement({ ...base, enqueteConcerne: false, chargement: true })).toBe("ouvert");
+  });
+
+  it("ouvert quand la copropriété n'a pas d'enquête : il n'y a rien à transmettre", () => {
+    expect(accesFinancement({ ...base, enqueteExiste: false })).toBe("ouvert");
+  });
+
+  it("un dossier d'adhésion déjà engagé garde l'accès à ses documents signés", () => {
+    expect(accesFinancement({ ...base, dossierEngage: true })).toBe("ouvert");
+  });
+
+  it("n'affiche ni l'encadré ni le financement tant que les données ne sont pas chargées", () => {
+    expect(accesFinancement({ ...base, chargement: true })).toBe("chargement");
+  });
+
+  it("l'encadré dit ce qu'il faut faire", () => {
+    expect(MOTIF_FINANCEMENT_VERROUILLE).toBe(
+      "Vous ne pourrez passer cette étape que lorsque vous aurez complété l'enquête sociale et technique."
+    );
   });
 });

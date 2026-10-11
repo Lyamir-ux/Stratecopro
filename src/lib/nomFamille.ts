@@ -130,3 +130,58 @@ export function decouperNomPrenom(nom: string): { prenom: string; nom: string } 
   while (j < ms.length && enCapitales(ms[j])) j++;
   return { prenom: [...ms.slice(0, i), ...ms.slice(j)].join(" "), nom: ms.slice(i, j).join(" ") };
 }
+
+/**
+ * Nom et prénom proposés dans l'enquête sociale, qui pose deux questions séparées et plus de
+ * raison sociale (retour de A CHELGHAM du 11/10/2026 : « pour la base de données et pour éviter
+ * les erreurs futures »). Une réponse déjà enregistrée est gardée ; un ancien « nom complet »
+ * sans prénom est séparé quand on peut le trancher ; sans réponse, on part du libellé de la
+ * fiche, mais seulement s'il s'agit d'une personne (ni couple, ni indivision, ni société : la
+ * personne qui répond saisit alors elle-même ses nom et prénom). Seules les clés connues sont
+ * renvoyées, pour ne pas écraser une réponse par du vide.
+ *   (rien, « Pierre MAXTAFF »)               → { nom: « MAXTAFF », prenom: « Pierre » }
+ *   ({ nom: « Pierre MAXTAFF » }, …)         → { nom: « MAXTAFF », prenom: « Pierre » }
+ *   (rien, « SCI DU PLATEAU DE HAYE »)       → {}
+ */
+export function nomPrenomEnquete(
+  stocke: { nom?: unknown; prenom?: unknown },
+  libelleFiche: string
+): { nom?: string; prenom?: string } {
+  const texte = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const nom = texte(stocke.nom);
+  const prenom = texte(stocke.prenom);
+  const resultat = (n: string | undefined, p: string | undefined) => ({
+    ...(n ? { nom: n } : {}),
+    ...(p ? { prenom: p } : {}),
+  });
+  if (prenom) return resultat(nom, prenom);
+  const d = decouperNomPrenom(nom || libelleFiche);
+  if (nom) return d?.prenom ? resultat(d.nom, d.prenom) : resultat(nom, undefined);
+  return d ? resultat(d.nom, d.prenom) : {};
+}
+
+/**
+ * « Nom et prénom » d'un adhérent vers son nom et son prénom, sur la convention du formulaire
+ * d'adhésion : le nom d'abord (« DUPONT Marie »). Le bloc en capitales est le nom quand il y en a
+ * un ; sinon le premier mot est le nom et le reste le prénom. Sert à créer le signataire de
+ * l'adhérent 2 d'après ce qui est saisi dans le formulaire (retour de A CHELGHAM du 11/10/2026 :
+ * « il n'y a plus qu'à demander l'adresse mail »).
+ *   « CHELGHAM Hassina » → { nom: « CHELGHAM », prenom: « Hassina » }
+ *   « Chelgham Hassina » → { nom: « Chelgham », prenom: « Hassina » }
+ *   « Hassina CHELGHAM » → { nom: « CHELGHAM », prenom: « Hassina » }
+ */
+export function separerNomPrenom(nomPrenom: string): { nom: string; prenom: string } {
+  const brut = nomPrenom.trim().replace(/\s+/g, " ");
+  const { mots: ms } = mots(brut);
+  if (ms.length === 0) return { nom: brut, prenom: "" };
+  if (ms.some(enCapitales)) {
+    const d = decouperNomPrenom(brut);
+    if (d?.nom && d.prenom) return d;
+  }
+  return { nom: ms[0], prenom: ms.slice(1).join(" ") };
+}
+
+/** Le nom ET le prénom sont renseignés (au moins deux mots). */
+export function nomEtPrenomRenseignes(nomPrenom: string): boolean {
+  return mots(nomPrenom.trim()).mots.length >= 2;
+}

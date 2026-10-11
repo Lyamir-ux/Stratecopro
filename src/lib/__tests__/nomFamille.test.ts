@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleNomFamille, conventionNoms, decouperNomPrenom, trierParNomFamille } from "../nomFamille";
+import { cleNomFamille, conventionNoms, decouperNomPrenom, nomPrenomEnquete, trierParNomFamille } from "../nomFamille";
 
 describe("cleNomFamille", () => {
   it("met devant le nom en capitales d'un libellé « Prénom NOM »", () => {
@@ -101,5 +101,29 @@ describe("decouperNomPrenom", () => {
     expect(decouperNomPrenom("KRENCKER FRANCINE")).toBeNull();
     expect(decouperNomPrenom("Jean de la Fontaine")).toBeNull();
     expect(decouperNomPrenom("")).toBeNull();
+  });
+});
+
+describe("nomPrenomEnquete : nom et prénom séparés dans l'enquête sociale", () => {
+  it("part du libellé de la fiche quand c'est une personne", () => {
+    expect(nomPrenomEnquete({}, "Pierre MAXTAFF")).toEqual({ nom: "MAXTAFF", prenom: "Pierre" });
+    expect(nomPrenomEnquete({}, "SCHNEIDER Delphine")).toEqual({ nom: "SCHNEIDER", prenom: "Delphine" });
+    expect(nomPrenomEnquete({}, "AVENEL")).toEqual({ nom: "AVENEL" });
+  });
+  it("ne propose rien pour un couple, une indivision ou une société", () => {
+    expect(nomPrenomEnquete({}, "M. et Mme DURAND")).toEqual({});
+    expect(nomPrenomEnquete({}, "SCI DU PLATEAU DE HAYE")).toEqual({});
+    expect(nomPrenomEnquete({}, "Indivision HENRIOT")).toEqual({});
+  });
+  it("garde les réponses enregistrées", () => {
+    expect(nomPrenomEnquete({ nom: "CHELGHAM", prenom: "Amir" }, "Autre PERSONNE")).toEqual({ nom: "CHELGHAM", prenom: "Amir" });
+    expect(nomPrenomEnquete({ nom: "CHELGHAM" }, "A CHELGHAM")).toEqual({ nom: "CHELGHAM" });
+  });
+  it("sépare un ancien « nom complet » enregistré sans prénom", () => {
+    expect(nomPrenomEnquete({ nom: "Amir CHELGHAM" }, "")).toEqual({ nom: "CHELGHAM", prenom: "Amir" });
+    expect(nomPrenomEnquete({ nom: "SCI DU RIED" }, "Pierre MAXTAFF")).toEqual({ nom: "SCI DU RIED" });
+  });
+  it("ignore les valeurs qui ne sont pas du texte", () => {
+    expect(nomPrenomEnquete({ nom: 12, prenom: undefined }, "Pierre MAXTAFF")).toEqual({ nom: "MAXTAFF", prenom: "Pierre" });
   });
 });

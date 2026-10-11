@@ -12,6 +12,8 @@ export type SituationMatrimoniale = "mariee" | "divorcee" | "pacsee" | "veuve" |
 
 export interface Adherent {
   nomPrenom: string;
+  /** Adhérent 2 : adresse e-mail où il reçoit son lien de signature (jamais imprimée sur le bulletin). */
+  email?: string;
   nomNaissance: string;
   dateLieuNaissance: string;
   profession: string;

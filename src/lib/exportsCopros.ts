@@ -222,7 +222,11 @@ const Q_COPRO = [
   "csp-reference", "situations-foyer", "impayes-charges", "accord-visite", "curatelle-tutelle",
   "coordonnees-representant", "situation-sociale", "importance-travaux",
 ];
-const Q_LOT = ["usage-lot", "type-occupation", "nb-habitants", "type-residence", "mode-location", "projet-vente", "demembrement", "difficultes-logement"];
+const Q_LOT = [
+  "usage-lot", "type-occupation", "nb-habitants", "type-residence", "mode-location",
+  "locataire-nom", "locataire-prenom", "locataire-nb-personnes", "locataire-telephone", "locataire-email",
+  "projet-vente", "demembrement", "difficultes-logement",
+];
 
 function tagDe(qid: string): string {
   return CATALOGUE.find((q) => q.id === qid)?.tag ?? qid;

@@ -41,6 +41,35 @@ export function idsNonConcernesParEnquete(
   return new Set([...parProprietaire].filter(([, ls]) => !peutRepondreEnquete(ls)).map(([id]) => id));
 }
 
+// « Mon financement » ne s'ouvre qu'une fois l'enquête sociale et technique transmise (règle
+// d'Amir du 11/10/2026) : le plan d'aides individuel et le choix de financement en dépendent.
+
+export type AccesFinancement = "ouvert" | "chargement" | "verrouille";
+
+/**
+ * Accès à l'étape « Mon financement ». Verrouillée tant que l'enquête, qui existe et concerne
+ * ce copropriétaire, n'est pas transmise complète. Restent ouverts : un copropriétaire que
+ * l'enquête ne concerne pas, une copropriété sans enquête (rien à transmettre) et un dossier
+ * d'adhésion déjà engagé (bulletins signés ou en signature), dont les documents doivent rester
+ * accessibles. `chargement` : les données qui décident ne sont pas encore là.
+ */
+export function accesFinancement(e: {
+  enqueteConcerne: boolean;
+  enqueteExiste: boolean;
+  enqueteTransmise: boolean;
+  dossierEngage: boolean;
+  chargement: boolean;
+}): AccesFinancement {
+  if (!e.enqueteConcerne) return "ouvert";
+  if (e.chargement) return "chargement";
+  if (!e.enqueteExiste || e.enqueteTransmise || e.dossierEngage) return "ouvert";
+  return "verrouille";
+}
+
+/** Message de l'encadré affiché à la place de « Mon financement » tant que l'enquête n'est pas transmise. */
+export const MOTIF_FINANCEMENT_VERROUILLE =
+  "Vous ne pourrez passer cette étape que lorsque vous aurez complété l'enquête sociale et technique.";
+
 /** Explication affichée à un copropriétaire que l'enquête ne concerne pas. */
 export const MOTIF_SANS_ENQUETE =
   "L'enquête sociale ne concerne que les propriétaires d'un lot d'habitation : elle sert à déterminer l'aide " +

@@ -5,7 +5,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { bulletinsSignes, piecesDossierPret, piecesEnquete, type ReponsesPieces } from "@/lib/piecesSituation";
 import { libelleLotsPortail } from "@/lib/lotsPortail";
-import { peutRepondreEnquete } from "@/lib/financement";
+import { accesFinancement, MOTIF_FINANCEMENT_VERROUILLE, peutRepondreEnquete } from "@/lib/financement";
 import { Avatar, PhaseBadge, THUMB_BG } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
 import { compteNonLus, useLectures, useMessagesPortail } from "@/api/messages";
@@ -320,14 +320,14 @@ export default function Portail() {
   const { data: scenarios } = useScenariosPartages(membership?.copro.id);
   const scenario: Scenario | null = scenarios?.[0] ?? null;
   const { data: bareme } = useBareme();
-  const { data: enquete } = useEnquetePortail(membership?.copro.id);
-  const { data: reponse } = useMaReponse(enquete?.id, membership?.coproprietaireId);
+  const { data: enquete, isLoading: chargeEnquete } = useEnquetePortail(membership?.copro.id);
+  const { data: reponse, isLoading: chargeReponse } = useMaReponse(enquete?.id, membership?.coproprietaireId);
   const { data: choix } = useMonChoix(scenario?.id, membership?.coproprietaireId);
   const { data: plan } = useMonPlan(scenario?.id, membership?.coproprietaireId);
   const { data: pieces } = useMesPieces(membership?.coproprietaireId);
   const contextePieces = useContextePieces(membership?.copro.id, membership?.coproprietaireId, membership?.nom);
-  const { data: bulletins } = useMesBulletins(membership?.coproprietaireId);
-  const { data: ancienneAdhesion } = useMonAdhesion(membership?.copro.id, membership?.coproprietaireId);
+  const { data: bulletins, isLoading: chargeBulletins } = useMesBulletins(membership?.coproprietaireId);
+  const { data: ancienneAdhesion, isLoading: chargeAdhesion } = useMonAdhesion(membership?.copro.id, membership?.coproprietaireId);
   const { data: messages } = useMessagesPortail(membership?.copro.id, membership?.coproprietaireId);
   const { data: lectures } = useLectures();
 
@@ -401,6 +401,15 @@ export default function Portail() {
   const profil = (reponse?.profil_mpr as Profil | null) ?? null;
   const profilMeta = profilMetaDepuisReponse(reponse);
   const enqueteComplete = !!(reponse?.reponses as { complet?: boolean } | null)?.complet;
+  // « Mon financement » ne s'ouvre qu'une fois l'enquête transmise ; un dossier d'adhésion déjà
+  // engagé (bulletins signés ou en signature) garde l'accès à ses documents
+  const accesPret = accesFinancement({
+    enqueteConcerne: enqueteOuverte,
+    enqueteExiste: !!enquete,
+    enqueteTransmise: enqueteComplete,
+    dossierEngage: (bulletins ?? []).some((b) => b.statut !== "annule" && b.statut !== "brouillon") || ancienneAdhesion?.statut === "signee",
+    chargement: chargeEnquete || chargeReponse || chargeBulletins || chargeAdhesion,
+  });
   // Pièces attendues selon les réponses enregistrées (feedback Marius MAZZANTE
   // 30/09/2026) ; refusée = à redéposer, donc pas fournie (feedback 10/09).
   // Celles du prêt collectif se déposent dans « Mon financement », une fois les
@@ -504,7 +513,23 @@ export default function Portail() {
         {section === "plan-indiv" && <QuotesParts {...common} />}
         {section === "enquete" &&
           (enqueteOuverte ? <Enquete membership={membership} bareme={bareme ?? null} /> : <EnqueteNonConcernee go={go} />)}
-        {section === "pret" && <Financement {...common} choix={choix ?? null} />}
+        {section === "pret" && accesPret === "ouvert" && <Financement {...common} choix={choix ?? null} />}
+        {section === "pret" && accesPret === "chargement" && (
+          <p className="se-small" style={{ color: "var(--fg-muted)" }}>Chargement…</p>
+        )}
+        {section === "pret" && accesPret === "verrouille" && (
+          <div className="fade">
+            <h1 className="sec-title">Mon financement</h1>
+            <div className="cc-next" role="status">
+              <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
+              <span>{MOTIF_FINANCEMENT_VERROUILLE}</span>
+            </div>
+            <button className="se-btn se-btn-primary" style={{ marginTop: 16 }} onClick={() => go("enquete")}>
+              <Icon name="clipboard" size={16} />
+              Compléter l'enquête
+            </button>
+          </div>
+        )}
         {section === "plan-copro" && <PlanCopro membership={membership} scenarios={scenarios ?? []} bareme={bareme ?? null} />}
         {section === "documents" && <Documents membership={membership} />}
         {section === "faq" && <Faq />}
