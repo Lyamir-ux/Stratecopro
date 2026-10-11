@@ -75,8 +75,11 @@ export function diagnosticBic(brut: string): Diagnostic | null {
 
 // ========== Dates ==========
 
+// setFullYear plutôt que new Date(a, …) : celui-ci lit les années 0 à 99 comme 1900 à 1999, et
+// l'année « 0001 » que donne le champ date de Chrome dès le premier chiffre tapé était refusée
 const dateReelle = (j: number, m: number, a: number) => {
-  const d = new Date(a, m - 1, j);
+  const d = new Date(2000, 0, 1);
+  d.setFullYear(a, m - 1, j);
   return d.getFullYear() === a && d.getMonth() === m - 1 && d.getDate() === j;
 };
 
@@ -86,7 +89,18 @@ export function dateFrVersIso(fr: string): string {
   if (!m) return "";
   const [j, mo, a] = [Number(m[1]), Number(m[2]), Number(m[3])];
   if (!dateReelle(j, mo, a)) return "";
-  return `${a}-${String(mo).padStart(2, "0")}-${String(j).padStart(2, "0")}`;
+  return `${String(a).padStart(4, "0")}-${String(mo).padStart(2, "0")}-${String(j).padStart(2, "0")}`;
+}
+
+/**
+ * Année pas encore tapée en entier dans un champ date : pendant la saisie de « 1980 », Chrome donne
+ * successivement 0001, 0019 puis 0198 (retour de A CHELGHAM du 11/10/2026 : la saisie de l'année
+ * effaçait tout et envoyait la date dans le lieu de naissance). Ces valeurs doivent survivre à
+ * l'aller-retour du champ, mais une date d'avant 1900 n'est jamais acceptée dans le dossier.
+ */
+export function anneeIncomplete(dateIso: string): boolean {
+  const a = Number(/^(\d{4,})-/.exec(dateIso ?? "")?.[1] ?? NaN);
+  return Number.isFinite(a) && a < 1900;
 }
 
 /** « 2015-09-01 » vers « 01/09/2015 » (format imprimé sur le bulletin). */
@@ -115,10 +129,10 @@ export function composerDateLieu(dateIso: string, lieu: string): string {
   return [date, reste].filter(Boolean).join(" ");
 }
 
-/** Date ET lieu renseignés. */
+/** Date (année entière) ET lieu renseignés. */
 export function dateLieuComplet(valeur: string): boolean {
   const { dateIso, lieu } = decouperDateLieu(valeur);
-  return !!dateIso && !!lieu.trim();
+  return !!dateIso && !anneeIncomplete(dateIso) && !!lieu.trim();
 }
 
 // ========== Téléphone ==========

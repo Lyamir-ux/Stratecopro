@@ -5,6 +5,7 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { useCommunesDuCodePostal } from "@/api/geo";
 import {
+  anneeIncomplete,
   composerDateLieu,
   dateFrVersIso,
   dateIsoVersFr,
@@ -101,6 +102,16 @@ export function CpVilleFields({
   );
 }
 
+/** Pendant la frappe de l'année (« 0198 » avant « 1980 ») : rappel des 4 chiffres. */
+function AlerteAnnee({ dateIso }: { dateIso: string }) {
+  if (!anneeIncomplete(dateIso)) return null;
+  return (
+    <span className="hint" style={{ color: "var(--color-error-700)" }}>
+      Année incomplète : tapez les 4 chiffres (ex. : 1980).
+    </span>
+  );
+}
+
 /** Champ date (calendrier du navigateur) ; la valeur reste au format imprimé sur le
  *  bulletin, « 01/09/2015 ». */
 export function ChampDate({
@@ -114,14 +125,18 @@ export function ChampDate({
   min?: string;
   max?: string;
 }) {
+  const dateIso = dateFrVersIso(valeur);
   return (
-    <input
-      type="date"
-      value={dateFrVersIso(valeur)}
-      min={min}
-      max={max ?? aujourdhuiIso()}
-      onChange={(e) => onChange(dateIsoVersFr(e.target.value))}
-    />
+    <>
+      <input
+        type="date"
+        value={dateIso}
+        min={min}
+        max={max ?? aujourdhuiIso()}
+        onChange={(e) => onChange(dateIsoVersFr(e.target.value))}
+      />
+      <AlerteAnnee dateIso={dateIso} />
+    </>
   );
 }
 
@@ -147,6 +162,7 @@ export function ChampsNaissance({
           max={aujourdhuiIso()}
           onChange={(e) => onChange(composerDateLieu(e.target.value, lieu))}
         />
+        <AlerteAnnee dateIso={dateIso} />
       </Champ>
       <Champ label={`Lieu de naissance${requis ? " *" : ""}`}>
         <input

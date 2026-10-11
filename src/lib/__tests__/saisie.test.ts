@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  anneeIncomplete,
   classerTelephone,
   composerDateLieu,
   dateFrVersIso,
@@ -100,6 +101,23 @@ describe("dates du dossier", () => {
     expect(dateFrVersIso("1/9/2015")).toBe("2015-09-01");
     expect(dateIsoVersFr("2015-09-01")).toBe("01/09/2015");
   });
+  it("garde les années tapées en partie par le champ date de Chrome (11/10/2026)", () => {
+    // « 1980 » tapé chiffre par chiffre : 0001, 0019, 0198, 1980 - l'aller-retour ne doit rien perdre
+    for (const iso of ["0001-05-12", "0019-05-12", "0198-05-12", "1980-05-12"]) {
+      expect(dateFrVersIso(dateIsoVersFr(iso))).toBe(iso);
+      expect(decouperDateLieu(composerDateLieu(iso, "Colmar"))).toEqual({ dateIso: iso, lieu: "Colmar" });
+      expect(decouperDateLieu(composerDateLieu(iso, ""))).toEqual({ dateIso: iso, lieu: "" });
+    }
+    expect(dateFrVersIso("29/02/0004")).toBe("0004-02-29");
+    expect(dateFrVersIso("29/02/0001")).toBe("");
+  });
+  it("repère une année incomplète", () => {
+    expect(anneeIncomplete("0198-05-12")).toBe(true);
+    expect(anneeIncomplete("1899-12-31")).toBe(true);
+    expect(anneeIncomplete("1900-01-01")).toBe(false);
+    expect(anneeIncomplete("1980-05-12")).toBe(false);
+    expect(anneeIncomplete("")).toBe(false);
+  });
   it("refuse ce qui n'est pas une vraie date", () => {
     expect(dateFrVersIso("31/02/2015")).toBe("");
     expect(dateFrVersIso("depuis 2015")).toBe("");
@@ -140,6 +158,7 @@ describe("date et lieu de naissance", () => {
     expect(dateLieuComplet("12/05/1980")).toBe(false);
     expect(dateLieuComplet("à Colmar")).toBe(false);
     expect(dateLieuComplet("")).toBe(false);
+    expect(dateLieuComplet("12/05/0198 à Colmar")).toBe(false);
   });
 });
 

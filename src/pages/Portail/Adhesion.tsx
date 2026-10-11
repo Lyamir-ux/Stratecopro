@@ -41,7 +41,7 @@ import {
   CpVilleFields,
   MessageSaisie,
 } from "@/components/ChampsSaisie";
-import { classerTelephone, dateLieuComplet, diagnosticBic, diagnosticIban } from "@/lib/saisie";
+import { anneeIncomplete, classerTelephone, dateFrVersIso, dateLieuComplet, diagnosticBic, diagnosticIban } from "@/lib/saisie";
 import { ACCEPT_PIECE, erreurFormatPiece, LIBELLE_FORMATS_PIECE, typeMimePiece } from "@/lib/formatPiece";
 import { nomEtPrenomRenseignes } from "@/lib/nomFamille";
 import {
@@ -1578,7 +1578,11 @@ export function Adhesion({
     form.email.trim() &&
     form.lieuSignature.trim() &&
     (form.montantType === "100" || form.montantAutre.trim()) &&
-    (!form.adherent2 || (form.adherent2.nomPrenom.trim() && dateLieuComplet(form.adherent2.dateLieuNaissance)));
+    (!form.adherent2 || (form.adherent2.nomPrenom.trim() && dateLieuComplet(form.adherent2.dateLieuNaissance))) &&
+    // dates « depuis le » facultatives, mais jamais avec une année tapée en partie
+    [form.adherent1, ...(form.adherent2 ? [form.adherent2] : [])].every(
+      (a) => !anneeIncomplete(dateFrVersIso(a.professionDepuis)) && !anneeIncomplete(dateFrVersIso(a.situationDepuis)),
+    );
 
   const principalOk =
     prenomPrincipal.trim() && nomPrincipal.trim() && emailValide(form.email) && telValide(form.portable);
