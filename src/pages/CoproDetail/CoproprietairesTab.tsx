@@ -97,7 +97,7 @@ function StatutBadge({ d }: { d: DossierCoproprietaire }) {
   );
 }
 
-/** Pièces de la banque fournies / attendues : « - » quand le dossier ne passe pas par nous (souscription en ligne). */
+/** Pièces de la banque fournies / attendues : « - » quand le copropriétaire n'adhère pas au prêt collectif. */
 function BanqueCell({ d }: { d: DossierCoproprietaire }) {
   if (!d.banque.applicable) return <span style={{ color: "var(--fg-muted)" }}>-</span>;
   const utiles = d.banque.lignes.filter((l) => l.etat !== "na");

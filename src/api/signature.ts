@@ -104,8 +104,8 @@ export async function uploadVersBucket(
 }
 
 // ========== Côté portail (signataire principal) ==========
-// Dossier d'adhésion du portail (retiré le 22/09/2026, rétabli le 08/10/2026
-// pour les copropriétés sans lien de souscription de la banque) : bulletin
+// Dossier d'adhésion du portail (retiré le 22/09/2026, rétabli le 08/10/2026 ; depuis le
+// 11/10/2026 c'est le seul parcours, sans lien de souscription de la banque) : bulletin
 // pré-rempli et mandat SEPA, signés avec le même code par le principal.
 
 export function useMesBulletins(coproprietaireId: string | undefined) {

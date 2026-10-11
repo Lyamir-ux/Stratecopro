@@ -21,7 +21,7 @@ import { useDonnees, type DonneesCopro, type LotFull } from "./donnees";
 import { useEnquete, useReponses, type Reponse } from "./enquete";
 import { readParams, useBareme, useChoixFinancementScenario, usePlansIndividuels, useScenarios } from "./scenarios";
 import { pfARepartir, plansValides, usePlansDefinitifs, type PlanDefinitif } from "./planDefinitif";
-import { useAdhesions, useFinancementConfigAmo, type AdhesionAvecNom } from "./financement";
+import { useAdhesions, type AdhesionAvecNom } from "./financement";
 import { useBulletinsCopro, type BulletinAvecSignataires } from "./signature";
 import type { CoproWithStats } from "./copros";
 import { trierParNomFamille } from "@/lib/nomFamille";
@@ -111,8 +111,8 @@ export interface DossierCoproprietaire {
   piecesRequises: TypePiece[];
   /**
    * Dossier d'adhésion au prêt collectif selon la nomenclature de la Caisse d'Épargne Grand
-   * Est (08/10/2026) : les pièces dans l'ordre de la banque. `applicable` : le dossier est
-   * monté par nous (le parcours de souscription en ligne de la banque ne l'est pas).
+   * Est (08/10/2026) : les pièces dans l'ordre de la banque. `applicable` : le copropriétaire
+   * adhère au prêt collectif, dossier monté par nous (parcours entièrement digital depuis le 11/10/2026).
    */
   banque: { applicable: boolean; complet: boolean; lignes: LigneBanque[] };
   etat: {
@@ -174,10 +174,6 @@ export function assemblerDossiers(input: {
   bulletins: BulletinAvecSignataires[];
   pieces: PieceJustificative[];
   bareme: Bareme | null;
-  /** La copropriété souscrit chez la banque (lien de souscription saisi) : le
-   *  bulletin et le mandat SEPA ne passent plus par nous, donc ils ne peuvent
-   *  plus manquer dans notre dossier (22/09/2026). */
-  souscriptionEnLigne?: boolean;
   /** Adresses de la copropriété et de ses bâtiments : sans réponse à
    *  l'enquête, un propriétaire de logement domicilié à l'une d'elles est
    *  occupant (règle d'Amir du 04/10/2026), domicilié ailleurs bailleur. */
@@ -313,31 +309,25 @@ export function assemblerDossiers(input: {
     if (etatFin === "manquant") manquants.push("choix de financement");
     let etatBulletin: EtatItem = "na";
     let etatSepa: EtatItem = "na";
-    // dossier d'adhésion monté par nous : adhérent au prêt collectif hors souscription en ligne
+    // dossier d'adhésion monté par nous : adhérent au prêt collectif
     let parcoursPret = false;
     if (collectif) {
       const signe = adhesion?.statut === "signee" || bulletinsElec.some((b) => b.statut === "complet");
       const enCours = !!adhesion || bulletinsElec.some((b) => b.statut === "en_signature");
-      if (input.souscriptionEnLigne && !signe && !enCours) {
-        // Souscription menée par la banque : rien à attendre de notre côté.
-        etatBulletin = "na";
-        etatSepa = "na";
-      } else {
-        parcoursPret = true;
-        etatBulletin = signe ? "ok" : enCours ? "en_cours" : "manquant";
-        if (etatBulletin !== "ok") manquants.push("bulletin d'adhésion" + (etatBulletin === "en_cours" ? " (en cours)" : ""));
-        // Mandat SEPA signé électroniquement avec le bulletin (0148), par le seul
-        // principal : fourni dès sa signature, sans attendre les cosignataires.
-        // Avant la signature électronique : mandat papier déposé sur le dossier.
-        const avecMandat = bulletinsElec.filter((b) => !!b.mandat_path);
-        etatSepa =
-          adhesion?.sepa_path || (avecMandat.length > 0 && avecMandat.every((b) => !!b.mandat_signe_le))
-            ? "ok"
-            : avecMandat.length > 0 || enCours
-              ? "en_cours"
-              : "manquant";
-        if (etatSepa !== "ok") manquants.push("mandat SEPA" + (etatSepa === "en_cours" ? " (en cours)" : ""));
-      }
+      parcoursPret = true;
+      etatBulletin = signe ? "ok" : enCours ? "en_cours" : "manquant";
+      if (etatBulletin !== "ok") manquants.push("bulletin d'adhésion" + (etatBulletin === "en_cours" ? " (en cours)" : ""));
+      // Mandat SEPA signé électroniquement avec le bulletin (0148), par le seul
+      // principal : fourni dès sa signature, sans attendre les cosignataires.
+      // Avant la signature électronique : mandat papier déposé sur le dossier.
+      const avecMandat = bulletinsElec.filter((b) => !!b.mandat_path);
+      etatSepa =
+        adhesion?.sepa_path || (avecMandat.length > 0 && avecMandat.every((b) => !!b.mandat_signe_le))
+          ? "ok"
+          : avecMandat.length > 0 || enCours
+            ? "en_cours"
+            : "manquant";
+      if (etatSepa !== "ok") manquants.push("mandat SEPA" + (etatSepa === "en_cours" ? " (en cours)" : ""));
     }
     // Pièce déposée au portail : validée = fournie ; à vérifier = en cours ;
     // refusée = manquante (le copropriétaire doit redéposer) - feedback 10/09.
@@ -458,7 +448,6 @@ export function useDossiersCoproprietaires(c: CoproWithStats): DossiersCopro {
   const { data: adhesions } = useAdhesions(c.id);
   const { data: bulletins } = useBulletinsCopro(c.id);
   const { data: pieces } = usePiecesCopro(c.id);
-  const { data: finConfig } = useFinancementConfigAmo(c.id);
 
   // Même sélection que l'onglet Financement : scénario partagé (ou importé) le plus récent.
   const scenario = useMemo(
@@ -489,13 +478,12 @@ export function useDossiersCoproprietaires(c: CoproWithStats): DossiersCopro {
       bulletins: bulletins ?? [],
       pieces: pieces ?? [],
       bareme: bareme ?? null,
-      souscriptionEnLigne: !!finConfig?.lien_adhesion,
       lieux: [
         { adresse: c.adresse, cp: c.code_postal },
         ...donnees.batiments.filter((b) => b.adresse).map((b) => ({ adresse: b.adresse, cp: c.code_postal })),
       ],
     });
-  }, [donnees, reponses, scenario, plansIndiv, choix, planValide, valides, adhesions, bulletins, pieces, bareme, finConfig, c.adresse, c.code_postal]);
+  }, [donnees, reponses, scenario, plansIndiv, choix, planValide, valides, adhesions, bulletins, pieces, bareme, c.adresse, c.code_postal]);
 
   return {
     dossiers: assemble.dossiers,

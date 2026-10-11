@@ -9,12 +9,6 @@ export type AdhesionAvecNom = Tables<"adhesions_pret"> & { coproprietaire: { nom
 
 export const BANQUES = ["CEGEE", "DOMOFINANCE"] as const;
 
-/** Le lien de souscription de la banque est ouvert depuis le portail : https seul,
- *  comme la contrainte de la table (migration 0086). */
-export function lienAdhesionValide(url: string): boolean {
-  return /^https:\/\/\S+$/i.test(url.trim());
-}
-
 export function useFinancementConfigAmo(coproId: string | undefined) {
   return useQuery({
     queryKey: ["fin-config", coproId],
@@ -34,17 +28,17 @@ export function useFinancementConfigAmo(coproId: string | undefined) {
 export function useSaveFinancementConfig(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
-    // Deux parcours d'adhésion (Amir, 08/10/2026) : le lien de la banque, s'il
-    // est saisi, l'emporte ; sinon `adhesion_ouverte` ouvre le dossier
-    // d'adhésion du portail (bulletin + mandat SEPA signés électroniquement).
+    // `adhesion_ouverte` ouvre le dossier d'adhésion du portail (bulletin + mandat SEPA signés
+    // électroniquement) ; plus de lien de souscription de la banque (Amir, 11/10/2026).
     // `dateLimiteChoix` (0117) : dernier jour où le copropriétaire peut choisir ou
     // modifier son financement depuis le portail ; null = sans limite.
     mutationFn: async (input: {
       banque: string;
       dureeAnnees: number;
       adhesionOuverte: boolean;
-      lienAdhesion: string | null;
       dateLimiteChoix: string | null;
+      /** Dernier jour pour déposer un dossier d'adhésion au prêt collectif (0158), exigé à l'ouverture. */
+      dateLimiteAdhesion: string | null;
     }) => {
       const { error } = await supabase.from("copro_financement_config").upsert(
         {
@@ -52,8 +46,8 @@ export function useSaveFinancementConfig(coproId: string) {
           banque: input.banque,
           duree_annees: input.dureeAnnees,
           adhesion_ouverte: input.adhesionOuverte,
-          lien_adhesion: input.lienAdhesion,
           date_limite_choix: input.dateLimiteChoix,
+          date_limite_adhesion: input.dateLimiteAdhesion,
         },
         { onConflict: "copro_id" }
       );
@@ -94,4 +88,33 @@ export async function downloadAdhesionDoc(path: string, filename: string) {
   a.download = filename;
   a.target = "_blank";
   a.click();
+}
+
+/**
+ * Trace d'un envoi à la campagne d'adhésion (0158) : l'e-mail d'ouverture, ou la dernière relance
+ * qui fixe aussi la deuxième date limite. Une trace qui n'a pas pu s'écrire n'annule pas l'envoi.
+ */
+export function useTracerEnvoiAdhesion(coproId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: { type: "ouverture"; nb: number } | { type: "relance"; nb: number; deuxiemeLimite: string }
+    ) => {
+      const maintenant = new Date().toISOString();
+      const patch =
+        input.type === "ouverture"
+          ? { adhesion_email_le: maintenant, adhesion_email_nb: input.nb }
+          : {
+              relance_adhesion_le: maintenant,
+              relance_adhesion_nb: input.nb,
+              date_limite_adhesion_2: input.deuxiemeLimite,
+            };
+      const { error } = await supabase.from("copro_financement_config").update(patch).eq("copro_id", coproId);
+      if (error) throw error;
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["fin-config", coproId] });
+      void qc.invalidateQueries({ queryKey: ["portail", "fin-config", coproId] });
+    },
+  });
 }

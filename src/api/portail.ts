@@ -8,7 +8,6 @@ import type { Tables, Enums, Json } from "@/lib/database.types";
 import { determineProfil, type Bareme, type FinanceParams, type Profil } from "@/lib/finance";
 import { readParams } from "./scenarios";
 import { estSci, libellePieceSituation, type ContextePieces } from "@/lib/piecesSituation";
-import { useMesBulletins } from "@/api/signature";
 import type { TachePortail } from "@/lib/recapPhases";
 import { computePlanDefinitif, readPlanDefinitif, type PlanDefinitifData, type PlanDefinitifResult } from "@/lib/finance/planDefinitif";
 import type { PartLotPortail } from "./planDefinitif";
@@ -647,11 +646,11 @@ export const PIECES: { type: TypePiece; name: string; required: boolean; hint: s
 
 /**
  * Contexte des pièces attendues d'un copropriétaire (08/10/2026) : s'il adhère au prêt collectif
- * par le parcours interne - dossier monté par Strat Eco, donc pas de lien de souscription de la
- * banque, ou un bulletin déjà engagé - la Caisse d'Épargne Grand Est lui demande des pièces en
- * plus (justificatif de domicile, taxe foncière, pièces de SCI) ; et s'il s'agit d'une SCI.
+ * - dossier monté par Strat Eco, parcours entièrement digital depuis le 11/10/2026 - la Caisse
+ * d'Épargne Grand Est lui demande des pièces en plus (justificatif de domicile, taxe foncière,
+ * pièces de SCI) ; et s'il s'agit d'une SCI.
  */
-export function useContextePieces(coproId: string | undefined, coproprietaireId: string | undefined, nom: string | undefined): ContextePieces {
+export function useContextePieces(coproprietaireId: string | undefined, nom: string | undefined): ContextePieces {
   const { data: collectif } = useQuery({
     queryKey: ["portail", "choix-collectif", coproprietaireId],
     enabled: !!coproprietaireId,
@@ -666,10 +665,7 @@ export function useContextePieces(coproId: string | undefined, coproprietaireId:
       return data?.[0]?.type === "collectif";
     },
   });
-  const { data: config } = useFinancementConfig(coproId);
-  const { data: bulletins } = useMesBulletins(coproprietaireId);
-  const interne = !config?.lien_adhesion || (bulletins?.length ?? 0) > 0;
-  return { pretCollectif: !!collectif && interne, sci: estSci(null, nom) };
+  return { pretCollectif: !!collectif, sci: estSci(null, nom) };
 }
 
 /** Libellé d'une pièce, qu'elle soit historique (PIECES) ou demandée selon la situation (0118). */
@@ -874,12 +870,11 @@ export function useQualifierPiece() {
 }
 
 // ========== Prêt collectif : adhésion ==========
-// Deux parcours (Amir, 08/10/2026) : si l'AMO a saisi le lien de souscription
-// de la banque (copro_financement_config.lien_adhesion), le copropriétaire
-// souscrit chez la banque ; sinon, une fois la campagne ouverte
-// (adhesion_ouverte), il remplit son dossier d'adhésion dans le portail -
-// bulletin pré-rempli et mandat SEPA signés électroniquement (voir Adhesion.tsx).
-// adhesions_pret garde le brouillon du formulaire et le suivi AMO.
+// Parcours entièrement digital (Amir, 08/10 puis 11/10/2026 : plus de lien de souscription
+// de la banque) : une fois la campagne ouverte par l'AMO (adhesion_ouverte), le copropriétaire
+// remplit son dossier d'adhésion dans le portail - bulletin pré-rempli et mandat SEPA signés
+// électroniquement (voir Adhesion.tsx). adhesions_pret garde le brouillon du formulaire et
+// le suivi AMO.
 
 export type FinancementConfig = Tables<"copro_financement_config">;
 export type Adhesion = Tables<"adhesions_pret">;

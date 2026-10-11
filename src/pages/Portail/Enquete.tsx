@@ -348,7 +348,7 @@ export function Enquete({ membership, bareme }: { membership: Membership; bareme
   const [restaure, setRestaure] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const { data: pieces } = useMesPieces(membership.coproprietaireId);
-  const contextePieces = useContextePieces(membership.copro.id, membership.coproprietaireId, membership.nom);
+  const contextePieces = useContextePieces(membership.coproprietaireId, membership.nom);
 
   const cleSecours = enquete ? `${PREFIXE_SECOURS_ENQUETE}${enquete.id}:${membership.coproprietaireId}` : null;
 

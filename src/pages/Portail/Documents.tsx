@@ -429,7 +429,7 @@ function ApercuPiece({ piece, onClose }: { piece: PieceJustificative; onClose: (
 export function PiecesDossierPret({ membership }: { membership: Membership }) {
   const { data: enquete } = useEnquetePortail(membership.copro.id);
   const { data: reponse } = useMaReponse(enquete?.id, membership.coproprietaireId);
-  const contexte = useContextePieces(membership.copro.id, membership.coproprietaireId, membership.nom);
+  const contexte = useContextePieces(membership.coproprietaireId, membership.nom);
   const { data: bulletins } = useMesBulletins(membership.coproprietaireId);
   const rep = reponse?.reponses as ReponsesPieces | null;
   const duPret = piecesDossierPret(rep, contexte);

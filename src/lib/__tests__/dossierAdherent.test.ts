@@ -174,12 +174,6 @@ describe("dossier de la banque d'un adhérent", () => {
     expect(d2.piecesRequises).not.toContain("taxe_fonciere");
   });
 
-  it("souscription en ligne chez la banque : le dossier ne passe pas par nous", () => {
-    const { dossiers } = assemblerDossiers({ ...base(["DUPONT Jean"]), choix: [collectif(1)], souscriptionEnLigne: true });
-    expect(dossiers[0].banque.applicable).toBe(false);
-    expect(dossiers[0].etat.manquants).not.toContain("taxe foncière ou attestation notariée de propriété du lot");
-  });
-
   it("dossier complet quand toutes les pièces de la banque sont fournies et validées", () => {
     const pieces = ["piece_identite", "rib", "avis_imposition", "justificatif_domicile", "taxe_fonciere"].map((t) => piece(1, t));
     const { dossiers } = assemblerDossiers({

@@ -1035,30 +1035,45 @@ export type Database = {
       }
       copro_financement_config: {
         Row: {
+          adhesion_email_le: string | null
+          adhesion_email_nb: number | null
           adhesion_ouverte: boolean
           banque: string
           copro_id: string
+          date_limite_adhesion: string | null
+          date_limite_adhesion_2: string | null
           date_limite_choix: string | null
           duree_annees: number
-          lien_adhesion: string | null
+          relance_adhesion_le: string | null
+          relance_adhesion_nb: number | null
           updated_at: string
         }
         Insert: {
+          adhesion_email_le?: string | null
+          adhesion_email_nb?: number | null
           adhesion_ouverte?: boolean
           banque?: string
           copro_id: string
+          date_limite_adhesion?: string | null
+          date_limite_adhesion_2?: string | null
           date_limite_choix?: string | null
           duree_annees?: number
-          lien_adhesion?: string | null
+          relance_adhesion_le?: string | null
+          relance_adhesion_nb?: number | null
           updated_at?: string
         }
         Update: {
+          adhesion_email_le?: string | null
+          adhesion_email_nb?: number | null
           adhesion_ouverte?: boolean
           banque?: string
           copro_id?: string
+          date_limite_adhesion?: string | null
+          date_limite_adhesion_2?: string | null
           date_limite_choix?: string | null
           duree_annees?: number
-          lien_adhesion?: string | null
+          relance_adhesion_le?: string | null
+          relance_adhesion_nb?: number | null
           updated_at?: string
         }
         Relationships: [

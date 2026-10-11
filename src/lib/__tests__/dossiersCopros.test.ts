@@ -205,15 +205,6 @@ describe("assemblerDossiers", () => {
     expect(d1.plan?.partage).toBe(true);
     expect(d1.plan?.publieLe).toBe("2026-09-02T00:00:00Z");
 
-    // Souscription en ligne chez la banque : le bulletin et le mandat SEPA ne
-    // passent plus par Strat Eco, ils ne peuvent donc plus manquer (22/09/2026).
-    const enLigne = assemblerDossiers({ ...base, scenario, choix, souscriptionEnLigne: true });
-    const b1 = enLigne.dossiers.find((d) => d.id === CP(1))!;
-    expect(b1.etat.bulletin).toBe("na");
-    expect(b1.etat.sepa).toBe("na");
-    expect(b1.etat.manquants).not.toContain("bulletin d'adhésion");
-    expect(b1.etat.manquants).not.toContain("mandat SEPA");
-
     // Dossier du portail (0148) : le mandat SEPA est signé avec le bulletin, par
     // le seul principal - « en cours » pendant la préparation, puis fourni dès
     // sa signature, même si les cosignataires n'ont pas encore signé le bulletin.

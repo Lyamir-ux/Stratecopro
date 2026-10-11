@@ -6,7 +6,6 @@ import { Badge, DpePair, Progress } from "@/components/ui";
 import {
   BANQUES,
   downloadAdhesionDoc,
-  lienAdhesionValide,
   useAdhesions,
   useFinancementConfigAmo,
   useSaveFinancementConfig,
@@ -63,6 +62,9 @@ import {
   useRelancerSignataire,
 } from "@/api/signature";
 import { messageErreur } from "@/lib/erreurs";
+import { useEspacesCoproprietaires } from "@/api/espaces";
+import { aujourdhuiParis, adhesionDepassee, dossierAdhesionDepose, limiteAdhesion } from "@/lib/financement";
+import { EnvoyerAdhesionFenetre, type ModeEmailAdhesion } from "./AdhesionEmail";
 
 export function FinancementTab({ c }: { c: CoproWithStats }) {
   const navigate = useNavigate();
@@ -77,17 +79,22 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   const { data: choix } = useChoixFinancementScenario(active?.id);
   const { data: finConfig } = useFinancementConfigAmo(c.id);
   const { data: adhesions } = useAdhesions(c.id);
+  // e-mails de la campagne d'adhésion (retours d'Amir du 11/10/2026) : qui écrire, qui a déposé son dossier
+  const { data: donneesCopro } = useDonnees(c.id);
+  const { data: espaces } = useEspacesCoproprietaires(c.id);
+  const { data: bulletinsCopro } = useBulletinsCopro(c.id);
   const { data: pfPlans } = usePlansDefinitifs(c.id);
   const [pfChoisi, setPfChoisi] = useState<string | null>(null);
   const saveConfig = useSaveFinancementConfig(c.id);
   const [banque, setBanque] = useState<string>("CEGEE");
   const [duree, setDuree] = useState(15);
-  // Deux parcours d'adhésion (Amir, 08/10/2026) : le lien de souscription de la
-  // banque, s'il est saisi, l'emporte - « Adhérer au prêt collectif » l'ouvre ;
-  // sans lien, la case « campagne ouverte » ouvre le dossier d'adhésion du
-  // portail (bulletin + mandat SEPA signés électroniquement).
+  // Parcours d'adhésion entièrement digital (Amir, 11/10/2026 : plus de lien de souscription de la
+  // banque) : la case « campagne ouverte » ouvre le dossier d'adhésion du portail (bulletin + mandat
+  // SEPA signés électroniquement), avec une date limite obligatoire pour le déposer et un e-mail aux
+  // copropriétaires ; une dernière relance peut proposer une deuxième date limite.
   const [ouverte, setOuverte] = useState(false);
-  const [lien, setLien] = useState("");
+  const [dateLimiteAdh, setDateLimiteAdh] = useState("");
+  const [emailAdhesion, setEmailAdhesion] = useState<ModeEmailAdhesion | null>(null);
   // Date limite du choix de financement dans le portail (0117, feedback du 30/09/2026).
   const [dateLimite, setDateLimite] = useState("");
 
@@ -96,21 +103,29 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
     setBanque(finConfig.banque);
     setDuree(finConfig.duree_annees);
     setOuverte(finConfig.adhesion_ouverte);
-    setLien(finConfig.lien_adhesion ?? "");
+    setDateLimiteAdh(finConfig.date_limite_adhesion ?? "");
     setDateLimite(finConfig.date_limite_choix ?? "");
   }, [finConfig]);
 
-  const lienNettoye = lien.trim();
-  const lienKo = lienNettoye !== "" && !lienAdhesionValide(lienNettoye);
+  // la date limite d'adhésion est exigée dès que la campagne est ouverte
+  const ouvertureSansDate = ouverte && !dateLimiteAdh;
   const configDirty =
     !finConfig ||
     finConfig.banque !== banque ||
     finConfig.duree_annees !== duree ||
     finConfig.adhesion_ouverte !== ouverte ||
-    (finConfig.lien_adhesion ?? "") !== lienNettoye ||
+    (finConfig.date_limite_adhesion ?? "") !== dateLimiteAdh ||
     (finConfig.date_limite_choix ?? "") !== dateLimite;
 
   if (isLoading || !bareme) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
+
+  // mode de financement choisi par fiche (le plus récent d'abord) et fiches dont le dossier d'adhésion est déposé
+  const choixParFiche = new Map<string, string>();
+  for (const x of choix ?? []) if (!choixParFiche.has(x.coproprietaire_id)) choixParFiche.set(x.coproprietaire_id, x.type);
+  const fichesDeposees = new Set<string>([
+    ...(bulletinsCopro ?? []).filter((b) => dossierAdhesionDepose([b])).map((b) => b.coproprietaire_id),
+    ...(adhesions ?? []).filter((a) => dossierAdhesionDepose([], a.statut === "signee")).map((a) => a.coproprietaire_id),
+  ]);
 
   const openAssistant = () => navigate(`/copros/${c.id}/ingenierie${active ? `/${active.id}` : ""}`);
 
@@ -253,9 +268,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
             <Icon name="users" size={18} />
             <h3>Prêt collectif - adhésions</h3>
             <span style={{ flex: 1 }}></span>
-            <Badge kind={lienNettoye || ouverte ? "success" : "neutral"}>
-              {lienNettoye ? "Souscription chez la banque" : ouverte ? "Campagne ouverte sur le portail" : "Fermée"}
-            </Badge>
+            <Badge kind={ouverte ? "success" : "neutral"}>{ouverte ? "Campagne ouverte sur le portail" : "Fermée"}</Badge>
           </div>
           <div className="p-body">
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -297,57 +310,122 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
               </div>
               <label
                 style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, cursor: "pointer", paddingBottom: 8 }}
-                title="Ouvre le dossier d'adhésion du portail : bulletin pré-rempli et mandat SEPA, signés électroniquement. Sans effet tant qu'un lien de souscription de la banque est saisi."
+                title="Ouvre le dossier d'adhésion du portail : bulletin pré-rempli et mandat SEPA, signés électroniquement. Une date limite est exigée, et les copropriétaires reçoivent un e-mail."
               >
                 <input type="checkbox" checked={ouverte} onChange={(e) => setOuverte(e.target.checked)} />
                 Adhésions ouvertes sur le portail
               </label>
+              {ouverte && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  <label
+                    style={{ fontSize: 12.5, color: "var(--fg2)" }}
+                    title="Dernier jour (inclus) pour déposer un dossier d'adhésion au prêt collectif : bulletin et mandat SEPA signés. L'éco-PTZ individuel et les fonds propres n'ont pas de date limite propre. Passé ce jour, seuls les dossiers déjà déposés restent ouverts, pour ajouter des pièces pendant l'instruction."
+                  >
+                    Date limite d'adhésion au prêt collectif *
+                  </label>
+                  <input
+                    className="edit-inp"
+                    type="date"
+                    value={dateLimiteAdh}
+                    disabled={!!finConfig?.date_limite_adhesion_2}
+                    title={finConfig?.date_limite_adhesion_2 ? "Une dernière relance a fixé une deuxième date limite : la première n'est plus modifiable." : undefined}
+                    onChange={(e) => setDateLimiteAdh(e.target.value)}
+                  />
+                </div>
+              )}
               <button
                 className="se-btn se-btn-secondary btn-sm"
                 style={{ marginBottom: 4 }}
-                disabled={!configDirty || lienKo || saveConfig.isPending || duree < 3 || duree > 20}
-                onClick={() =>
-                  saveConfig.mutate({
-                    banque,
-                    dureeAnnees: duree,
-                    adhesionOuverte: ouverte,
-                    lienAdhesion: lienNettoye || null,
-                    dateLimiteChoix: dateLimite || null,
-                  })
-                }
+                disabled={!configDirty || ouvertureSansDate || saveConfig.isPending || duree < 3 || duree > 20}
+                onClick={() => {
+                  // ouverture de la campagne : l'e-mail aux copropriétaires est proposé une fois la config enregistrée
+                  const ouvre = ouverte && !finConfig?.adhesion_ouverte;
+                  saveConfig.mutate(
+                    {
+                      banque,
+                      dureeAnnees: duree,
+                      adhesionOuverte: ouverte,
+                      dateLimiteChoix: dateLimite || null,
+                      dateLimiteAdhesion: dateLimiteAdh || null,
+                    },
+                    { onSuccess: () => ouvre && setEmailAdhesion("ouverture") }
+                  );
+                }}
               >
                 {saveConfig.isPending ? "Enregistrement…" : "Enregistrer"}
               </button>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 14 }}>
-              <label style={{ fontSize: 12.5, color: "var(--fg2)" }}>
-                Lien de souscription de la banque - facultatif, remplace le dossier du portail
-              </label>
-              <input
-                className="edit-inp"
-                type="url"
-                placeholder="https://… (parcours d'adhésion communiqué par la banque)"
-                value={lien}
-                onChange={(e) => setLien(e.target.value)}
-              />
-              <p className="se-small" style={{ color: lienKo ? "var(--color-error-700)" : "var(--fg-muted)", margin: 0 }}>
-                {lienKo
-                  ? "Le lien doit commencer par https:// - il est ouvert depuis le portail des copropriétaires."
-                  : lienNettoye
-                    ? "Le bouton « Adhérer au prêt collectif » du portail ouvre ce lien après avoir enregistré le choix du copropriétaire : la banque mène alors tout le dossier de prêt, à la place du dossier d'adhésion du portail. Les dossiers déjà engagés dans le portail restent consultables."
-                    : ouverte
-                      ? "Sans lien, le copropriétaire remplit son dossier d'adhésion dans le portail : bulletin pré-rempli et mandat SEPA, signés électroniquement avec un code reçu par e-mail."
-                      : "Sans lien ni campagne ouverte, le portail enregistre le choix du copropriétaire et lui annonce que le dossier d'adhésion ouvrira bientôt."}
+            {ouvertureSansDate && (
+              <p className="se-small" style={{ color: "var(--color-error-700)", margin: "10px 0 0" }}>
+                Indiquez la date limite d'adhésion au prêt collectif pour ouvrir la campagne.
               </p>
-            </div>
+            )}
+            <p className="se-small" style={{ color: "var(--fg-muted)", margin: "12px 0 0" }}>
+              {ouverte
+                ? "Le copropriétaire remplit son dossier d'adhésion dans le portail : bulletin pré-rempli et mandat SEPA, signés électroniquement avec un code reçu par e-mail. L'éco-PTZ individuel et les fonds propres n'ont pas de date limite propre ; après la date limite d'adhésion, un copropriétaire qui a déposé son dossier peut encore y ajouter des pièces pendant l'instruction."
+                : "Sans campagne ouverte, le portail enregistre le choix du copropriétaire et lui annonce que le dossier d'adhésion ouvrira bientôt."}
+            </p>
+
+            {finConfig?.adhesion_ouverte && (
+              <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                {(() => {
+                  const limite = limiteAdhesion(finConfig);
+                  const depassee = adhesionDepassee(limite, aujourdhuiParis());
+                  return (
+                    <>
+                      <div className="kv">
+                        <span className="k">Date limite d'adhésion</span>
+                        <span className="v">
+                          {limite ? fmtDate(limite) : "-"}
+                          {finConfig.date_limite_adhesion_2 ? " (deuxième date)" : ""}
+                          {depassee && (
+                            <>
+                              {" "}
+                              <Badge kind="warn">Dépassée</Badge>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      <div className="kv">
+                        <span className="k">E-mail d'ouverture</span>
+                        <span className="v">
+                          {finConfig.adhesion_email_le
+                            ? `Envoyé le ${fmtDate(finConfig.adhesion_email_le)}${finConfig.adhesion_email_nb != null ? ` à ${finConfig.adhesion_email_nb} copropriétaire${finConfig.adhesion_email_nb > 1 ? "s" : ""}` : ""}`
+                            : "Pas encore envoyé"}
+                        </span>
+                      </div>
+                      <div className="kv">
+                        <span className="k">Dernière relance</span>
+                        <span className="v">
+                          {finConfig.relance_adhesion_le
+                            ? `Envoyée le ${fmtDate(finConfig.relance_adhesion_le)}${finConfig.relance_adhesion_nb != null ? ` à ${finConfig.relance_adhesion_nb} copropriétaire${finConfig.relance_adhesion_nb > 1 ? "s" : ""}` : ""}`
+                            : "Pas encore faite (une seule relance est possible, avec une deuxième date limite)"}
+                        </span>
+                      </div>
+                    </>
+                  );
+                })()}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button className="se-btn se-btn-ghost btn-sm" onClick={() => setEmailAdhesion("ouverture")}>
+                    <Icon name="mail" size={14} />
+                    {finConfig.adhesion_email_le ? "Renvoyer l'e-mail d'ouverture" : "Envoyer l'e-mail d'ouverture"}
+                  </button>
+                  {!finConfig.date_limite_adhesion_2 && finConfig.date_limite_adhesion && (
+                    <button className="se-btn se-btn-secondary btn-sm" onClick={() => setEmailAdhesion("relance")}>
+                      <Icon name="send" size={14} />
+                      Dernière relance
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 2 }}>
               {(adhesions ?? []).length === 0 ? (
                 <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
-                  {lienNettoye
-                    ? "Aucun dossier d'adhésion dans le portail : les copropriétaires souscrivent en ligne chez la banque. Suivez leurs choix de financement dans l'onglet Copropriétaires."
-                    : "Aucun dossier d'adhésion pour l'instant - les copropriétaires y accèdent depuis leur portail après avoir choisi le prêt collectif, une fois la campagne ouverte."}
+                  Aucun dossier d'adhésion pour l'instant - les copropriétaires y accèdent depuis leur portail après avoir
+                  choisi le prêt collectif, une fois la campagne ouverte.
                 </p>
               ) : (
                 (adhesions ?? []).map((a, i, arr) => {
@@ -406,6 +484,20 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
             </div>
           </div>
         </div>
+        {emailAdhesion && finConfig && (
+          <EnvoyerAdhesionFenetre
+            key={emailAdhesion}
+            mode={emailAdhesion}
+            copro={c.name}
+            coproId={c.id}
+            config={finConfig}
+            fiches={donneesCopro?.coproprietaires ?? []}
+            espaces={espaces}
+            choixParFiche={choixParFiche}
+            deposees={fichesDeposees}
+            onClose={() => setEmailAdhesion(null)}
+          />
+        )}
         <EcoPtzIndividuelPanel coproId={c.id} />
         <SignaturesElectroniquesPanel coproId={c.id} />
       </div>

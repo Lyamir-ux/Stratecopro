@@ -5,7 +5,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { bulletinsSignes, piecesDossierPret, piecesEnquete, type ReponsesPieces } from "@/lib/piecesSituation";
 import { libelleLotsPortail } from "@/lib/lotsPortail";
-import { accesFinancement, MOTIF_FINANCEMENT_VERROUILLE, peutRepondreEnquete } from "@/lib/financement";
+import { accesFinancement, dossierAdhesionDepose, MOTIF_FINANCEMENT_VERROUILLE, peutRepondreEnquete } from "@/lib/financement";
 import { Avatar, PhaseBadge, THUMB_BG } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
 import { compteNonLus, useLectures, useMessagesPortail } from "@/api/messages";
@@ -325,7 +325,7 @@ export default function Portail() {
   const { data: choix } = useMonChoix(scenario?.id, membership?.coproprietaireId);
   const { data: plan } = useMonPlan(scenario?.id, membership?.coproprietaireId);
   const { data: pieces } = useMesPieces(membership?.coproprietaireId);
-  const contextePieces = useContextePieces(membership?.copro.id, membership?.coproprietaireId, membership?.nom);
+  const contextePieces = useContextePieces(membership?.coproprietaireId, membership?.nom);
   const { data: bulletins, isLoading: chargeBulletins } = useMesBulletins(membership?.coproprietaireId);
   const { data: ancienneAdhesion, isLoading: chargeAdhesion } = useMonAdhesion(membership?.copro.id, membership?.coproprietaireId);
   const { data: messages } = useMessagesPortail(membership?.copro.id, membership?.coproprietaireId);
@@ -407,7 +407,7 @@ export default function Portail() {
     enqueteConcerne: enqueteOuverte,
     enqueteExiste: !!enquete,
     enqueteTransmise: enqueteComplete,
-    dossierEngage: (bulletins ?? []).some((b) => b.statut !== "annule" && b.statut !== "brouillon") || ancienneAdhesion?.statut === "signee",
+    dossierEngage: dossierAdhesionDepose(bulletins, ancienneAdhesion?.statut === "signee"),
     chargement: chargeEnquete || chargeReponse || chargeBulletins || chargeAdhesion,
   });
   // Pièces attendues selon les réponses enregistrées (feedback Marius MAZZANTE

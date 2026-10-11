@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { accesFinancement, ecoPtzPossible, idsNonConcernesParEnquete, MOTIF_FINANCEMENT_VERROUILLE, peutRepondreEnquete } from "../financement";
+import {
+  accesFinancement,
+  adhesionDepassee,
+  adhesionPossible,
+  dossierAdhesionDepose,
+  ecoPtzPossible,
+  idsNonConcernesParEnquete,
+  limiteAdhesion,
+  MOTIF_FINANCEMENT_VERROUILLE,
+  peutRepondreEnquete,
+} from "../financement";
 
 describe("ecoPtzPossible", () => {
   it("ouvert dès qu'un lot d'habitation est à son nom", () => {
@@ -83,5 +93,39 @@ describe("accesFinancement : « Mon financement » après l'enquête (règle d'A
     expect(MOTIF_FINANCEMENT_VERROUILLE).toBe(
       "Vous ne pourrez passer cette étape que lorsque vous aurez complété l'enquête sociale et technique."
     );
+  });
+});
+
+describe("date limite d'adhésion au prêt collectif (idée d'Amir du 11/10/2026)", () => {
+  it("la deuxième date, fixée par la dernière relance, fait foi quand elle existe", () => {
+    expect(limiteAdhesion({ date_limite_adhesion: "2026-11-15", date_limite_adhesion_2: "2026-12-01" })).toBe("2026-12-01");
+    expect(limiteAdhesion({ date_limite_adhesion: "2026-11-15", date_limite_adhesion_2: null })).toBe("2026-11-15");
+    expect(limiteAdhesion({ date_limite_adhesion: null })).toBeNull();
+    expect(limiteAdhesion(null)).toBeNull();
+  });
+
+  it("le jour même de la date limite est encore ouvert, le lendemain non ; sans date, jamais dépassée", () => {
+    expect(adhesionDepassee("2026-11-15", "2026-11-15")).toBe(false);
+    expect(adhesionDepassee("2026-11-15", "2026-11-14")).toBe(false);
+    expect(adhesionDepassee("2026-11-15", "2026-11-16")).toBe(true);
+    expect(adhesionDepassee(null, "2030-01-01")).toBe(false);
+  });
+
+  it("un dossier est déposé dès qu'un bulletin est sorti de la préparation, ou pour un ancien dossier signé", () => {
+    expect(dossierAdhesionDepose([{ statut: "brouillon" }])).toBe(false);
+    expect(dossierAdhesionDepose([{ statut: "annule" }])).toBe(false);
+    expect(dossierAdhesionDepose([])).toBe(false);
+    expect(dossierAdhesionDepose(null)).toBe(false);
+    expect(dossierAdhesionDepose([{ statut: "en_signature" }])).toBe(true);
+    expect(dossierAdhesionDepose([{ statut: "brouillon" }, { statut: "complet" }])).toBe(true);
+    expect(dossierAdhesionDepose([], true)).toBe(true);
+  });
+
+  it("l'adhésion n'est possible que campagne ouverte et date limite pas dépassée", () => {
+    const base = { campagneOuverte: true, limite: "2026-11-15", aujourdhui: "2026-11-10" };
+    expect(adhesionPossible(base)).toBe(true);
+    expect(adhesionPossible({ ...base, aujourdhui: "2026-11-16" })).toBe(false);
+    expect(adhesionPossible({ ...base, campagneOuverte: false })).toBe(false);
+    expect(adhesionPossible({ ...base, limite: null, aujourdhui: "2030-01-01" })).toBe(true);
   });
 });

@@ -88,9 +88,19 @@ export function paquetsParAdresse<T extends { id: string; email: string | null }
   return paquets;
 }
 
-async function appelerPaquet(ids: string[], enquete?: EnvoiEnquete): Promise<ResultatEspace[]> {
+/** Mode de l'e-mail : le questionnaire d'enquête, ou « Mon financement » (ouverture des adhésions, relance). */
+export interface CampagneEmail {
+  enquete?: EnvoiEnquete;
+  financement?: EnvoiEnquete;
+}
+
+async function appelerPaquet(ids: string[], campagne: CampagneEmail): Promise<ResultatEspace[]> {
   const { data, error } = await supabase.functions.invoke("creer-espace-coproprietaire", {
-    body: { coproprietaire_ids: ids, ...(enquete ? { enquete } : {}) },
+    body: {
+      coproprietaire_ids: ids,
+      ...(campagne.enquete ? { enquete: campagne.enquete } : {}),
+      ...(campagne.financement ? { financement: campagne.financement } : {}),
+    },
   });
   if (error) {
     // le corps d'erreur de l'edge function porte le message à afficher
@@ -106,7 +116,8 @@ async function appelerPaquet(ids: string[], enquete?: EnvoiEnquete): Promise<Res
  * nombre de fiches traitées. Un paquet en échec n'arrête pas la suite : ses
  * fiches sortent en erreur (nom vide, l'écran le connaît) et restent à refaire.
  * Avec `enquete`, chaque fiche reçoit le questionnaire : lien vers l'enquête
- * si son espace est activé, sinon lien pour choisir son mot de passe.
+ * si son espace est activé, sinon lien pour choisir son mot de passe. Avec
+ * `financement` (11/10/2026), même traitement mais l'e-mail mène à « Mon financement ».
  */
 export function useCreerEspaces(coproId: string) {
   const qc = useQueryClient();
@@ -114,17 +125,19 @@ export function useCreerEspaces(coproId: string) {
     mutationFn: async ({
       cibles,
       enquete,
+      financement,
       onProgres,
     }: {
       cibles: { id: string; email: string | null }[];
       enquete?: EnvoiEnquete;
+      financement?: EnvoiEnquete;
       onProgres?: (n: number) => void;
     }) => {
       const resultats: ResultatEspace[] = [];
       for (const paquet of paquetsParAdresse(cibles)) {
         const ids = paquet.map((c) => c.id);
         try {
-          resultats.push(...(await appelerPaquet(ids, enquete)));
+          resultats.push(...(await appelerPaquet(ids, { enquete, financement })));
         } catch (e) {
           const detail = e instanceof Error ? e.message : "Appel impossible";
           resultats.push(...ids.map((id): ResultatEspace => ({ id, nom: "", statut: "erreur", envoi: null, detail })));

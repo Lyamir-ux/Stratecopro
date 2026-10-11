@@ -5,8 +5,8 @@
 // bulletin et du mandat SEPA, puis code OTP. Voir
 // SPEC_signature_bulletins_adhesion.md et CGU v1.6.
 //
-// Retiré le 22/09/2026 au profit du lien de la banque, rétabli le 08/10/2026
-// (Amir) : c'est le parcours des copropriétés sans lien de souscription.
+// Retiré le 22/09/2026 au profit du lien de la banque, rétabli le 08/10/2026 (Amir) ;
+// depuis le 11/10/2026 c'est le seul parcours : le lien de souscription n'existe plus.
 // Nouveauté : le mandat SEPA n'est plus à imprimer - généré depuis le RIB
 // (un par bulletin), il est signé avec le même code que le bulletin, par le
 // seul signataire principal (titulaire du compte). Les cosignataires ne le
@@ -45,6 +45,7 @@ import { classerTelephone, dateLieuComplet, diagnosticBic, diagnosticIban } from
 import { ACCEPT_PIECE, erreurFormatPiece, LIBELLE_FORMATS_PIECE, typeMimePiece } from "@/lib/formatPiece";
 import { decouperNomPrenom, nomEtPrenomRenseignes } from "@/lib/nomFamille";
 import { signataireDepuisAdherent2 } from "@/lib/signataireAdherent2";
+import { adhesionDepassee, limiteAdhesion } from "@/lib/financement";
 import { assemblerPieceIdentite, facesADeposer, verifierFacesPiece } from "@/lib/pdf/pieceIdentite";
 import { PieceIdentiteChamps } from "@/components/PieceIdentiteChamps";
 import { useGlisserDeposer } from "@/components/useGlisserDeposer";
@@ -459,8 +460,8 @@ export function Adhesion({
   config: FinancementConfig | null;
   email: string;
   go?: (s: SectionId) => void;
-  /** Campagne fermée ou souscription passée chez la banque : on n'affiche que
-   *  les dossiers déjà engagés (signés ou en signature), sans en ouvrir de nouveau. */
+  /** Campagne fermée : on n'affiche que les dossiers déjà engagés (signés ou en
+   *  signature), sans en ouvrir de nouveau. */
   suiviSeul?: boolean;
 }) {
   // Aperçu AMO du portail : lecture seule - le dossier se remplit et se signe
@@ -759,6 +760,38 @@ export function Adhesion({
   const engage = actifs.some((b) => b.statut !== "brouillon") || adhesion?.statut === "signee";
   if (suiviSeul && !engage) return null;
 
+  // ---------- Date limite d'adhésion dépassée (idée d'Amir du 11/10/2026) ----------
+  // Qui n'a pas déposé son dossier ne peut plus en ouvrir un ; qui l'a déposé garde son suivi, ses
+  // signatures et le dépôt de pièces pendant l'instruction. L'éco-PTZ individuel et les fonds propres
+  // n'ont pas de date limite propre.
+  const limite = limiteAdhesion(config);
+  const delaiPasse = adhesionDepassee(limite);
+  if (delaiPasse && limite && !engage) {
+    return (
+      <div className="card-xl fade" style={{ marginTop: 22 }}>
+        <div className="cx-head">
+          <Icon name="lock" size={20} style={{ color: "var(--color-warning-500)" }} />
+          <h2 style={{ fontSize: 19 }}>Date limite d'adhésion dépassée</h2>
+        </div>
+        <div className="cx-body">
+          <p className="se-body" style={{ marginTop: 0 }}>
+            La date limite pour déposer un dossier d'adhésion au prêt collectif était le <b>{fmtDate(limite)}</b> : il
+            n'est plus possible d'ouvrir le vôtre. Pour toute question, écrivez à votre AMO.
+          </p>
+          <p className="se-small" style={{ color: "var(--fg-muted)" }}>
+            L'éco-PTZ individuel et le financement sur fonds propres ne sont pas soumis à cette date limite.
+          </p>
+          {go && (
+            <button className="se-btn se-btn-secondary btn-sm" onClick={() => go("messages")}>
+              <Icon name="message" size={15} />
+              Nous contacter
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // ---------- Aperçu AMO : pas de saisie à la place du copropriétaire ----------
   if (apercuAmo && !engage) {
     return (
@@ -824,6 +857,15 @@ export function Adhesion({
             {tousComplets && <Badge kind="success">Scellé le {fmtDate(actifs[0].scelle_le)}</Badge>}
           </div>
           <div className="cx-body">
+            {delaiPasse && limite && (
+              <div className="cc-next" style={{ marginBottom: 12 }}>
+                <Icon name="clock" size={15} className="ico" />
+                <span>
+                  La date limite d'adhésion au prêt collectif ({fmtDate(limite)}) est dépassée. Votre dossier est
+                  déposé : vous pouvez encore y ajouter des pièces pendant son instruction.
+                </span>
+              </div>
+            )}
             {actifs.map((b) => (
               <div key={b.id} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: 14, marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>

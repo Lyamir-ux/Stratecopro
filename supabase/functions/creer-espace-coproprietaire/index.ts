@@ -28,6 +28,12 @@
 // pour choisir son mot de passe si l'espace n'a jamais servi, sinon un lien
 // vers l'enquête du portail (une fiche à l'espace déjà activé reçoit donc aussi
 // l'e-mail). Une adresse partagée par plusieurs fiches ne reçoit qu'un e-mail.
+//
+// Mode financement (retours d'Amir du 11/10/2026) : avec `financement`
+// ({ sujet, message }), même traitement des comptes, mais l'e-mail ouvre « Mon
+// financement » du portail (/portail/pret) : e-mail d'ouverture des adhésions et
+// dernière relance avec une deuxième date limite. La date limite est dans le
+// message relu et modifié par l'AMO : aucune ligne de date n'est ajoutée.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const cors = {
@@ -152,7 +158,7 @@ Deno.serve(async (req: Request) => {
     return json(403, { error: "Réservé à l'équipe Strat Eco" });
   }
 
-  const { coproprietaire_ids, enquete: enqueteBrute } = await req.json().catch(() => ({}));
+  const { coproprietaire_ids, enquete: enqueteBrute, financement: financementBrute } = await req.json().catch(() => ({}));
   if (!Array.isArray(coproprietaire_ids) || coproprietaire_ids.length === 0) {
     return json(400, { error: "coproprietaire_ids attendu" });
   }
@@ -160,18 +166,24 @@ Deno.serve(async (req: Request) => {
     return json(400, { error: `${MAX_FICHES} fiches au plus par appel` });
   }
 
-  // --- Mode enquête : objet et message de l'AMO ---
-  let enquete: { sujet: string; message: string; dateLimite: string | null } | null = null;
-  if (enqueteBrute != null) {
-    const sujet = typeof enqueteBrute.sujet === "string" ? enqueteBrute.sujet.replace(/\s+/g, " ").trim() : "";
-    const message = typeof enqueteBrute.message === "string" ? enqueteBrute.message.trim() : "";
+  // --- Mode enquête ou financement : objet et message de l'AMO ---
+  let enquete: { type: "enquete" | "financement"; sujet: string; message: string; dateLimite: string | null } | null = null;
+  const campagneBrute = enqueteBrute != null ? enqueteBrute : financementBrute;
+  if (campagneBrute != null) {
+    const sujet = typeof campagneBrute.sujet === "string" ? campagneBrute.sujet.replace(/\s+/g, " ").trim() : "";
+    const message = typeof campagneBrute.message === "string" ? campagneBrute.message.trim() : "";
     if (!sujet || sujet.length > MAX_SUJET) {
       return json(400, { error: `Objet de l'e-mail vide ou trop long (${MAX_SUJET} caractères au plus)` });
     }
     if (!message || message.length > MAX_MESSAGE) {
       return json(400, { error: `Message de l'e-mail vide ou trop long (${MAX_MESSAGE} caractères au plus)` });
     }
-    enquete = { sujet, message, dateLimite: dateEnLettres(enqueteBrute.date_limite) };
+    enquete = {
+      type: enqueteBrute != null ? "enquete" : "financement",
+      sujet,
+      message,
+      dateLimite: enqueteBrute != null ? dateEnLettres(enqueteBrute.date_limite) : null,
+    };
   }
 
   const { data: fiches, error: fichesErr } = await admin
@@ -223,12 +235,14 @@ Deno.serve(async (req: Request) => {
       <p style="color:#5c6470;font-size:13px">Ce lien est personnel et valable pour une durée limitée. S'il a expiré,
       rendez-vous sur <a href="${appUrl}/mot-de-passe-oublie">${appUrl}/mot-de-passe-oublie</a> et saisissez
       cette adresse (${esc(email)}) : vous recevrez un nouveau lien.</p>`;
-  /** Début de l'e-mail du questionnaire : message de l'AMO, puis la date limite. */
+  /** Début de l'e-mail de la campagne : message de l'AMO, puis la date limite du questionnaire. */
   const corpsEnquete = () =>
     enquete
       ? messageHtml(enquete.message) +
         (enquete.dateLimite ? `<p>Merci de répondre avant le <strong>${esc(enquete.dateLimite)}</strong>.</p>` : "")
       : "";
+  /** Mode financement : l'e-mail mène à « Mon financement » plutôt qu'à l'enquête. */
+  const financement = enquete?.type === "financement";
 
   /** E-mail d'activation : lien vers /activer-espace pour choisir son mot de passe. */
   const envoyerActivation = async (email: string, nom: string, copro: string): Promise<Envoi> => {
@@ -246,7 +260,7 @@ Deno.serve(async (req: Request) => {
         <p>Votre espace copropriétaire est ouvert : pour y accéder, choisissez votre mot de passe.</p>
         ${bouton(actionLink, "Choisir mon mot de passe")}
         <p>Votre identifiant de connexion est votre adresse e-mail : <strong>${esc(email)}</strong>. Une fois votre
-        mot de passe choisi, l'enquête vous attend dans la rubrique « Enquête sociale » de votre espace.</p>
+        mot de passe choisi, ${financement ? "votre financement vous attend dans la rubrique « Mon financement »" : "l'enquête vous attend dans la rubrique « Enquête sociale »"} de votre espace.</p>
         ${lienExpire(email)}
         ${AIDE_ENQUETE}`,
       );
@@ -272,7 +286,9 @@ Deno.serve(async (req: Request) => {
     const html = gabarit(
       nom,
       `${corpsEnquete()}
-      ${bouton(`${appUrl}/portail/enquete`, "Répondre à l'enquête")}
+      ${financement
+        ? bouton(`${appUrl}/portail/pret`, "Choisir mon financement")
+        : bouton(`${appUrl}/portail/enquete`, "Répondre à l'enquête")}
       <p>Connectez-vous avec votre adresse e-mail (<strong>${esc(email)}</strong>) et votre mot de passe habituel.</p>
       <p style="color:#5c6470;font-size:13px">Mot de passe oublié ? Rendez-vous sur
       <a href="${appUrl}/mot-de-passe-oublie">${appUrl}/mot-de-passe-oublie</a> : vous recevrez un lien pour en

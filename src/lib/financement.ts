@@ -75,3 +75,52 @@ export const MOTIF_SANS_ENQUETE =
   "L'enquête sociale ne concerne que les propriétaires d'un lot d'habitation : elle sert à déterminer l'aide " +
   "individuelle d'un ménage. Vos lots (garage, cave, parking, local d'activité…) ne sont pas des logements, " +
   "aucune réponse n'est attendue de votre part.";
+
+// ========== Date limite d'adhésion au prêt collectif (idée d'Amir du 11/10/2026) ==========
+// Pas de date limite propre à l'éco-PTZ individuel ni aux fonds propres (date_limite_choix reste le
+// dernier jour pour choisir ou modifier son financement). Le dépôt d'un dossier d'adhésion au prêt
+// collectif, lui, a une date limite fixée à l'ouverture des adhésions ; une dernière relance peut
+// proposer une deuxième date, qui fait alors foi. Passé ce jour, qui n'a pas déposé son dossier ne
+// peut plus en ouvrir un ; qui l'a déposé (bulletin et mandat SEPA) peut encore ajouter des pièces
+// pendant l'instruction.
+
+/** Date du jour à Paris, au format AAAA-MM-JJ (comparable à une colonne date). */
+export function aujourdhuiParis(): string {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
+}
+
+/** Date limite en vigueur : la deuxième quand la dernière relance en a fixé une, sinon la première. */
+export function limiteAdhesion(
+  config: { date_limite_adhesion?: string | null; date_limite_adhesion_2?: string | null } | null | undefined
+): string | null {
+  return config?.date_limite_adhesion_2 || config?.date_limite_adhesion || null;
+}
+
+/** La date limite est passée : le jour même est encore ouvert. */
+export function adhesionDepassee(limite: string | null, aujourdhui: string = aujourdhuiParis()): boolean {
+  return !!limite && aujourdhui > limite;
+}
+
+/**
+ * Dossier d'adhésion déposé : au moins un bulletin sorti de la préparation (signé par le principal, en
+ * signature ou scellé), ou un ancien dossier signé avant la signature électronique. Il reste ouvert à son
+ * titulaire après la date limite : signatures des autres adhérents, pièces du prêt pendant l'instruction.
+ */
+export function dossierAdhesionDepose(
+  bulletins: readonly { statut: string }[] | null | undefined,
+  ancienDossierSigne = false
+): boolean {
+  return ancienDossierSigne || (bulletins ?? []).some((b) => b.statut !== "annule" && b.statut !== "brouillon");
+}
+
+/**
+ * Dossier d'adhésion qu'un copropriétaire peut encore ouvrir ou terminer : campagne ouverte et date
+ * limite pas dépassée. Un dossier déjà déposé est toujours accessible (suivi, signatures, pièces).
+ */
+export function adhesionPossible(e: {
+  campagneOuverte: boolean;
+  limite: string | null;
+  aujourdhui?: string;
+}): boolean {
+  return e.campagneOuverte && !adhesionDepassee(e.limite, e.aujourdhui);
+}
