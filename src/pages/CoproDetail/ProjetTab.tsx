@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
 import { PHASES, type PhaseId } from "@/lib/referentiels";
+import { STATUT_TACHE_SUIVANT } from "@/lib/statutTache";
 import { useTaches, useUpdateTache, type Tache } from "@/api/taches";
 import { useTeamProfiles } from "@/api/profiles";
 import { downloadFichier, useFichiers, type Fichier } from "@/api/fichiers";
@@ -13,14 +14,23 @@ import { DOSSIERS_PAR_PHASE, usePhaseNotes, useSavePhaseNote } from "@/api/phase
 import type { CoproWithStats } from "@/api/copros";
 import { HonorairesBloc } from "./HonorairesBloc";
 
-const NEXT_STATUS = { todo: "doing", doing: "done", done: "todo" } as const;
+const NEXT_STATUS = STATUT_TACHE_SUIVANT;
 
+/** Pastille de statut. Cliquable, elle ne remonte pas le clic : dans « Vos tâches » la ligne entière
+ *  ouvre le dossier, et le clic sur la pastille doit seulement changer l'état. */
 export function StatusDot({ status, onClick }: { status: Tache["status"]; onClick?: () => void }) {
   const cls = status === "done" ? " done" : status === "doing" ? " doing" : " todo";
   return (
     <span
       className={"status-dot" + cls}
-      onClick={onClick}
+      onClick={
+        onClick
+          ? (e) => {
+              e.stopPropagation();
+              onClick();
+            }
+          : undefined
+      }
       role={onClick ? "button" : undefined}
       title={onClick ? "Changer le statut" : undefined}
       style={onClick ? { cursor: "pointer" } : undefined}

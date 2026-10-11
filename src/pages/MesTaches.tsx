@@ -12,7 +12,9 @@ import { Avatar, Badge, PhaseBadge } from "@/components/ui";
 import { supabase, toutesLesLignes } from "@/lib/supabase";
 import type { Tables } from "@/lib/database.types";
 import { useCopros } from "@/api/copros";
-import { usePerimetreTaches } from "@/api/taches";
+import { useChangerStatutTache, usePerimetreTaches } from "@/api/taches";
+import { STATUT_TACHE_SUIVANT } from "@/lib/statutTache";
+import { messageErreur } from "@/lib/erreurs";
 import { dansPerimetre, libellePerimetre } from "@/lib/perimetreChef";
 import { nomPiece, urlApercuPiece, usePiecesAVerifier } from "@/api/portail";
 import { downloadAdhesionDoc } from "@/api/financement";
@@ -64,6 +66,7 @@ export default function MesTaches() {
   const copros = (tousLesDossiers ?? []).filter((c) => dansPerimetre(perimetre, c.chef_projet));
   const idsPerimetre = new Set(copros.map((c) => c.id));
   const { data: tasks } = useAllOpenTasks();
+  const changerStatut = useChangerStatutTache();
   // pièces justificatives déposées au portail par les copropriétaires, en
   // attente de vérification par l'équipe (feedback Amir 10/09)
   const { data: toutesLesPieces } = usePiecesAVerifier();
@@ -260,6 +263,12 @@ export default function MesTaches() {
         </div>
       )}
 
+      {changerStatut.isError && (
+        <p className="se-small" role="alert" style={{ color: "var(--color-error-700)", margin: "0 0 12px" }}>
+          {messageErreur(changerStatut.error, "Le changement d'état n'a pas pu être enregistré. Réessayez.")}
+        </p>
+      )}
+
       <div className="mt-groups">
         {groups.map((g) => (
           <div className="panel mt-card" key={g.c.id}>
@@ -278,7 +287,8 @@ export default function MesTaches() {
             <div className="mt-list">
               {g.tasks.map((t) => (
                 <div className="mt-task" key={t.id} onClick={() => navigate(`/copros/${g.c.id}`)}>
-                  <StatusDot status={t.status} />
+                  {/* la pastille change l'état (à faire, en cours, fait) ; le reste de la ligne ouvre le dossier */}
+                  <StatusDot status={t.status} onClick={() => changerStatut.mutate({ id: t.id, status: STATUT_TACHE_SUIVANT[t.status] })} />
                   <span className="mt-task-title">
                     {t.title}
                     {t.jalon && <span className="jalon">{t.jalon}</span>}
