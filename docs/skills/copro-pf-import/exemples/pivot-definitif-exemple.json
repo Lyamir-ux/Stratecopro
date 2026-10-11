@@ -1,0 +1,314 @@
+{
+  "nature": "definitif",
+  "classeur_source": "Plan de financement définitif - Résidence Les Tilleuls (exemple fictif).xlsx",
+  "onglet_source": "PF définitif Eco PTZ collectif",
+  "scenarios": [
+    {
+      "ordre": 1,
+      "libelle": "",
+      "infos": {
+        "nomCopro": "Résidence Les Tilleuls",
+        "adresse": "12 rue des Tilleuls, 67000 Strasbourg",
+        "nbLogements": 12,
+        "nbLogementsEquiv": 13,
+        "surfaceHabitable": 840,
+        "nbEtages": 4,
+        "nbEntrees": 1,
+        "typeChauffage": "Gaz Coll",
+        "cepInitial": 260,
+        "cepProjet": 118,
+        "dispositifClimaxion": true,
+        "etiquetteInitiale": "E",
+        "etiquetteProjet": "C"
+      },
+      "lots": [
+        {
+          "numero": 1,
+          "titre": "Échafaudage - Façades",
+          "entreprise": "FACADES DU RHIN",
+          "remisePct": 0,
+          "lignes": [
+            {
+              "designation": "Installation de chantier",
+              "retenu": true,
+              "montantHt": 8500,
+              "tvaPct": 10
+            },
+            {
+              "designation": "Isolation thermique par l'extérieur",
+              "groupe": "Amélioration énergétique",
+              "retenu": true,
+              "montantHt": 142300,
+              "tvaPct": 5.5
+            },
+            {
+              "designation": "Réfection des balcons",
+              "groupe": "Amélioration état",
+              "retenu": false,
+              "montantHt": 18600,
+              "tvaPct": 10
+            }
+          ]
+        },
+        {
+          "numero": 2,
+          "titre": "Couverture - Isolation des combles",
+          "entreprise": "TOITURES ALSACE",
+          "remisePct": 2,
+          "lignes": [
+            {
+              "designation": "Isolation des combles perdus",
+              "retenu": true,
+              "montantHt": 21400,
+              "tvaPct": 5.5
+            },
+            {
+              "designation": "Reprise de zinguerie",
+              "retenu": false,
+              "montantHt": 6200,
+              "tvaPct": 10
+            }
+          ]
+        },
+        {
+          "numero": 3,
+          "titre": "Ventilation",
+          "entreprise": "AIR CONFORT",
+          "remisePct": 0,
+          "lignes": [
+            {
+              "designation": "VMC hygroréglable",
+              "retenu": true,
+              "montantHt": 24800,
+              "tvaPct": 5.5
+            }
+          ]
+        }
+      ],
+      "moe": [
+        {
+          "designation": "Assistance Maîtrise d'Ouvrage (phase conseil)",
+          "phase": "etude",
+          "montant": {
+            "mode": "forfait",
+            "montantHt": 2400
+          },
+          "tvaPct": 20,
+          "eligibleMprEtudes": false,
+          "eligibleMprAmo": true,
+          "commentaire": "Phase conseil (Strat Eco)",
+          "ttc_source": 2880
+        },
+        {
+          "designation": "Maîtrise d'œuvre phase études (DIAG-AVP)",
+          "phase": "etude",
+          "montant": {
+            "mode": "forfait",
+            "montantHt": 6500
+          },
+          "tvaPct": 20,
+          "eligibleMprEtudes": true,
+          "eligibleMprAmo": false,
+          "entreprise": "ATELIER EXEMPLE",
+          "ttc_source": 7800
+        },
+        {
+          "designation": "Assistance Maîtrise d'Ouvrage (phase projet)",
+          "phase": "projet",
+          "montant": {
+            "mode": "forfait",
+            "montantHt": 4800
+          },
+          "tvaPct": 20,
+          "eligibleMprEtudes": false,
+          "eligibleMprAmo": true,
+          "ttc_source": 5760
+        },
+        {
+          "designation": "Maîtrise d'oeuvre phase conception (PRO-DCE)",
+          "phase": "projet",
+          "montant": {
+            "mode": "forfait",
+            "montantHt": 9000
+          },
+          "tvaPct": 20,
+          "eligibleMprEtudes": true,
+          "eligibleMprAmo": false,
+          "entreprise": "ATELIER EXEMPLE",
+          "ttc_source": 10800
+        },
+        {
+          "designation": "Contrôle technique",
+          "phase": "projet",
+          "montant": {
+            "mode": "forfait",
+            "montantHt": 1100
+          },
+          "tvaPct": 20,
+          "eligibleMprEtudes": true,
+          "eligibleMprAmo": false,
+          "ttc_source": 1320
+        },
+        {
+          "designation": "Assistance Maîtrise d'Ouvrage (phase travaux)",
+          "phase": "travaux",
+          "montant": {
+            "mode": "forfait",
+            "montantHt": 2400
+          },
+          "tvaPct": 20,
+          "eligibleMprEtudes": false,
+          "eligibleMprAmo": true,
+          "ttc_source": 2880
+        },
+        {
+          "designation": "Maîtrise d'œuvre phase travaux",
+          "phase": "travaux",
+          "montant": {
+            "mode": "pctTravauxHt",
+            "taux": 5
+          },
+          "tvaPct": 5.5,
+          "eligibleMprEtudes": true,
+          "eligibleMprAmo": false,
+          "entreprise": "ATELIER EXEMPLE"
+        },
+        {
+          "designation": "Dommage ouvrage",
+          "phase": "travaux",
+          "montant": {
+            "mode": "pctTravauxTtc",
+            "taux": 1.9
+          },
+          "tvaPct": 0,
+          "eligibleMprEtudes": false,
+          "eligibleMprAmo": false,
+          "commentaire": "Selon grille de l'assureur"
+        },
+        {
+          "designation": "Honoraires syndic",
+          "phase": "travaux",
+          "montant": {
+            "mode": "pctTravauxHt",
+            "taux": 3
+          },
+          "tvaPct": 20,
+          "eligibleMprEtudes": false,
+          "eligibleMprAmo": false
+        }
+      ],
+      "aides": [
+        {
+          "groupe": "CEE",
+          "libelle": "Coup de pouce CEE",
+          "calcul": {
+            "mode": "parM2Shab",
+            "tauxEurM2": 27,
+            "coef": 0.9
+          },
+          "publique": false,
+          "commentaire": "Dépend des lots de travaux énergétiques et de la surface habitable",
+          "montant_source": 20412
+        },
+        {
+          "groupe": "ANAH",
+          "libelle": "Maprimerénov' partie travaux",
+          "calcul": {
+            "mode": "pctAssietteTravaux",
+            "taux": 45,
+            "coef": 0.9
+          },
+          "publique": true,
+          "commentaire": "45 % des travaux énergétiques HT - plafonné",
+          "montant_source": 79611.66
+        },
+        {
+          "groupe": "ANAH",
+          "libelle": "Maprimerénov' partie études",
+          "calcul": {
+            "mode": "pctEtudes",
+            "taux": 45,
+            "coef": 0.9
+          },
+          "publique": true
+        },
+        {
+          "groupe": "ANAH",
+          "libelle": "Maprimerénov' AMO",
+          "calcul": {
+            "mode": "pctAmo",
+            "taux": 50
+          },
+          "publique": true
+        },
+        {
+          "groupe": "ANAH",
+          "libelle": "Maprimerénov' individuelle",
+          "calcul": {
+            "mode": "info"
+          },
+          "publique": true,
+          "commentaire": "Aide de 1 500 € ou de 3 000 € selon les revenus du copropriétaire occupant"
+        },
+        {
+          "groupe": "Climaxion",
+          "libelle": "Climaxion aide travaux",
+          "calcul": {
+            "mode": "forfaitPlusParLogement",
+            "base": 10000,
+            "parLogement": 2500,
+            "surEquivalent": true
+          },
+          "publique": true,
+          "montant_source": 42500
+        },
+        {
+          "groupe": "EMS",
+          "libelle": "EMS aide travaux",
+          "calcul": {
+            "mode": "parLogement",
+            "montant": 1000,
+            "surEquivalent": true
+          },
+          "publique": true
+        },
+        {
+          "groupe": "EMS",
+          "libelle": "EMS aide MOE",
+          "calcul": {
+            "mode": "manuel",
+            "montant": 4875
+          },
+          "publique": true,
+          "commentaire": "75 % du DIAG-AVP HT"
+        }
+      ],
+      "params": {
+        "imprevusPct": 7,
+        "fondsTravaux": 18450.5,
+        "commentaireFondsTravaux": "Fonds travaux disponible 6 450,50 € + montant déjà appelé pour les études 12 000,00 €",
+        "totalTantiemes": 10000,
+        "tantiemesExemples": [
+          612,
+          845
+        ],
+        "dureeEcoPtzAns": 20
+      },
+      "variantes": {
+        "collectif": true,
+        "collectifSansAvance": false,
+        "individuel": true
+      },
+      "totaux_source": {
+        "totalTravauxHt": 221248,
+        "totalTravauxTtc": 234945.5,
+        "totalOperationTtc": 306931.41,
+        "totalAides": 175152.42,
+        "resteACharge": 113328.49
+      },
+      "notes": [
+        "Exemple fictif : montant déjà appelé pour les études (12 000 €) cumulé au fonds travaux, faute de champ dédié."
+      ]
+    }
+  ]
+}
