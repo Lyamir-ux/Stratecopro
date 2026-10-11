@@ -10,8 +10,14 @@
 //   • compte copropriétaire existant (même personne dans un autre dossier) :
 //     fiche reliée à ce compte, e-mail d'accès ou d'information ;
 //   • fiche déjà reliée mais lien jamais utilisé : l'e-mail est renvoyé ;
-//   • adresse d'un compte AMO, syndic ou prestataire : refusée (un compte garde
-//     un seul rôle, arbitrage d'Amir du 30/09) ;
+//   • adresse d'un compte syndic ou prestataire : refusée (un compte garde un
+//     seul rôle, arbitrage d'Amir du 30/09) ;
+//   • adresse d'un compte AMO actif (demande d'Amir du 11/10/2026, 0159) : la
+//     fiche est reliée à ce compte, qui entre dans le portail en copropriétaire
+//     par la tuile « Copropriétaire » ; aucun e-mail hors campagne (il a déjà son
+//     mot de passe). En campagne (enquête, financement), l'e-mail lui part comme à
+//     un espace activé, avec un lien qui ouvre le portail en copropriétaire
+//     (?espace=copro) ;
 //   • fiche sortante (0090) ou sans adresse : ignorée ; si le champ e-mail en
 //     porte plusieurs, seule la première compte.
 // Le jeton est généré ici (generateLink) et envoyé par Resend, pas par le
@@ -135,6 +141,9 @@ const ROLE_LIBELLE: Record<string, string> = {
   presta: "un compte prestataire",
   moe: "un compte maître d'œuvre",
 };
+
+/** Fiche reliée au compte d'un membre de l'équipe par son adresse (0159). */
+const DETAIL_COMPTE_EQUIPE = "Compte Strat Eco : connexion avec la tuile « Copropriétaire »";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -281,15 +290,19 @@ Deno.serve(async (req: Request) => {
     return envoyer(email, `Votre espace copropriétaire - ${copro}`, html);
   };
 
-  /** E-mail du questionnaire à un espace déjà activé : lien vers l'enquête du portail. */
-  const envoyerEnqueteActif = (email: string, nom: string): Promise<Envoi> => {
+  /** E-mail du questionnaire à un espace déjà activé : lien vers l'enquête du portail.
+   *  `compteEquipe` : fiche reliée au compte d'un membre de l'équipe (0159) ; le lien ouvre le
+   *  portail en copropriétaire (?espace=copro) et l'e-mail rappelle la tuile à choisir. */
+  const envoyerEnqueteActif = (email: string, nom: string, compteEquipe = false): Promise<Envoi> => {
+    const espace = compteEquipe ? "?espace=copro" : "";
     const html = gabarit(
       nom,
       `${corpsEnquete()}
       ${financement
-        ? bouton(`${appUrl}/portail/pret`, "Choisir mon financement")
-        : bouton(`${appUrl}/portail/enquete`, "Répondre à l'enquête")}
+        ? bouton(`${appUrl}/portail/pret${espace}`, "Choisir mon financement")
+        : bouton(`${appUrl}/portail/enquete${espace}`, "Répondre à l'enquête")}
       <p>Connectez-vous avec votre adresse e-mail (<strong>${esc(email)}</strong>) et votre mot de passe habituel.</p>
+      ${compteEquipe ? "<p>Sur la page de connexion, choisissez l'espace « Copropriétaire ».</p>" : ""}
       <p style="color:#5c6470;font-size:13px">Mot de passe oublié ? Rendez-vous sur
       <a href="${appUrl}/mot-de-passe-oublie">${appUrl}/mot-de-passe-oublie</a> : vous recevrez un lien pour en
       choisir un nouveau.</p>
@@ -326,6 +339,8 @@ Deno.serve(async (req: Request) => {
 
   // une adresse partagée par plusieurs fiches de l'appel : un compte, un e-mail
   const comptesDeLAppel = new Map<string, string>();
+  // adresses de l'appel qui sont celles d'un compte AMO actif (0159)
+  const adressesEquipe = new Set<string>();
   const adressesEcrites = new Set<string>();
   const resultats: Resultat[] = [];
 
@@ -354,8 +369,16 @@ Deno.serve(async (req: Request) => {
           r.detail = "Compte relié introuvable";
           continue;
         }
-        const actif = !!u.user.last_sign_in_at;
+        // fiche reliée au compte d'un membre de l'équipe par son adresse (0159) : espace actif
+        const { data: profilRelie } = await admin
+          .from("profiles")
+          .select("role")
+          .eq("user_id", f.user_id)
+          .maybeSingle();
+        const compteEquipe = profilRelie?.role === "amo";
+        const actif = !!u.user.last_sign_in_at || compteEquipe;
         r.statut = actif ? "deja_actif" : "renvoye";
+        if (compteEquipe) r.detail = DETAIL_COMPTE_EQUIPE;
         if (actif && !enquete) continue;
         const adresse = emailCompte.toLowerCase();
         if (adressesEcrites.has(adresse)) {
@@ -364,7 +387,7 @@ Deno.serve(async (req: Request) => {
         }
         adressesEcrites.add(adresse);
         if (actif) {
-          r.envoi = await envoyerEnqueteActif(emailCompte, f.nom);
+          r.envoi = await envoyerEnqueteActif(emailCompte, f.nom, compteEquipe);
         } else {
           r.envoi = await envoyerActivation(emailCompte, f.nom, copro);
           if (r.envoi === "envoye") await tracerEnvoi(id);
@@ -381,13 +404,20 @@ Deno.serve(async (req: Request) => {
       // --- Compte existant pour cette adresse ? ---
       let userId = comptesDeLAppel.get(email) ?? null;
       let dejaConnecte = false;
+      let compteEquipe = adressesEquipe.has(email);
       if (!userId) {
         const { data: comptes } = await admin.rpc("compte_par_email", { p_email: email });
         const compte = (comptes ?? [])[0] as
           | { user_id: string; role: string | null; derniere_connexion: string | null }
           | undefined;
+        // compte AMO actif : la fiche lui est reliée (0159) ; inactif, l'adresse reste prise
+        if (compte?.role === "amo") {
+          const { data: p } = await admin.from("profiles").select("active").eq("user_id", compte.user_id).maybeSingle();
+          compteEquipe = !!p?.active;
+          if (compteEquipe) adressesEquipe.add(email);
+        }
         if (compte) {
-          if (compte.role !== "copro") {
+          if (compte.role !== "copro" && !compteEquipe) {
             r.statut = "email_pris";
             r.detail = compte.role
               ? `Adresse déjà utilisée par ${ROLE_LIBELLE[compte.role] ?? "un autre compte"}`
@@ -395,7 +425,7 @@ Deno.serve(async (req: Request) => {
             continue;
           }
           userId = compte.user_id;
-          dejaConnecte = !!compte.derniere_connexion;
+          dejaConnecte = !!compte.derniere_connexion || compteEquipe;
           r.statut = "relie";
         }
       } else {
@@ -438,11 +468,17 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
+      if (compteEquipe) r.detail = DETAIL_COMPTE_EQUIPE;
       if (adressesEcrites.has(email)) {
         r.detail = "Même adresse qu'une autre fiche : un seul e-mail envoyé";
         continue;
       }
       adressesEcrites.add(email);
+      if (compteEquipe) {
+        // il a déjà son mot de passe : un e-mail seulement en campagne (enquête, financement)
+        if (enquete) r.envoi = await envoyerEnqueteActif(email, f.nom, true);
+        continue;
+      }
       if (dejaConnecte) {
         r.envoi = await envoyerAjout(email, f.nom, copro);
       } else {

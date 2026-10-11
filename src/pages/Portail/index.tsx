@@ -331,6 +331,18 @@ export default function Portail() {
   const [coproApercu, setCoproApercu] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Lien ?espace=copro d'un e-mail de campagne (enquête, financement) envoyé à un compte AMO
+  // relié à une fiche par son adresse (creer-espace-coproprietaire, 0159) : la session passe en
+  // copropriétaire, comme une connexion par la tuile « Copropriétaire ». Sans effet pour les
+  // autres comptes.
+  const espaceParam = searchParams.get("espace");
+  const basculeCopro = espaceParam === "copro" && profile?.role === "amo" && espace !== "copro";
+  useEffect(() => {
+    if (espaceParam !== "copro") return;
+    if (basculeCopro && userId) choisirEspace(userId, "copro");
+    setSearchParams({}, { replace: true });
+  }, [espaceParam, basculeCopro, userId, choisirEspace, setSearchParams]);
+
   // Lien profond ?cp=<coproprietaireId> (ex. clic sur un plan individuel côté
   // AMO) : sélectionne directement ce copropriétaire, puis nettoie l'URL.
   const cpParam = searchParams.get("cp");
@@ -386,7 +398,7 @@ export default function Portail() {
     nav.scrollTo({ left: actif.offsetLeft - (nav.clientWidth - actif.offsetWidth) / 2, behavior: "smooth" });
   }, [section, membership]);
 
-  if (isLoading || !profile) return <Loader />;
+  if (isLoading || !profile || basculeCopro) return <Loader />;
 
   const userName = profile.full_name;
   const initials = profile.initials;
