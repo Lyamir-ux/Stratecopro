@@ -191,6 +191,32 @@ describe("manquesAdhesion : ce qui grise « Passer à la signature »", () => {
   });
 });
 
+describe("SCI : cadre « Adhérent personne morale », demandé une seule fois", () => {
+  const PM = { siren: "552 120 222", raisonSociale: "SCI SCHMITT PATRIMOINE", representant: "MUNSTERMANN Wolfgang" };
+
+  it("complet : rien ne manque", () => {
+    expect(manquesAdhesion(etat({ personneMorale: PM }))).toEqual([]);
+  });
+
+  it("SIREN, raison sociale et représentant obligatoires ; SIREN contrôlé (9 chiffres, clé)", () => {
+    expect(manquesAdhesion(etat({ personneMorale: { siren: "", raisonSociale: " ", representant: "" } }))).toEqual([
+      "SCI (adhérent personne morale) : N° de SIREN, raison sociale, représentée par",
+    ]);
+    expect(manquesAdhesion(etat({ personneMorale: { ...PM, siren: "552 120 223" } }))).toEqual([
+      "SCI (adhérent personne morale) : N° de SIREN non valide (9 chiffres)",
+    ]);
+  });
+
+  it("l'adhérent 1 d'une SCI est le gérant, pas la SCI", () => {
+    const form = { ...FORM_SCI, adherent1: { ...FORM_SCI.adherent1, nomPrenom: "SCI SCHMITT PATRIMOINE" } };
+    expect(manquesAdhesion(etat({ form, personneMorale: PM }))).toEqual([
+      "Adhérent 1 : nom et prénom du gérant (pas le nom de la SCI)",
+    ]);
+    // hors SCI, aucun contrôle de ce genre
+    expect(manquesAdhesion(etat({ form }))).toEqual([]);
+  });
+});
+
 describe("téléphone des signataires", () => {
   it("mobile français vers +33, numéro international gardé", () => {
     expect(normaliserTelephone("06 12 34 56 78")).toBe("+33612345678");

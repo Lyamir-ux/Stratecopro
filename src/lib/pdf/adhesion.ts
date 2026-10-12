@@ -40,6 +40,44 @@ export interface AdhesionForm {
   /** Adhérents supplémentaires (indivision, associés d'une SCI…), gardés au brouillon : chacun a sa
    *  page de bulletin, insérée après la première. Absent des dossiers d'avant le 12/10/2026. */
   adherentsSupplementaires?: AdherentSupplementaire[];
+  /** SCI : cadre « Adhérent personne morale » du bulletin, demandé une seule fois à l'adhérent
+   *  principal et repris sur la page de chaque associé (retour d'Amir du 12/10/2026). */
+  personneMorale?: PersonneMorale | null;
+}
+
+export interface PersonneMorale {
+  siren: string;
+  raisonSociale: string;
+  /** Gérant qui représente la SCI ; null = le signataire principal (« NOM Prénom »), tant qu'il
+   *  n'a pas été modifié. */
+  representant: string | null;
+}
+
+/** SIREN : 9 chiffres, clé de Luhn (exception connue : La Poste, 356 000 000). */
+export function sirenValide(siren: string): boolean {
+  const s = siren.replace(/[\s.]/g, "");
+  if (!/^\d{9}$/.test(s)) return false;
+  if (s === "356000000") return true;
+  const somme = [...s].reverse().reduce((acc, c, i) => {
+    const d = Number(c) * (i % 2 === 1 ? 2 : 1);
+    return acc + (d > 9 ? d - 9 : d);
+  }, 0);
+  return somme % 10 === 0;
+}
+
+/** « 552120222 » vers « 552 120 222 » (impression du bulletin). */
+export function sirenFormate(siren: string): string {
+  const s = siren.replace(/[\s.]/g, "");
+  return /^\d{9}$/.test(s) ? `${s.slice(0, 3)} ${s.slice(3, 6)} ${s.slice(6)}` : siren.trim();
+}
+
+/** Représentant imprimé : celui saisi, à défaut le signataire principal « NOM Prénom ». */
+export function representantEffectif(
+  pm: Pick<PersonneMorale, "representant">,
+  principal: { nom?: string | null; prenom?: string | null }
+): string {
+  if (pm.representant !== null) return pm.representant;
+  return `${(principal.nom ?? "").trim()} ${(principal.prenom ?? "").trim()}`.trim();
 }
 
 /**
@@ -81,6 +119,7 @@ export function formAdherentSupplementaire(dossier: AdhesionForm, s: AdherentSup
     montantType: dossier.montantType,
     montantAutre: dossier.montantAutre,
     lieuSignature: dossier.lieuSignature,
+    personneMorale: dossier.personneMorale ?? null,
   };
 }
 
@@ -144,6 +183,13 @@ function remplirBulletin(
   drawSpot(p, font, ctx.adresseImmeuble, C.adresseImmeuble);
   drawSpot(p, font, ctx.nomSyndic, C.nomSyndic);
   drawSpot(p, font, ctx.interlocuteur, C.interlocuteur);
+
+  // le représentant est déjà résolu (representantEffectif) quand le bulletin est généré
+  if (form.personneMorale) {
+    drawSpot(p, font, sirenFormate(form.personneMorale.siren), C.personneMorale.siren);
+    drawSpot(p, font, form.personneMorale.raisonSociale.trim(), C.personneMorale.raisonSociale);
+    drawSpot(p, font, (form.personneMorale.representant ?? "").trim(), C.personneMorale.representant);
+  }
 
   drawAdherent(p, font, fontBold, form.adherent1, C.a1);
   if (form.adherent2) drawAdherent(p, font, fontBold, form.adherent2, C.a2);

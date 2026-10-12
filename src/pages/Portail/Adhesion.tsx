@@ -27,9 +27,12 @@ import {
   nomDebiteurMandat,
   nomPrenomComplet,
   normalizeIban,
+  representantEffectif,
+  sirenValide,
   type Adherent,
   type AdherentSupplementaire,
   type AdhesionForm,
+  type PersonneMorale,
   type SituationMatrimoniale,
 } from "@/lib/pdf/adhesion";
 import { checkRibConcordance } from "@/lib/pdf/ribCheck";
@@ -702,6 +705,15 @@ export function Adhesion({
   useEffect(() => {
     if (sci && connues !== undefined && form.adherent2) setForm((prev) => ({ ...prev, adherent2: null }));
   }, [sci, connues, form.adherent2]);
+  // SCI : cadre « Adhérent personne morale » du bulletin, saisi une seule fois ici et repris sur la
+  // page de chaque associé (retour d'Amir du 12/10/2026) ; raison sociale proposée d'après la fiche
+  const personneMorale: PersonneMorale = form.personneMorale ?? {
+    siren: "",
+    raisonSociale: estSci(undefined, membership.nom) ? membership.nom.trim() : "",
+    representant: null,
+  };
+  const changerPersonneMorale = (patch: Partial<PersonneMorale>) =>
+    setForm((prev) => ({ ...prev, personneMorale: { ...personneMorale, ...prev.personneMorale, ...patch } }));
 
   const cle = readParams(scenario.params, bareme).cle;
   const lotsHab = useMemo(() => {
@@ -784,6 +796,7 @@ export function Adhesion({
     ...form,
     adherent1: { ...form.adherent1, nomPrenom: nomPrenomComplet(form.adherent1.nomPrenom, principal) },
     adherentsSupplementaires: cosignataires,
+    personneMorale: sci ? personneMorale : null,
   });
 
   const brouillonAdhesion = () => {
@@ -825,8 +838,12 @@ export function Adhesion({
     date: Date,
     principal: { nom?: string | null; prenom?: string | null }
   ) => {
+    const f = formComplet(principal);
     const bytes = await genBulletin(
-      formComplet(principal),
+      // SCI : « Représentée par » résolu (par défaut le signataire principal) au moment d'imprimer
+      f.personneMorale
+        ? { ...f, personneMorale: { ...f.personneMorale, representant: representantEffectif(f.personneMorale, principal) } }
+        : f,
       {
         adresseImmeuble: copro.adresse ?? copro.name,
         nomSyndic: copro.syndic_name ?? "",
@@ -1704,6 +1721,9 @@ export function Adhesion({
     cosignataires,
     attestHonneur,
     infoAvis,
+    personneMorale: sci
+      ? { ...personneMorale, representant: representantEffectif(personneMorale, { nom: nomPrincipal, prenom: prenomPrincipal }) }
+      : null,
   };
   const manques = manquesAdhesion(etatDossier);
   // garde-fou anti auto-signature : e-mails et téléphones tous distincts
@@ -1774,7 +1794,47 @@ export function Adhesion({
         </p>
 
         <div className="form-grid">
-          <AdherentFields a={form.adherent1} onChange={changerAdherent1} titre="Adhérent 1" repris={identiteReprise} />
+          {sci && (
+            <>
+              <div className="se-eyebrow" style={{ gridColumn: "1 / -1", marginTop: 6 }}>Adhérent personne morale (SCI)</div>
+              <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>
+                Demandé une seule fois : ce cadre figure sur le bulletin de chaque associé. L'adhérent 1 ci-dessous
+                est le gérant qui signe pour la SCI.
+              </p>
+              <Fld label="N° de SIREN *">
+                <input
+                  inputMode="numeric"
+                  placeholder="123 456 789"
+                  value={personneMorale.siren}
+                  onChange={(e) => changerPersonneMorale({ siren: e.target.value })}
+                />
+                {personneMorale.siren.trim() && !sirenValide(personneMorale.siren) ? (
+                  <span className="hint" style={{ color: "var(--color-error-700)" }}>
+                    Numéro non valide : 9 chiffres, tels qu'ils figurent sur l'extrait Kbis ou l'avis de situation Sirene.
+                  </span>
+                ) : (
+                  <span className="hint">Sur l'extrait Kbis ou l'avis de situation Sirene de la SCI.</span>
+                )}
+              </Fld>
+              <Fld label="Raison sociale *">
+                <input value={personneMorale.raisonSociale} onChange={(e) => changerPersonneMorale({ raisonSociale: e.target.value })} />
+              </Fld>
+              <Fld label="Représentée par *" span>
+                <input
+                  placeholder="NOM Prénom du gérant"
+                  value={representantEffectif(personneMorale, { nom: nomPrincipal, prenom: prenomPrincipal })}
+                  onChange={(e) => changerPersonneMorale({ representant: e.target.value })}
+                />
+                <span className="hint">Le gérant qui représente la SCI : par défaut, le signataire principal.</span>
+              </Fld>
+            </>
+          )}
+          <AdherentFields
+            a={form.adherent1}
+            onChange={changerAdherent1}
+            titre={sci ? "Adhérent 1 (gérant de la SCI)" : "Adhérent 1"}
+            repris={identiteReprise}
+          />
 
           {sci ? (
             <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>

@@ -5,7 +5,8 @@
 // incomplet. La même liste grise le bouton et s'affiche dessous : les deux ne peuvent plus diverger.
 import type { CosignataireDeclare } from "@/api/signature";
 import { nomEtPrenomRenseignes } from "./nomFamille";
-import type { Adherent, AdherentSupplementaire, AdhesionForm } from "./pdf/adhesion";
+import { estSci } from "./piecesSituation";
+import { sirenValide, type Adherent, type AdherentSupplementaire, type AdhesionForm } from "./pdf/adhesion";
 import { anneeIncomplete, composerDateLieu, dateFrVersIso, decouperDateLieu } from "./saisie";
 
 /** Téléphone mobile français vers E.164 (+33612345678) ; un numéro déjà international reste tel quel. */
@@ -33,6 +34,8 @@ export interface EtatDossierAdhesion {
   cosignataires: AdherentSupplementaire[];
   attestHonneur: boolean;
   infoAvis: boolean;
+  /** SCI : cadre « Adhérent personne morale », représentant résolu ; null hors SCI */
+  personneMorale?: { siren: string; raisonSociale: string; representant: string } | null;
 }
 
 /** Deux signataires avec le même e-mail ou le même téléphone (garde-fou anti auto-signature). */
@@ -101,7 +104,22 @@ export function manquesAdhesion(e: EtatDossierAdhesion): string[] {
     if (m.length) manques.push(`${qui} : ${m.join(", ")}`);
   };
 
-  ligne("Adhérent 1", [...(form.adherent1.nomPrenom.trim() ? [] : ["nom et prénom"]), ...manquesIdentite(form.adherent1)]);
+  const pm = e.personneMorale;
+  if (pm) {
+    const m: string[] = [];
+    if (!pm.siren.trim()) m.push("N° de SIREN");
+    else if (!sirenValide(pm.siren)) m.push("N° de SIREN non valide (9 chiffres)");
+    if (!pm.raisonSociale.trim()) m.push("raison sociale");
+    if (!pm.representant.trim()) m.push("représentée par");
+    ligne("SCI (adhérent personne morale)", m);
+  }
+
+  // SCI : le cadre « Adhérent » est rempli par le gérant, une personne (NB du bulletin CEGEE)
+  const nomA1 = form.adherent1.nomPrenom.trim();
+  ligne("Adhérent 1", [
+    ...(!nomA1 ? ["nom et prénom"] : pm && estSci(undefined, nomA1) ? ["nom et prénom du gérant (pas le nom de la SCI)"] : []),
+    ...manquesIdentite(form.adherent1),
+  ]);
 
   const a2 = form.adherent2;
   if (a2) {

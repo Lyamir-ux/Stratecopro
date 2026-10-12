@@ -46,6 +46,13 @@ export const BULLETIN_COORDS = {
     situationDepuis: { x: 352, y: 535, size: 8, max: 12 },
     signature: { x: 400, y: 137, w: 120, h: 46 },
   },
+  // cadre « Adhérent personne morale (SCI patrimoniale, non soumise à l'IS) » (12/10/2026, positions
+  // lues avec pdf.js : ligne vide du SIREN y 663,8 ; pointillés à partir de x 323,7 / 330,2)
+  personneMorale: {
+    siren: { x: 262, y: 665.5, size: 9, max: 20 },
+    raisonSociale: { x: 326, y: 653.4, size: 8, max: 50 },
+    representant: { x: 332, y: 641.1, size: 8, max: 48 },
+  },
   lots: { x: 120, y: 514, size: 9, max: 40 },
   tantiemes: { x: 402, y: 514, size: 9, max: 30 },
   adresse: { x: 140, y: 488, size: 8, max: 95 },

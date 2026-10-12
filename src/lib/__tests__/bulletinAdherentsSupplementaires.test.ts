@@ -2,7 +2,15 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it, vi } from "vitest";
-import { formAdherentSupplementaire, genBulletin, type AdherentSupplementaire, type AdhesionForm } from "../pdf/adhesion";
+import {
+  formAdherentSupplementaire,
+  genBulletin,
+  representantEffectif,
+  sirenFormate,
+  sirenValide,
+  type AdherentSupplementaire,
+  type AdhesionForm,
+} from "../pdf/adhesion";
 
 const DOSSIER: AdhesionForm = {
   adherent1: {
@@ -70,7 +78,29 @@ describe("bulletin d'un adhérent supplémentaire", () => {
       montantType: "autre",
       montantAutre: "12000",
       lieuSignature: "Colmar",
+      personneMorale: null,
     });
+  });
+
+  it("SCI : le cadre personne morale du dossier est repris tel quel sur sa page", () => {
+    const pm = { siren: "552120222", raisonSociale: "SCI SCHMITT PATRIMOINE", representant: "SCHMITT Paul" };
+    expect(formAdherentSupplementaire({ ...DOSSIER, personneMorale: pm }, ANNA).personneMorale).toEqual(pm);
+  });
+});
+
+describe("SIREN et représentant de la SCI", () => {
+  it("SIREN : 9 chiffres et clé de Luhn, espaces tolérés ; La Poste en exception", () => {
+    expect(sirenValide("552 120 222")).toBe(true);
+    expect(sirenValide("552120223")).toBe(false);
+    expect(sirenValide("55212022")).toBe(false);
+    expect(sirenValide("356 000 000")).toBe(true);
+    expect(sirenFormate("552120222")).toBe("552 120 222");
+  });
+
+  it("représentant : le signataire principal tant qu'il n'a pas été modifié", () => {
+    expect(representantEffectif({ representant: null }, { nom: "SCHMITT", prenom: "Paul" })).toBe("SCHMITT Paul");
+    expect(representantEffectif({ representant: "DUPONT Marie" }, { nom: "SCHMITT", prenom: "Paul" })).toBe("DUPONT Marie");
+    expect(representantEffectif({ representant: "" }, { nom: "SCHMITT", prenom: "Paul" })).toBe("");
   });
 });
 
@@ -95,5 +125,28 @@ describe("genBulletin : une page formulaire par adhérent supplémentaire", () =
     expect(pdf.getPageCount()).toBe(5);
     // pages 2 et 3 = copies de la page formulaire, puis les deux pages de conditions
     expect(pdf.getPages().map((p) => p.getSize())).toEqual([tailles[0], tailles[0], tailles[0], tailles[1], tailles[2]]);
+  });
+
+  it("SCI : SIREN, raison sociale et représentant imprimés sur la page du gérant et sur celle de chaque associé", async () => {
+    const bytes = await genBulletin(
+      {
+        ...DOSSIER,
+        personneMorale: { siren: "552120222", raisonSociale: "SCI SCHMITT PATRIMOINE", representant: "SCHMITT Paul" },
+        adherentsSupplementaires: [ANNA],
+      },
+      ctx,
+      date,
+    );
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const doc = await pdfjs.getDocument({ data: bytes.slice(), verbosity: 0 }).promise;
+    for (const n of [1, 2]) {
+      const items = (await (await doc.getPage(n)).getTextContent()).items as { str: string; transform: number[] }[];
+      const a = (texte: string) => items.find((i) => i.str === texte)?.transform.slice(4, 6).map(Math.round);
+      expect(a("552 120 222")).toEqual([262, 666]);
+      expect(a("SCI SCHMITT PATRIMOINE")).toEqual([326, 653]);
+      expect(a("SCHMITT Paul")).toEqual([332, 641]);
+    }
+    const p2 = (await (await doc.getPage(2)).getTextContent()).items.map((i) => (i as { str: string }).str);
+    expect(p2).toContain("SCHMITT Anna");
   });
 });
