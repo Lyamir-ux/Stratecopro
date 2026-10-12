@@ -16,6 +16,9 @@ export const sujetEnqueteParDefaut = (copro: string) => `Enquête sociale et tec
 export const AIDE_ENQUETE_DEBUT = "En cas de questions ou de problèmes de connexion, contactez";
 export const CONTACT_ENQUETE = "admin@strateco.fr";
 
+/** Vidéo de présentation du portail, dans l'e-mail d'invitation (demande d'Amir du 12/10/2026), comme dans l'edge function. */
+export const VIDEO_PORTAIL_URL = "https://youtu.be/IcwPrs0x5og";
+
 export const messageEnqueteParDefaut = (copro: string) =>
   `Strat Eco accompagne votre copropriété ${copro} dans son projet de rénovation énergétique.\n\n` +
   "Pour préparer le dépôt du dossier de financement et estimer les aides auxquelles vous pouvez prétendre, " +
