@@ -283,11 +283,15 @@ function drawInBox(page: PDFPage, font: PDFFont, ch: string, x: number, w: numbe
  * seul « CHELGHAM » était imprimé). Le champ libre « Nom et prénom » du bulletin n'est qu'un
  * repli, car il arrive incomplet ; il n'est utilisé qu'à défaut de nom et de prénom du signataire.
  *   { nom: « CHELGHAM », prenom: « Amir » } → « CHELGHAM Amir »
+ * SCI : la raison sociale, car la SCI est titulaire du compte prélevé (décision d'Amir du 12/10/2026).
  */
 export function nomDebiteurMandat(
   principal: { nom?: string | null; prenom?: string | null },
-  repli = ""
+  repli = "",
+  personneMorale?: Pick<PersonneMorale, "raisonSociale"> | null
 ): string {
+  const raisonSociale = (personneMorale?.raisonSociale ?? "").trim();
+  if (raisonSociale) return raisonSociale;
   const nom = (principal.nom ?? "").trim();
   const prenom = (principal.prenom ?? "").trim();
   if (nom && prenom) return `${nom} ${prenom}`;

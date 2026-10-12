@@ -229,6 +229,13 @@ describe("nomDebiteurMandat : « Nom / Prénoms du débiteur » du mandat SEPA",
   it("sans prénom, n'écrit que le nom (sans espace parasite)", () => {
     expect(nomDebiteurMandat({ nom: "CHELGHAM", prenom: "" }, "autre")).toBe("CHELGHAM");
   });
+  it("SCI : la raison sociale est le débiteur, pas le gérant qui signe", () => {
+    expect(nomDebiteurMandat({ nom: "MUNSTERMANN", prenom: "Wolfgang" }, "", { raisonSociale: " SCI SCHMITT PATRIMOINE " })).toBe(
+      "SCI SCHMITT PATRIMOINE",
+    );
+    expect(nomDebiteurMandat({ nom: "MUNSTERMANN", prenom: "Wolfgang" }, "", { raisonSociale: "" })).toBe("MUNSTERMANN Wolfgang");
+    expect(nomDebiteurMandat({ nom: "MUNSTERMANN", prenom: "Wolfgang" }, "", null)).toBe("MUNSTERMANN Wolfgang");
+  });
 });
 
 describe("nomPrenomComplet : « Nom et prénom » de l'adhérent 1 sur le bulletin", () => {

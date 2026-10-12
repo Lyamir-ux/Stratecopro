@@ -1373,7 +1373,8 @@ export function Adhesion({
                       (await genMandatSepa({
                         nom: nomDebiteurMandat(
                           { nom: nomPrincipal, prenom: prenomPrincipal },
-                          form.adherent1.nomPrenom
+                          form.adherent1.nomPrenom,
+                          sci ? personneMorale : null
                         ),
                         rue: form.adresse,
                         cp: form.cp,

@@ -344,9 +344,17 @@ function FenetreRib({
               for (const id of aSigner) {
                 const b = bulletins.find((x) => x.id === id);
                 const p = b?.signataires.find((s) => s.role === "principal");
-                const f = (form ?? {}) as { adherent1?: { nomPrenom?: string }; adresse?: string; cp?: string; ville?: string; lieuSignature?: string };
+                const f = (form ?? {}) as {
+                  adherent1?: { nomPrenom?: string };
+                  adresse?: string;
+                  cp?: string;
+                  ville?: string;
+                  lieuSignature?: string;
+                  personneMorale?: { raisonSociale: string } | null;
+                };
                 const mandat = await genMandatSepa({
-                  nom: nomDebiteurMandat({ nom: p?.nom, prenom: p?.prenom }, f.adherent1?.nomPrenom || membership.nom),
+                  // SCI : la raison sociale gardée au dossier est le débiteur (décision du 12/10/2026)
+                  nom: nomDebiteurMandat({ nom: p?.nom, prenom: p?.prenom }, f.adherent1?.nomPrenom || membership.nom, f.personneMorale),
                   rue: f.adresse || p?.adresse_ligne1 || "",
                   cp: f.cp || p?.code_postal || "",
                   ville: f.ville || p?.ville || "",

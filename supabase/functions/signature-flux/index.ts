@@ -379,6 +379,16 @@ async function coproNom(admin: Admin, coproId: string): Promise<string> {
   return data?.name ?? "votre copropriété";
 }
 
+/** SCI : raison sociale saisie au dossier d'adhésion (cadre « Adhérent personne morale ») ; la SCI
+ *  est alors le débiteur du mandat SEPA, son gérant le signataire (décision d'Amir du 12/10/2026). */
+async function raisonSocialeDebiteur(admin: Admin, b: Bulletin): Promise<string | null> {
+  if (!b.adhesion_id) return null;
+  const { data } = await admin.from("adhesions_pret").select("form").eq("id", b.adhesion_id).maybeSingle();
+  const pm = (data?.form as { personneMorale?: { raisonSociale?: unknown } | null } | null)?.personneMorale;
+  const raison = typeof pm?.raisonSociale === "string" ? pm.raisonSociale.trim() : "";
+  return raison || null;
+}
+
 /** État renvoyé au front du cosignataire - jamais de donnée d'un autre signataire. */
 function etatPublic(s: Signataire, b: Bulletin, coproName: string) {
   return {
@@ -761,6 +771,8 @@ async function genererMandatSigne(
   original: Uint8Array, b: Bulletin, s: Signataire, coproName: string, hashInstant: string,
   /** changement de compte (0155) : date de signature du mandat remplacé */
   remplaceLe: string | null = null,
+  /** SCI débitrice (raisonSocialeDebiteur) : le signataire la représente */
+  raisonSociale: string | null = null,
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(original);
   const police = await pdf.embedFont(StandardFonts.Helvetica);
@@ -798,7 +810,12 @@ async function genererMandatSigne(
   ligne(`Bulletin d'adhésion associé : ${b.lot_reference} (référence ${b.id})`);
   ligne(`Créancier : Caisse d'Epargne Grand Est Europe`);
   y -= 6;
-  ligne(`${s.civilite ? s.civilite + " " : ""}${s.prenom} ${s.nom} - débiteur, signataire principal`, { taille: 12, f: gras });
+  if (raisonSociale) {
+    ligne(`Débiteur : ${raisonSociale}`, { taille: 12, f: gras });
+    ligne(`${s.civilite ? s.civilite + " " : ""}${s.prenom} ${s.nom} - signataire principal, représentant le débiteur`, { taille: 12, f: gras });
+  } else {
+    ligne(`${s.civilite ? s.civilite + " " : ""}${s.prenom} ${s.nom} - débiteur, signataire principal`, { taille: 12, f: gras });
+  }
   ligne(`E-mail : ${s.email}`);
   ligne(`Téléphone : ${telMasque(s.telephone)}`);
   ligne(`CGU acceptées le : ${s.cgu_acceptees_le ? fmtDateHeure(s.cgu_acceptees_le) : "-"} (version ${b.cgu_version})`);
@@ -854,7 +871,9 @@ async function signerMandat(admin: Admin, req: Request | null, bulletinId: strin
       b.mandat_signe_le = s.signe_le;
     }
 
-    const signe = await genererMandatSigne(original, b, s, await coproNom(admin, b.copro_id), hashInstant);
+    const signe = await genererMandatSigne(
+      original, b, s, await coproNom(admin, b.copro_id), hashInstant, null, await raisonSocialeDebiteur(admin, b),
+    );
     const hashFinal = await sha256Hex(signe);
     const sceau = await scellerHash(hashFinal);
     const path = `${b.id}/mandat-sepa-signe.pdf`;
@@ -904,6 +923,7 @@ async function signerNouveauMandat(admin: Admin, req: Request, b: Bulletin, s: S
   const nomCopro = await coproNom(admin, b.copro_id);
   const signe = await genererMandatSigne(
     original, { ...b, mandat_lu_le: b.mandat_nouveau_lu_le }, signataire, nomCopro, hashInstant, b.mandat_signe_le,
+    await raisonSocialeDebiteur(admin, b),
   );
   const hashFinal = await sha256Hex(signe);
   const sceau = await scellerHash(hashFinal);
