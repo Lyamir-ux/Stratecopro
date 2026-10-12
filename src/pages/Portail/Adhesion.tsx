@@ -28,6 +28,7 @@ import {
   nomPrenomComplet,
   normalizeIban,
   type Adherent,
+  type AdherentSupplementaire,
   type AdhesionForm,
   type SituationMatrimoniale,
 } from "@/lib/pdf/adhesion";
@@ -41,7 +42,14 @@ import {
   CpVilleFields,
   MessageSaisie,
 } from "@/components/ChampsSaisie";
-import { anneeIncomplete, classerTelephone, dateFrVersIso, dateLieuComplet, diagnosticBic, diagnosticIban } from "@/lib/saisie";
+import { classerTelephone, composerDateLieu, decouperDateLieu, diagnosticBic, diagnosticIban } from "@/lib/saisie";
+import {
+  AIDE_TELEPHONE,
+  coordonneesEnDouble,
+  manquesAdhesion,
+  normaliserTelephone,
+  telValide,
+} from "@/lib/manquesAdhesion";
 import { ACCEPT_PIECE, erreurFormatPiece, LIBELLE_FORMATS_PIECE, typeMimePiece } from "@/lib/formatPiece";
 import { nomEtPrenomRenseignes } from "@/lib/nomFamille";
 import {
@@ -150,16 +158,16 @@ const emptyCosignataire = (): CosignataireDeclare => ({
   lieu_naissance: "",
 });
 
-/** Téléphone mobile français vers E.164 (+33612345678). */
-function normaliserTelephone(tel: string): string {
-  const brut = tel.replace(/[\s.\-()]/g, "");
-  if (/^0[67]\d{8}$/.test(brut)) return "+33" + brut.slice(1);
-  if (/^\+\d{8,15}$/.test(brut)) return brut;
-  return brut;
-}
-
-const telValide = (tel: string) => /^\+\d{8,15}$/.test(normaliserTelephone(tel));
-const emailValide = (e: string) => /.+@.+\..+/.test(e);
+const nouvelAdherentSupplementaire = (): AdherentSupplementaire => ({
+  ...emptyCosignataire(),
+  nomNaissance: "",
+  profession: "",
+  professionDepuis: "",
+  situation: "celibataire",
+  situationDepuis: "",
+  telDomicile: "",
+  telBureau: "",
+});
 
 function Fld({ label, children, span }: { label: string; children: ReactNode; span?: boolean }) {
   return (
@@ -325,8 +333,8 @@ function AdherentFields({
   );
 }
 
-/** Fiche complète d'un signataire déclaré à la main : adhérent 2 hors couple, adhérents
- *  supplémentaires (indivision, SCI…). Chacun signe depuis son propre lien. */
+/** Fiche de signature de l'adhérent 2 hors couple (ses champs du bulletin sont dans son bloc
+ *  « Adhérent 2 ») : il signe depuis son propre lien. */
 function FicheSignataire({
   c,
   onChange,
@@ -344,6 +352,9 @@ function FicheSignataire({
       </Fld>
       <Fld label="Téléphone mobile *">
         <input type="tel" placeholder="06 12 34 56 78" value={c.telephone} onChange={(e) => onChange({ telephone: e.target.value })} />
+        {c.telephone.trim() && !telValide(c.telephone) && (
+          <span className="hint" style={{ color: "var(--color-error-700)" }}>Numéro non valide : {AIDE_TELEPHONE}.</span>
+        )}
       </Fld>
       <Fld label="Civilité">
         <select value={c.civilite} onChange={(e) => onChange({ civilite: e.target.value })}>
@@ -377,6 +388,96 @@ function FicheSignataire({
           })
         }
       />
+    </div>
+  );
+}
+
+/** Adhérent supplémentaire (indivision, associé d'une SCI…) : il remplit son propre bulletin, avec
+ *  les mêmes champs que l'adhérent 1 (retour d'Amir du 12/10/2026), et signe depuis son lien. */
+function FicheAdherentSupplementaire({
+  c,
+  onChange,
+  autoFocus = false,
+}: {
+  c: AdherentSupplementaire;
+  onChange: (patch: Partial<AdherentSupplementaire>) => void;
+  /** Curseur dans le nom quand la fiche vient d'être ajoutée (pas à la reprise du brouillon). */
+  autoFocus?: boolean;
+}) {
+  return (
+    <div className="form-grid">
+      <Fld label="Nom *">
+        <input autoFocus={autoFocus} value={c.nom} onChange={(e) => onChange({ nom: e.target.value })} />
+      </Fld>
+      <Fld label="Prénom *">
+        <input value={c.prenom} onChange={(e) => onChange({ prenom: e.target.value })} />
+      </Fld>
+      <Fld label="Civilité">
+        <select value={c.civilite} onChange={(e) => onChange({ civilite: e.target.value })}>
+          <option value="">-</option>
+          <option value="Madame">Madame</option>
+          <option value="Monsieur">Monsieur</option>
+        </select>
+      </Fld>
+      <Fld label="Nom de naissance (si différent)">
+        <input value={c.nomNaissance} onChange={(e) => onChange({ nomNaissance: e.target.value })} />
+      </Fld>
+      <ChampsNaissance
+        requis
+        valeur={composerDateLieu(c.date_naissance, c.lieu_naissance)}
+        onChange={(v) => {
+          const { dateIso, lieu } = decouperDateLieu(v);
+          onChange({ date_naissance: dateIso, lieu_naissance: lieu });
+        }}
+      />
+      <Fld label="Profession">
+        <input value={c.profession} onChange={(e) => onChange({ profession: e.target.value })} />
+      </Fld>
+      <Fld label="Profession exercée depuis le">
+        <ChampDate valeur={c.professionDepuis} onChange={(v) => onChange({ professionDepuis: v })} min="1900-01-01" />
+      </Fld>
+      <Fld label="Situation matrimoniale *">
+        <select value={c.situation} onChange={(e) => onChange({ situation: e.target.value as SituationMatrimoniale })}>
+          {SITUATIONS.map((s) => (
+            <option key={s.id} value={s.id}>{s.label}</option>
+          ))}
+        </select>
+      </Fld>
+      {c.situation !== "celibataire" && (
+        <Fld label="Depuis le">
+          <ChampDate valeur={c.situationDepuis} onChange={(v) => onChange({ situationDepuis: v })} min="1900-01-01" />
+        </Fld>
+      )}
+      <Fld label="Adresse personnelle *" span>
+        <input value={c.adresse_ligne1} onChange={(e) => onChange({ adresse_ligne1: e.target.value })} />
+      </Fld>
+      <CpVilleFields
+        requis
+        cp={c.code_postal}
+        ville={c.ville}
+        onChange={(patch) =>
+          onChange({
+            ...(patch.cp !== undefined ? { code_postal: patch.cp } : {}),
+            ...(patch.ville !== undefined ? { ville: patch.ville } : {}),
+          })
+        }
+      />
+      <Fld label="Téléphone portable *">
+        <input type="tel" placeholder="06 12 34 56 78" value={c.telephone} onChange={(e) => onChange({ telephone: e.target.value })} />
+        {c.telephone.trim() && !telValide(c.telephone) && (
+          <span className="hint" style={{ color: "var(--color-error-700)" }}>Numéro non valide : {AIDE_TELEPHONE}.</span>
+        )}
+      </Fld>
+      <Fld label="Téléphone domicile">
+        <input type="tel" value={c.telDomicile} onChange={(e) => onChange({ telDomicile: e.target.value })} />
+      </Fld>
+      <Fld label="Téléphone bureau">
+        <input type="tel" value={c.telBureau} onChange={(e) => onChange({ telBureau: e.target.value })} />
+      </Fld>
+      <Fld label="E-mail *">
+        <input type="email" placeholder="prenom.nom@exemple.fr" value={c.email} onChange={(e) => onChange({ email: e.target.value })} />
+        <span className="hint">Il y recevra son lien personnel et son code de signature.</span>
+      </Fld>
     </div>
   );
 }
@@ -487,8 +588,10 @@ export function Adhesion({
   // (repris ensuite de l'enquête sociale quand elle est répondue)
   const [prenomPrincipal, setPrenomPrincipal] = useState(() => identiteDeLaFiche(membership.nom).prenom ?? "");
   const [nomPrincipal, setNomPrincipal] = useState(() => identiteDeLaFiche(membership.nom).nom ?? "");
-  // adhérents supplémentaires (indivision, SCI…) et, hors couple, fiche de signature de l'adhérent 2
-  const [cosignataires, setCosignataires] = useState<CosignataireDeclare[]>([]);
+  // adhérents supplémentaires (indivision, SCI…), gardés au brouillon, et, hors couple, fiche de
+  // signature de l'adhérent 2
+  const [cosignataires, setCosignataires] = useState<AdherentSupplementaire[]>([]);
+  const [supplementaireAjoute, setSupplementaireAjoute] = useState<number | null>(null);
   const [ficheAdherent2, setFicheAdherent2] = useState<CosignataireDeclare>(emptyCosignataire);
   const [cguCochee, setCguCochee] = useState(false);
   const [attestHonneur, setAttestHonneur] = useState(false);
@@ -530,7 +633,12 @@ export function Adhesion({
   useEffect(() => {
     if (!adhesion) return;
     const f = adhesion.form as Partial<AdhesionForm> | null;
-    if (f?.adherent1) setForm((prev) => ({ ...prev, ...f } as AdhesionForm));
+    // les adhérents supplémentaires ont leur propre état (fiches), hors du formulaire
+    const { adherentsSupplementaires, ...champs } = f ?? {};
+    if (f?.adherent1) setForm((prev) => ({ ...prev, ...champs } as AdhesionForm));
+    if (adherentsSupplementaires?.length) {
+      setCosignataires(adherentsSupplementaires.map((a) => ({ ...nouvelAdherentSupplementaire(), ...a })));
+    }
     // un brouillon dont l'adhérent 2 a une autre situation que l'adhérent 1 : choix manuel à respecter
     if (
       f?.adherent1 &&
@@ -670,10 +778,12 @@ export function Adhesion({
     }, "dl");
 
   /** Formulaire avec « Nom et prénom » de l'adhérent 1 complété d'après le signataire principal
-   *  (nom puis prénom) : c'est lui qui est imprimé sur le bulletin et enregistré au brouillon. */
+   *  (nom puis prénom) : c'est lui qui est imprimé sur le bulletin et enregistré au brouillon, avec
+   *  les adhérents supplémentaires (une page de bulletin chacun). */
   const formComplet = (principal: { nom?: string | null; prenom?: string | null }): AdhesionForm => ({
     ...form,
     adherent1: { ...form.adherent1, nomPrenom: nomPrenomComplet(form.adherent1.nomPrenom, principal) },
+    adherentsSupplementaires: cosignataires,
   });
 
   const brouillonAdhesion = () => {
@@ -1577,28 +1687,6 @@ export function Adhesion({
   }
 
   // ---------- formulaire + cosignataires ----------
-  const champsOk =
-    form.adherent1.nomPrenom.trim() &&
-    dateLieuComplet(form.adherent1.dateLieuNaissance) &&
-    form.adresse.trim() &&
-    form.cp.trim() &&
-    form.ville.trim() &&
-    form.portable.trim() &&
-    form.email.trim() &&
-    form.lieuSignature.trim() &&
-    (form.montantType === "100" || form.montantAutre.trim()) &&
-    (!form.adherent2 || (form.adherent2.nomPrenom.trim() && dateLieuComplet(form.adherent2.dateLieuNaissance))) &&
-    // dates « depuis le » facultatives, mais jamais avec une année tapée en partie
-    [form.adherent1, ...(form.adherent2 ? [form.adherent2] : [])].every(
-      (a) => !anneeIncomplete(dateFrVersIso(a.professionDepuis)) && !anneeIncomplete(dateFrVersIso(a.situationDepuis)),
-    );
-
-  const principalOk =
-    prenomPrincipal.trim() && nomPrincipal.trim() && emailValide(form.email) && telValide(form.portable);
-  // adhérents supplémentaires (indivision, SCI…) : fiche complète, chacun signe depuis son lien
-  const cosignatairesOk = cosignataires.every(
-    (c) => c.nom.trim() && c.prenom.trim() && emailValide(c.email) && telValide(c.telephone)
-  );
   // Titulaires du prêt et signataires vont de pair : l'adhérent 2 (co-emprunteur) signe le bulletin
   // comme le principal et dépose sa propre pièce d'identité (recto + verso, feedback du 09/10/2026).
   // Couple marié ou pacsé : son nom, sa naissance et son adresse sont déjà dans le formulaire, seule
@@ -1607,23 +1695,19 @@ export function Adhesion({
   const couple = enCouple(form.adherent1.situation);
   const adherent2Couple = !!form.adherent2 && couple;
   const adherent2Fiche = !!form.adherent2 && !couple;
-  const ficheAdherent2Ok =
-    !!ficheAdherent2.nom.trim() && !!ficheAdherent2.prenom.trim() && emailValide(ficheAdherent2.email) && telValide(ficheAdherent2.telephone);
-  const adherent2Incomplet = adherent2Couple
-    ? !(emailValide((form.adherent2?.email ?? "").trim()) && nomEtPrenomRenseignes(form.adherent2?.nomPrenom ?? ""))
-    : adherent2Fiche && !ficheAdherent2Ok;
+  // ce qui manque grise « Passer à la signature » et s'affiche dessous (retours du 12/10/2026)
+  const etatDossier = {
+    form,
+    principal: { prenom: prenomPrincipal, nom: nomPrincipal },
+    couple,
+    ficheAdherent2,
+    cosignataires,
+    attestHonneur,
+    infoAvis,
+  };
+  const manques = manquesAdhesion(etatDossier);
   // garde-fou anti auto-signature : e-mails et téléphones tous distincts
-  const emails = [
-    form.email,
-    adherent2Couple ? (form.adherent2?.email ?? "") : adherent2Fiche ? ficheAdherent2.email : "",
-    ...cosignataires.map((c) => c.email),
-  ]
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  const tels = [form.portable, adherent2Fiche ? ficheAdherent2.telephone : "", ...cosignataires.map((c) => c.telephone)]
-    .map(normaliserTelephone)
-    .filter(Boolean);
-  const doublons = new Set(emails).size !== emails.length || new Set(tels).size !== tels.length;
+  const doublons = coordonneesEnDouble(etatDossier);
 
   const saveBrouillon = () => void brouillonAdhesion().catch((e) => setError(messageErreur(e, "Enregistrement impossible.")));
 
@@ -1743,7 +1827,9 @@ export function Adhesion({
           <CpVilleFields requis cp={form.cp} ville={form.ville} onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))} />
           <Fld label="Téléphone portable *">
             <input type="tel" autoComplete="tel" value={form.portable} onChange={(e) => setForm({ ...form, portable: e.target.value })} />
-            {telephoneRepris === "portable" && (
+            {form.portable.trim() && !telValide(form.portable) ? (
+              <span className="hint" style={{ color: "var(--color-error-700)" }}>Numéro non valide : {AIDE_TELEPHONE}.</span>
+            ) : telephoneRepris === "portable" && (
               <span className="hint">Numéro repris de votre réponse au questionnaire : vérifiez-le.</span>
             )}
           </Fld>
@@ -1809,9 +1895,10 @@ export function Adhesion({
           </div>
           <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>
             Si le lot a d'autres propriétaires que vous{sci ? "" : " et votre adhérent 2"} (indivision, associés d'une SCI…),
-            <b> tous doivent signer</b>. Chaque adhérent supplémentaire recevra son propre lien par e-mail,
-            déposera lui-même sa pièce d'identité et signera avec son propre code : vous ne pouvez pas
-            signer à sa place.
+            <b> tous doivent signer</b>. Chaque adhérent supplémentaire a <b>son propre bulletin d'adhésion</b>,
+            avec les mêmes informations que l'adhérent 1, joint au vôtre ; il recevra son propre lien par
+            e-mail, déposera lui-même sa pièce d'identité et signera avec son propre code : vous ne pouvez
+            pas signer à sa place.
           </p>
           <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>
             Signataires de ce dossier : <b>{1 + (form.adherent2 ? 1 : 0) + cosignataires.length}</b>{" "}
@@ -1827,14 +1914,21 @@ export function Adhesion({
                   <Icon name="trash" size={13} />Retirer
                 </button>
               </div>
-              <FicheSignataire
+              <FicheAdherentSupplementaire
                 c={c}
+                autoFocus={i === supplementaireAjoute}
                 onChange={(patch) => setCosignataires((prev) => prev.map((x, j) => (j === i ? { ...x, ...patch } : x)))}
               />
             </div>
           ))}
           <div style={{ gridColumn: "1 / -1" }}>
-            <button className="se-btn se-btn-ghost btn-sm" onClick={() => setCosignataires([...cosignataires, emptyCosignataire()])}>
+            <button
+              className="se-btn se-btn-ghost btn-sm"
+              onClick={() => {
+                setSupplementaireAjoute(cosignataires.length);
+                setCosignataires([...cosignataires, nouvelAdherentSupplementaire()]);
+              }}
+            >
               <Icon name="plus" size={14} />Ajouter un adhérent supplémentaire
             </button>
           </div>
@@ -1862,31 +1956,22 @@ export function Adhesion({
           </button>
           <button
             className="se-btn se-btn-primary"
-            disabled={!champsOk || !principalOk || !cosignatairesOk || adherent2Incomplet || doublons || !attestHonneur || !infoAvis || !!busy}
+            disabled={manques.length > 0 || !!busy}
             onClick={() => void preparerSignature()}
           >
             {busy ? "Préparation des bulletins…" : "Passer à la signature"}
             <Icon name="arrowRight" size={16} />
           </button>
         </div>
-        {!champsOk && (
-          <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10 }}>
-            Renseignez tous les champs marqués * - la banque rejette les dossiers incomplets.
-          </p>
-        )}
-        {adherent2Incomplet && (
-          <p className="se-small" style={{ color: "var(--color-error-700)", marginTop: 10 }}>
-            Vous avez déclaré un adhérent 2 (co-emprunteur) : il doit aussi signer le bulletin.{" "}
-            {couple
-              ? "Indiquez son nom, son prénom et son adresse e-mail"
-              : "Complétez ses informations de signature (e-mail, téléphone mobile, nom et prénom)"}{" "}
-            - il recevra son propre lien et déposera sa pièce d'identité, recto et verso.
-          </p>
-        )}
-        {champsOk && !principalOk && (
-          <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 10 }}>
-            Renseignez vos prénom et nom de signataire, un e-mail valide et un téléphone portable valide.
-          </p>
+        {manques.length > 0 && (
+          <div className="se-small" style={{ color: "var(--color-warning-700)", marginTop: 10 }}>
+            <b>Pour passer à la signature, il reste à compléter</b> (la banque rejette les dossiers incomplets) :
+            <ul style={{ margin: "6px 0 0", paddingLeft: 20 }}>
+              {manques.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
       {apercu && <ApercuPdfGenere name={apercu.name} path={apercu.path} onClose={() => setApercu(null)} />}

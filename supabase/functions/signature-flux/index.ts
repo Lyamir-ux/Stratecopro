@@ -606,20 +606,34 @@ function mentionCaseBulletin(
 
 async function genererPdfSigne(
   original: Uint8Array, signataires: Signataire[], b: Bulletin, scelleLe: Date, adherent2: string | null,
+  nbSupplementaires: number | null,
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(original);
   const police = await pdf.embedFont(StandardFonts.Helvetica);
   const gras = await pdf.embedFont(StandardFonts.HelveticaBold);
   const vert = rgb(0.208, 0.341, 0.09);
+  const pagesBulletin = pdf.getPageCount();
 
   // Mention dans les cases « Signature Adhérent 1 / 2 » de la première page (retour
   // d'Amir du 09/10/2026 : elle n'apparaissait que sur la page ajoutée en fin de document)
   const p1 = pdf.getPage(0);
   const principal = signataires.find((s) => s.role === "principal");
   const cosigs = signataires.filter((s) => s.role !== "principal");
-  const second = cosignataireAdherent2(cosigs, adherent2);
+  // Dossier du 12/10/2026 ou plus récent (`nbSupplementaires` connu) : sans adhérent 2 déclaré, la
+  // case reste vide - le premier cosignataire est alors un adhérent supplémentaire, qui a sa page
+  const second = adherent2 || nbSupplementaires === null ? cosignataireAdherent2(cosigs, adherent2) : null;
   if (principal) mentionCaseBulletin(p1, police, gras, BULLETIN_CASES_SIGNATURE[0], principal, 0);
   if (second) mentionCaseBulletin(p1, police, gras, BULLETIN_CASES_SIGNATURE[1], second, cosigs.length - 1);
+  // Adhérents supplémentaires : chacun est l'adhérent 1 de sa page de bulletin, insérée après la
+  // première dans l'ordre de déclaration (genBulletin, retour d'Amir du 12/10/2026)
+  if (nbSupplementaires) {
+    cosigs
+      .filter((s) => s !== second)
+      .slice(0, nbSupplementaires)
+      .forEach((s, i) => {
+        if (i + 1 < pagesBulletin) mentionCaseBulletin(pdf.getPage(i + 1), police, gras, BULLETIN_CASES_SIGNATURE[0], s, 0);
+      });
+  }
 
   let page = pdf.addPage(A4);
   let y = A4[1] - 64;
@@ -974,13 +988,18 @@ async function sceller(admin: Admin, req: Request | null, bulletinId: string): P
   const origBytes = new Uint8Array(await orig.arrayBuffer());
 
   // nom de l'adhérent 2 (co-emprunteur) déclaré au formulaire : son cosignataire signe
-  // dans la case « Signature Adhérent 2 »
+  // dans la case « Signature Adhérent 2 » ; nombre d'adhérents supplémentaires (une page de
+  // bulletin chacun), absent des dossiers d'avant le 12/10/2026
   let adherent2: string | null = null;
+  let nbSupplementaires: number | null = null;
   if (b.adhesion_id) {
     const { data: adh } = await admin.from("adhesions_pret").select("form").eq("id", b.adhesion_id).maybeSingle();
-    adherent2 = (adh?.form as { adherent2?: { nomPrenom?: string } | null } | null)?.adherent2?.nomPrenom ?? null;
+    const form = adh?.form as { adherent2?: { nomPrenom?: string } | null; adherentsSupplementaires?: unknown } | null;
+    adherent2 = form?.adherent2?.nomPrenom ?? null;
+    const supplementaires = form?.adherentsSupplementaires;
+    if (Array.isArray(supplementaires)) nbSupplementaires = supplementaires.length;
   }
-  const pdfSigne = await genererPdfSigne(origBytes, signataires, b as Bulletin, scelleLe, adherent2);
+  const pdfSigne = await genererPdfSigne(origBytes, signataires, b as Bulletin, scelleLe, adherent2, nbSupplementaires);
   const hashFinal = await sha256Hex(pdfSigne);
   const sceau = await scellerHash(hashFinal);
 

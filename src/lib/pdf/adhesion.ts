@@ -6,6 +6,8 @@
 // calibrés au rectangle (./coords) ; la mention de signature du mandat est
 // apposée côté serveur (signature-flux), dans la case « Signature(s) ».
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
+import type { CosignataireDeclare } from "@/api/signature";
+import { composerDateLieu } from "../saisie";
 import { BULLETIN_COORDS, SEPA_COORDS, type TextSpot } from "./coords";
 
 export type SituationMatrimoniale = "mariee" | "divorcee" | "pacsee" | "veuve" | "celibataire";
@@ -35,6 +37,51 @@ export interface AdhesionForm {
   montantType: "100" | "autre";
   montantAutre: string;
   lieuSignature: string;
+  /** Adhérents supplémentaires (indivision, associés d'une SCI…), gardés au brouillon : chacun a sa
+   *  page de bulletin, insérée après la première. Absent des dossiers d'avant le 12/10/2026. */
+  adherentsSupplementaires?: AdherentSupplementaire[];
+}
+
+/**
+ * Adhérent supplémentaire : signataire à part entière (fiche de signature) qui remplit son propre
+ * bulletin avec les mêmes champs que l'adhérent 1 (retour d'Amir du 12/10/2026 : « chacun doit
+ * remplir un bulletin avec les mêmes champs »).
+ */
+export interface AdherentSupplementaire extends CosignataireDeclare {
+  nomNaissance: string;
+  profession: string;
+  professionDepuis: string;
+  situation: SituationMatrimoniale;
+  situationDepuis: string;
+  telDomicile: string;
+  telBureau: string;
+}
+
+/** Bulletin d'un adhérent supplémentaire : il y est l'adhérent 1, avec ses propres coordonnées ;
+ *  lot, montant demandé, lieu et date de signature sont ceux du dossier. */
+export function formAdherentSupplementaire(dossier: AdhesionForm, s: AdherentSupplementaire): AdhesionForm {
+  return {
+    adherent1: {
+      nomPrenom: `${s.nom.trim()} ${s.prenom.trim()}`.trim(),
+      nomNaissance: s.nomNaissance,
+      dateLieuNaissance: composerDateLieu(s.date_naissance, s.lieu_naissance),
+      profession: s.profession,
+      professionDepuis: s.professionDepuis,
+      situation: s.situation,
+      situationDepuis: s.situationDepuis,
+    },
+    adherent2: null,
+    adresse: s.adresse_ligne1,
+    cp: s.code_postal,
+    ville: s.ville,
+    telDomicile: s.telDomicile,
+    telBureau: s.telBureau,
+    portable: s.telephone,
+    email: s.email,
+    montantType: dossier.montantType,
+    montantAutre: dossier.montantAutre,
+    lieuSignature: dossier.lieuSignature,
+  };
 }
 
 export interface BulletinContexte {
@@ -84,24 +131,16 @@ function drawAdherent(
   if (a.situation !== "celibataire") drawSpot(page, font, a.situationDepuis, c.situationDepuis);
 }
 
-/**
- * Bulletin d'adhésion pré-rempli pour UN lot principal.
- * `signaturePng` (dataURL) : apposée pour l'adhérent 1 (et 2 si `signature2Png`),
- * avec horodatage sous l'image - signature électronique simple.
- */
-export async function genBulletin(
+/** Remplit la page formulaire du gabarit CEGEE (première page). */
+function remplirBulletin(
+  p: PDFPage,
+  font: PDFFont,
+  fontBold: PDFFont,
   form: AdhesionForm,
   ctx: BulletinContexte,
-  date: Date,
-  signaturePng?: string | null,
-  signature2Png?: string | null
-): Promise<Uint8Array> {
-  const doc = await loadTemplate("/modeles/bulletin-adhesion-cegee.pdf");
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const p = doc.getPage(0);
+  date: Date
+) {
   const C = BULLETIN_COORDS;
-
   drawSpot(p, font, ctx.adresseImmeuble, C.adresseImmeuble);
   drawSpot(p, font, ctx.nomSyndic, C.nomSyndic);
   drawSpot(p, font, ctx.interlocuteur, C.interlocuteur);
@@ -131,7 +170,43 @@ export async function genBulletin(
   drawSpot(p, font, dd, C.dateJJ);
   drawSpot(p, font, mm, C.dateMM);
   drawSpot(p, font, String(date.getFullYear()), C.dateAAAA);
+}
 
+/**
+ * Bulletin d'adhésion pré-rempli pour UN lot principal : adhérents 1 et 2 en première page, puis
+ * une page formulaire par adhérent supplémentaire (`form.adherentsSupplementaires`), avant les
+ * pages de conditions du gabarit. Le scellement (signature-flux) appose la mention de chacun dans
+ * la case « Signature Adhérent 1 » de sa page.
+ * `signaturePng` (dataURL) : apposée pour l'adhérent 1 (et 2 si `signature2Png`),
+ * avec horodatage sous l'image - signature électronique simple.
+ */
+export async function genBulletin(
+  form: AdhesionForm,
+  ctx: BulletinContexte,
+  date: Date,
+  signaturePng?: string | null,
+  signature2Png?: string | null
+): Promise<Uint8Array> {
+  const chemin = "/modeles/bulletin-adhesion-cegee.pdf";
+  const doc = await loadTemplate(chemin);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const p = doc.getPage(0);
+  const C = BULLETIN_COORDS;
+  remplirBulletin(p, font, fontBold, form, ctx, date);
+
+  const supplementaires = form.adherentsSupplementaires ?? [];
+  if (supplementaires.length) {
+    const modele = await loadTemplate(chemin);
+    for (const [i, s] of supplementaires.entries()) {
+      const [page] = await doc.copyPages(modele, [0]);
+      doc.insertPage(1 + i, page);
+      remplirBulletin(page, font, fontBold, formAdherentSupplementaire(form, s), ctx, date);
+    }
+  }
+
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
   const horodatage = `Signé électroniquement le ${dd}/${mm}/${date.getFullYear()} à ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
   const stampSig = async (dataUrl: string, zone: { x: number; y: number; w: number; h: number }) => {
     const png = await doc.embedPng(dataUrl);
