@@ -110,3 +110,56 @@ export function resumeAcces(adresses: readonly { etat: string }[]): ResumeAcces 
   const n = (etat: string) => adresses.filter((a) => a.etat === etat).length;
   return { total: adresses.length, actifs: n("actif"), invites: n("invite"), aCreer: n("a_creer"), pris: n("email_pris") };
 }
+
+/** Dernier envoi d'une consultation à une adresse. */
+export interface EnvoiAdresse {
+  email: string;
+  statut: string;
+  sentAt: string;
+}
+
+/** Entreprise alertée pour une consultation, et ses adresses servies. */
+export interface EnvoisEntreprise {
+  prestataireId: string | null;
+  raisonSociale: string;
+  adresses: EnvoiAdresse[];
+}
+
+/**
+ * Journal d'une consultation regroupé par entreprise, adresse par adresse : le
+ * dernier envoi de chaque adresse l'emporte (une erreur retentée puis envoyée
+ * s'affiche « Envoyé »). Depuis notifier-consultation v18 le journal a une
+ * ligne par adresse ; les lignes plus anciennes regroupent les adresses d'une
+ * entreprise, séparées par « , ». Entreprises et adresses dans l'ordre du
+ * premier envoi.
+ */
+export function envoisParEntreprise(
+  lignes: readonly {
+    prestataire_id: string | null;
+    email: string;
+    statut: string;
+    sent_at: string;
+    prestataire?: { raison_sociale: string } | null;
+  }[]
+): EnvoisEntreprise[] {
+  const ordonnees = [...lignes].sort((a, b) => (a.sent_at < b.sent_at ? -1 : a.sent_at > b.sent_at ? 1 : 0));
+  const parEntreprise = new Map<string, { raisonSociale: string; prestataireId: string | null; adresses: Map<string, EnvoiAdresse> }>();
+  for (const l of ordonnees) {
+    const cle = l.prestataire_id ?? `sans-fiche:${l.email}`;
+    const e = parEntreprise.get(cle) ?? {
+      raisonSociale: l.prestataire?.raison_sociale ?? l.email,
+      prestataireId: l.prestataire_id,
+      adresses: new Map<string, EnvoiAdresse>(),
+    };
+    for (const brut of l.email.split(",")) {
+      const email = brut.trim().toLowerCase();
+      if (email) e.adresses.set(email, { email, statut: l.statut, sentAt: l.sent_at });
+    }
+    parEntreprise.set(cle, e);
+  }
+  return [...parEntreprise.values()].map((e) => ({
+    prestataireId: e.prestataireId,
+    raisonSociale: e.raisonSociale,
+    adresses: [...e.adresses.values()],
+  }));
+}

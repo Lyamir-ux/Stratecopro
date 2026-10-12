@@ -1,18 +1,21 @@
 // Réinitialisation du mot de passe - page d'atterrissage du lien envoyé
 // par Supabase (resetPasswordForEmail). Le lien ouvre une session de
 // récupération ; sans session valide, le lien est expiré ou déjà utilisé.
+// Venue de /activer-espace avec une suite (lien d'accès joint à une
+// consultation), la personne y est menée une fois le mot de passe choisi.
 import { useState, type FormEvent, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { PasswordInput } from "@/components/PasswordInput";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthProvider";
-import { homeFor } from "@/auth/RequireRole";
+import { cheminInterne, homeFor } from "@/auth/RequireRole";
 import type { RoleId } from "@/lib/referentiels";
 
 export default function Reinitialisation() {
   const { session, profile, loading } = useAuth();
   const navigate = useNavigate();
+  const suite = cheminInterne((useLocation().state as { suite?: string } | null)?.suite);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [done, setDone] = useState(false);
@@ -96,7 +99,7 @@ export default function Reinitialisation() {
         <button
           className="se-btn se-btn-primary"
           style={{ width: "100%", marginTop: 18 }}
-          onClick={() => navigate(homeFor(profile?.role as RoleId | undefined), { replace: true })}
+          onClick={() => navigate(suite ?? homeFor(profile?.role as RoleId | undefined), { replace: true })}
         >
           Accéder à mon espace
           <Icon name="arrowRight" size={18} />

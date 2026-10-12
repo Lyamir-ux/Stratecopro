@@ -8,16 +8,21 @@
 // choisir le mot de passe.
 // Même page pour l'accès des prestataires depuis le 01/10/2026 (0123, edge
 // function creer-espace-prestataire) : le lien porte alors espace=prestataire.
+// Depuis le 12/10/2026, le lien d'accès joint à une consultation
+// (notifier-consultation v18) porte aussi suite=<chemin de la consultation> :
+// la personne y arrive une fois son mot de passe choisi.
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { supabase } from "@/lib/supabase";
+import { cheminInterne } from "@/auth/RequireRole";
 
 export default function ActiverEspace() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const tokenHash = params.get("token_hash");
   const espace = params.get("espace") === "prestataire" ? "Votre espace prestataire" : "Votre espace copropriétaire";
+  const suite = cheminInterne(params.get("suite"));
   const [busy, setBusy] = useState(false);
   const [expire, setExpire] = useState(false);
 
@@ -30,7 +35,7 @@ export default function ActiverEspace() {
       setExpire(true);
       return;
     }
-    navigate("/reinitialisation", { replace: true });
+    navigate("/reinitialisation", { replace: true, state: suite ? { suite } : undefined });
   };
 
   const card = (content: ReactNode) => (

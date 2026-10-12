@@ -19,6 +19,8 @@ import { Avatar, Badge } from "@/components/ui";
 import { RenommageDialog } from "@/components/RenommageDialog";
 import { ChoixPrestatairesDialog } from "@/components/ChoixPrestatairesDialog";
 import { departementConsultation } from "@/lib/departements";
+import { envoisParEntreprise } from "@/lib/prestataires";
+import { useAccesPrestataires } from "@/api/prestataires";
 import { fmtEuro, fmtDate } from "@/lib/format";
 import { lignesOffre } from "@/lib/offres";
 import { nbLogements, useCopros } from "@/api/copros";
@@ -40,6 +42,8 @@ import {
   useReopenConsultation,
   useRepondreQuestion,
   texteEcartes,
+  texteEnvois,
+  phrasesAcces,
   type Consultation,
   type DestinatairesChoisis,
   type PublishResult,
@@ -70,6 +74,14 @@ const NOTIF_LABELS: Record<string, { label: string; kind: "success" | "neutral" 
   erreur: { label: "Erreur", kind: "warn" },
 };
 
+/** Accès d'une adresse à l'espace prestataire (0162), comme dans la Base prestataires. */
+const ETATS_ACCES: Record<string, { label: string; kind: "success" | "neutral" | "warn" }> = {
+  actif: { label: "Compte actif", kind: "success" },
+  invite: { label: "Invitée", kind: "warn" },
+  a_creer: { label: "Sans accès", kind: "neutral" },
+  email_pris: { label: "Adresse prise", kind: "warn" },
+};
+
 /** Onglet « État de la consultation » : destinataires de l'alerte, dossiers
  *  récupérés (formulaire ouvert ou pièce téléchargée), réponses avec offres. */
 function EtatConsultation({ cs }: { cs: Consultation }) {
@@ -79,25 +91,46 @@ function EtatConsultation({ cs }: { cs: Consultation }) {
     </div>
   );
   const ligne: CSSProperties = { display: "flex", alignItems: "center", gap: 10, padding: "5px 0", fontSize: 13 };
+  // une entreprise, puis chacune de ses adresses : dernier envoi et accès à l'espace prestataire (0162)
+  const envois = useMemo(() => envoisParEntreprise(cs.notifications), [cs.notifications]);
+  const { data: acces } = useAccesPrestataires();
+  const etatAcces = (prestataireId: string | null, email: string) =>
+    prestataireId ? acces?.get(prestataireId)?.find((a) => a.email === email)?.etat : undefined;
 
   return (
     <div className="cs-cand-list">
-      {titre("1", "Consultation envoyée à", cs.notifications.length)}
-      {cs.notifications.length === 0 && (
+      {titre("1", "Consultation envoyée à", envois.length)}
+      {envois.length === 0 && (
         <div className="cs-cand-empty">Aucun prestataire référencé alerté (base prestataires vide pour ce métier).</div>
       )}
-      {cs.notifications.map((n) => {
-        const s = NOTIF_LABELS[n.statut] ?? NOTIF_LABELS.simule;
-        return (
-          <div key={n.id} style={ligne}>
-            <span style={{ fontWeight: 600 }}>{n.prestataire?.raison_sociale ?? n.email}</span>
-            <span style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>{n.email}</span>
-            <span className="spacer" style={{ flex: 1 }}></span>
-            <span style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>{fmtDate(n.sent_at)}</span>
-            <Badge kind={s.kind}>{s.label}</Badge>
+      {envois.map((e) => (
+        <div key={e.prestataireId ?? e.raisonSociale} style={{ padding: "3px 0" }}>
+          <div style={ligne}>
+            <span style={{ fontWeight: 600 }}>{e.raisonSociale}</span>
+            <span style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>
+              {e.adresses.length} adresse{e.adresses.length > 1 ? "s" : ""}
+            </span>
           </div>
-        );
-      })}
+          {e.adresses.map((a) => {
+            const s = NOTIF_LABELS[a.statut] ?? NOTIF_LABELS.simule;
+            const etat = etatAcces(e.prestataireId, a.email);
+            const ac = etat ? ETATS_ACCES[etat] : undefined;
+            return (
+              <div key={a.email} style={{ ...ligne, padding: "2px 0 2px 14px", flexWrap: "wrap" }}>
+                <span style={{ color: "var(--fg2)", fontSize: 12.5 }}>{a.email}</span>
+                {ac && (
+                  <span title="Accès de cette personne à l'espace prestataire">
+                    <Badge kind={ac.kind}>{ac.label}</Badge>
+                  </span>
+                )}
+                <span className="spacer" style={{ flex: 1 }}></span>
+                <span style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>{fmtDate(a.sentAt)}</span>
+                <Badge kind={s.kind}>{s.label}</Badge>
+              </div>
+            );
+          })}
+        </div>
+      ))}
 
       {titre("2", "Dossier récupéré par", cs.acces.length)}
       {cs.acces.length === 0 && (
@@ -225,22 +258,25 @@ function Card({ cs }: { cs: Consultation }) {
   const bilanAlertes = (n: NonNullable<PublishResult["notification"]>) => {
     const ecartes = texteEcartes(n);
     window.alert(
-      (n.total === 0
-        ? ecartes
-          ? "Aucun nouvel e-mail."
-          : choisis
-            ? "Toutes les entreprises choisies ont déjà été alertées - aucun nouvel e-mail."
-            : "Tous les prestataires référencés du métier ont déjà été alertés - aucun nouvel e-mail."
-        : n.mode === "simulation"
-          ? `${n.total} prestataire${n.total > 1 ? "s" : ""} identifié${n.total > 1 ? "s" : ""} - envoi simulé (configurez RESEND_API_KEY pour l'e-mail réel).`
-          : `Alertes envoyées : ${n.envoyes} e-mail${n.envoyes > 1 ? "s" : ""}${n.erreurs ? ` · ${n.erreurs} en erreur` : ""}.`) +
-        (ecartes ? `
-Non alertées : ${ecartes}.` : "")
+      [
+        n.total === 0
+          ? ecartes
+            ? "Aucun nouvel e-mail."
+            : choisis
+              ? "Toutes les personnes des entreprises choisies ont déjà reçu la consultation et ont un accès - aucun nouvel e-mail."
+              : "Tous les prestataires référencés du métier ont déjà reçu la consultation et ont un accès - aucun nouvel e-mail."
+          : `Alertes : ${texteEnvois(n)}`,
+        ...phrasesAcces(n),
+        ecartes ? `Non alertées : ${ecartes}.` : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
     );
   };
   // Renvoie les alertes e-mail aux prestataires du métier (ou aux entreprises
-  // choisies) pas encore prévenus : la fonction serveur ne notifie jamais deux
-  // fois le même prestataire.
+  // choisies) pas encore prévenus, aux adresses ajoutées depuis, et ouvre
+  // l'accès des personnes qui n'en ont pas (notifier-consultation v18) ; une
+  // personne déjà prévenue et pourvue d'un accès ne reçoit rien de plus.
   const relancerAlertes = async () => {
     const n = await relance.mutateAsync(cs.id);
     if (n) bilanAlertes(n);
@@ -258,7 +294,8 @@ Non alertées : ${ecartes}.` : "")
   const jr = joursRestants(cs.date_limite);
   const enLigne = cs.statut === "en_ligne";
   const cible = consultationCible(cs);
-  const notifOk = cs.notifications.filter((n) => n.statut !== "erreur").length;
+  // entreprises alertées (le journal compte une ligne par adresse depuis notifier-consultation v18)
+  const notifOk = new Set(cs.notifications.filter((n) => n.statut !== "erreur").map((n) => n.prestataire_id)).size;
   const enAttente = cs.questions.filter((q) => !q.reponse).length;
 
   return (
@@ -408,9 +445,10 @@ Non alertées : ${ecartes}.` : "")
             <button
               className="se-btn se-btn-ghost btn-sm"
               title={
-                choisis
+                (choisis
                   ? "Alerter par e-mail les entreprises choisies qui ne l'ont pas encore été"
-                  : "Alerter par e-mail les prestataires référencés du métier qui ne l'ont pas encore été"
+                  : "Alerter par e-mail les prestataires référencés du métier qui ne l'ont pas encore été") +
+                ", ainsi que les adresses ajoutées depuis ; une personne sans accès à l'espace prestataire reçoit le sien avec la consultation"
               }
               disabled={relance.isPending}
               onClick={() => void relancerAlertes()}
@@ -677,14 +715,17 @@ export default function Consultations() {
         ? `Consultation publiée, réservée à ${n.choisis} entreprise${n.choisis > 1 ? "s" : ""} choisie${n.choisis > 1 ? "s" : ""}.`
         : "Consultation publiée.";
       setNotice(
-        (n.total === 0
-          ? ecartes || n.choisis
-            ? `${publiee} Aucune entreprise alertée.`
-            : "Consultation publiée. Aucun prestataire référencé pour ce métier - pensez à enrichir la base prestataires."
-          : n.mode === "simulation"
-            ? `${publiee} ${n.total} prestataire${n.total > 1 ? "s" : ""} référencé${n.total > 1 ? "s" : ""} identifié${n.total > 1 ? "s" : ""} (envoi simulé : configurez RESEND_API_KEY pour l'e-mail réel).`
-            : `${publiee} ${n.envoyes} e-mail${n.envoyes > 1 ? "s" : ""} envoyé${n.envoyes > 1 ? "s" : ""}${n.erreurs ? `, ${n.erreurs} en erreur` : ""}.`) +
-          (ecartes ? ` Non alertées : ${ecartes}.` : "")
+        [
+          n.total === 0
+            ? ecartes || n.choisis
+              ? `${publiee} Aucune entreprise alertée.`
+              : "Consultation publiée. Aucun prestataire référencé pour ce métier - pensez à enrichir la base prestataires."
+            : `${publiee} ${texteEnvois(n)}`,
+          ...phrasesAcces(n),
+          ecartes ? `Non alertées : ${ecartes}.` : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
       );
     }
     if (res.docErrors.length > 0) {

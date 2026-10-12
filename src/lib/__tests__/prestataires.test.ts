@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   accesPerdus,
+  envoisParEntreprise,
   adressesEntreprise,
   adressesFiche,
   adressesParDefaut,
@@ -136,5 +137,49 @@ describe("accès par personne (0162)", () => {
       resumeAcces([{ etat: "actif" }, { etat: "invite" }, { etat: "a_creer" }, { etat: "a_creer" }, { etat: "email_pris" }])
     ).toEqual({ total: 5, actifs: 1, invites: 1, aCreer: 2, pris: 1 });
     expect(resumeAcces([])).toEqual({ total: 0, actifs: 0, invites: 0, aCreer: 0, pris: 0 });
+  });
+});
+
+describe("envoisParEntreprise", () => {
+  const l = (prestataire_id: string | null, email: string, statut: string, sent_at: string, raison = "Acceo") => ({
+    prestataire_id,
+    email,
+    statut,
+    sent_at,
+    prestataire: prestataire_id ? { raison_sociale: raison } : null,
+  });
+
+  it("éclate les anciennes lignes groupées et ajoute les lignes par adresse", () => {
+    const r = envoisParEntreprise([
+      l("a", "Julien@acceo.eu, jules@acceo.eu", "envoye", "2026-10-05T12:20:00Z"),
+      l("a", "nouvelle@acceo.eu", "envoye", "2026-10-12T09:00:00Z"),
+    ]);
+    expect(r).toHaveLength(1);
+    expect(r[0].raisonSociale).toBe("Acceo");
+    expect(r[0].adresses.map((a) => a.email)).toEqual(["julien@acceo.eu", "jules@acceo.eu", "nouvelle@acceo.eu"]);
+  });
+
+  it("le dernier envoi d'une adresse l'emporte, quel que soit l'ordre des lignes", () => {
+    const r = envoisParEntreprise([
+      l("a", "julien@acceo.eu", "envoye", "2026-10-12T09:00:00Z"),
+      l("a", "julien@acceo.eu, jules@acceo.eu", "erreur", "2026-10-05T12:20:00Z"),
+    ]);
+    expect(r[0].adresses).toEqual([
+      { email: "julien@acceo.eu", statut: "envoye", sentAt: "2026-10-12T09:00:00Z" },
+      { email: "jules@acceo.eu", statut: "erreur", sentAt: "2026-10-05T12:20:00Z" },
+    ]);
+  });
+
+  it("une entreprise par fiche, dans l'ordre du premier envoi", () => {
+    const r = envoisParEntreprise([
+      l("b", "nicolas@atelierg5.fr", "envoye", "2026-10-05T12:21:00Z", "Atelier G5"),
+      l("a", "julien@acceo.eu", "envoye", "2026-10-05T12:20:00Z"),
+      l(null, "x@ex.fr", "simule", "2026-10-05T12:22:00Z"),
+    ]);
+    expect(r.map((e) => [e.prestataireId, e.raisonSociale])).toEqual([
+      ["a", "Acceo"],
+      ["b", "Atelier G5"],
+      [null, "x@ex.fr"],
+    ]);
   });
 });

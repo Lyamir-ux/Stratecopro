@@ -17,6 +17,11 @@ export function homeFor(role: RoleId | undefined): string {
   return "/";
 }
 
+/** Chemin de l'application reçu dans un lien (« /prestataire/… »), ou null s'il mène ailleurs. */
+export function cheminInterne(chemin: string | null | undefined): string | null {
+  return chemin && /^\/(?![/\\])/.test(chemin) ? chemin : null;
+}
+
 export function RequireRole({ role }: { role: RoleId }) {
   const { profile, espace, loading, signOut } = useAuth();
 

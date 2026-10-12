@@ -133,11 +133,22 @@ export function useConsultations() {
 export interface PublishResult {
   /** Bilan de la notification des prestataires référencés. */
   notification: {
+    /** E-mails : un par personne depuis notifier-consultation v18 (avant : un par entreprise). */
     total: number;
     envoyes: number;
     simules: number;
     erreurs: number;
     mode: string;
+    /** Entreprises qui ont reçu au moins un e-mail (v18). */
+    entreprises?: number;
+    /** Accès à l'espace prestataire ouverts par cet envoi (v18, règle d'Amir du 12/10/2026). */
+    acces_crees?: number;
+    /** E-mails envoyés avec le lien pour choisir son mot de passe (v18). */
+    invitations?: number;
+    /** Adresses de la fiche qui ne peuvent pas avoir d'accès (adresse prise…) (v18). */
+    acces_impossibles?: { entreprise: string; email: string; motif: string }[];
+    /** Entreprises pas encore traitées faute de temps : à reprendre par « Relancer les alertes » (v18). */
+    restants?: number;
     /** Entreprises du métier écartées (0122) : « Ne pas consulter », autre département. */
     hors_consultation?: number;
     hors_departement?: number;
@@ -160,12 +171,62 @@ export function texteEcartes(n: NonNullable<PublishResult["notification"]>): str
   return parts.join(" · ");
 }
 
+const pl = (n: number, mot: string) => `${n} ${mot}${n > 1 ? "s" : ""}`;
+
+/** « 18 e-mails envoyés (4 entreprises), 1 en erreur », ou l'envoi simulé. */
+export function texteEnvois(n: NonNullable<PublishResult["notification"]>): string {
+  const entreprises = n.entreprises != null ? ` (${pl(n.entreprises, "entreprise")})` : "";
+  if (n.mode === "simulation") {
+    return `${pl(n.total, "e-mail")} préparé${n.total > 1 ? "s" : ""}${entreprises} - envoi simulé (configurez RESEND_API_KEY pour l'e-mail réel).`;
+  }
+  return `${pl(n.envoyes, "e-mail")} envoyé${n.envoyes > 1 ? "s" : ""}${entreprises}${n.erreurs ? `, ${n.erreurs} en erreur` : ""}.`;
+}
+
+/**
+ * Accès ouverts par l'envoi (règle d'Amir du 12/10/2026 : une personne sans
+ * compte le reçoit avec la consultation), adresses sans accès possible et
+ * entreprises restantes - une phrase par point, ou [] si rien à dire.
+ */
+export function phrasesAcces(n: NonNullable<PublishResult["notification"]>): string[] {
+  const out: string[] = [];
+  const crees = n.acces_crees ?? 0;
+  const liens = n.invitations ?? 0;
+  if (crees || liens) {
+    out.push(
+      [
+        crees ? `${pl(crees, "accès")} à l'espace prestataire ouvert${crees > 1 ? "s" : ""}` : "",
+        liens ? `${pl(liens, "e-mail")} avec le lien pour choisir le mot de passe` : "",
+      ]
+        .filter(Boolean)
+        .join(", ") + "."
+    );
+  }
+  const impossibles = n.acces_impossibles ?? [];
+  if (impossibles.length) {
+    out.push(
+      `Sans accès possible : ${impossibles.map((a) => `${a.email} (${a.entreprise}, ${a.motif})`).join(" ; ")}.`
+    );
+  }
+  if (n.restants) {
+    out.push(
+      `${pl(n.restants, "entreprise")} pas encore traitée${n.restants > 1 ? "s" : ""} (temps d'envoi dépassé) : cliquez de nouveau sur « Relancer les alertes ».`
+    );
+  }
+  return out;
+}
+
 /**
  * Adresses choisies par l'équipe pour certaines entreprises (0139, idée de Louis
  * du 05/10/2026) : prestataire_id -> adresses à qui la consultation est envoyée.
  * Une entreprise absente reçoit l'alerte à son adresse principale et en copie.
  */
 export type DestinatairesChoisis = Record<string, string[]>;
+
+/** Après une alerte : le journal de la consultation et les accès ouverts à l'envoi (notifier-consultation v18). */
+function invaliderApresEnvoi(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ["consultations"] });
+  void qc.invalidateQueries({ queryKey: ["prestataires", "acces"] });
+}
 
 /** Enregistre le choix avant l'alerte : notifier-consultation le lit au moment de l'envoi. */
 async function enregistrerDestinataires(consultationId: string, destinataires: DestinatairesChoisis | undefined) {
@@ -250,15 +311,17 @@ export function usePublishConsultation() {
         docErrors,
       };
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["consultations"] }),
+    onSuccess: () => invaliderApresEnvoi(qc),
   });
 }
 
 /**
  * Relance les alertes e-mail d'une consultation en ligne : notifie les
  * prestataires référencés du métier qui n'ont pas encore été alertés
- * (nouveaux référencés, ou traces purgées après un envoi simulé/en erreur).
- * La fonction ne renvoie jamais deux fois au même prestataire.
+ * (nouveaux référencés, envoi en erreur) et, chez ceux déjà prévenus, les
+ * adresses ajoutées depuis et les personnes sans accès à l'espace prestataire
+ * (accès ouvert, lien joint : notifier-consultation v18). Une personne déjà
+ * prévenue et pourvue d'un accès ne reçoit rien de plus.
  */
 export function useRelancerAlertes() {
   const qc = useQueryClient();
@@ -270,7 +333,7 @@ export function useRelancerAlertes() {
       if (fnErr) throw new Error(String(fnErr.message ?? fnErr));
       return data as PublishResult["notification"];
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["consultations"] }),
+    onSuccess: () => invaliderApresEnvoi(qc),
   });
 }
 
@@ -315,7 +378,7 @@ export function useAjouterPrestatairesChoisis() {
       if (fnErr) throw new Error("Entreprises ajoutées, mais l'alerte e-mail a échoué : " + String(fnErr.message ?? fnErr));
       return data as PublishResult["notification"];
     },
-    onSettled: () => void qc.invalidateQueries({ queryKey: ["consultations"] }),
+    onSettled: () => invaliderApresEnvoi(qc),
   });
 }
 
