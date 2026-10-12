@@ -14,7 +14,6 @@ import { compteNouvelles, useDemandesAmo } from "@/api/demandesAmo";
 import { compteEnAttente, useHonoraires } from "@/api/honoraires";
 import { declencherRappelAgrements } from "@/api/prestataires";
 import { nonLusFilGeneral, useFilsGeneraux, useLecturesFilGeneral } from "@/api/messages";
-import { declencherRapportSyndic } from "@/api/rapportSyndic";
 import { declencherSignatureCron } from "@/api/signature";
 
 // Accent dynamique - repris de la maquette (app.jsx ACCENT_MAP)
@@ -40,11 +39,11 @@ export function Layout() {
   }, [accent]);
   const { profile, signOut } = useAuth();
   // rappel e-mail des agréments prestataires en fin de validité (1×/jour)
-  // + rapport mensuel de portefeuille aux cabinets de syndic (1×/mois)
   // + entretien des signatures électroniques : relances, expirations, purge (1×/jour)
+  // Le rapport mensuel aux syndics n'est PLUS automatique (12/10/2026 : 80 e-mails
+  // partis chez des cabinets non déployés) : il se lance à la main depuis Paramètres.
   useEffect(() => {
     void declencherRappelAgrements();
-    void declencherRapportSyndic();
     void declencherSignatureCron();
   }, []);
   const { data: copros } = useCopros();

@@ -6,8 +6,10 @@
 // retard - avec une liste de points de vigilance.
 //
 // Un envoi par enseigne et par mois (journal rapport_syndic_envois) ;
-// déclenchée au premier chargement de l'app AMO du mois (api/rapportSyndic.ts)
-// et relançable à la main depuis Paramètres (body { force: true }).
+// lancée à la main depuis Paramètres (api/rapportSyndic.ts, body { force: true }
+// pour renvoyer même si déjà parti). Plus de déclenchement automatique au
+// chargement de l'app AMO depuis le 12/10/2026 (80 e-mails partis chez des
+// cabinets pas encore déployés).
 // Envoi réel via Resend si RESEND_API_KEY est configuré ; sans clé, l'envoi
 // est simulé et rien n'est journalisé (le rapport partira au vrai branchement).
 import { createClient } from "npm:@supabase/supabase-js@2";

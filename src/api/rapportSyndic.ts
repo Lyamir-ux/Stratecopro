@@ -1,9 +1,9 @@
 // Rapport mensuel de portefeuille aux cabinets de syndic (edge function
 // `rapport-syndic`) : chaque directeur reçoit l'état de toute son enseigne,
-// chaque gestionnaire celui de ses copropriétés. Déclenché une fois par mois
-// au chargement de l'app AMO (garde locale + journal serveur
-// rapport_syndic_envois : un envoi par enseigne et par mois), relançable à la
-// main depuis Paramètres.
+// chaque gestionnaire celui de ses copropriétés. Déclenchement MANUEL
+// uniquement, depuis Paramètres (journal serveur rapport_syndic_envois : un
+// envoi par enseigne et par mois, sauf `force`). Il n'est plus lancé au
+// chargement de l'app AMO depuis le 12/10/2026.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Tables } from "@/lib/database.types";
@@ -15,21 +15,6 @@ export interface BilanRapport {
   simules: number;
   erreurs: number;
   mode: string;
-}
-
-/** Déclenchement mensuel automatique - meilleur effort : un échec est
- *  silencieux, le rapport repartira au prochain chargement (le journal
- *  serveur garantit de toute façon un seul envoi par enseigne et par mois). */
-export async function declencherRapportSyndic(): Promise<void> {
-  const cle = "rapport-syndic-dernier";
-  const mois = new Date().toISOString().slice(0, 7);
-  try {
-    if (localStorage.getItem(cle) === mois) return;
-    localStorage.setItem(cle, mois);
-    await supabase.functions.invoke("rapport-syndic", { body: {} });
-  } catch {
-    /* rapport facultatif */
-  }
 }
 
 export type RapportEnvoi = Tables<"rapport_syndic_envois"> & {
