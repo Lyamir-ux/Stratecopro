@@ -133,8 +133,9 @@ export default function MesTaches() {
           <div className="p-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
             <p className="se-small" style={{ margin: "0 0 4px", color: "var(--fg-muted)" }}>
               Déposées par les copropriétaires sur leur portail. Ouvrez la pièce (œil), vérifiez lisibilité, pages et
-              année, puis qualifiez-la : « Conforme » la valide ; tout autre choix la refuse et envoie aussitôt un
-              e-mail au copropriétaire avec le motif.
+              année, puis qualifiez-la : un champ s'ouvre à côté pour un commentaire facultatif. « Valider et
+              prévenir » ou « Refuser et prévenir » envoie l'e-mail au copropriétaire, avec le motif d'un refus et
+              votre commentaire.
             </p>
             {piecesAVerifier.map((p) => (
               <div key={p.id} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 12px" }}>
@@ -181,8 +182,9 @@ export default function MesTaches() {
           <div className="p-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
             <p className="se-small" style={{ margin: "0 0 4px", color: "var(--fg-muted)" }}>
               Pièces d'identité des signataires et RIB déposés avec les bulletins d'adhésion (tous les dossiers ;
-              niveau 1, chaque ouverture est journalisée). « Conforme » valide ; tout autre choix refuse et prévient
-              le signataire par e-mail (un cosignataire reçoit un lien pour redéposer sa pièce).
+              niveau 1, chaque ouverture est journalisée). Qualifiez-la, ajoutez si besoin un commentaire dans le champ
+              qui s'ouvre à côté : la validation comme le refus sont annoncés par e-mail au signataire principal (un
+              cosignataire dont la pièce est refusée reçoit un lien pour la redéposer).
             </p>
             {piecesSignature.map((p) => (
               <div key={p.quoi + p.bulletinId + (p.signataireId ?? "")} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 12px" }}>

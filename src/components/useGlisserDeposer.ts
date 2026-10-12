@@ -3,12 +3,13 @@
 // posent sur l'élément qui reçoit le fichier ; `survol` sert à le surligner.
 // Un fichier lâché à côté d'une zone inactive n'est jamais ouvert par le
 // navigateur à la place du portail : le comportement par défaut est toujours
-// annulé.
+// annulé. Le second argument du rappel porte tous les fichiers lâchés (pièce du
+// portail en plusieurs photos, 12/10/2026).
 import { useState, type DragEvent } from "react";
 
 const porteDesFichiers = (e: DragEvent) => Array.from(e.dataTransfer.types ?? []).includes("Files");
 
-export function useGlisserDeposer(onFichier: (f: File) => boolean | void, actif = true) {
+export function useGlisserDeposer(onFichier: (f: File, tous: File[]) => boolean | void, actif = true) {
   const [survol, setSurvol] = useState(false);
   const props = {
     onDragOver: (e: DragEvent<HTMLElement>) => {
@@ -29,7 +30,7 @@ export function useGlisserDeposer(onFichier: (f: File) => boolean | void, actif 
       if (!actif || !fichier) return;
       const champ = e.currentTarget.querySelector<HTMLInputElement>('input[type="file"]');
       // false = fichier refusé (format) : le champ natif n'en affiche pas le nom
-      if (onFichier(fichier) === false || !champ) return;
+      if (onFichier(fichier, Array.from(e.dataTransfer.files)) === false || !champ) return;
       try {
         champ.files = e.dataTransfer.files;
       } catch {

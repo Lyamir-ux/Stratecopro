@@ -18,6 +18,13 @@
 // bulletins : le lien y renvoie pour ces pièces. Kbis, statuts et avis des
 // associés restent dans l'enquête pour une SCI à l'IR occupée par un associé
 // (même règle que src/lib/piecesSituation.ts, piecesEnquete / piecesDossierPret).
+//
+// v4 (12/10/2026, idée d'Amir) : « envoyer une notification à chaque fois qu'une pièce
+// est qualifiée au copropriétaire, ou si elle n'est pas qualifiée, avec le
+// commentaire ». Une pièce validée reçoit aussi son e-mail ; le commentaire facultatif
+// de l'AMO (commentaire_verification, 0161) est repris dans les deux e-mails. La
+// trace (refus_email_statut) vaut pour l'e-mail de la dernière qualification ; depuis
+// 0161 le déclencheur la laisse écrire par la clé de service.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const cors = {
@@ -99,11 +106,12 @@ Deno.serve(async (req: Request) => {
 
   const { data: piece } = await admin
     .from("pieces_justificatives")
-    .select("id, type, name, copro_id, coproprietaire_id, statut, qualification, motif_refus, uploaded_at, verifiee_par_nom")
+    .select("id, type, name, copro_id, coproprietaire_id, statut, qualification, motif_refus, commentaire_verification, uploaded_at, verifiee_par_nom")
     .eq("id", piece_id)
     .maybeSingle();
   if (!piece) return json(404, { error: "Pièce introuvable" });
-  if (piece.statut !== "refuse") return json(200, { skipped: "pièce non refusée" });
+  if (piece.statut !== "refuse" && piece.statut !== "valide") return json(200, { skipped: "pièce à vérifier" });
+  const validee = piece.statut === "valide";
 
   const [{ data: cp }, { data: copro }] = await Promise.all([
     admin.from("coproprietaires").select("id, nom, email, user_id").eq("id", piece.coproprietaire_id).maybeSingle(),
@@ -146,6 +154,14 @@ Deno.serve(async (req: Request) => {
   const motif = (piece.motif_refus && piece.motif_refus.trim()) ||
     MOTIF_QUALIFICATION[piece.qualification ?? ""] ||
     MOTIF_QUALIFICATION.autre;
+  const commentaire = (piece.commentaire_verification ?? "").trim();
+  const blocCommentaire = commentaire
+    ? `<p style="margin:0 0 4px"><strong>Commentaire de l'équipe Strat Eco :</strong></p>
+      <p style="padding:10px 14px;background:#f4f6f1;border-left:3px solid #355717;border-radius:4px;margin-top:0">
+        ${echap(commentaire).replaceAll(String.fromCharCode(13), "").replaceAll(String.fromCharCode(10), "<br/>")}
+      </p>`
+    : "";
+  const signature = echap(piece.verifiee_par_nom ?? profile.full_name ?? "L'équipe Strat Eco");
   const deposeeLe = new Date(piece.uploaded_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 
   if (!resendKey) {
@@ -153,7 +169,29 @@ Deno.serve(async (req: Request) => {
     return json(200, { mode: "simulation", to: email });
   }
 
-  const html = `
+  const htmlValidee = `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14.5px;line-height:1.55;color:#1a1a1a;max-width:620px">
+      <p>Bonjour ${echap(cp.nom)},</p>
+      <p>Vous avez déposé le ${deposeeLe}, sur votre portail Strat Eco pro, la pièce
+      <strong>${echap(libelle)}</strong> (fichier « ${echap(piece.name)} ») pour la copropriété
+      <strong>${echap(copro.name)}</strong>.</p>
+      <p style="padding:10px 14px;background:#eef6e8;border-left:3px solid #355717;border-radius:4px">
+        <strong>Cette pièce a été vérifiée et validée par l'équipe Strat Eco.</strong>
+      </p>
+      ${blocCommentaire}
+      <p>Vous la retrouvez dans votre portail, rubrique « ${rubrique} ».</p>
+      <p style="margin:22px 0">
+        <a href="${lien}"
+           style="background:#355717;color:#fff;padding:12px 22px;border-radius:6px;text-decoration:none;font-weight:bold">
+          Ouvrir mon portail
+        </a>
+      </p>
+      <p style="color:#666;font-size:13px">Vos pièces sont stockées de manière sécurisée et ne sont visibles que
+      par vous et l'équipe Strat Eco. Pour toute question, répondez à ce message.</p>
+      <p>Bien cordialement,<br/><strong>${signature}</strong><br/>Strat Eco pro</p>
+    </div>`;
+
+  const html = validee ? htmlValidee : `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14.5px;line-height:1.55;color:#1a1a1a;max-width:620px">
       <p>Bonjour ${echap(cp.nom)},</p>
       <p>Vous avez déposé le ${deposeeLe}, sur votre portail Strat Eco pro, la pièce
@@ -163,6 +201,7 @@ Deno.serve(async (req: Request) => {
       <p style="padding:10px 14px;background:#fdecec;border-left:3px solid #DC2626;border-radius:4px">
         <strong>${echap(motif.charAt(0).toUpperCase() + motif.slice(1))}.</strong>
       </p>
+      ${blocCommentaire}
       <p>Merci de déposer une nouvelle version depuis votre portail, rubrique « ${rubrique} » :
       elle remplacera la précédente et sera vérifiée à son tour.</p>
       <p style="margin:22px 0">
@@ -173,7 +212,7 @@ Deno.serve(async (req: Request) => {
       </p>
       <p style="color:#666;font-size:13px">Vos pièces sont stockées de manière sécurisée et ne sont visibles que
       par vous et l'équipe Strat Eco. Pour toute question, répondez à ce message.</p>
-      <p>Bien cordialement,<br/><strong>${echap(piece.verifiee_par_nom ?? profile.full_name ?? "L'équipe Strat Eco")}</strong><br/>Strat Eco pro</p>
+      <p>Bien cordialement,<br/><strong>${signature}</strong><br/>Strat Eco pro</p>
     </div>`;
 
   try {
@@ -183,7 +222,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         from,
         to: [email],
-        subject: `Pièce à redéposer - ${libelle} · ${copro.name}`,
+        subject: validee ? `Pièce validée - ${libelle} · ${copro.name}` : `Pièce à redéposer - ${libelle} · ${copro.name}`,
         html,
       }),
     });

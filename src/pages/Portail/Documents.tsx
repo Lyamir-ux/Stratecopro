@@ -17,12 +17,19 @@
 //
 // Le dépôt (bucket privé pieces-copro) exige l'acceptation préalable des CGU du
 // service - tracée par version dans cgu_acceptations.
+//
+// Plusieurs fichiers par pièce (remarque d'Amir du 12/10/2026, l'avis d'imposition
+// pris en photo page par page) : des photos, ou plusieurs fichiers choisis ou
+// glissés ensemble, ouvrent la fenêtre « Pages de la pièce » (PagesDocumentDialog)
+// et partent réunis en un seul PDF. Un PDF seul part directement.
+// Le commentaire de l'AMO à la vérification (0161) s'affiche sous la pièce.
 import { useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/components/Icon";
 import { Modal } from "@/components/Modal";
 import { RenommageDialog } from "@/components/RenommageDialog";
 import { ApercuDocument } from "@/components/ApercuDocument";
 import { useGlisserDeposer } from "@/components/useGlisserDeposer";
+import { PagesDocumentDialog, pagesADemander } from "@/components/PagesDocumentDialog";
 import { Badge } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
 import { downloadFichier, estVisualisable, type Fichier } from "@/api/fichiers";
@@ -75,6 +82,8 @@ function DepotPiece({
   const inputRef = useRef<HTMLInputElement>(null);
   // Fichier en attente de renommage assisté avant téléversement
   const [depot, setDepot] = useState<File | null>(null);
+  // Photos ou fichiers à réunir en un seul PDF avant le nommage
+  const [pages, setPages] = useState<File[] | null>(null);
   // Nom du fichier qui vient d'être transmis (fenêtre de confirmation)
   const [transmis, setTransmis] = useState<string | null>(null);
   const supprimer = useSupprimerPiece(membership.coproprietaireId);
@@ -84,13 +93,18 @@ function DepotPiece({
   const [erreurFormat, setErreurFormat] = useState<string | null>(null);
   const [apercu, setApercu] = useState(false);
 
-  const choisir = (file: File) => {
-    const refus = erreurFormatPiece(file);
+  const choisir = (fichiers: File[]): boolean => {
+    const refus = fichiers.map(erreurFormatPiece).find(Boolean) ?? null;
     setErreurFormat(refus);
-    if (!refus) setDepot(file);
+    const valides = fichiers.filter((f) => !erreurFormatPiece(f));
+    if (!valides.length) return false;
+    if (pagesADemander(valides)) setPages(valides);
+    else setDepot(valides[0]);
+    return true;
   };
-  // le fichier peut aussi être glissé sur l'encadré (retour de A CHELGHAM, 09/10/2026)
-  const glisser = useGlisserDeposer(choisir, !upload.isPending);
+  // le fichier peut aussi être glissé sur l'encadré (retour de A CHELGHAM, 09/10/2026),
+  // plusieurs à la fois depuis le 12/10/2026
+  const glisser = useGlisserDeposer((_f, tous) => choisir(tous), !upload.isPending);
 
   // Encadré : vert une fois validé par Strat Eco, orange en attente de
   // vérification, rouge si refusé (feedback Amir 10/09).
@@ -100,7 +114,7 @@ function DepotPiece({
   const hint = upload.isPending
     ? "Téléversement…"
     : !piece
-      ? `${attendue.aide} ${LIBELLE_FORMATS_PIECE}.`
+      ? `${attendue.aide} ${LIBELLE_FORMATS_PIECE} ; plusieurs photos ou fichiers possibles, réunis en un seul document.`
       : piece.statut === "valide"
         ? `${piece.name} · validé par Strat Eco le ${fmtDate(piece.verifiee_le)}`
         : piece.statut === "refuse"
@@ -112,11 +126,12 @@ function DepotPiece({
       <input
         ref={inputRef}
         type="file"
+        multiple
         accept={ACCEPT_PIECE}
         style={{ display: "none" }}
         onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) choisir(file);
+          const fichiers = Array.from(e.target.files ?? []);
+          if (fichiers.length) choisir(fichiers);
           if (inputRef.current) inputRef.current.value = "";
         }}
       />
@@ -145,6 +160,11 @@ function DepotPiece({
             )}
           </div>
           <div className="dz-hint">{hint}</div>
+          {piece && piece.statut !== "a_verifier" && piece.commentaire_verification && (
+            <div className="dz-hint" style={{ whiteSpace: "pre-wrap", marginTop: 2 }}>
+              Commentaire de Strat Eco : {piece.commentaire_verification}
+            </div>
+          )}
         </div>
         <span className="spacer"></span>
         <span className="dz-action">
@@ -207,6 +227,18 @@ function DepotPiece({
         </Modal>
       )}
 
+      {pages && (
+        <PagesDocumentDialog
+          titre={attendue.nom}
+          fichiers={pages}
+          onValider={(document) => {
+            setPages(null);
+            setDepot(document);
+          }}
+          onClose={() => setPages(null)}
+        />
+      )}
+
       {depot && (
         <RenommageDialog
           files={[depot]}
@@ -230,8 +262,8 @@ function DepotPiece({
               <b>{attendue.nom}</b> : bien reçu par l'équipe Strat Eco.
             </p>
             <p className="se-small" style={{ margin: 0, color: "var(--fg2)", overflowWrap: "anywhere" }}>
-              Fichier : {transmis}. Il va être vérifié : l'encadré passera au vert une fois validé ; en cas de
-              problème, vous recevrez un e-mail qui précise quoi corriger.
+              Fichier : {transmis}. Il va être vérifié par l'équipe Strat Eco : vous recevrez un e-mail une fois
+              la pièce validée (l'encadré passera au vert), ou qui précise quoi corriger en cas de problème.
             </p>
             <div className="eq-confirm-actions">
               <button className="se-btn se-btn-primary" onClick={() => setTransmis(null)}>
@@ -391,9 +423,10 @@ export function PiecesJustificatives({
             ))}
             <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
               Cliquez sur un encadré pour choisir le fichier, ou faites-le glisser dessus depuis votre ordinateur.
-              Vos pièces sont vérifiées par l'équipe Strat Eco (lisibilité, pages complètes, bonne année) :
-              l'encadré passe au vert une fois validé ; en cas de problème, vous recevez un e-mail qui précise
-              quoi corriger et l'encadré passe au rouge. Elles sont stockées de manière sécurisée et ne sont
+              Une pièce de plusieurs pages peut être déposée en plusieurs photos ou fichiers : ils sont réunis en
+              un seul document. Vos pièces sont vérifiées par l'équipe Strat Eco (lisibilité, pages complètes,
+              bonne année) et vous recevez un e-mail à chaque vérification : l'encadré passe au vert une fois
+              validé, au rouge en cas de problème, avec ce qu'il faut corriger. Elles sont stockées de manière sécurisée et ne sont
               visibles que par vous et l'équipe Strat Eco. CGU acceptées le {fmtDate(cguAcceptees.accepte_le)}{" "}
               (version {cguAcceptees.cgu_version}).
             </p>

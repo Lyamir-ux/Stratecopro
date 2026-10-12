@@ -114,6 +114,9 @@ function LignePiece({ piece, onVoir, onRemplacer }: { piece: PieceSignature; onV
         {piece.statut === "refuse" && piece.motif && (
           <div className="dz-hint" style={{ fontWeight: 600 }}>Motif : {piece.motif}</div>
         )}
+        {piece.commentaire && (
+          <div className="dz-hint" style={{ whiteSpace: "pre-wrap" }}>Commentaire de Strat Eco : {piece.commentaire}</div>
+        )}
       </div>
       <span className="spacer"></span>
       <div className="dz-actions">

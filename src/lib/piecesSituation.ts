@@ -71,15 +71,15 @@ export const PIECES_SITUATION: Record<string, { nom: string; aide: string }> = {
   },
   statuts_sci: {
     nom: "Statuts de la SCI",
-    aide: "Statuts à jour, signés, avec le PV d'AG autorisant le gérant à emprunter au nom de la SCI le cas échéant (un seul fichier).",
+    aide: "Statuts à jour, signés, avec le PV d'AG autorisant le gérant à emprunter au nom de la SCI le cas échéant.",
   },
   avis_associes_sci: {
     nom: "Avis d'imposition de tous les associés",
-    aide: "Avis définitifs, toutes les pages, réunis en un seul fichier.",
+    aide: "Avis définitifs de tous les associés, toutes les pages.",
   },
   jugement_protection: {
     nom: "Jugement de tutelle ou de curatelle",
-    aide: "Jugement désignant le représentant légal. Pour une tutelle, joignez dans le même fichier l'accord du juge pour l'emprunt.",
+    aide: "Jugement désignant le représentant légal. Pour une tutelle, joignez aussi l'accord du juge pour l'emprunt.",
   },
 };
 
@@ -191,6 +191,8 @@ export interface BulletinPieces {
   rib_statut: StatutPieceSignature | null;
   rib_motif_refus: string | null;
   rib_verifiee_le: string | null;
+  /** commentaire de l'AMO à la dernière qualification (0161) */
+  rib_commentaire?: string | null;
   signataires: {
     id: string;
     role: string;
@@ -206,6 +208,7 @@ export interface BulletinPieces {
     piece_motif_refus: string | null;
     piece_verifiee_le: string | null;
     piece_remplacee_le: string | null;
+    piece_commentaire?: string | null;
   }[];
 }
 
@@ -226,6 +229,8 @@ export interface PieceSignature {
   /** null : pas encore déposée (un cosignataire la dépose depuis son lien) */
   statut: StatutPieceSignature | null;
   motif: string | null;
+  /** commentaire de l'AMO joint à la validation ou au refus (0161) */
+  commentaire: string | null;
   detail: string;
   /** le signataire a signé : sa pièce (ou le RIB) se remplace depuis le portail */
   remplacable: boolean;
@@ -303,6 +308,7 @@ export function piecesFourniesSignature(bulletins: BulletinPieces[] | null | und
         nom: `Pièce d'identité de ${personne}${principal ? " (vous)" : ""}`,
         statut,
         motif: statut === "refuse" ? ref.piece_motif_refus : null,
+        commentaire: statut === "valide" || statut === "refuse" ? ref.piece_commentaire ?? null : null,
         detail: purgee
           ? "Supprimée après l'instruction de votre dossier (conservation limitée)"
           : deposees.length === 0
@@ -334,6 +340,7 @@ export function piecesFourniesSignature(bulletins: BulletinPieces[] | null | und
       nom: "RIB du compte de prélèvement",
       statut,
       motif: statut === "refuse" ? ref.rib_motif_refus : null,
+      commentaire: statut === "valide" || statut === "refuse" ? ref.rib_commentaire ?? null : null,
       detail: [
         fins.length ? `IBAN se terminant par ${fins.join(", ")}` : "Déposé avec votre bulletin",
         mandats.length ? `mandat SEPA signé le ${fmtDate(mandats[mandats.length - 1])}` : "",

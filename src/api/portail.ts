@@ -884,8 +884,10 @@ export function usePiecesAVerifierParDossier() {
 /**
  * Qualifie une pièce (menu déroulant de l'administratif). « Conforme » la
  * valide ; tout autre choix la refuse avec un motif (celui de la qualification,
- * ou le texte libre saisi) et déclenche l'e-mail au copropriétaire.
- * Remettre `qualification` à null la repasse « à vérifier ».
+ * ou le texte libre saisi). Validation comme refus déclenchent l'e-mail au
+ * copropriétaire, avec le commentaire facultatif de l'AMO (idée d'Amir du
+ * 12/10/2026, 0161). Remettre `qualification` à null la repasse « à vérifier »,
+ * sans e-mail.
  */
 export function useQualifierPiece() {
   const qc = useQueryClient();
@@ -894,21 +896,28 @@ export function useQualifierPiece() {
       piece,
       qualification,
       motifLibre,
+      commentaire,
     }: {
       piece: Pick<PieceJustificative, "id" | "copro_id" | "coproprietaire_id">;
       qualification: string | null;
       motifLibre?: string | null;
+      commentaire?: string | null;
     }) => {
       const q = QUALIFICATIONS_PIECE.find((x) => x.id === qualification) ?? null;
       const statut: StatutPiece = q ? q.statut : "a_verifier";
       const motif = statut === "refuse" ? (motifLibre?.trim() || q?.motif || null) : null;
       const { error } = await supabase
         .from("pieces_justificatives")
-        .update({ statut, qualification: q?.id ?? null, motif_refus: motif })
+        .update({
+          statut,
+          qualification: q?.id ?? null,
+          motif_refus: motif,
+          commentaire_verification: statut === "a_verifier" ? null : commentaire?.trim() || null,
+        })
         .eq("id", piece.id);
       if (error) throw error;
-      if (statut === "refuse") {
-        // e-mail au copropriétaire - best effort, le refus est enregistré quoi qu'il arrive
+      if (statut !== "a_verifier") {
+        // e-mail au copropriétaire - best effort, la qualification est enregistrée quoi qu'il arrive
         await supabase.functions.invoke("notifier-piece-refusee", { body: { piece_id: piece.id } }).catch(() => undefined);
       }
       return statut;

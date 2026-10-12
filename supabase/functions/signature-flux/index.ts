@@ -21,6 +21,11 @@
 // la pièce d'origine, et chaque remplacement est journalisé avec l'empreinte de
 // la pièce remplacée.
 //
+// v7 (12/10/2026, idée d'Amir, 0161) : la validation d'une pièce de la signature
+// est aussi annoncée par e-mail au signataire principal ; le commentaire facultatif
+// de l'AMO (piece_commentaire, rib_commentaire) accompagne l'e-mail de validation
+// comme celui de refus (et le lien de redépôt d'un cosignataire).
+//
 // Trois familles d'actions, routées par le champ `action` du POST :
 //  - token   : cosignataire sans compte, authentifié par son lien personnel
 //              (token 256 bits ; seul le SHA-256 est stocké) ;
@@ -236,6 +241,19 @@ function gabaritEmail(corps: string): string {
     </div>`;
 }
 
+const echapHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** Commentaire de l'AMO à la validation d'une pièce (0161), repris dans l'e-mail. */
+function blocCommentaire(commentaire: string | null): string {
+  const c = (commentaire ?? "").trim();
+  if (!c) return "";
+  return `<p style="margin:0 0 4px"><strong>Commentaire de l'équipe Strat Eco :</strong></p>
+    <p style="padding:10px 14px;background:#f4f6f1;border-left:3px solid #355717;border-radius:4px;margin-top:0">
+      ${echapHtml(c).replaceAll(String.fromCharCode(13), "").replaceAll(String.fromCharCode(10), "<br/>")}
+    </p>`;
+}
+
 function boutonEmail(url: string, libelle: string): string {
   return `<p style="margin:22px 0">
     <a href="${url}" style="background:#355717;color:#fff;padding:12px 22px;border-radius:6px;text-decoration:none;font-weight:bold">${libelle}</a>
@@ -442,6 +460,7 @@ async function envoyerLienSignataire(
  *  personnel, qui ne sert qu'à déposer une nouvelle pièce (0155). */
 async function envoyerLienRedepot(
   admin: Admin, req: Request | null, b: Bulletin, s: Signataire, coproName: string, motif: string | null,
+  commentaire: string | null = null,
 ): Promise<"envoye" | "simule" | "erreur"> {
   const token = genToken();
   const expire = new Date(Date.now() + TOKEN_VALIDITE_JOURS * 24 * 3600 * 1000);
@@ -459,7 +478,8 @@ async function envoyerLienRedepot(
       <p>Bonjour ${s.prenom},</p>
       <p>Votre signature du bulletin d'adhésion de la copropriété <strong>${coproName}</strong>
       (${b.lot_reference}) reste valable, mais la pièce d'identité que vous avez déposée n'a pas pu être
-      validée par l'équipe Strat Eco${motif ? ` : ${motif}` : ""}.</p>
+      validée par l'équipe Strat Eco${motif ? ` : ${echapHtml(motif)}` : ""}.</p>
+      ${blocCommentaire(commentaire)}
       <p>Merci d'en déposer une nouvelle, en cours de validité et bien lisible (recto et verso) :</p>
       ${boutonEmail(`${appUrl}/signature/${token}`, "Déposer ma pièce d'identité")}
       <p style="color:#555">Ce lien est personnel : ne le transmettez à personne.
@@ -482,10 +502,30 @@ async function emailRefusAuPrincipal(
     gabaritEmail(`
       <p>Bonjour ${p.prenom},</p>
       <p>${objet} (bulletin d'adhésion ${b.lot_reference}, copropriété <strong>${coproName}</strong>)
-      n'a pas pu être validé(e) par l'équipe Strat Eco${motif ? ` : ${motif}` : ""}.</p>
+      n'a pas pu être validé(e) par l'équipe Strat Eco${motif ? ` : ${echapHtml(motif)}` : ""}.</p>
       ${complement}
       <p>Vous pouvez le ou la remplacer depuis votre espace, rubrique « Mon financement », dans l'encadré
       « Pièces de votre dossier de prêt ». Votre signature reste valable.</p>
+      ${boutonEmail(`${appUrl}/portail/pret`, "Ouvrir mon espace")}`),
+  );
+}
+
+/** E-mail au signataire principal : une pièce de son dossier a été validée, avec le
+ *  commentaire éventuel de l'AMO (idée d'Amir du 12/10/2026, 0161). */
+async function emailValidationAuPrincipal(
+  p: Signataire, b: Bulletin, coproName: string, objet: string, commentaire: string | null,
+): Promise<"envoye" | "simule" | "erreur"> {
+  const appUrl = Deno.env.get("APP_URL") ?? "https://stratecopro.vercel.app";
+  return await envoyerEmail(
+    p.email,
+    `Pièce validée dans votre dossier de prêt - ${coproName}`,
+    gabaritEmail(`
+      <p>Bonjour ${p.prenom},</p>
+      <p>${objet} (bulletin d'adhésion ${b.lot_reference}, copropriété <strong>${coproName}</strong>)
+      a été vérifié(e) et validé(e) par l'équipe Strat Eco.</p>
+      ${blocCommentaire(commentaire)}
+      <p>Vous la retrouvez dans votre espace, rubrique « Mon financement », encadré « Pièces de votre
+      dossier de prêt ».</p>
       ${boutonEmail(`${appUrl}/portail/pret`, "Ouvrir mon espace")}`),
   );
 }
@@ -1231,11 +1271,11 @@ const QUALIFICATIONS_SIGNATURE: Record<string, { statut: "valide" | "refuse"; pi
 /** Pièce déposée ou remplacée : de nouveau à valider par l'AMO (0155). */
 const PIECE_A_VERIFIER = {
   piece_statut: "a_verifier", piece_qualification: null, piece_motif_refus: null,
-  piece_verifiee_le: null, piece_verifiee_par: null, piece_refus_email_statut: null,
+  piece_verifiee_le: null, piece_verifiee_par: null, piece_refus_email_statut: null, piece_commentaire: null,
 };
 const RIB_A_VERIFIER = {
   rib_statut: "a_verifier", rib_qualification: null, rib_motif_refus: null,
-  rib_verifiee_le: null, rib_verifiee_par: null, rib_refus_email_statut: null,
+  rib_verifiee_le: null, rib_verifiee_par: null, rib_refus_email_statut: null, rib_commentaire: null,
 };
 
 /**
@@ -1915,7 +1955,9 @@ Deno.serve(async (req: Request) => {
     }
     case "amo_verifier": {
       // validation de la pièce d'identité d'un signataire ou du RIB (0155) : niveau 1,
-      // seul à pouvoir les lire ; un refus prévient le signataire par e-mail
+      // seul à pouvoir les lire ; un refus prévient le signataire par e-mail. Depuis
+      // le 12/10/2026 (idée d'Amir, 0161), une validation aussi, et le commentaire
+      // facultatif de l'AMO accompagne les deux e-mails.
       if (!estAmo) return json(403, { error: "Réservé à l'équipe AMO" });
       if (profil!.niveau_pieces !== 1) return json(403, { error: "niveau_2_sans_lecture" });
       const quoi: "piece" | "rib" = corps.quoi === "rib" ? "rib" : "piece";
@@ -1925,6 +1967,7 @@ Deno.serve(async (req: Request) => {
       const statut = q ? q.statut : "a_verifier";
       const motif = statut === "refuse" ? (String(corps.motif ?? "").trim() || q![quoi] || null) : null;
       if (statut === "refuse" && !motif) return json(400, { error: "motif_requis" });
+      const commentaire = statut === "a_verifier" ? null : (String(corps.commentaire ?? "").trim().slice(0, 2000) || null);
       const le = statut === "a_verifier" ? null : new Date().toISOString();
       const par = statut === "a_verifier" ? null : uid;
       let email: string | null = null;
@@ -1939,14 +1982,17 @@ Deno.serve(async (req: Request) => {
         for (const c of cibles) {
           await admin.from("bulletins").update({
             rib_statut: statut, rib_qualification: q ? qualification : null, rib_motif_refus: motif,
-            rib_verifiee_le: le, rib_verifiee_par: par, rib_refus_email_statut: null,
+            rib_verifiee_le: le, rib_verifiee_par: par, rib_refus_email_statut: null, rib_commentaire: commentaire,
           }).eq("id", c.id);
-          await journal(admin, req, c.id, "rib.verifie", { payload: { statut, qualification, par: uid } });
+          await journal(admin, req, c.id, "rib.verifie", { payload: { statut, qualification, commentaire, par: uid } });
         }
-        if (statut === "refuse") {
+        if (statut !== "a_verifier") {
           const p = await signatairePrincipal(b0.id);
           if (p) {
-            email = await emailRefusAuPrincipal(p, b0 as Bulletin, await coproNom(admin, b0.copro_id), "Votre RIB", motif);
+            const nomCopro = await coproNom(admin, b0.copro_id);
+            email = statut === "refuse"
+              ? await emailRefusAuPrincipal(p, b0 as Bulletin, nomCopro, "Votre RIB", motif, blocCommentaire(commentaire))
+              : await emailValidationAuPrincipal(p, b0 as Bulletin, nomCopro, "Votre RIB", commentaire);
             await admin.from("bulletins").update({ rib_refus_email_statut: email }).in("id", cibles.map((c) => c.id));
           }
         }
@@ -1968,25 +2014,36 @@ Deno.serve(async (req: Request) => {
       for (const c of cibles) {
         await admin.from("signataires").update({
           piece_statut: statut, piece_qualification: q ? qualification : null, piece_motif_refus: motif,
-          piece_verifiee_le: le, piece_verifiee_par: par, piece_refus_email_statut: null,
+          piece_verifiee_le: le, piece_verifiee_par: par, piece_refus_email_statut: null, piece_commentaire: commentaire,
         }).eq("id", c.id);
         await journal(admin, req, c.bulletin_id, "signataire.piece_verifiee", {
-          signataireId: c.id, payload: { statut, qualification, par: uid },
+          signataireId: c.id, payload: { statut, qualification, commentaire, par: uid },
         });
+      }
+      if (statut === "valide") {
+        // la validation est annoncée au signataire principal, titulaire du dossier
+        const p = s0.role === "principal" ? (s0 as Signataire) : await signatairePrincipal(b0.id);
+        if (p) {
+          const objet = s0.role === "principal" ? "Votre pièce d'identité" : `La pièce d'identité de ${s0.prenom} ${s0.nom}`;
+          email = await emailValidationAuPrincipal(p, b0 as Bulletin, await coproNom(admin, b0.copro_id), objet, commentaire);
+          await admin.from("signataires").update({ piece_refus_email_statut: email }).in("id", cibles.map((c) => c.id));
+        }
       }
       if (statut === "refuse") {
         const nomCopro = await coproNom(admin, b0.copro_id);
         const s1 = { ...(s0 as Signataire), piece_statut: "refuse", piece_motif_refus: motif };
         const p = await signatairePrincipal(b0.id);
         if (s0.role === "principal") {
-          email = await emailRefusAuPrincipal(s1, b0 as Bulletin, nomCopro, "Votre pièce d'identité", motif);
+          email = await emailRefusAuPrincipal(
+            s1, b0 as Bulletin, nomCopro, "Votre pièce d'identité", motif, blocCommentaire(commentaire),
+          );
         } else {
           // le cosignataire redépose depuis un nouveau lien ; le principal peut aussi la remplacer
-          email = await envoyerLienRedepot(admin, req, b0 as Bulletin, s1, nomCopro, motif);
+          email = await envoyerLienRedepot(admin, req, b0 as Bulletin, s1, nomCopro, motif, commentaire);
           if (p) {
             await emailRefusAuPrincipal(
               p, b0 as Bulletin, nomCopro, `La pièce d'identité de ${s0.prenom} ${s0.nom}`, motif,
-              `<p>${s0.prenom} ${s0.nom} a reçu par e-mail un lien personnel pour en déposer une nouvelle.</p>`,
+              `${blocCommentaire(commentaire)}<p>${s0.prenom} ${s0.nom} a reçu par e-mail un lien personnel pour en déposer une nouvelle.</p>`,
             );
           }
         }

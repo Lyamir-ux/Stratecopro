@@ -239,6 +239,7 @@ export type Database = {
           mandat_signe_path: string | null
           notification_anah_le: string | null
           purge_effectuee_le: string | null
+          rib_commentaire: string | null
           rib_hash: string | null
           rib_path: string | null
           sceau_signature: string | null
@@ -291,6 +292,7 @@ export type Database = {
           mandat_signe_path?: string | null
           notification_anah_le?: string | null
           purge_effectuee_le?: string | null
+          rib_commentaire?: string | null
           rib_hash?: string | null
           rib_path?: string | null
           sceau_signature?: string | null
@@ -343,6 +345,7 @@ export type Database = {
           mandat_signe_path?: string | null
           notification_anah_le?: string | null
           purge_effectuee_le?: string | null
+          rib_commentaire?: string | null
           rib_hash?: string | null
           rib_path?: string | null
           sceau_signature?: string | null
@@ -2897,6 +2900,7 @@ export type Database = {
       }
       pieces_justificatives: {
         Row: {
+          commentaire_verification: string | null
           copro_id: string
           coproprietaire_id: string
           deposee_par: string | null
@@ -2919,6 +2923,7 @@ export type Database = {
           verifiee_par_nom: string | null
         }
         Insert: {
+          commentaire_verification?: string | null
           copro_id: string
           coproprietaire_id: string
           deposee_par?: string | null
@@ -2941,6 +2946,7 @@ export type Database = {
           verifiee_par_nom?: string | null
         }
         Update: {
+          commentaire_verification?: string | null
           copro_id?: string
           coproprietaire_id?: string
           deposee_par?: string | null
@@ -4502,6 +4508,7 @@ export type Database = {
           nom: string
           ordre: number
           pays: string | null
+          piece_commentaire: string | null
           piece_deposee_ip: unknown
           piece_deposee_le: string | null
           piece_identite_hash: string | null
@@ -4547,6 +4554,7 @@ export type Database = {
           nom: string
           ordre: number
           pays?: string | null
+          piece_commentaire?: string | null
           piece_deposee_ip?: unknown
           piece_deposee_le?: string | null
           piece_identite_hash?: string | null
@@ -4592,6 +4600,7 @@ export type Database = {
           nom?: string
           ordre?: number
           pays?: string | null
+          piece_commentaire?: string | null
           piece_deposee_ip?: unknown
           piece_deposee_le?: string | null
           piece_identite_hash?: string | null

@@ -485,7 +485,9 @@ export function usePiecesSignatureAVerifier(actif: boolean) {
   });
 }
 
-/** Validation par l'AMO (niveau 1) de la pièce d'identité d'un signataire ou du RIB. */
+/** Validation par l'AMO (niveau 1) de la pièce d'identité d'un signataire ou du RIB ;
+ *  validation comme refus préviennent le signataire principal par e-mail, avec le
+ *  commentaire facultatif de l'AMO (12/10/2026, 0161). */
 export function useVerifierPieceSignature(coproId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
@@ -495,6 +497,7 @@ export function useVerifierPieceSignature(coproId: string | undefined) {
       signataireId?: string;
       qualification: string | null;
       motif?: string | null;
+      commentaire?: string | null;
     }) =>
       appelSignature({
         action: "amo_verifier",
@@ -503,6 +506,7 @@ export function useVerifierPieceSignature(coproId: string | undefined) {
         signataire_id: input.signataireId,
         qualification: input.qualification,
         motif: input.motif ?? null,
+        commentaire: input.commentaire ?? null,
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["signature", "bulletins-copro", coproId] });

@@ -2,7 +2,9 @@
 // bulletin (0155, retour de A CHELGHAM du 09/10/2026). Réservée au niveau 1, seul
 // à pouvoir lire ces pièces (CGU art. 7.5.1) ; un refus prévient le signataire par
 // e-mail (le cosignataire reçoit un lien pour redéposer sa pièce). Même principe
-// que VerificationPiece pour les pièces justificatives du portail.
+// que VerificationPiece pour les pièces justificatives du portail : depuis l'idée
+// d'Amir du 12/10/2026, le choix ouvre sur le côté un champ de commentaire
+// facultatif et la validation est aussi annoncée par e-mail (signature-flux v7, 0161).
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
@@ -39,6 +41,7 @@ export function VerificationSignature({
   statut,
   qualification,
   motif,
+  commentaire = null,
   verifieeLe,
   emailStatut,
 }: {
@@ -49,78 +52,152 @@ export function VerificationSignature({
   statut: string | null;
   qualification: string | null;
   motif: string | null;
+  /** commentaire de l'AMO envoyé avec la dernière qualification (0161) */
+  commentaire?: string | null;
   verifieeLe: string | null;
   emailStatut: string | null;
 }) {
   const { profile } = useAuth();
   const verifier = useVerifierPieceSignature(coproId);
-  const [choix, setChoix] = useState(qualification ?? "");
-  const [motifLibre, setMotifLibre] = useState(motif ?? "");
+  const enregistree = qualification ?? "";
+  const [choix, setChoix] = useState(enregistree);
+  const [ouvert, setOuvert] = useState(false);
+  // commentaire facultatif ; motif obligatoire quand la qualification n'en a pas par défaut
+  const [texte, setTexte] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
   const niveau1 = profile?.niveau_pieces === 1;
+  const verif = !!statut && statut !== "a_verifier";
+  const q = qualificationsPour(quoi).find((x) => x.id === choix) ?? null;
+  const motifLibre = motifLibreRequis(quoi, choix);
 
-  const appliquer = (q: string) => {
+  const envoyer = (id: string) => {
     setErreur(null);
+    const libre = motifLibreRequis(quoi, id);
     verifier.mutate(
-      { quoi, bulletinId, signataireId, qualification: q || null, motif: motifLibreRequis(quoi, q) ? motifLibre : null },
-      { onError: (e) => setErreur(messageErreur(e, "Enregistrement impossible")) },
+      {
+        quoi,
+        bulletinId,
+        signataireId,
+        qualification: id || null,
+        motif: libre ? texte : null,
+        commentaire: id && !libre ? texte : null,
+      },
+      {
+        onSuccess: () => setOuvert(false),
+        onError: (e) => setErreur(messageErreur(e, "Enregistrement impossible")),
+      },
     );
+  };
+
+  const ouvrir = (id: string) => {
+    setErreur(null);
+    setChoix(id);
+    setTexte(
+      motifLibreRequis(quoi, id)
+        ? (id === enregistree ? motif ?? "" : "")
+        : id === enregistree
+          ? commentaire ?? ""
+          : "",
+    );
+    setOuvert(true);
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        <StatutSignatureBadge statut={statut} qualification={qualification} />
-        {statut && statut !== "a_verifier" && verifieeLe && (
-          <span style={{ color: "var(--fg-muted)" }}>le {fmtDate(verifieeLe)}</span>
-        )}
-        {statut === "refuse" && emailStatut && (
-          <span style={{ color: "var(--fg-muted)" }}>
-            <Icon name="mail" size={11} /> {EMAIL[emailStatut] ?? emailStatut}
-          </span>
-        )}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexWrap: "wrap" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", minHeight: 28 }}>
+          <StatutSignatureBadge statut={statut} qualification={qualification} />
+          {verif && verifieeLe && <span style={{ color: "var(--fg-muted)" }}>le {fmtDate(verifieeLe)}</span>}
+          {verif && emailStatut && (
+            <span style={{ color: "var(--fg-muted)" }}>
+              <Icon name="mail" size={11} /> {EMAIL[emailStatut] ?? emailStatut}
+            </span>
+          )}
+        </span>
         {niveau1 ? (
           <select
             className="chip-filter"
             value={choix}
             disabled={verifier.isPending}
             onChange={(e) => {
-              setChoix(e.target.value);
-              if (!motifLibreRequis(quoi, e.target.value)) appliquer(e.target.value);
+              const v = e.target.value;
+              if (!v) {
+                // « Remettre à vérifier » : immédiat, sans e-mail
+                setChoix("");
+                setOuvert(false);
+                if (verif) envoyer("");
+                return;
+              }
+              ouvrir(v);
             }}
             style={{ cursor: "pointer", maxWidth: 180 }}
-            title="« Conforme » valide la pièce ; tout autre choix la refuse et prévient le signataire par e-mail"
+            title="Qualifier la pièce : un champ de commentaire s'ouvre à côté, puis le signataire est prévenu par e-mail (validation comme refus)"
           >
-            <option value="">{statut && statut !== "a_verifier" ? "Remettre à vérifier" : "Qualifier…"}</option>
-            {qualificationsPour(quoi).map((q) => (
-              <option key={q.id} value={q.id}>{q.label}</option>
+            <option value="">{verif ? "Remettre à vérifier" : "Qualifier…"}</option>
+            {qualificationsPour(quoi).map((x) => (
+              <option key={x.id} value={x.id}>{x.label}</option>
             ))}
           </select>
         ) : (
-          statut === "a_verifier" && <span style={{ color: "var(--fg-muted)" }}>validation réservée au niveau 1</span>
+          statut === "a_verifier" && <span style={{ color: "var(--fg-muted)", alignSelf: "center" }}>validation réservée au niveau 1</span>
         )}
-        {verifier.isPending && <span style={{ color: "var(--fg-muted)" }}>Enregistrement…</span>}
-      </div>
-      {niveau1 && motifLibreRequis(quoi, choix) && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <input
-            className="se-input"
-            style={{ flex: 1, minWidth: 180, fontSize: 12, padding: "4px 8px" }}
-            placeholder="Motif communiqué au signataire"
-            value={motifLibre}
-            onChange={(e) => setMotifLibre(e.target.value)}
-          />
+        {niveau1 && ouvert && q && (
+          <div style={{ flex: 1, minWidth: 200, display: "flex", flexDirection: "column", gap: 6 }}>
+            <textarea
+              className="cs-textarea"
+              style={{ fontSize: 12, padding: "5px 8px" }}
+              rows={2}
+              autoFocus
+              maxLength={2000}
+              value={texte}
+              onChange={(e) => setTexte(e.target.value)}
+              placeholder={
+                motifLibre
+                  ? "Motif du refus communiqué au signataire (obligatoire)"
+                  : "Commentaire pour le signataire (facultatif), repris dans l'e-mail"
+              }
+              aria-label={motifLibre ? "Motif du refus" : "Commentaire pour le signataire"}
+            />
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <button
+                className={"se-btn btn-sm " + (q.statut === "valide" ? "se-btn-primary" : "se-btn-secondary")}
+                disabled={verifier.isPending || (motifLibre && !texte.trim())}
+                onClick={() => envoyer(choix)}
+              >
+                <Icon name="send" size={12} />
+                {q.statut === "valide" ? "Valider et prévenir" : "Refuser et prévenir"}
+              </button>
+              <button
+                className="se-btn se-btn-ghost btn-sm"
+                disabled={verifier.isPending}
+                onClick={() => {
+                  setErreur(null);
+                  setChoix(enregistree);
+                  setOuvert(false);
+                }}
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
+        {niveau1 && !ouvert && verif && enregistree && (
           <button
-            className="se-btn se-btn-secondary btn-sm"
-            disabled={!motifLibre.trim() || verifier.isPending}
-            onClick={() => appliquer(choix)}
+            className="se-btn se-btn-ghost btn-sm"
+            disabled={verifier.isPending}
+            title="Modifier le commentaire et renvoyer l'e-mail, sans changer la qualification"
+            onClick={() => ouvrir(enregistree)}
           >
-            <Icon name="send" size={12} />
-            Confirmer le refus
+            <Icon name="mail" size={12} />
+            Commenter et renvoyer
           </button>
-        </div>
-      )}
+        )}
+        {verifier.isPending && <span style={{ color: "var(--fg-muted)", alignSelf: "center" }}>Enregistrement…</span>}
+      </div>
       {statut === "refuse" && motif && <div style={{ color: "var(--color-error-700)" }}>Motif : {motif}</div>}
+      {verif && commentaire && !ouvert && (
+        <div style={{ color: "var(--fg2)", whiteSpace: "pre-wrap" }}>Commentaire : {commentaire}</div>
+      )}
       {erreur && <div style={{ color: "var(--color-error-700)" }}>{erreur}</div>}
     </div>
   );

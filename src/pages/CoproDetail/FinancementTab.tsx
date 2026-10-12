@@ -1577,6 +1577,7 @@ function SignaturesElectroniquesPanel({ coproId }: { coproId: string }) {
                     statut={b.rib_statut}
                     qualification={b.rib_qualification}
                     motif={b.rib_motif_refus}
+                    commentaire={b.rib_commentaire}
                     verifieeLe={b.rib_verifiee_le}
                     emailStatut={b.rib_refus_email_statut}
                   />
@@ -1638,6 +1639,7 @@ function SignaturesElectroniquesPanel({ coproId }: { coproId: string }) {
                           statut={s.piece_statut}
                           qualification={s.piece_qualification}
                           motif={s.piece_motif_refus}
+                          commentaire={s.piece_commentaire}
                           verifieeLe={s.piece_verifiee_le}
                           emailStatut={s.piece_refus_email_statut}
                         />

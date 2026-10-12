@@ -152,13 +152,19 @@ export function useVerifierProfil(enqueteId: string, coproId: string) {
         .not("profil_mpr", "is", null);
       if (error) throw error;
       if (input.verifie) {
-        const { error: errPiece } = await supabase
+        const { data: validees, error: errPiece } = await supabase
           .from("pieces_justificatives")
           .update({ statut: "valide", qualification: "conforme", motif_refus: null })
           .eq("coproprietaire_id", input.coproprietaireId)
           .eq("type", "avis_imposition")
-          .eq("statut", "a_verifier");
+          .eq("statut", "a_verifier")
+          .select("id");
         if (errPiece) throw errPiece;
+        // l'avis ainsi validé est annoncé au copropriétaire, comme toute pièce qualifiée
+        // (idée d'Amir du 12/10/2026) - best effort
+        for (const p of validees ?? []) {
+          await supabase.functions.invoke("notifier-piece-refusee", { body: { piece_id: p.id } }).catch(() => undefined);
+        }
       }
     },
     onSuccess: (_r, v) => {
