@@ -208,9 +208,10 @@ function champsOffre(
   };
 }
 
-/** Pièce jointe d'une offre : bucket privé, dossier du compte connecté. */
-async function deposerFichierOffre(uid: string, consultationId: string, file: File) {
-  const path = `${uid}/${consultationId}-${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
+/** Pièce jointe d'une offre : bucket privé, dossier de l'entreprise (0162 : toutes
+ *  ses personnes y accèdent ; avant, dossier du compte connecté). */
+async function deposerFichierOffre(prestataireId: string, consultationId: string, file: File) {
+  const path = `${prestataireId}/${consultationId}-${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
   const { error } = await supabase.storage.from("offres-presta").upload(path, file);
   if (error) throw error;
   return { fichier_path: path, fichier_name: file.name };
@@ -240,7 +241,7 @@ export function usePostuler() {
     }) => {
       if (!session) throw new Error("Session expirée");
       const fichier = file
-        ? await deposerFichierOffre(session.user.id, consultation.id, file)
+        ? await deposerFichierOffre(prestataire.id, consultation.id, file)
         : { fichier_path: null, fichier_name: null };
       const { error } = await supabase.from("candidatures").insert({
         consultation_id: consultation.id,
@@ -286,7 +287,7 @@ export function useModifierCandidature() {
     }) => {
       if (!session) throw new Error("Session expirée");
       const fichier = file
-        ? await deposerFichierOffre(session.user.id, cand.consultation_id, file)
+        ? await deposerFichierOffre(cand.prestataire_id ?? session.user.id, cand.consultation_id, file)
         : retirerFichier
           ? { fichier_path: null, fichier_name: null }
           : {};
@@ -471,10 +472,10 @@ export function useDocsPresta(prestaId: string) {
   });
 }
 
-/** Dossier de dépôt dans presta-docs : celui du compte rattaché à l'entreprise
- *  (le prestataire garde ainsi l'accès à ses fichiers même déposés en aperçu AMO). */
-const dossierPresta = (presta: Tables<"prestataires">, sessionUid: string) =>
-  presta.user_id ?? sessionUid;
+/** Dossier de dépôt dans presta-docs : celui de l'entreprise (0162), ouvert à
+ *  toutes ses personnes et aux dépôts de l'équipe en aperçu. Avant, dossier du
+ *  compte rattaché : ces fichiers restent lisibles par toute l'entreprise. */
+const dossierPresta = (presta: Tables<"prestataires">) => presta.id;
 
 /** Dépôt d'un document de certification (RGE, qualification, assurance…),
  *  avec sa date de fin de validité éventuelle (rappel automatique avant échéance). */
@@ -484,7 +485,7 @@ export function useUploadDocPresta(presta: Tables<"prestataires">) {
   return useMutation({
     mutationFn: async ({ file, expireLe }: { file: File; expireLe: string | null }) => {
       if (!session) throw new Error("Session expirée");
-      const path = `${dossierPresta(presta, session.user.id)}/${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
+      const path = `${dossierPresta(presta)}/${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
       const { error: upErr } = await supabase.storage.from("presta-docs").upload(path, file);
       if (upErr) throw upErr;
       const { error } = await supabase.from("prestataire_docs").insert({
@@ -542,7 +543,7 @@ export function useUploadLogoPresta(presta: Tables<"prestataires">) {
     mutationFn: async (file: File) => {
       if (!session) throw new Error("Session expirée");
       const ext = file.name.split(".").pop() ?? "png";
-      const path = `${dossierPresta(presta, session.user.id)}/logo-${Date.now()}.${ext}`;
+      const path = `${dossierPresta(presta)}/logo-${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from("presta-docs").upload(path, file);
       if (upErr) throw upErr;
       if (presta.logo_path) {
@@ -677,11 +678,10 @@ export function useProjetDocs(prestaId: string) {
 /** Dépose un document de projet ; renvoie la ligne créée (la vérification RGE s'y rattache). */
 export async function deposerProjetDoc(
   presta: Tables<"prestataires">,
-  sessionUid: string,
   coproId: string,
   file: File
 ): Promise<{ id: string }> {
-  const path = `${dossierPresta(presta, sessionUid)}/projet-${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
+  const path = `${dossierPresta(presta)}/projet-${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
   const { error: upErr } = await supabase.storage.from("presta-docs").upload(path, file);
   if (upErr) throw upErr;
   const { data, error } = await supabase
@@ -705,7 +705,7 @@ export function useUploadProjetDoc(presta: Tables<"prestataires">) {
   return useMutation({
     mutationFn: async ({ coproId, file }: { coproId: string; file: File }) => {
       if (!session) throw new Error("Session expirée");
-      return deposerProjetDoc(presta, session.user.id, coproId, file);
+      return deposerProjetDoc(presta, coproId, file);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["projet-docs"] });

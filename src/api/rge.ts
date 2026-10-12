@@ -228,10 +228,8 @@ export function useArchiverCertificatRgeProjet(presta: Tables<"prestataires"> | 
   return useMutation({
     mutationFn: async (a: ArchivageRge) => {
       if (!presta) throw new Error("Entreprise inconnue.");
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) throw new Error("Session expirée");
       const file = await fichierCertificat(prefixe, a);
-      await deposerProjetDoc(presta, session.session.user.id, coproId, file);
+      await deposerProjetDoc(presta, coproId, file);
       return file.name;
     },
     onSuccess: () => {

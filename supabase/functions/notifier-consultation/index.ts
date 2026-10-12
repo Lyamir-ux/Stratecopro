@@ -20,6 +20,12 @@
 // (une adresse retirée depuis ne reçoit rien) ; s'il ne reste rien, retour à
 // l'envoi d'office.
 //
+// v17 (12/10/2026, 0162) : chaque adresse de la fiche est une personne qui peut
+// avoir son propre accès à l'espace de l'entreprise. Toutes les adresses
+// reçoivent toujours la consultation (demande d'Amir : « la consultation est
+// envoyée à toute la liste des adresses mail référencées du prestataire ») ;
+// l'e-mail ne donne plus l'adresse principale comme identifiant commun.
+//
 // Envoi réel via Resend si le secret RESEND_API_KEY est configuré
 // (supabase secrets set RESEND_API_KEY=re_xxx [RESEND_FROM="Strat Eco <consultations@strateco.fr>"] [APP_URL=https://...]).
 // Sans clé : chaque notification est journalisée avec le statut 'simule'
@@ -260,7 +266,8 @@ Deno.serve(async (req: Request) => {
             </a>
           </p>
           <p>Pour y accéder, <a href="${lienConsultations}" style="color:#355717">connectez-vous à votre espace prestataire</a>
-          avec votre adresse e-mail (${p.email}).
+          avec votre adresse e-mail : chaque personne de l'entreprise a son propre accès. Pas encore d'accès ?
+          Écrivez-nous à <a href="mailto:admin@strateco.fr" style="color:#355717">admin@strateco.fr</a>.
           Mot de passe oublié ? <a href="${appUrl}/mot-de-passe-oublie" style="color:#355717">Réinitialisez-le ici</a>.</p>
           <p>À réception, votre candidature est transmise à l'équipe Strat Eco,
           qui reviendra vers vous à l'issue de la consultation.</p>

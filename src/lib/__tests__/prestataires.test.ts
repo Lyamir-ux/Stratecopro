@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { adressesEntreprise, adressesParDefaut, estChoixParDefaut, filtrerEntreprises, motifNonAlertable } from "../prestataires";
+import {
+  accesPerdus,
+  adressesEntreprise,
+  adressesFiche,
+  adressesParDefaut,
+  estChoixParDefaut,
+  filtrerEntreprises,
+  motifNonAlertable,
+  resumeAcces,
+} from "../prestataires";
 
 const e = (raison_sociale: string, metiers: string, ville: string | null = null, contact_nom: string | null = null) => ({
   raison_sociale,
@@ -100,5 +109,32 @@ describe("adressesEntreprise (choix de l'adresse d'envoi d'une consultation)", (
     expect(estChoixParDefaut(new Set(["contact@moe.fr"]), l)).toBe(false);
     expect(estChoixParDefaut(["contact@moe.fr", "compta@moe.fr", "anne@moe.fr"], l)).toBe(false);
     expect(estChoixParDefaut(["anne@moe.fr"], l)).toBe(false);
+  });
+});
+
+describe("accès par personne (0162)", () => {
+  it("adressesFiche : principale puis autres, en minuscules, sans vide ni doublon", () => {
+    expect(adressesFiche(" Contact@MOE.fr ", ["jean@moe.fr", "", "CONTACT@moe.fr", " paul@moe.fr"])).toEqual([
+      "contact@moe.fr",
+      "jean@moe.fr",
+      "paul@moe.fr",
+    ]);
+    expect(adressesFiche(null, null)).toEqual([]);
+  });
+
+  it("accesPerdus : les adresses avec accès qui ne sont plus sur la fiche", () => {
+    const avecAcces = ["contact@moe.fr", "jean@moe.fr"];
+    expect(accesPerdus(avecAcces, "contact@moe.fr", ["jean@moe.fr", "paul@moe.fr"])).toEqual([]);
+    expect(accesPerdus(avecAcces, "contact@moe.fr", ["paul@moe.fr"])).toEqual(["jean@moe.fr"]);
+    // une adresse qui passe d'autre à principale n'est pas retirée
+    expect(accesPerdus(avecAcces, "JEAN@moe.fr", ["contact@moe.fr"])).toEqual([]);
+    expect(accesPerdus(avecAcces, "", [])).toEqual(["contact@moe.fr", "jean@moe.fr"]);
+  });
+
+  it("resumeAcces : décompte par état", () => {
+    expect(
+      resumeAcces([{ etat: "actif" }, { etat: "invite" }, { etat: "a_creer" }, { etat: "a_creer" }, { etat: "email_pris" }])
+    ).toEqual({ total: 5, actifs: 1, invites: 1, aCreer: 2, pris: 1 });
+    expect(resumeAcces([])).toEqual({ total: 0, actifs: 0, invites: 0, aCreer: 0, pris: 0 });
   });
 });

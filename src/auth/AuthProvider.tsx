@@ -24,6 +24,8 @@ interface AuthState {
   choisirEspace: (userId: string, espace: RoleId) => void;
   loading: boolean;
   signOut: () => Promise<void>;
+  /** Relit le profil du compte connecté (après un changement de nom, par exemple). */
+  rechargerProfil: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState>({
@@ -33,6 +35,7 @@ const AuthContext = createContext<AuthState>({
   choisirEspace: () => {},
   loading: true,
   signOut: async () => {},
+  rechargerProfil: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -144,10 +147,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const rechargerProfil = useCallback(async () => {
+    if (!userId) return;
+    const { data } = await supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle();
+    if (data && userIdRef.current === userId) setProfile(data);
+  }, [userId]);
+
   const espace = espaceEffectif(profile?.role, session?.user.id, espaceMemorise);
 
   return (
-    <AuthContext.Provider value={{ session, profile, espace, choisirEspace, loading, signOut }}>
+    <AuthContext.Provider value={{ session, profile, espace, choisirEspace, loading, signOut, rechargerProfil }}>
       {children}
     </AuthContext.Provider>
   );

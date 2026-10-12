@@ -8,6 +8,8 @@
 // v2 (07/10/2026, 0147) : ouverte aussi au maître d'œuvre connecté (fiche
 // entreprise active, métier MOE), qui archive le certificat dans ses documents
 // de projet depuis « Mes projets ».
+// v3 (12/10/2026, 0162) : plusieurs personnes par entreprise, l'appartenance se
+// lit dans prestataire_comptes.
 //
 // Garde-fous : équipe AMO ou maître d'œuvre actifs ; le lien demandé doit figurer dans
 // la liste officielle des entreprises RGE de l'ADEME pour CE SIRET (la fonction
@@ -50,15 +52,16 @@ Deno.serve(async (req: Request) => {
     .maybeSingle();
   if (!profile || !profile.active) return json(403, { error: "Compte inactif" });
   if (profile.role !== "amo") {
-    // v2 (0147) : maître d'œuvre connecté à sa fiche entreprise active
-    const { data: moe } = await admin
-      .from("prestataires")
-      .select("id")
+    // v2 (0147) : maître d'œuvre connecté à sa fiche entreprise active ;
+    // v3 (0162) : toute personne de l'entreprise (prestataire_comptes)
+    const { data: membre } = await admin
+      .from("prestataire_comptes")
+      .select("prestataires!inner(id)")
       .eq("user_id", userData.user.id)
-      .eq("actif", true)
-      .contains("types", ["moe"])
+      .eq("prestataires.actif", true)
+      .contains("prestataires.types", ["moe"])
       .maybeSingle();
-    if (profile.role !== "presta" || !moe) return json(403, { error: "Réservé à l'équipe Strat Eco et aux maîtres d'œuvre" });
+    if (profile.role !== "presta" || !membre) return json(403, { error: "Réservé à l'équipe Strat Eco et aux maîtres d'œuvre" });
   }
 
   const body = await req.json().catch(() => ({}));

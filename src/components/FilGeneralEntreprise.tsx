@@ -25,7 +25,16 @@ const initiales = (nom: string) =>
     .slice(0, 2)
     .toUpperCase();
 
-export function FilGeneralEntreprise({ presta, onClose }: { presta: Tables<"prestataires">; onClose: () => void }) {
+export function FilGeneralEntreprise({
+  presta,
+  sansAcces,
+  onClose,
+}: {
+  presta: Tables<"prestataires">;
+  /** Aucune personne de l'entreprise n'a d'accès à l'espace (0162). */
+  sansAcces: boolean;
+  onClose: () => void;
+}) {
   const { data: fil } = useFilGeneral(presta.id);
   const { data: lectures } = useLecturesFilGeneral();
   const marquerLu = useMarquerFilGeneralLu();
@@ -72,7 +81,7 @@ export function FilGeneralEntreprise({ presta, onClose }: { presta: Tables<"pres
         Fil général entre l'entreprise et l'équipe, hors opération. Les échanges sur une opération se lisent dans
         l'onglet Communications du dossier.
       </p>
-      {!presta.user_id && (
+      {sansAcces && (
         <p
           className="se-small"
           style={{ margin: "0 0 12px", padding: "10px 14px", borderRadius: "var(--radius-md)", background: "var(--color-warning-50)", color: "var(--color-warning-700)" }}

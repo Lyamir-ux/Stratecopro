@@ -4065,6 +4065,41 @@ export type Database = {
           },
         ]
       }
+      prestataire_comptes: {
+        Row: {
+          cree_le: string
+          email: string
+          invite_le: string | null
+          invite_par: string | null
+          prestataire_id: string
+          user_id: string
+        }
+        Insert: {
+          cree_le?: string
+          email: string
+          invite_le?: string | null
+          invite_par?: string | null
+          prestataire_id: string
+          user_id: string
+        }
+        Update: {
+          cree_le?: string
+          email?: string
+          invite_le?: string | null
+          invite_par?: string | null
+          prestataire_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prestataire_comptes_prestataire_id_fkey"
+            columns: ["prestataire_id"]
+            isOneToOne: false
+            referencedRelation: "prestataires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prestataire_contacts: {
         Row: {
           created_at: string
@@ -5264,6 +5299,35 @@ export type Database = {
           role_compte: Database["public"]["Enums"]["app_role"] | null
         }[]
       }
+      acces_prestataires: {
+        Args: { p_prestataire_id?: string }
+        Returns: {
+          autre_fiche: string | null
+          derniere_connexion: string | null
+          email: string
+          etat: string
+          hors_fiche: boolean
+          invite_le: string | null
+          nom: string | null
+          prestataire_id: string
+          principale: boolean
+          role_compte: Database["public"]["Enums"]["app_role"] | null
+          user_id: string | null
+        }[]
+      }
+      equipe_prestataire: {
+        Args: { p_prestataire_id: string }
+        Returns: {
+          active: boolean
+          email: string
+          moi: boolean
+          nom: string | null
+          principale: boolean
+          user_id: string | null
+        }[]
+      }
+      my_prestataire_fiche_id: { Args: never; Returns: string }
+      prestataire_mon_nom: { Args: { p_nom: string }; Returns: undefined }
       espaces_prestataires: {
         Args: never
         Returns: {

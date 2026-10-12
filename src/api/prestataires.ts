@@ -4,6 +4,7 @@
 // e-mail tous les prestataires actifs du métier concerné.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/auth/AuthProvider";
 import type { Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
 import { resoudreMaitreOeuvre } from "@/lib/maitreOeuvre";
 
@@ -12,8 +13,9 @@ export type Prestataire = Tables<"prestataires">;
 /** Format d'adresse accepté dans les fiches (même contrôle que le formulaire). */
 export const emailValide = (e: string): boolean => /^\S+@\S+\.\S+$/.test(e.trim());
 
-/** Adresses d'une entreprise telles qu'enregistrées (0106) : la principale
- *  (compte et alertes) et celles en copie. Adresses nettoyées (espaces, casse),
+/** Adresses d'une entreprise telles qu'enregistrées (0106) : la principale et
+ *  les autres, une par personne, chacune avec son accès possible (0162).
+ *  Adresses nettoyées (espaces, casse),
  *  vides et doublons retirés ; sans principale, la première adresse en copie
  *  prend sa place - la base refuse une copie sans principale. */
 export function normaliserEmails(
@@ -119,39 +121,55 @@ export function useUpdatePrestataire() {
 // Aucune entreprise n'avait de compte : l'AMO le crée depuis la fiche, l'edge
 // function creer-espace-prestataire crée le compte, relie la fiche et envoie
 // l'e-mail d'activation (même mécanique que les espaces copropriétaires).
+// Depuis le 12/10/2026 (0162, demande d'Amir) : un accès par personne, c'est-à-
+// dire par adresse de la fiche (principale ou autre), toutes reliées au même
+// espace de l'entreprise ; retirer une adresse de la fiche retire l'accès.
 
 export type EtatAccesPrestataire = "actif" | "invite" | "a_creer" | "sans_email" | "email_pris";
 
-export interface AccesPrestataire {
+/** Accès d'une adresse de la fiche (équipe Strat Eco). */
+export interface AccesAdresse {
+  email: string;
+  principale: boolean;
+  /** Compte relié par une adresse qui n'est plus sur la fiche (modification en SQL). */
+  horsFiche: boolean;
   etat: EtatAccesPrestataire;
+  userId: string | null;
+  /** Nom de la personne (profil du compte relié). */
+  nom: string | null;
   inviteLe: string | null;
-  /** Identifiant de connexion du compte relié (ne suit pas l'e-mail de la fiche). */
-  emailCompte: string | null;
+  derniereConnexion: string | null;
   /** Rôle du compte qui détient déjà l'adresse (état email_pris). */
   roleCompte: string | null;
   /** Entreprise déjà reliée au compte prestataire de cette adresse (état email_pris). */
   autreFiche: string | null;
 }
 
-/** État de l'accès de chaque fiche de la Base prestataires (AMO seul). */
+/** Accès de chaque fiche de la Base prestataires, adresse par adresse (AMO seul). */
 export function useAccesPrestataires() {
   return useQuery({
     queryKey: ["prestataires", "acces"],
-    queryFn: async (): Promise<Map<string, AccesPrestataire>> => {
-      const { data, error } = await supabase.rpc("espaces_prestataires");
+    queryFn: async (): Promise<Map<string, AccesAdresse[]>> => {
+      const { data, error } = await supabase.rpc("acces_prestataires", {});
       if (error) throw error;
-      return new Map(
-        (data ?? []).map((r) => [
-          r.prestataire_id,
-          {
-            etat: r.etat as EtatAccesPrestataire,
-            inviteLe: r.invite_le,
-            emailCompte: r.email_compte,
-            roleCompte: r.role_compte,
-            autreFiche: r.autre_fiche,
-          },
-        ])
-      );
+      const parFiche = new Map<string, AccesAdresse[]>();
+      for (const r of data ?? []) {
+        const liste = parFiche.get(r.prestataire_id) ?? [];
+        liste.push({
+          email: r.email,
+          principale: r.principale,
+          horsFiche: r.hors_fiche,
+          etat: r.etat as EtatAccesPrestataire,
+          userId: r.user_id,
+          nom: r.nom,
+          inviteLe: r.invite_le,
+          derniereConnexion: r.derniere_connexion,
+          roleCompte: r.role_compte,
+          autreFiche: r.autre_fiche,
+        });
+        parFiche.set(r.prestataire_id, liste);
+      }
+      return parFiche;
     },
   });
 }
@@ -163,8 +181,8 @@ const ROLE_COMPTE: Record<string, string> = {
   moe: "un compte maître d'œuvre",
 };
 
-/** Pourquoi l'adresse d'une fiche ne peut pas recevoir d'accès (état email_pris). */
-export function motifAdressePrise(acces: Pick<AccesPrestataire, "roleCompte" | "autreFiche">): string {
+/** Pourquoi une adresse de la fiche ne peut pas recevoir d'accès (état email_pris). */
+export function motifAdressePrise(acces: Pick<AccesAdresse, "roleCompte" | "autreFiche">): string {
   if (acces.autreFiche) return `Adresse déjà utilisée par le compte de ${acces.autreFiche}`;
   if (!acces.roleCompte) return "Adresse déjà utilisée par un compte incomplet";
   return `Adresse déjà utilisée par ${ROLE_COMPTE[acces.roleCompte] ?? "un autre compte"}`;
@@ -177,13 +195,22 @@ export interface ResultatAccesPrestataire {
   detail?: string;
 }
 
-/** Crée l'accès d'une fiche (ou renvoie le lien d'activation) - l'e-mail part réellement. */
+/** Ouvre l'accès d'une adresse de la fiche (ou renvoie le lien d'activation),
+ *  ou de toutes celles qui n'en ont pas encore (`tous`) - les e-mails partent réellement. */
 export function useCreerAccesPrestataire() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (prestataireId: string): Promise<ResultatAccesPrestataire> => {
+    mutationFn: async ({
+      prestataireId,
+      email,
+      tous,
+    }: {
+      prestataireId: string;
+      email?: string;
+      tous?: boolean;
+    }): Promise<ResultatAccesPrestataire[]> => {
       const { data, error } = await supabase.functions.invoke("creer-espace-prestataire", {
-        body: { prestataire_id: prestataireId },
+        body: { prestataire_id: prestataireId, ...(email ? { email } : {}), ...(tous ? { tous: true } : {}) },
       });
       if (error) {
         // le corps d'erreur de l'edge function porte le message à afficher
@@ -191,9 +218,72 @@ export function useCreerAccesPrestataire() {
         const parsed = ctx ? await ctx.json().catch(() => null) : null;
         throw new Error(parsed?.error ?? "La création de l'accès a échoué. Réessayez.");
       }
-      return (data as { resultat: ResultatAccesPrestataire }).resultat;
+      const rep = data as { resultats?: ResultatAccesPrestataire[]; resultat: ResultatAccesPrestataire };
+      return rep.resultats ?? [rep.resultat];
     },
     onSettled: () => void qc.invalidateQueries({ queryKey: ["prestataires"] }),
+  });
+}
+
+/** Retire l'accès d'une personne (compte relié par une adresse qui n'est plus
+ *  sur la fiche) ; le compte reste, sans entreprise. */
+export function useRetirerAccesPrestataire() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await supabase.from("prestataire_comptes").delete().eq("user_id", userId);
+      if (error) throw error;
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["prestataires"] }),
+  });
+}
+
+/** Une adresse de l'entreprise et l'accès de la personne, vus par l'entreprise. */
+export interface PersonneEntreprise {
+  email: string;
+  principale: boolean;
+  userId: string | null;
+  nom: string | null;
+  /** S'est déjà connectée. */
+  active: boolean;
+  /** Le compte connecté. */
+  moi: boolean;
+}
+
+/** Les personnes de l'entreprise (adresses de la fiche et leur accès) : pour
+ *  l'entreprise elle-même ou l'équipe Strat Eco en aperçu. */
+export function useEquipePrestataire(prestataireId: string) {
+  return useQuery({
+    queryKey: ["prestataires", "equipe", prestataireId],
+    queryFn: async (): Promise<PersonneEntreprise[]> => {
+      const { data, error } = await supabase.rpc("equipe_prestataire", { p_prestataire_id: prestataireId });
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        email: r.email,
+        principale: r.principale,
+        userId: r.user_id,
+        nom: r.nom,
+        active: r.active,
+        moi: r.moi,
+      }));
+    },
+  });
+}
+
+/** La personne connectée règle le nom qui signe ses messages. */
+export function useModifierMonNom() {
+  const qc = useQueryClient();
+  const { rechargerProfil } = useAuth();
+  return useMutation({
+    mutationFn: async (nom: string) => {
+      const { error } = await supabase.rpc("prestataire_mon_nom", { p_nom: nom });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["prestataires", "equipe"] });
+      // les prochains messages sont signés du nouveau nom
+      void rechargerProfil();
+    },
   });
 }
 

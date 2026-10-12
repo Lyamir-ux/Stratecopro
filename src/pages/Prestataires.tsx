@@ -16,11 +16,15 @@
 // « Best Ryan ») : aucune entreprise n'avait de compte, le rattachement se
 // faisait en SQL. Le compte se crée seulement sur un clic dans la fiche, à
 // l'e-mail principal ; l'entreprise reçoit un lien pour choisir son mot de passe.
+// Un accès par personne depuis le 12/10/2026 (0162, demande d'Amir « côté maître
+// d'œuvre ») : chaque adresse de la fiche est une personne, avec son propre
+// accès au même espace d'entreprise ; « Créer l'accès » devant chaque adresse,
+// retirer une adresse de la fiche retire l'accès de la personne.
 // Filtre par zone de chalandise (idée d'Amir du 01/10/2026) : un département,
 // et les entreprises qui y interviennent (celles qui couvrent toute la France
 // comprises). Fil « Équipe Strat Eco » de chaque entreprise (0124) : bouton
 // Messages, pastille des messages non lus.
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
@@ -43,11 +47,13 @@ import {
   useCreerAccesPrestataire,
   useDeletePrestataire,
   usePrestataires,
+  useRetirerAccesPrestataire,
   useUpdatePrestataire,
-  type AccesPrestataire,
+  type AccesAdresse,
   type Prestataire,
   type ResultatAccesPrestataire,
 } from "@/api/prestataires";
+import { accesPerdus, adressesFiche, resumeAcces } from "@/lib/prestataires";
 import type { Tables } from "@/lib/database.types";
 import { fmtDate, normaliserRecherche } from "@/lib/format";
 
@@ -83,25 +89,46 @@ function TypeChips({ types }: { types: TypeConsult[] }) {
   );
 }
 
-/** État de l'accès dans la liste (repli sur user_id tant que l'état charge). */
-function BadgeAcces({ acces, lie }: { acces: AccesPrestataire | undefined; lie: boolean }) {
-  const etat = acces?.etat ?? (lie ? "actif" : "a_creer");
-  if (etat === "actif") return <Badge kind="success" dot>Compte actif</Badge>;
-  if (etat === "invite") {
+const LIBELLE_ETAT: Record<string, string> = {
+  actif: "Compte actif",
+  invite: "Invitée",
+  a_creer: "Sans accès",
+  email_pris: "Adresse prise",
+};
+
+/** Accès de l'entreprise dans la liste : une personne par adresse de la fiche. */
+function BadgeAcces({ adresses }: { adresses: AccesAdresse[] | undefined }) {
+  if (!adresses) return null;
+  const r = resumeAcces(adresses);
+  const detail = adresses.map((a) => `${a.email} : ${LIBELLE_ETAT[a.etat] ?? a.etat}`).join("\n");
+  if (r.actifs > 0) {
     return (
-      <span title={`E-mail d'activation envoyé${acces?.inviteLe ? ` le ${fmtDate(acces.inviteLe)}` : ""}, lien pas encore utilisé`}>
-        <Badge kind="warn">Invitée</Badge>
+      <span title={detail}>
+        <Badge kind="success" dot>
+          {r.total === 1 ? "Compte actif" : `${r.actifs}/${r.total} accès actifs`}
+        </Badge>
       </span>
     );
   }
-  if (etat === "email_pris" && acces) {
+  if (r.invites > 0) {
     return (
-      <span className="badge b-error" title={motifAdressePrise(acces) + " : autre adresse principale à saisir dans la fiche"}>
+      <span title={detail}>
+        <Badge kind="warn">{r.invites > 1 ? `${r.invites} invitées` : "Invitée"}</Badge>
+      </span>
+    );
+  }
+  if (r.pris > 0 && r.aCreer === 0) {
+    return (
+      <span className="badge b-error" title={detail}>
         Adresse prise
       </span>
     );
   }
-  return <Badge kind="neutral">Sans compte</Badge>;
+  return (
+    <span title={detail || undefined}>
+      <Badge kind="neutral">Sans compte</Badge>
+    </span>
+  );
 }
 
 /** Compte rendu d'une création d'accès, en une phrase. */
@@ -109,172 +136,268 @@ function phraseResultat(r: ResultatAccesPrestataire): string {
   const a = r.email ? ` à ${r.email}` : "";
   const simulation = r.envoi === "simule" ? " (simulation : clé d'envoi absente du serveur)" : "";
   if (r.envoi === "echec") {
-    return "Le compte est prêt mais l'e-mail n'est pas parti : utilisez « Renvoyer l'e-mail ».";
+    return `${r.email ?? "Accès"} : le compte est prêt mais l'e-mail n'est pas parti, utilisez « Renvoyer l'e-mail ».`;
   }
   switch (r.statut) {
     case "invite":
       return `Accès créé : e-mail d'activation envoyé${a}${simulation}.`;
     case "relie":
-      return `Fiche reliée au compte existant de cette adresse : e-mail envoyé${a}${simulation}.`;
+      return `Compte existant de ${r.email ?? "cette adresse"} relié à l'entreprise : e-mail envoyé${simulation}.`;
     case "renvoye":
       return `E-mail d'activation renvoyé${a}${simulation}.`;
     case "deja_actif":
-      return "Accès déjà activé, rien à envoyer.";
+      return `${r.email ?? "Accès"} : accès déjà activé, rien à envoyer.`;
     case "sans_email":
-      return "Pas d'adresse e-mail principale valide sur la fiche.";
+      return r.detail ?? "Pas d'adresse e-mail valide sur la fiche.";
     default:
-      return r.detail ?? "La création de l'accès a échoué.";
+      return `${r.email ? r.email + " : " : ""}${r.detail ?? "la création de l'accès a échoué."}`;
+  }
+}
+
+/** État d'une adresse de la fiche, en une pastille. */
+function EtatAdresse({ a }: { a: AccesAdresse }) {
+  if (a.horsFiche) {
+    return (
+      <span title="Compte relié par une adresse qui n'est plus sur la fiche">
+        <Badge kind="warn">Hors fiche</Badge>
+      </span>
+    );
+  }
+  switch (a.etat) {
+    case "actif":
+      return (
+        <span title={a.derniereConnexion ? `Dernière connexion le ${fmtDate(a.derniereConnexion)}` : undefined}>
+          <Badge kind="success" dot>Compte actif</Badge>
+        </span>
+      );
+    case "invite":
+      return (
+        <span title={`E-mail d'activation envoyé${a.inviteLe ? ` le ${fmtDate(a.inviteLe)}` : ""}, lien pas encore utilisé`}>
+          <Badge kind="warn">Invitée</Badge>
+        </span>
+      );
+    case "email_pris":
+      return (
+        <span className="badge b-error" title={motifAdressePrise(a)}>
+          Adresse prise
+        </span>
+      );
+    default:
+      return <Badge kind="neutral">Sans accès</Badge>;
   }
 }
 
 /**
- * Accès de l'entreprise à son espace prestataire : état du compte et bouton
- * « Créer l'accès » (ou « Renvoyer l'e-mail » tant que le lien n'a pas servi).
- * L'e-mail part réellement, d'où la confirmation.
+ * Accès des personnes de l'entreprise à son espace : une ligne par adresse de
+ * la fiche, avec « Créer l'accès » (ou « Renvoyer l'e-mail » tant que le lien
+ * n'a pas servi). Les e-mails partent réellement, d'où la confirmation.
  */
 function AccesEspace({
   fiche,
-  acces,
+  adresses,
   emailSaisi,
+  secondairesSaisis,
 }: {
   fiche: Prestataire;
-  acces: AccesPrestataire | undefined;
-  /** E-mail principal en cours de saisie : l'accès part de l'adresse enregistrée. */
+  adresses: AccesAdresse[] | undefined;
+  /** Adresses en cours de saisie : les accès partent des adresses enregistrées. */
   emailSaisi: string;
+  secondairesSaisis: string[];
 }) {
   const creer = useCreerAccesPrestataire();
-  const [confirmer, setConfirmer] = useState(false);
-  const [resultat, setResultat] = useState<ResultatAccesPrestataire | null>(null);
+  const retirer = useRetirerAccesPrestataire();
+  const [confirmer, setConfirmer] = useState<{ email?: string; tous?: boolean; destinataires: string[] } | null>(null);
+  const [resultats, setResultats] = useState<ResultatAccesPrestataire[]>([]);
   const [erreur, setErreur] = useState<string | null>(null);
 
-  const emailEnregistre = (fiche.email ?? "").trim().toLowerCase();
-  const etat = acces?.etat ?? (fiche.user_id ? "invite" : emailEnregistre ? "a_creer" : "sans_email");
-  const emailModifie = emailSaisi.trim().toLowerCase() !== emailEnregistre;
-  const destinataire = acces?.emailCompte ?? emailEnregistre;
-  const peutEnvoyer = fiche.actif && (etat === "invite" || (etat === "a_creer" && !emailModifie));
+  const enregistrees = adressesFiche(fiche.email, fiche.emails_secondaires);
+  // ordre de la fiche (principale puis autres), comptes hors fiche en dernier
+  const rang = (a: AccesAdresse) => (a.horsFiche ? Infinity : enregistrees.indexOf(a.email));
+  const liste = [...(adresses ?? [])].sort((x, y) => rang(x) - rang(y));
+  const saisies = adressesFiche(emailSaisi, secondairesSaisis);
+  const modifiees = saisies.length !== enregistrees.length || saisies.some((e, i) => e !== enregistrees[i]);
+  const perdus = new Set(
+    accesPerdus(
+      liste.filter((a) => a.userId && !a.horsFiche).map((a) => a.email),
+      emailSaisi,
+      secondairesSaisis
+    )
+  );
+  const aCreer = liste.filter((a) => !a.horsFiche && a.etat === "a_creer");
 
-  const lancer = () => {
+  const demander = (c: { email?: string; tous?: boolean; destinataires: string[] }) => {
+    setResultats([]);
     setErreur(null);
-    creer.mutate(fiche.id, {
-      onSuccess: (r) => {
-        setResultat(r);
-        setConfirmer(false);
-      },
-      onError: (e) => setErreur(e instanceof Error ? e.message : "La création de l'accès a échoué."),
-    });
+    setConfirmer(c);
   };
 
-  let constat: ReactNode;
-  switch (etat) {
-    case "actif":
-      constat = (
-        <>
-          <Badge kind="success" dot>Compte actif</Badge> L'entreprise s'est déjà connectée. Identifiant :{" "}
-          <b>{acces?.emailCompte}</b>.
-        </>
-      );
-      break;
-    case "invite":
-      constat = (
-        <>
-          <Badge kind="warn">Invitée</Badge> E-mail d'activation envoyé
-          {acces?.inviteLe ? ` le ${fmtDate(acces.inviteLe)}` : ""} à <b>{destinataire}</b>, lien pas encore utilisé.
-        </>
-      );
-      break;
-    case "email_pris":
-      constat = (
-        <>
-          <span className="badge b-error">Adresse prise</span> {acces ? motifAdressePrise(acces) : ""} : saisissez une
-          autre adresse principale.
-        </>
-      );
-      break;
-    case "sans_email":
-      constat = <>Renseignez l'e-mail principal et enregistrez la fiche pour pouvoir créer l'accès.</>;
-      break;
-    default:
-      constat = (
-        <>
-          <Badge kind="neutral">Sans compte</Badge> L'entreprise recevra à <b>{emailEnregistre}</b> un lien pour choisir
-          son mot de passe.
-        </>
-      );
-  }
+  const lancer = () => {
+    if (!confirmer) return;
+    setErreur(null);
+    creer.mutate(
+      { prestataireId: fiche.id, email: confirmer.email, tous: confirmer.tous },
+      {
+        onSuccess: (r) => {
+          setResultats(r);
+          setConfirmer(null);
+        },
+        onError: (e) => setErreur(e instanceof Error ? e.message : "La création de l'accès a échoué."),
+      }
+    );
+  };
 
   return (
     <div className="cs-field cs-field-full" style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
       <label>Accès à l'espace prestataire</label>
-      <p className="se-small" style={{ margin: "2px 0 0", color: "var(--fg2)", lineHeight: 1.7 }}>{constat}</p>
-      {etat === "actif" && acces?.emailCompte && acces.emailCompte !== emailEnregistre && (
-        <p className="se-small" style={{ margin: "4px 0 0", color: "var(--fg-muted)" }}>
-          L'identifiant de connexion ne suit pas l'e-mail principal de la fiche.
-        </p>
-      )}
-      {!fiche.actif && etat !== "actif" && (
-        <p className="se-small" style={{ margin: "6px 0 0", color: "var(--fg-muted)" }}>
-          Fiche suspendue : réactivez-la pour créer l'accès.
-        </p>
-      )}
-      {fiche.actif && emailModifie && (etat === "a_creer" || etat === "sans_email" || etat === "email_pris") && (
-        <p className="se-small" style={{ margin: "6px 0 0", color: "var(--fg-muted)" }}>
-          Enregistrez d'abord la nouvelle adresse : l'accès part de l'e-mail principal enregistré.
+      <p className="se-small" style={{ margin: "2px 0 8px", color: "var(--fg2)" }}>
+        Chaque adresse est une personne : elle reçoit son propre accès, et toutes retrouvent le même espace de
+        l'entreprise (consultations, offres, projets, messages).
+      </p>
+
+      {liste.length === 0 && (
+        <p className="se-small" style={{ margin: 0, color: "var(--fg-muted)" }}>
+          Renseignez au moins une adresse et enregistrez la fiche pour pouvoir créer les accès.
         </p>
       )}
 
-      {resultat && (
-        <p
-          className="se-small"
-          style={{ margin: "8px 0 0", color: resultat.envoi === "envoye" ? "var(--color-success-700)" : "var(--fg2)" }}
-        >
-          {resultat.envoi === "envoye" && (
-            <Icon name="checkCircle" size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-          )}
-          {phraseResultat(resultat)}
+      {liste.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}>
+          {liste.map((a, i) => {
+            const peutEnvoyer = fiche.actif && !a.horsFiche && (a.etat === "a_creer" || a.etat === "invite");
+            const retiree = perdus.has(a.email);
+            const sousTitre = retiree
+              ? "Adresse retirée : l'accès de la personne sera retiré à l'enregistrement"
+              : a.etat === "email_pris" && !a.horsFiche
+                ? motifAdressePrise(a)
+                : a.nom !== fiche.raison_sociale
+                  ? a.nom
+                  : null;
+            return (
+              <div
+                key={a.email + (a.horsFiche ? "-hors" : "")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                  padding: "8px 10px",
+                  borderTop: i > 0 ? "1px solid var(--border)" : undefined,
+                }}
+              >
+                <span style={{ flex: "1 1 220px", minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 13.5, fontWeight: 600, overflowWrap: "anywhere" }}>
+                    {a.email}
+                    {a.principale && (
+                      <span style={{ marginLeft: 6, fontSize: 11.5, fontWeight: 400, color: "var(--fg-muted)" }}>principale</span>
+                    )}
+                  </span>
+                  {sousTitre && (
+                    <span style={{ display: "block", fontSize: 12, color: retiree ? "var(--color-error-700)" : "var(--fg-muted)" }}>
+                      {sousTitre}
+                    </span>
+                  )}
+                </span>
+                <EtatAdresse a={a} />
+                {peutEnvoyer && !confirmer && (
+                  <button
+                    type="button"
+                    className="se-btn se-btn-ghost btn-sm"
+                    disabled={creer.isPending || modifiees}
+                    title={modifiees ? "Enregistrez d'abord les adresses modifiées" : undefined}
+                    onClick={() => demander({ email: a.email, destinataires: [a.email] })}
+                  >
+                    <Icon name="send" size={14} />
+                    {a.etat === "invite" ? "Renvoyer l'e-mail" : "Créer l'accès"}
+                  </button>
+                )}
+                {a.horsFiche && a.userId && (
+                  <button
+                    type="button"
+                    className="se-btn se-btn-ghost btn-sm"
+                    disabled={retirer.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Retirer l'accès de ${a.email} à l'espace de ${fiche.raison_sociale} ?`)) {
+                        retirer.mutate(a.userId!, {
+                          onError: (e) => setErreur(e instanceof Error ? e.message : "Le retrait a échoué."),
+                        });
+                      }
+                    }}
+                  >
+                    <Icon name="x" size={14} />
+                    Retirer l'accès
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {!fiche.actif && liste.some((a) => a.etat !== "actif") && (
+        <p className="se-small" style={{ margin: "6px 0 0", color: "var(--fg-muted)" }}>
+          Fiche suspendue : réactivez-la pour créer les accès.
         </p>
       )}
-      {erreur && <p className="se-small" style={{ margin: "8px 0 0", color: "var(--color-error-700)" }}>{erreur}</p>}
+      {fiche.actif && modifiees && (
+        <p className="se-small" style={{ margin: "6px 0 0", color: "var(--fg-muted)" }}>
+          Enregistrez d'abord les adresses ajoutées ou modifiées : les accès partent des adresses enregistrées.
+        </p>
+      )}
 
-      {(etat === "a_creer" || etat === "invite") && !confirmer && (
+      {fiche.actif && aCreer.length > 1 && !confirmer && (
         <div style={{ marginTop: 10 }}>
           <button
             type="button"
             className="se-btn se-btn-ghost btn-sm"
-            disabled={!peutEnvoyer || creer.isPending}
-            onClick={() => {
-              setResultat(null);
-              setConfirmer(true);
-            }}
+            disabled={creer.isPending || modifiees}
+            onClick={() => demander({ tous: true, destinataires: aCreer.map((a) => a.email) })}
           >
             <Icon name="send" size={14} />
-            {etat === "invite" ? "Renvoyer l'e-mail" : "Créer l'accès"}
+            Créer les {aCreer.length} accès manquants
           </button>
         </div>
       )}
+
+      {resultats.length > 0 && (
+        <div style={{ margin: "8px 0 0" }}>
+          {resultats.map((r, i) => (
+            <p
+              key={i}
+              className="se-small"
+              style={{ margin: "2px 0 0", color: r.envoi === "envoye" ? "var(--color-success-700)" : "var(--fg2)" }}
+            >
+              {r.envoi === "envoye" && <Icon name="checkCircle" size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />}
+              {phraseResultat(r)}
+            </p>
+          ))}
+        </div>
+      )}
+      {erreur && <p className="se-small" style={{ margin: "8px 0 0", color: "var(--color-error-700)" }}>{erreur}</p>}
+
       {confirmer && (
         <div style={{ marginTop: 10 }}>
           <div className="cc-next" style={{ marginTop: 0, marginBottom: 10 }}>
             <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
             <span>
-              {etat === "invite" ? (
-                <>Un nouvel e-mail d'activation va partir réellement à <b>{destinataire}</b>.</>
+              {confirmer.destinataires.length > 1 ? (
+                <>
+                  {confirmer.destinataires.length} accès vont être créés et un e-mail va partir réellement à chaque
+                  adresse : <b>{confirmer.destinataires.join(", ")}</b>.
+                </>
+              ) : liste.find((a) => a.email === confirmer.email)?.etat === "invite" ? (
+                <>Un nouvel e-mail d'activation va partir réellement à <b>{confirmer.email}</b>.</>
               ) : (
-                <>Le compte va être créé et un e-mail va partir réellement à <b>{emailEnregistre}</b>.</>
+                <>Le compte va être créé et un e-mail va partir réellement à <b>{confirmer.email}</b>.</>
               )}
             </span>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className="se-btn se-btn-ghost btn-sm"
-              onClick={() => setConfirmer(false)}
-              disabled={creer.isPending}
-            >
+            <button type="button" className="se-btn se-btn-ghost btn-sm" onClick={() => setConfirmer(null)} disabled={creer.isPending}>
               Annuler
             </button>
             <button type="button" className="se-btn se-btn-primary btn-sm" onClick={lancer} disabled={creer.isPending}>
               <Icon name="send" size={14} />
-              {creer.isPending ? "Envoi…" : "Envoyer l'e-mail"}
+              {creer.isPending ? "Envoi…" : confirmer.destinataires.length > 1 ? "Envoyer les e-mails" : "Envoyer l'e-mail"}
             </button>
           </div>
         </div>
@@ -299,7 +422,7 @@ function PrestaForm({
   title: string;
   /** Fiche enregistrée (modification) : bloc d'accès à l'espace prestataire. */
   fiche?: Prestataire;
-  acces?: AccesPrestataire;
+  acces?: AccesAdresse[];
 }) {
   const [draft, setDraft] = useState(initial);
   const [voirRge, setVoirRge] = useState(false);
@@ -324,12 +447,12 @@ function PrestaForm({
             onChange={(e) => set("contact_nom", e.target.value)} placeholder="Prénom Nom" />
         </div>
         <div className="cs-field cs-field-full">
-          <label>E-mail principal <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· compte et alertes, sans e-mail aucune alerte</span></label>
+          <label>E-mail principal <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· alertes et accès, sans e-mail aucune alerte</span></label>
           <input className="edit-inp" style={{ maxWidth: "none" }} type="email" value={draft.email}
             onChange={(e) => set("email", e.target.value)} placeholder="contact@entreprise.fr" />
         </div>
         <div className="cs-field cs-field-full">
-          <label>Autres e-mails <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· reçoivent les mêmes alertes, en copie</span></label>
+          <label>Autres e-mails <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· une adresse par personne : mêmes alertes, et chacune son accès</span></label>
           <EmailsSecondaires valeurs={draft.emails_secondaires} onChange={(v) => set("emails_secondaires", v)} />
         </div>
         <div className="cs-field">
@@ -404,10 +527,15 @@ function PrestaForm({
           </label>
         </div>
         {fiche ? (
-          <AccesEspace fiche={fiche} acces={acces} emailSaisi={draft.email} />
+          <AccesEspace
+            fiche={fiche}
+            adresses={acces}
+            emailSaisi={draft.email}
+            secondairesSaisis={draft.emails_secondaires}
+          />
         ) : (
           <p className="se-small cs-field-full" style={{ margin: 0, color: "var(--fg-muted)" }}>
-            L'accès à l'espace prestataire se crée ensuite depuis la fiche enregistrée (« Créer l'accès »).
+            L'accès de chaque adresse à l'espace prestataire se crée ensuite depuis la fiche enregistrée (« Créer l'accès »).
           </p>
         )}
       </div>
@@ -467,10 +595,27 @@ export default function Prestataires() {
   }, [prestas, filter, zone, recherche]);
 
   const save = async (draft: typeof EMPTY, id?: string) => {
+    const emails = normaliserEmails(draft.email, draft.emails_secondaires);
+    if (id) {
+      // retirer une adresse de la fiche retire l'accès de la personne (0162)
+      const perdus = accesPerdus(
+        (acces?.get(id) ?? []).filter((a) => a.userId && !a.horsFiche).map((a) => a.email),
+        emails.email,
+        emails.emails_secondaires
+      );
+      if (
+        perdus.length > 0 &&
+        !window.confirm(
+          `${perdus.length > 1 ? "Ces personnes perdront leur" : "Cette personne perdra son"} accès à l'espace de l'entreprise : ${perdus.join(", ")}. Enregistrer quand même ?`
+        )
+      ) {
+        return;
+      }
+    }
     const payload = {
       raison_sociale: draft.raison_sociale.trim(),
       contact_nom: draft.contact_nom.trim() || null,
-      ...normaliserEmails(draft.email, draft.emails_secondaires),
+      ...emails,
       telephone: draft.telephone.trim() || null,
       ville: draft.ville.trim() || null,
       siret: draft.siret.trim() || null,
@@ -604,7 +749,7 @@ export default function Prestataires() {
                   </span>
                 )}
                 <span style={{ flex: "none", whiteSpace: "nowrap" }}>
-                  <BadgeAcces acces={acces?.get(p.id)} lie={!!p.user_id} />
+                  <BadgeAcces adresses={acces?.get(p.id)} />
                 </span>
                 <button
                   className="se-btn se-btn-ghost btn-sm"
@@ -671,7 +816,13 @@ export default function Prestataires() {
           acces={acces?.get(editing.id)}
         />
       )}
-      {filDe && <FilGeneralEntreprise presta={prestas?.find((x) => x.id === filDe.id) ?? filDe} onClose={() => setFilDe(null)} />}
+      {filDe && (
+        <FilGeneralEntreprise
+          presta={prestas?.find((x) => x.id === filDe.id) ?? filDe}
+          sansAcces={!!acces && !(acces.get(filDe.id) ?? []).some((a) => a.userId)}
+          onClose={() => setFilDe(null)}
+        />
+      )}
     </div>
   );
 }

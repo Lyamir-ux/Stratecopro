@@ -77,3 +77,36 @@ export function motifNonAlertable(p: { actif: boolean; email: string | null; ne_
   if (p.ne_pas_consulter) return "Ne souhaite pas être consultée";
   return null;
 }
+
+/** Adresses de la fiche (principale puis autres), en minuscules, sans doublon. */
+export function adressesFiche(email: string | null | undefined, secondaires: readonly string[] | null | undefined): string[] {
+  return [...new Set([email ?? "", ...(secondaires ?? [])].map((e) => e.trim().toLowerCase()).filter(Boolean))];
+}
+
+/**
+ * Adresses dont la personne perdrait son accès à l'enregistrement (0162 :
+ * retirer une adresse de la fiche retire l'accès). `avecAcces` : adresses qui
+ * ont un compte relié à la fiche.
+ */
+export function accesPerdus(
+  avecAcces: readonly string[],
+  email: string | null | undefined,
+  secondaires: readonly string[] | null | undefined
+): string[] {
+  const gardees = new Set(adressesFiche(email, secondaires));
+  return [...new Set(avecAcces.map((e) => e.trim().toLowerCase()))].filter((e) => e && !gardees.has(e));
+}
+
+/** Décompte des accès d'une entreprise, adresse par adresse (0162). */
+export interface ResumeAcces {
+  total: number;
+  actifs: number;
+  invites: number;
+  aCreer: number;
+  pris: number;
+}
+
+export function resumeAcces(adresses: readonly { etat: string }[]): ResumeAcces {
+  const n = (etat: string) => adresses.filter((a) => a.etat === etat).length;
+  return { total: adresses.length, actifs: n("actif"), invites: n("invite"), aCreer: n("a_creer"), pris: n("email_pris") };
+}
