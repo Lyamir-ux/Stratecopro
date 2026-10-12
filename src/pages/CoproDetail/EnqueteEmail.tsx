@@ -15,6 +15,7 @@ import {
   CONTACT_ENQUETE,
   MAX_MESSAGE,
   MAX_SUJET,
+  VIDEO_PORTAIL_URL,
   aEnregistrer,
   dateEnLettres,
   messageEnqueteParDefaut,
@@ -91,6 +92,13 @@ export function ApercuEmailEnquete({
             <p>
               Votre identifiant de connexion est votre adresse e-mail : <strong>{email}</strong>. Une fois votre mot de
               passe choisi, l'enquête vous attend dans la rubrique « Enquête sociale » de votre espace.
+            </p>
+            <p>
+              Découvrez en vidéo le fonctionnement de votre espace copropriétaire :{" "}
+              <a href={VIDEO_PORTAIL_URL} target="_blank" rel="noreferrer">
+                regarder la vidéo de présentation
+              </a>
+              .
             </p>
             <p className="mail-note">
               Ce lien est personnel et valable pour une durée limitée. S'il a expiré, rendez-vous sur {APP_URL}

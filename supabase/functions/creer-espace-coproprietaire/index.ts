@@ -25,7 +25,9 @@
 // /activer-espace de l'app, qui ne vérifie le jeton qu'au clic : les messageries
 // qui ouvrent les liens pour les analyser ne le consomment pas. L'écran appelle
 // la fonction par paquets de quelques fiches : Resend limite le débit, les
-// envois sont espacés.
+// envois sont espacés. L'e-mail d'invitation (lien du mot de passe, hors
+// campagne comme en campagne) porte le lien de la vidéo de présentation du
+// portail (demande d'Amir du 12/10/2026) ; pas les e-mails aux espaces activés.
 //
 // Mode enquête (idée d'Amir du 04/10/2026, migration 0136) : avec `enquete`
 // ({ sujet, message, date_limite }), chaque fiche reçoit le questionnaire
@@ -78,6 +80,10 @@ function premiereAdresse(texte: unknown): string | null {
 /** Dernière phrase du questionnaire, sous l'accès à l'espace (demande d'Amir du 07/10/2026). */
 const AIDE_ENQUETE = `<p>En cas de questions ou de problèmes de connexion, contactez
       <a href="mailto:admin@strateco.fr">admin@strateco.fr</a>.</p>`;
+
+/** Vidéo de présentation du portail, dans l'e-mail d'invitation (demande d'Amir du 12/10/2026). */
+const VIDEO_PORTAIL = `<p>Découvrez en vidéo le fonctionnement de votre espace copropriétaire :
+      <a href="https://www.strateco.fr/stratecopro">regarder la vidéo de présentation</a>.</p>`;
 
 const MAX_FICHES = 25;
 const MAX_SUJET = 150;
@@ -270,6 +276,7 @@ Deno.serve(async (req: Request) => {
         ${bouton(actionLink, "Choisir mon mot de passe")}
         <p>Votre identifiant de connexion est votre adresse e-mail : <strong>${esc(email)}</strong>. Une fois votre
         mot de passe choisi, ${financement ? "votre financement vous attend dans la rubrique « Mon financement »" : "l'enquête vous attend dans la rubrique « Enquête sociale »"} de votre espace.</p>
+        ${VIDEO_PORTAIL}
         ${lienExpire(email)}
         ${AIDE_ENQUETE}`,
       );
@@ -283,6 +290,7 @@ Deno.serve(async (req: Request) => {
       <p>Pour y accéder, choisissez votre mot de passe :</p>
       ${bouton(actionLink, "Choisir mon mot de passe")}
       <p>Votre identifiant de connexion est votre adresse e-mail : <strong>${esc(email)}</strong>.</p>
+      ${VIDEO_PORTAIL}
       <p style="color:#5c6470;font-size:13px">Ce lien est personnel et valable pour une durée limitée. S'il a expiré,
       rendez-vous sur <a href="${appUrl}/mot-de-passe-oublie">${appUrl}/mot-de-passe-oublie</a> et saisissez
       cette adresse : vous recevrez un nouveau lien.</p>`,
