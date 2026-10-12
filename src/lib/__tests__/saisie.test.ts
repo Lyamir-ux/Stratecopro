@@ -14,7 +14,7 @@ import {
   positionCurseur,
 } from "../saisie";
 import { erreurFormatPiece, typeMimePiece } from "../formatPiece";
-import { casesIban, isValidIban, nomDebiteurMandat, nomPrenomComplet } from "../pdf/adhesion";
+import { adresseDebiteurMandat, casesIban, isValidIban, nomDebiteurMandat, nomPrenomComplet } from "../pdf/adhesion";
 
 const IBAN = "FR7630001007941234567890185";
 
@@ -228,6 +228,16 @@ describe("nomDebiteurMandat : « Nom / Prénoms du débiteur » du mandat SEPA",
   });
   it("sans prénom, n'écrit que le nom (sans espace parasite)", () => {
     expect(nomDebiteurMandat({ nom: "CHELGHAM", prenom: "" }, "autre")).toBe("CHELGHAM");
+  });
+  it("SCI : l'adresse du débiteur est le siège quand il est renseigné", () => {
+    const perso = { rue: "10 Rue d'Alsace", cp: "08000", ville: "Charleville-Mézières" };
+    expect(adresseDebiteurMandat(perso, { adresseSiege: " 5 place de la Cathédrale ", cpSiege: "68000", villeSiege: "Colmar" })).toEqual({
+      rue: "5 place de la Cathédrale",
+      cp: "68000",
+      ville: "Colmar",
+    });
+    expect(adresseDebiteurMandat(perso, { adresseSiege: "" })).toEqual(perso);
+    expect(adresseDebiteurMandat(perso, null)).toEqual(perso);
   });
   it("SCI : la raison sociale est le débiteur, pas le gérant qui signe", () => {
     expect(nomDebiteurMandat({ nom: "MUNSTERMANN", prenom: "Wolfgang" }, "", { raisonSociale: " SCI SCHMITT PATRIMOINE " })).toBe(

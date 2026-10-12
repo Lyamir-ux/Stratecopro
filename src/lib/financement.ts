@@ -16,6 +16,25 @@ export const MOTIF_SANS_ECO_PTZ =
   "individuel, ne les finance pas, et un lot annexe ne peut être rattaché qu'à un lot d'habitation vous appartenant. " +
   "Le financement sur fonds propres est donc votre seul choix.";
 
+/** SCI soumise à l'impôt sur les sociétés (type répondu à l'enquête) : exclue de l'éco-PTZ, réservé aux
+ *  personnes physiques et aux « SCI patrimoniales, non soumises à l'IS » (bulletin CEGEE ; règle d'Amir
+ *  du 12/10/2026). Sans réponse à l'enquête, rien n'est fermé : le nom ne dit pas le régime fiscal. */
+export function sciSoumiseIs(typeCoproprietaire: unknown): boolean {
+  return typeof typeCoproprietaire === "string" && /^SCI\b.*soci[ée]t[ée]s/i.test(typeCoproprietaire.trim());
+}
+
+export const MOTIF_SCI_IS =
+  "Votre SCI est soumise à l'impôt sur les sociétés : l'éco-PTZ, collectif comme individuel, est réservé aux " +
+  "personnes physiques et aux SCI non soumises à l'impôt sur les sociétés. Le financement sur fonds propres est " +
+  "donc votre seul choix.";
+
+/** Pourquoi l'éco-PTZ (collectif comme individuel) est fermé à ce copropriétaire ; null s'il est ouvert. */
+export function motifSansEcoPtz(lots: readonly { usage: string }[], typeCoproprietaire: unknown): string | null {
+  if (!ecoPtzPossible(lots)) return MOTIF_SANS_ECO_PTZ;
+  if (sciSoumiseIs(typeCoproprietaire)) return MOTIF_SCI_IS;
+  return null;
+}
+
 // Enquête sociale (retour de Marius MAZZANTE, 09/10/2026) : elle sert à établir le
 // profil d'aides individuelles d'un ménage, donc elle ne concerne que les
 // propriétaires d'un logement. Un copropriétaire qui n'a que des garages, caves,

@@ -19,13 +19,14 @@
 // Choix transmis (feedback PIERRE PIERRE 30/09/2026) : récapitulatif de ce qui a
 // été choisi, et modification possible jusqu'à la date limite fixée par l'AMO
 // (copro_financement_config.date_limite_choix, 0117 - refusée côté serveur au-delà).
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { fmtDate, fmtEuro } from "@/lib/format";
 import {
   computeIndiv,
   lotTantiemes,
   totalTantiemes,
+  useCoordonneesConnues,
   useEtatAidesPortail,
   useFinancementConfig,
   useMonAdhesion,
@@ -40,9 +41,8 @@ import {
   adhesionDepassee,
   aujourdhuiParis,
   dossierAdhesionDepose,
-  ecoPtzPossible,
   limiteAdhesion,
-  MOTIF_SANS_ECO_PTZ,
+  motifSansEcoPtz,
 } from "@/lib/financement";
 import { useMesBulletins } from "@/api/signature";
 import { useAuth } from "@/auth/AuthProvider";
@@ -89,11 +89,17 @@ export function Financement({
   const { data: bulletins } = useMesBulletins(membership.coproprietaireId);
   const { data: ancienneAdhesion } = useMonAdhesion(membership.copro.id, membership.coproprietaireId);
   const [editing, setEditing] = useState(false);
-  // Garages, caves et autres lots sans lot d'habitation : l'éco-PTZ (collectif
-  // comme individuel) leur est fermé, les fonds propres sont le seul choix
-  // (bug d'Amir du 05/10/2026).
-  const ecoPtz = ecoPtzPossible(lots);
+  // Garages, caves et autres lots sans lot d'habitation (bug d'Amir du 05/10/2026), SCI soumise à
+  // l'impôt sur les sociétés d'après l'enquête (règle du 12/10/2026) : l'éco-PTZ (collectif comme
+  // individuel) leur est fermé, les fonds propres sont le seul choix.
+  const { data: connues } = useCoordonneesConnues(membership.copro.id, membership.coproprietaireId, membership.adresse);
+  const motifFerme = motifSansEcoPtz(lots, connues?.typeCoproprietaire);
+  const ecoPtz = !motifFerme;
   const [type, setType] = useState<TypeFinancement>(ecoPtz ? (choix?.type ?? "collectif") : "fonds");
+  // le type de l'enquête arrive après le premier affichage
+  useEffect(() => {
+    if (!ecoPtz) setType("fonds");
+  }, [ecoPtz]);
   // éco-PTZ individuel : un prêt par logement (lot d'habitation et ses annexes rattachées)
   const logements = lots.filter((l) => l.usage === "habitation");
   const [selLots, setSelLots] = useState<string[]>(() => {
@@ -238,7 +244,7 @@ export function Financement({
               <div className="cc-next" style={{ textAlign: "left", maxWidth: 520, margin: "0 auto 16px" }}>
                 <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
                 <span>
-                  {MOTIF_SANS_ECO_PTZ} Ce choix ne peut donc pas être maintenu
+                  {motifFerme} Ce choix ne peut donc pas être maintenu
                   {modifiable ? " : cliquez sur « Modifier mon choix » pour confirmer les fonds propres." : ". Écrivez à votre AMO."}
                 </span>
               </div>
@@ -391,7 +397,7 @@ export function Financement({
       {!ecoPtz && (
         <div className="cc-next" style={{ marginBottom: 18 }}>
           <Icon name="alert" size={15} className="ico" style={{ color: "var(--color-warning-500)" }} />
-          <span>{MOTIF_SANS_ECO_PTZ}</span>
+          <span>{motifFerme}</span>
         </div>
       )}
       {indiv.cee > 0 && (

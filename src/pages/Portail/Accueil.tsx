@@ -17,6 +17,7 @@ import {
   useFichiersPartages,
   pfDuCoproprietaire,
   pfIdsDuScenario,
+  useCoordonneesConnues,
   usePlansDefinitifsPartages,
   usePortailTaches,
   type ChoixFinancement,
@@ -28,7 +29,7 @@ import { readParams } from "@/api/scenarios";
 import { lireEtiquette, type Bareme, type Profil } from "@/lib/finance";
 import type { Tables } from "@/lib/database.types";
 import { messageErreur } from "@/lib/erreurs";
-import { ecoPtzPossible, peutRepondreEnquete } from "@/lib/financement";
+import { MOTIF_SCI_IS, motifSansEcoPtz, peutRepondreEnquete } from "@/lib/financement";
 import type { SectionId } from "./index";
 import { telechargerPlanIndividuelPdf } from "./planPdf";
 import { BandeauResteApproximatif } from "./Mentions";
@@ -90,6 +91,9 @@ export function Accueil({
   const { data: documents } = useFichiersPartages(copro.id);
   // Aides pas encore toutes notifiées : reste à charge approximatif (12/10/2026)
   const etatAides = useEtatAidesPortail(scenario, membership.lots);
+  // éco-PTZ fermé : pas de logement, ou SCI soumise à l'IS d'après l'enquête (12/10/2026)
+  const { data: connues } = useCoordonneesConnues(copro.id, membership.coproprietaireId, membership.adresse);
+  const motifSansPtz = motifSansEcoPtz(membership.lots, connues?.typeCoproprietaire);
   const nbDocuments = documents?.length ?? 0;
 
   const indiv =
@@ -177,9 +181,11 @@ export function Accueil({
       title: "Choisir votre financement",
       sub: choix
         ? "Choix transmis"
-        : ecoPtzPossible(membership.lots)
+        : !motifSansPtz
           ? "Prêt collectif, individuel ou fonds propres"
-          : "Fonds propres : le seul mode de financement ouvert à vos lots",
+          : motifSansPtz === MOTIF_SCI_IS
+            ? "Fonds propres : l'éco-PTZ n'est pas ouvert à une SCI soumise à l'IS"
+            : "Fonds propres : le seul mode de financement ouvert à vos lots",
     },
     // pièces du prêt collectif, après la signature des bulletins (retour de A CHELGHAM, 09/10/2026)
     ...(nbPiecesPret > 0

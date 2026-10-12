@@ -11,6 +11,7 @@ import {
   lotsRattaches,
   lotTantiemes,
   totalTantiemes,
+  useCoordonneesConnues,
   useEtatAidesPortail,
   useMonPlan,
   useRattacherLot,
@@ -24,7 +25,7 @@ import type { Bareme, Profil } from "@/lib/finance";
 import type { SectionId } from "./index";
 import { BandeauResteApproximatif, MentionsPrudence } from "./Mentions";
 import { telechargerPlanIndividuelPdf } from "./planPdf";
-import { ecoPtzPossible, MOTIF_SANS_ECO_PTZ, peutRepondreEnquete } from "@/lib/financement";
+import { MOTIF_SANS_ECO_PTZ, motifSansEcoPtz, peutRepondreEnquete } from "@/lib/financement";
 import { noteResteAFinancer } from "@/lib/specificitesCopro";
 
 export function QuotesParts({
@@ -45,6 +46,9 @@ export function QuotesParts({
   go: (s: SectionId) => void;
 }) {
   const lots = membership.lots;
+  // éco-PTZ fermé : pas de logement, ou SCI soumise à l'IS d'après l'enquête (12/10/2026)
+  const { data: connues } = useCoordonneesConnues(membership.copro.id, membership.coproprietaireId, membership.adresse);
+  const ecoPtzOuvert = !motifSansEcoPtz(lots, connues?.typeCoproprietaire);
   const lb = libellesBatiments(membership.copro.denomination_batiments);
   const [lotIdx, setLotIdx] = useState(0);
   const [scnId, setScnId] = useState<string | null>(null);
@@ -349,7 +353,7 @@ export function QuotesParts({
           })()}
           <button className="se-btn se-btn-secondary" onClick={() => go("pret")}>
             <Icon name="trendingUp" size={17} />
-            {ecoPtzPossible(lots) ? "Financer mon reste à charge" : "Financer mon reste à charge (fonds propres)"}
+            {ecoPtzOuvert ? "Financer mon reste à charge" : "Financer mon reste à charge (fonds propres)"}
           </button>
           <button className="se-btn se-btn-ghost" onClick={() => void telechargerPdf()} disabled={pdfBusy}>
             <Icon name="download" size={17} />

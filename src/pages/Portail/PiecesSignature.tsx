@@ -23,7 +23,7 @@ import { useGlisserDeposer } from "@/components/useGlisserDeposer";
 import { fmtDate } from "@/lib/format";
 import { messageErreur } from "@/lib/erreurs";
 import { diagnosticBic, diagnosticIban } from "@/lib/saisie";
-import { genMandatSepa, isValidBic, isValidIban, nomDebiteurMandat, normalizeIban } from "@/lib/pdf/adhesion";
+import { adresseDebiteurMandat, genMandatSepa, isValidBic, isValidIban, nomDebiteurMandat, normalizeIban } from "@/lib/pdf/adhesion";
 import { assemblerPieceIdentite, facesADeposer, verifierFacesPiece } from "@/lib/pdf/pieceIdentite";
 import { ACCEPT_PIECE, erreurFormatPiece, LIBELLE_FORMATS_PIECE, typeMimePiece } from "@/lib/formatPiece";
 import type { PieceSignature } from "@/lib/piecesSituation";
@@ -350,14 +350,15 @@ function FenetreRib({
                   cp?: string;
                   ville?: string;
                   lieuSignature?: string;
-                  personneMorale?: { raisonSociale: string } | null;
+                  personneMorale?: { raisonSociale: string; adresseSiege?: string; cpSiege?: string; villeSiege?: string } | null;
                 };
                 const mandat = await genMandatSepa({
-                  // SCI : la raison sociale gardée au dossier est le débiteur (décision du 12/10/2026)
+                  // SCI : la raison sociale et le siège gardés au dossier sont ceux du débiteur (12/10/2026)
                   nom: nomDebiteurMandat({ nom: p?.nom, prenom: p?.prenom }, f.adherent1?.nomPrenom || membership.nom, f.personneMorale),
-                  rue: f.adresse || p?.adresse_ligne1 || "",
-                  cp: f.cp || p?.code_postal || "",
-                  ville: f.ville || p?.ville || "",
+                  ...adresseDebiteurMandat(
+                    { rue: f.adresse || p?.adresse_ligne1 || "", cp: f.cp || p?.code_postal || "", ville: f.ville || p?.ville || "" },
+                    f.personneMorale,
+                  ),
                   iban,
                   bic,
                   lieu: f.lieuSignature || membership.copro.city || "",

@@ -34,8 +34,15 @@ export interface EtatDossierAdhesion {
   cosignataires: AdherentSupplementaire[];
   attestHonneur: boolean;
   infoAvis: boolean;
-  /** SCI : cadre « Adhérent personne morale », représentant résolu ; null hors SCI */
-  personneMorale?: { siren: string; raisonSociale: string; representant: string } | null;
+  /** SCI : cadre « Adhérent personne morale », représentant résolu, siège ; null hors SCI */
+  personneMorale?: {
+    siren: string;
+    raisonSociale: string;
+    representant: string;
+    adresseSiege?: string;
+    cpSiege?: string;
+    villeSiege?: string;
+  } | null;
 }
 
 /** Deux signataires avec le même e-mail ou le même téléphone (garde-fou anti auto-signature). */
@@ -111,6 +118,9 @@ export function manquesAdhesion(e: EtatDossierAdhesion): string[] {
     else if (!sirenValide(pm.siren)) m.push("N° de SIREN non valide (9 chiffres)");
     if (!pm.raisonSociale.trim()) m.push("raison sociale");
     if (!pm.representant.trim()) m.push("représentée par");
+    if (!(pm.adresseSiege ?? "").trim()) m.push("adresse du siège");
+    if (!(pm.cpSiege ?? "").trim()) m.push("code postal du siège");
+    if (!(pm.villeSiege ?? "").trim()) m.push("ville du siège");
     ligne("SCI (adhérent personne morale)", m);
   }
 

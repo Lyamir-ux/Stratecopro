@@ -9,6 +9,10 @@ import {
   limiteAdhesion,
   MOTIF_FINANCEMENT_VERROUILLE,
   peutRepondreEnquete,
+  MOTIF_SANS_ECO_PTZ,
+  MOTIF_SCI_IS,
+  motifSansEcoPtz,
+  sciSoumiseIs,
 } from "../financement";
 
 describe("ecoPtzPossible", () => {
@@ -127,5 +131,21 @@ describe("date limite d'adhésion au prêt collectif (idée d'Amir du 11/10/2026
     expect(adhesionPossible({ ...base, aujourdhui: "2026-11-16" })).toBe(false);
     expect(adhesionPossible({ ...base, campagneOuverte: false })).toBe(false);
     expect(adhesionPossible({ ...base, limite: null, aujourdhui: "2030-01-01" })).toBe(true);
+  });
+});
+
+describe("SCI soumise à l'impôt sur les sociétés : pas d'éco-PTZ (règle d'Amir du 12/10/2026)", () => {
+  const LOGEMENT = [{ usage: "habitation" }];
+  it("seul le type « SCI soumise à l'impôt sur les sociétés » de l'enquête ferme l'éco-PTZ", () => {
+    expect(sciSoumiseIs("SCI soumise à l'impôt sur les sociétés")).toBe(true);
+    expect(sciSoumiseIs("SCI soumise à l'impôt sur le revenu")).toBe(false);
+    expect(sciSoumiseIs("Personne physique")).toBe(false);
+    expect(sciSoumiseIs(null)).toBe(false);
+  });
+  it("motif : pas de logement d'abord, puis SCI à l'IS ; sinon ouvert", () => {
+    expect(motifSansEcoPtz(LOGEMENT, "SCI soumise à l'impôt sur le revenu")).toBeNull();
+    expect(motifSansEcoPtz(LOGEMENT, "SCI soumise à l'impôt sur les sociétés")).toBe(MOTIF_SCI_IS);
+    expect(motifSansEcoPtz([{ usage: "garage" }], "SCI soumise à l'impôt sur les sociétés")).toBe(MOTIF_SANS_ECO_PTZ);
+    expect(motifSansEcoPtz(LOGEMENT, undefined)).toBeNull();
   });
 });

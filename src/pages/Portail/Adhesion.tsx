@@ -25,6 +25,7 @@ import {
   isValidBic,
   isValidIban,
   nomDebiteurMandat,
+  adresseDebiteurMandat,
   nomPrenomComplet,
   normalizeIban,
   representantEffectif,
@@ -63,7 +64,7 @@ import {
   nomPrenomDeLaFiche,
 } from "@/lib/preremplissageAdhesion";
 import { signataireDepuisAdherent2 } from "@/lib/signataireAdherent2";
-import { adhesionDepassee, limiteAdhesion } from "@/lib/financement";
+import { adhesionDepassee, limiteAdhesion, MOTIF_SCI_IS, sciSoumiseIs } from "@/lib/financement";
 import { estSci } from "@/lib/piecesSituation";
 import { assemblerPieceIdentite, facesADeposer, verifierFacesPiece } from "@/lib/pdf/pieceIdentite";
 import { PieceIdentiteChamps } from "@/components/PieceIdentiteChamps";
@@ -707,10 +708,14 @@ export function Adhesion({
   }, [sci, connues, form.adherent2]);
   // SCI : cadre « Adhérent personne morale » du bulletin, saisi une seule fois ici et repris sur la
   // page de chaque associé (retour d'Amir du 12/10/2026) ; raison sociale proposée d'après la fiche
-  const personneMorale: PersonneMorale = form.personneMorale ?? {
+  const personneMorale: PersonneMorale = {
     siren: "",
     raisonSociale: estSci(undefined, membership.nom) ? membership.nom.trim() : "",
     representant: null,
+    adresseSiege: "",
+    cpSiege: "",
+    villeSiege: "",
+    ...form.personneMorale,
   };
   const changerPersonneMorale = (patch: Partial<PersonneMorale>) =>
     setForm((prev) => ({ ...prev, personneMorale: { ...personneMorale, ...prev.personneMorale, ...patch } }));
@@ -926,6 +931,32 @@ export function Adhesion({
   // ---------- Suivi seul : rien d'engagé, rien à montrer ----------
   const engage = actifs.some((b) => b.statut !== "brouillon") || adhesion?.statut === "signee";
   if (suiviSeul && !engage) return null;
+
+  // ---------- SCI soumise à l'IS : pas d'éco-PTZ (règle d'Amir du 12/10/2026) ----------
+  // Un dossier déjà engagé garde son suivi ; seule l'ouverture d'un nouveau dossier est fermée.
+  if (sciSoumiseIs(connues?.typeCoproprietaire) && !engage) {
+    return (
+      <div className="card-xl fade" style={{ marginTop: 22 }}>
+        <div className="cx-head">
+          <Icon name="lock" size={20} style={{ color: "var(--color-warning-500)" }} />
+          <h2 style={{ fontSize: 19 }}>Adhésion au prêt collectif impossible</h2>
+        </div>
+        <div className="cx-body">
+          <p className="se-body" style={{ marginTop: 0 }}>{MOTIF_SCI_IS}</p>
+          <p className="se-small" style={{ color: "var(--fg-muted)" }}>
+            Modifiez votre choix de financement pour confirmer les fonds propres. En cas d'erreur sur le régime fiscal
+            de votre SCI, écrivez à votre AMO.
+          </p>
+          {go && (
+            <button className="se-btn se-btn-secondary btn-sm" onClick={() => go("messages")}>
+              <Icon name="message" size={15} />
+              Nous contacter
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ---------- Date limite d'adhésion dépassée (idée d'Amir du 11/10/2026) ----------
   // Qui n'a pas déposé son dossier ne peut plus en ouvrir un ; qui l'a déposé garde son suivi, ses
@@ -1376,9 +1407,8 @@ export function Adhesion({
                           form.adherent1.nomPrenom,
                           sci ? personneMorale : null
                         ),
-                        rue: form.adresse,
-                        cp: form.cp,
-                        ville: form.ville,
+                        // SCI : le siège, adresse du débiteur (12/10/2026)
+                        ...adresseDebiteurMandat({ rue: form.adresse, cp: form.cp, ville: form.ville }, sci ? personneMorale : null),
                         iban,
                         bic,
                         lieu: form.lieuSignature || copro.city || "",
@@ -1828,6 +1858,25 @@ export function Adhesion({
                 />
                 <span className="hint">Le gérant qui représente la SCI : par défaut, le signataire principal.</span>
               </Fld>
+              <Fld label="Adresse du siège de la SCI *" span>
+                <input
+                  placeholder="N°, rue"
+                  value={personneMorale.adresseSiege ?? ""}
+                  onChange={(e) => changerPersonneMorale({ adresseSiege: e.target.value })}
+                />
+                <span className="hint">Elle figure sur le mandat de prélèvement SEPA : la SCI est titulaire du compte prélevé.</span>
+              </Fld>
+              <CpVilleFields
+                requis
+                cp={personneMorale.cpSiege ?? ""}
+                ville={personneMorale.villeSiege ?? ""}
+                onChange={(patch) =>
+                  changerPersonneMorale({
+                    ...(patch.cp !== undefined ? { cpSiege: patch.cp } : {}),
+                    ...(patch.ville !== undefined ? { villeSiege: patch.ville } : {}),
+                  })
+                }
+              />
             </>
           )}
           <AdherentFields

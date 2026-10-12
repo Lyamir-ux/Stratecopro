@@ -51,6 +51,22 @@ export interface PersonneMorale {
   /** Gérant qui représente la SCI ; null = le signataire principal (« NOM Prénom »), tant qu'il
    *  n'a pas été modifié. */
   representant: string | null;
+  /** Siège de la SCI, débitrice du mandat SEPA (règle d'Amir du 12/10/2026) ; absent des
+   *  brouillons enregistrés avant. Pas de case sur le bulletin. */
+  adresseSiege?: string;
+  cpSiege?: string;
+  villeSiege?: string;
+}
+
+/** Adresse du débiteur du mandat SEPA : le siège de la SCI quand il est renseigné, sinon l'adresse
+ *  personnelle du formulaire. */
+export function adresseDebiteurMandat(
+  personnelle: { rue: string; cp: string; ville: string },
+  personneMorale?: Pick<PersonneMorale, "adresseSiege" | "cpSiege" | "villeSiege"> | null
+): { rue: string; cp: string; ville: string } {
+  const rue = (personneMorale?.adresseSiege ?? "").trim();
+  if (!rue) return personnelle;
+  return { rue, cp: (personneMorale?.cpSiege ?? "").trim(), ville: (personneMorale?.villeSiege ?? "").trim() };
 }
 
 /** SIREN : 9 chiffres, clé de Luhn (exception connue : La Poste, 356 000 000). */

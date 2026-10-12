@@ -192,15 +192,22 @@ describe("manquesAdhesion : ce qui grise « Passer à la signature »", () => {
 });
 
 describe("SCI : cadre « Adhérent personne morale », demandé une seule fois", () => {
-  const PM = { siren: "552 120 222", raisonSociale: "SCI SCHMITT PATRIMOINE", representant: "MUNSTERMANN Wolfgang" };
+  const PM = {
+    siren: "552 120 222",
+    raisonSociale: "SCI SCHMITT PATRIMOINE",
+    representant: "MUNSTERMANN Wolfgang",
+    adresseSiege: "5 place de la Cathédrale",
+    cpSiege: "68000",
+    villeSiege: "Colmar",
+  };
 
   it("complet : rien ne manque", () => {
     expect(manquesAdhesion(etat({ personneMorale: PM }))).toEqual([]);
   });
 
-  it("SIREN, raison sociale et représentant obligatoires ; SIREN contrôlé (9 chiffres, clé)", () => {
+  it("SIREN, raison sociale, représentant et siège obligatoires ; SIREN contrôlé (9 chiffres, clé)", () => {
     expect(manquesAdhesion(etat({ personneMorale: { siren: "", raisonSociale: " ", representant: "" } }))).toEqual([
-      "SCI (adhérent personne morale) : N° de SIREN, raison sociale, représentée par",
+      "SCI (adhérent personne morale) : N° de SIREN, raison sociale, représentée par, adresse du siège, code postal du siège, ville du siège",
     ]);
     expect(manquesAdhesion(etat({ personneMorale: { ...PM, siren: "552 120 223" } }))).toEqual([
       "SCI (adhérent personne morale) : N° de SIREN non valide (9 chiffres)",
