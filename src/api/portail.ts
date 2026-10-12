@@ -511,6 +511,8 @@ export function useCoordonneesConnues(
         adresse: adresseConnue(adresseDeLEnquete(reponses), adresseFiche),
         telephone: reponseIdentiteEnquete(reponses, "telephone"),
         identite: identiteEnquete(reponses),
+        // « SCI soumise à… », « Personne physique »… : une SCI n'a pas d'adhérent 2 (12/10/2026)
+        typeCoproprietaire: reponseIdentiteEnquete(reponses, "type-coproprietaire"),
       };
     },
   });

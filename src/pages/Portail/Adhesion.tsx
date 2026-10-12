@@ -53,6 +53,7 @@ import {
 } from "@/lib/preremplissageAdhesion";
 import { signataireDepuisAdherent2 } from "@/lib/signataireAdherent2";
 import { adhesionDepassee, limiteAdhesion } from "@/lib/financement";
+import { estSci } from "@/lib/piecesSituation";
 import { assemblerPieceIdentite, facesADeposer, verifierFacesPiece } from "@/lib/pdf/pieceIdentite";
 import { PieceIdentiteChamps } from "@/components/PieceIdentiteChamps";
 import { useGlisserDeposer } from "@/components/useGlisserDeposer";
@@ -585,6 +586,14 @@ export function Adhesion({
       setTelephoneRepris(champ);
     }
   }, [isLoading, coordonneesTraitees, connues, adhesion, copro.city, membership.nom]);
+
+  // SCI (type répondu à l'enquête, à défaut le nom de la fiche) : pas d'adhérent 2 co-emprunteur,
+  // chaque associé doit avoir son propre bulletin (règle d'Amir du 12/10/2026). Un adhérent 2
+  // d'un brouillon est retiré, une fois l'enquête lue (elle l'emporte sur le nom).
+  const sci = estSci(connues?.typeCoproprietaire, membership.nom);
+  useEffect(() => {
+    if (sci && connues !== undefined && form.adherent2) setForm((prev) => ({ ...prev, adherent2: null }));
+  }, [sci, connues, form.adherent2]);
 
   const cle = readParams(scenario.params, bareme).cle;
   const lotsHab = useMemo(() => {
@@ -1683,7 +1692,12 @@ export function Adhesion({
         <div className="form-grid">
           <AdherentFields a={form.adherent1} onChange={changerAdherent1} titre="Adhérent 1" repris={identiteReprise} />
 
-          {form.adherent2 ? (
+          {sci ? (
+            <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>
+              Une SCI ne peut pas déclarer d'adhérent 2 (co-emprunteur) : chaque associé doit avoir son propre
+              bulletin d'adhésion.
+            </p>
+          ) : form.adherent2 ? (
             <>
               <AdherentFields a={form.adherent2} onChange={changerAdherent2} titre="Adhérent 2 (co-emprunteur)" emailSeul={couple} />
               {!couple && (
@@ -1794,7 +1808,7 @@ export function Adhesion({
             Adhérents supplémentaires (indivision, SCI…)
           </div>
           <p className="se-small" style={{ gridColumn: "1 / -1", color: "var(--fg-muted)", margin: 0 }}>
-            Si le lot a d'autres propriétaires que vous et votre adhérent 2 (indivision, associés d'une SCI…),
+            Si le lot a d'autres propriétaires que vous{sci ? "" : " et votre adhérent 2"} (indivision, associés d'une SCI…),
             <b> tous doivent signer</b>. Chaque adhérent supplémentaire recevra son propre lien par e-mail,
             déposera lui-même sa pièce d'identité et signera avec son propre code : vous ne pouvez pas
             signer à sa place.
