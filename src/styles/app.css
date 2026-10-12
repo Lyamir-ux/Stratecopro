@@ -1747,6 +1747,22 @@ table.dossiers.sf-table tfoot td:first-child { text-align: left; }
 .mentions-prudence { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--border); }
 .mentions-prudence p { margin: 0 0 6px; font-size: 12px; line-height: 1.55; color: var(--fg-muted); }
 .mentions-prudence .mp-credit { font-weight: 700; color: var(--fg3); }
+/* Portail - reste à charge approximatif tant que les aides ne sont pas notifiées (12/10/2026) */
+.bandeau-approximatif {
+  display: flex; align-items: center; gap: 14px; margin: 0 0 22px; padding: 16px 20px;
+  background: var(--color-warning-50); border: 1px solid var(--color-warning-500); border-left: 6px solid var(--color-warning-500);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+}
+.bandeau-approximatif .ico { flex: none; color: var(--color-warning-700); }
+.bandeau-approximatif .ba-titre {
+  font-family: var(--font-display); font-weight: 800; font-size: 22px; line-height: 1.25; color: var(--color-warning-700);
+}
+.bandeau-approximatif .ba-sub { margin-top: 4px; font-size: 14px; line-height: 1.5; color: var(--fg2); }
+@media (max-width: 760px) {
+  .bandeau-approximatif { padding: 13px 14px; gap: 10px; }
+  .bandeau-approximatif .ba-titre { font-size: 18px; }
+  .bandeau-approximatif .ba-sub { font-size: 13px; }
+}
 
 /* Portail - étiquette énergie visée du bâtiment (accueil) */
 .c2e-box { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; background: var(--bg-soft); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: var(--radius-md); }

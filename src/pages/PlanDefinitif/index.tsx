@@ -12,23 +12,31 @@ import { useDonnees, type DonneesCopro } from "@/api/donnees";
 import {
   estPlanEstimatif,
   libellePerimetre,
+  pfARepartir,
   plansValides,
   plansValidesEnConflit,
+  pontAJour,
   type PlanDefinitif,
   scenariosDuGroupe,
   scenariosEstimatifs,
   useArchiverPlanDefinitif,
+  usePartagerPfCopros,
   usePlanDefinitif,
   usePlansDefinitifs,
+  usePontPf,
   useUpdatePlanDefinitif,
   useValiderPlanDefinitif,
 } from "@/api/planDefinitif";
+import { useBareme } from "@/api/scenarios";
+import { aujourdhuiParis } from "@/lib/financement";
 import { fmtEuro, fmtEuroFull } from "@/lib/format";
 import { libellesBatiments } from "@/lib/referentiels";
 import { messageErreur } from "@/lib/erreurs";
 import {
+  aideNotifiee,
   computePlanDefinitif,
   couvreToutLaCopro,
+  etatNotificationAides,
   exportPlanDefinitif,
   exportPlanEstimatif,
   itemsARepartirPf,
@@ -42,6 +50,7 @@ import {
   type ModeAide,
   type PlanDefinitifData,
 } from "@/lib/finance";
+import type { Json } from "@/lib/database.types";
 
 const TVA_CHOICES = [0, 5.5, 10, 20];
 
@@ -121,6 +130,51 @@ function CleSelect({
         </option>
       ))}
     </select>
+  );
+}
+
+/**
+ * Résultat de la notification d'une aide (demande d'Amir du 12/10/2026) : vide
+ * = pas encore notifiée (l'estimation de la formule est retenue), 0 = aide
+ * refusée. Le montant saisi remplace l'estimation dans tous les calculs.
+ */
+function NotificationAide({
+  aide,
+  onChange,
+}: {
+  aide: AideDef;
+  onChange: (patch: Pick<AideDef, "montantNotifie" | "dateNotification">) => void;
+}) {
+  const notifiee = aideNotifiee(aide);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <input
+        className="edit-inp"
+        type="number"
+        step="any"
+        placeholder="Non notifiée"
+        title="Montant notifié par le financeur (vide : pas encore notifiée, 0 : aide refusée)"
+        style={{ width: "100%", textAlign: "right" }}
+        value={notifiee ? aide.montantNotifie : ""}
+        onChange={(e) =>
+          onChange(
+            e.target.value === ""
+              ? { montantNotifie: undefined, dateNotification: aide.dateNotification }
+              : { montantNotifie: Number(e.target.value), dateNotification: aide.dateNotification ?? aujourdhuiParis() }
+          )
+        }
+      />
+      {notifiee && (
+        <input
+          className="edit-inp"
+          type="date"
+          title="Date de la notification"
+          style={{ width: "100%" }}
+          value={aide.dateNotification ?? ""}
+          onChange={(e) => onChange({ montantNotifie: aide.montantNotifie, dateNotification: e.target.value || undefined })}
+        />
+      )}
+    </div>
   );
 }
 
@@ -251,6 +305,13 @@ export default function PlanDefinitifPage() {
   // Scénario d'un PF estimatif : ses scénarios frères servent à l'export (format estimatif)
   const { data: tousPlans } = usePlansDefinitifs(coproId);
   const estimatif = !!plan && estPlanEstimatif(plan);
+  // PF validé déjà publié au portail : l'enregistrement met à jour les plans
+  // individuels des copropriétaires (aides notifiées, 12/10/2026)
+  const { data: bareme } = useBareme();
+  const valides = plansValides(tousPlans);
+  const idsValides = valides.map((p) => p.id);
+  const { data: pont } = usePontPf(coproId ?? "", idsValides);
+  const partager = usePartagerPfCopros(coproId ?? "");
 
   const [data, setData] = useState<PlanDefinitifData | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -307,7 +368,25 @@ export default function PlanDefinitifPage() {
 
   const save = () => {
     if (!data) return;
-    update.mutate({ id: plan.id, data }, { onSuccess: () => setDirty(false) });
+    const publie = plan.statut === "valide" && pontAJour(pont, idsValides);
+    partager.reset();
+    update.mutate(
+      { id: plan.id, data },
+      {
+        onSuccess: () => {
+          setDirty(false);
+          // Le portail suit le plan validé : restes à charge des copropriétaires recalculés
+          if (publie && donnees && bareme)
+            partager.mutate({
+              pfs: valides.map((p) => pfARepartir(p.id === plan.id ? { ...p, data: data as unknown as Json } : p)),
+              lots: donnees.lots,
+              cles: donnees.cles,
+              bareme,
+              partager: true,
+            });
+        },
+      }
+    );
   };
 
   const doExport = () => {
@@ -324,6 +403,8 @@ export default function PlanDefinitifPage() {
   };
 
   const gardeFousKo = r.gardeFous.filter((g) => !g.ok);
+  // Notification des aides : estimations tant que le financeur n'a pas notifié
+  const notif = etatNotificationAides(r);
 
   return (
     <div className="page" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -362,6 +443,15 @@ export default function PlanDefinitifPage() {
         ) : (
           <Badge kind={plan.statut === "valide" ? "success" : "neutral"}>
             {plan.statut === "valide" ? "Validé" : plan.statut === "partage" ? "Partagé" : "Brouillon"}
+          </Badge>
+        )}
+        {!estimatif && notif.attendues > 0 && (
+          <Badge kind={notif.toutes ? "success" : notif.notifiees ? "warn" : "neutral"}>
+            {notif.toutes
+              ? "Aides notifiées"
+              : notif.notifiees
+                ? `Aides notifiées : ${notif.notifiees}/${notif.attendues}`
+                : "Aides estimées"}
           </Badge>
         )}
         <Badge kind={gardeFousKo.length ? "warn" : "success"}>
@@ -428,6 +518,23 @@ export default function PlanDefinitifPage() {
           {update.isPending ? "Enregistrement…" : dirty ? "Enregistrer" : "Enregistré"}
         </button>
       </div>
+
+      {(partager.isPending || partager.isSuccess || partager.isError) && (
+        <p
+          className="se-small"
+          style={{
+            margin: "-10px 0 0",
+            color: partager.isError ? "var(--color-error-700)" : "var(--fg-muted)",
+          }}
+        >
+          <Icon name={partager.isError ? "alert" : "eye"} size={12} />{" "}
+          {partager.isPending
+            ? "Mise à jour du portail des copropriétaires…"
+            : partager.isSuccess
+              ? "Portail des copropriétaires mis à jour : chaque plan individuel suit le plan enregistré."
+              : `${messageErreur(partager.error, "Mise à jour du portail impossible")} - mettez à jour le partage depuis l'onglet Financement.`}
+        </p>
+      )}
 
       {/* ---- périmètre : plans par bâtiment ---- */}
       {!estimatif && donnees && donnees.batiments.length > 1 && (
@@ -980,6 +1087,7 @@ export default function PlanDefinitifPage() {
           <span style={{ flex: 1 }}></span>
           <span className="se-small" style={{ color: "var(--fg-muted)" }}>
             Total NET <b>{fmtEuroFull(r.totalAides)}</b> · publiques {fmtEuroFull(r.totalAidesPubliques)}
+            {!estimatif && notif.attendues > 0 && ` · ${notif.notifiees}/${notif.attendues} notifiée${notif.notifiees > 1 ? "s" : ""}`}
           </span>
           <button
             className="se-btn se-btn-ghost btn-sm"
@@ -1002,7 +1110,14 @@ export default function PlanDefinitifPage() {
           <button
             className="se-btn se-btn-ghost btn-sm"
             title="Réinitialiser le catalogue standard (CEE, MPR, Climaxion, EMS)"
-            onClick={() => edit((d) => ((d.aides = makeAidesDefaut()), d))}
+            onClick={() => {
+              if (
+                notif.notifiees > 0 &&
+                !window.confirm("Le catalogue standard remplace toutes les aides du plan, montants notifiés compris. Continuer ?")
+              )
+                return;
+              edit((d) => ((d.aides = makeAidesDefaut()), d));
+            }}
           >
             Catalogue standard
           </button>
@@ -1018,7 +1133,17 @@ export default function PlanDefinitifPage() {
                   <th style={{ width: 76 }} title="Compte dans le total des aides publiques (décoché : prime privée type CEE)">
                     Publique
                   </th>
-                  <th style={{ ...thR, width: 120 }}>Montant</th>
+                  <th style={{ ...thR, width: 120 }} title={estimatif ? undefined : "Montant donné par la formule"}>
+                    {estimatif ? "Montant" : "Estimation"}
+                  </th>
+                  {!estimatif && (
+                    <th
+                      style={{ ...thR, width: 140 }}
+                      title="Montant notifié par le financeur : il remplace l'estimation dans tous les calculs"
+                    >
+                      Notifié
+                    </th>
+                  )}
                   {multiCles && (
                     <th style={{ width: 190 }} title="Clé qui répartit l'aide entre copropriétaires (sans clé : au prorata de la quote-part)">
                       Clé de répartition
@@ -1060,8 +1185,37 @@ export default function PlanDefinitifPage() {
                       />
                     </td>
                     <td className="mono" style={tdR}>
-                      {r.aides[i]?.montant == null ? "-" : fmtEuroFull(r.aides[i].montant)}
+                      {estimatif ? (
+                        r.aides[i]?.montant == null ? "-" : fmtEuroFull(r.aides[i].montant)
+                      ) : r.aides[i]?.montantEstime == null ? (
+                        "-"
+                      ) : r.aides[i].notifiee ? (
+                        <>
+                          <span style={{ color: "var(--fg-muted)", textDecoration: "line-through" }}>
+                            {fmtEuroFull(r.aides[i].montantEstime)}
+                          </span>
+                          <div className="se-small" style={{ color: ecartCouleur((r.aides[i].montant ?? 0) - r.aides[i].montantEstime!) }}>
+                            {fmtEcart((r.aides[i].montant ?? 0) - r.aides[i].montantEstime!)}
+                          </div>
+                        </>
+                      ) : (
+                        fmtEuroFull(r.aides[i].montantEstime)
+                      )}
                     </td>
+                    {!estimatif && (
+                      <td>
+                        {a.calcul.mode === "info" ? (
+                          <span className="se-small" style={{ color: "var(--fg-muted)" }}>
+                            Aide individuelle
+                          </span>
+                        ) : (
+                          <NotificationAide
+                            aide={a}
+                            onChange={(patch) => edit((d) => (Object.assign(d.aides[i], patch), d))}
+                          />
+                        )}
+                      </td>
+                    )}
                     {multiCles && (
                       <td>
                         <CleSelect
@@ -1082,6 +1236,24 @@ export default function PlanDefinitifPage() {
               </tbody>
             </table>
           </div>
+          {!estimatif && (
+            <p className="se-small" style={{ color: "var(--fg-muted)", margin: "10px 0 0" }}>
+              À réception de la notification (décision de l'ANAH, de la Région, de l'EMS… ou contrat de la prime
+              CEE), saisissez le montant notifié : il remplace l'estimation dans tous les calculs - restes à charge,
+              plans individuels, portail des copropriétaires, appels de fonds du syndic. Laissez vide tant que l'aide
+              n'est pas notifiée ; 0 pour une aide refusée.
+              {notif.notifiees > 0 && (
+                <>
+                  {" "}
+                  Écart avec les estimations :{" "}
+                  <b style={{ color: ecartCouleur(notif.ecart) }}>{fmtEcart(notif.ecart)}</b>.
+                </>
+              )}
+              {!notif.toutes && notif.attendues > 0 && (
+                <> Tant que toutes les aides ne sont pas notifiées, le portail signale un reste à charge approximatif.</>
+              )}
+            </p>
+          )}
         </div>
       </div>
 
@@ -1219,6 +1391,17 @@ export default function PlanDefinitifPage() {
       </div>
     </div>
   );
+}
+
+/** Écart notifié - estimé : « +7 000 € », « −1 250 € », « = estimation ». */
+function fmtEcart(ecart: number): string {
+  if (Math.abs(ecart) < 0.005) return "= estimation";
+  return `${ecart > 0 ? "+" : "−"}${fmtEuroFull(Math.abs(ecart))}`;
+}
+
+function ecartCouleur(ecart: number): string {
+  if (Math.abs(ecart) < 0.005) return "var(--fg-muted)";
+  return ecart > 0 ? "var(--color-success-700)" : "var(--color-error-700)";
 }
 
 // ---------- formule d'aide (éditeur par mode) ----------

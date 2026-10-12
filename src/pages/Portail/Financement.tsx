@@ -26,6 +26,7 @@ import {
   computeIndiv,
   lotTantiemes,
   totalTantiemes,
+  useEtatAidesPortail,
   useFinancementConfig,
   useMonAdhesion,
   useSaveChoix,
@@ -45,7 +46,7 @@ import {
 } from "@/lib/financement";
 import { useMesBulletins } from "@/api/signature";
 import { useAuth } from "@/auth/AuthProvider";
-import { MentionsPrudence } from "./Mentions";
+import { BandeauResteApproximatif, MentionsPrudence } from "./Mentions";
 import { DocumentsEcoPtz } from "./Documents";
 import { Adhesion } from "./Adhesion";
 import type { Bareme, Profil } from "@/lib/finance";
@@ -100,6 +101,8 @@ export function Financement({
     return deja.length ? deja : logements.map((l) => l.id);
   });
   const save = useSaveChoix(scenario?.id ?? "", membership.coproprietaireId);
+  // Aides pas encore toutes notifiées : reste à charge approximatif (12/10/2026)
+  const etatAides = useEtatAidesPortail(scenario, lots);
 
   if (!scenario || !bareme) {
     return (
@@ -156,6 +159,7 @@ export function Financement({
     return (
       <div className="fade">
         <h1 className="sec-title">Mon financement</h1>
+        <BandeauResteApproximatif etat={etatAides} />
         <div className="card-xl fade" style={{ maxWidth: choix.type === "collectif" ? undefined : 660 }}>
           <div className="cx-body choix-transmis">
             <div
@@ -349,6 +353,7 @@ export function Financement({
   return (
     <div className="fade">
       <h1 className="sec-title">Mon financement</h1>
+      <BandeauResteApproximatif etat={etatAides} />
       {choix && editing && (
         <div className="choix-modif">
           <Icon name="edit" size={16} />

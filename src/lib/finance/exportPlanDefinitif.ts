@@ -3,13 +3,24 @@
 // « PF définitif Eco PTZ individuel » + un onglet par lot avec colonne « Retenu ».
 // Les montants sont exportés en valeurs (le recalcul vit dans le logiciel).
 import { utils, type WorkBook } from "xlsx";
-import type { PlanDefinitifData } from "./planDefinitif";
+import type { AideResult, PlanDefinitifData } from "./planDefinitif";
 import { computePlanDefinitif, PHASES_MOE } from "./planDefinitif";
 
 type Row = (string | number | null)[];
 
 function fmtTaux(t: number): string {
   return String(t).replace(".", ",");
+}
+
+/** Commentaire d'une aide : notification (date, estimation remplacée) puis commentaire du plan. */
+function commentaireAide(a: AideResult): string | null {
+  if (!a.notifiee) return a.commentaire ?? null;
+  const date = a.dateNotification ? ` le ${a.dateNotification.split("-").reverse().join("/")}` : "";
+  const estime =
+    a.montantEstime != null
+      ? ` (estimation : ${a.montantEstime.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} €)`
+      : "";
+  return [`Montant notifié${date}${estime}`, a.commentaire].filter(Boolean).join(" - ");
 }
 
 /** Nom d'onglet Excel valide (≤ 31 caractères, sans \ / ? * [ ] :). */
@@ -124,7 +135,7 @@ export function exportPlanDefinitif(data: PlanDefinitifData): WorkBook {
     push(null, "Aides mobilisables", null, "Scénario 1", "Commentaires", avecCles ? "Clé de répartition" : null);
     let dernierGroupe = "";
     r.aides.forEach((a, i) => {
-      push(a.groupe !== dernierGroupe ? a.groupe : null, a.libelle, null, a.montant, a.commentaire ?? null, avecCles ? data.aides[i]?.cleRepartition ?? null : null);
+      push(a.groupe !== dernierGroupe ? a.groupe : null, a.libelle, null, a.montant, commentaireAide(a), avecCles ? data.aides[i]?.cleRepartition ?? null : null);
       dernierGroupe = a.groupe;
     });
     push(null, "Total Aides NET", null, r.totalAides);

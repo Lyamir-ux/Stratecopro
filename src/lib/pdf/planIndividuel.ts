@@ -6,7 +6,7 @@ import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb, type RGB }
 import { DPE, libellesBatiments, PROFILS_MPR, USAGE_LOT_LABEL, type DpeClass } from "@/lib/referentiels";
 import { noteResteAFinancer, texteEtiquetteVisee } from "@/lib/specificitesCopro";
 import { peutRepondreEnquete } from "@/lib/financement";
-import { MENTIONS_PRUDENCE } from "@/pages/Portail/Mentions";
+import { MENTIONS_PRUDENCE, TEXTE_RESTE_APPROXIMATIF } from "@/pages/Portail/Mentions";
 import type { IndivBreakdown, Membership } from "@/api/portail";
 import type { Bareme, FinanceParams, Profil } from "@/lib/finance";
 
@@ -19,6 +19,8 @@ export interface PlanIndividuelPdfInput {
   indiv: IndivBreakdown;
   profil: Profil | null;
   cle: string;
+  /** Des aides du plan ne sont pas encore notifiées : reste à charge approximatif (12/10/2026). */
+  resteApproximatif?: boolean;
 }
 
 // ---------- utilitaires ----------
@@ -32,6 +34,7 @@ const ENCRE = rgb(0.102, 0.102, 0.102);
 const GRIS = rgb(0.42, 0.45, 0.4);
 const GRIS_CLAIR = rgb(0.898, 0.906, 0.882);
 const FOND_DOUX = rgb(0.949, 0.973, 0.902); // --color-primary-50
+const ORANGE = rgb(0.722, 0.431, 0); // --color-warning-700 #B86E00
 
 const hex = (h: string): RGB => {
   const n = parseInt(h.slice(1), 16);
@@ -319,6 +322,10 @@ export async function genererPlanIndividuelPdf(input: PlanIndividuelPdfInput): P
 
   // ----- plan personnel -----
   f.titreSection("Votre plan de financement personnel");
+  if (input.resteApproximatif) {
+    f.paragraphe(TEXTE_RESTE_APPROXIMATIF, { size: 12, bold: true, color: ORANGE });
+    f.y -= 4;
+  }
   f.ligne("Votre quote-part de travaux T.T.C.", euro(indiv.quotePart), { bold: true });
   f.ligne(
     "MaPrimeRénov' individuelle" + (profil ? ` (${(PROFILS_MPR[profil]?.desc ?? "").toLowerCase()})` : ""),

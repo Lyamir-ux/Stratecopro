@@ -622,6 +622,46 @@ export function pontAJour(pont: { statut: string; pf_ids: string[] } | null | un
   return a.size === planIds.length && planIds.every((id) => a.has(id));
 }
 
+/**
+ * Montants des PF repris dans les paramètres du scénario pont : ils alimentent
+ * les cascades du portail (« Plan de la copropriété », estimations de repli) -
+ * travaux × mprCoproPct = aides publiques, cee = prime CEE (sommes des PF).
+ */
+export function montantsPont(pfs: Pick<PfARepartir, "data" | "resultat">[]) {
+  const somme = (f: (p: Pick<PfARepartir, "data" | "resultat">) => number) => round2(pfs.reduce((s, p) => s + f(p), 0));
+  const travaux = somme((p) => p.resultat.totalTravauxTtc);
+  const totalAides = somme((p) => p.resultat.totalAides);
+  const primeCee = somme((p) => p.resultat.primeCee);
+  return {
+    travaux,
+    honoraires: somme((p) => p.resultat.totalMoeTtc),
+    aleas: somme((p) => p.resultat.totalTravauxTtcImprevus - p.resultat.totalTravauxTtc),
+    mprCoproPct: travaux > 0 ? round2(((totalAides - primeCee) / travaux) * 100) : 0,
+    cee: primeCee,
+    fonds: somme((p) => p.data.params.fondsTravaux),
+    /** Aides publiques des PF, au centime : trace du partage (montants notifiés, 12/10/2026). */
+    aidesPubliquesPf: round2(totalAides - primeCee),
+  };
+}
+
+/**
+ * Les montants publiés par le pont sont encore ceux des PF : une aide notifiée,
+ * un devis ou un fonds travaux modifiés après le partage laissent au portail
+ * des plans individuels périmés, à republier.
+ */
+export function montantsPontAJour(pont: { params: Json } | null | undefined, pfs: Pick<PfARepartir, "data" | "resultat">[]): boolean {
+  if (!pont || !pfs.length) return true;
+  const publie = (pont.params ?? {}) as Record<string, unknown>;
+  const actuel = montantsPont(pfs);
+  const egal = (cle: keyof typeof actuel, tolerance = 0.01) => {
+    const v = publie[cle];
+    return typeof v !== "number" || Math.abs(v - actuel[cle]) <= tolerance;
+  };
+  return egal("travaux") && egal("honoraires") && egal("aleas") && egal("cee") && egal("fonds") && egal("aidesPubliquesPf") &&
+    // partages antérieurs au 12/10/2026, sans le montant des aides au centime
+    (typeof publie.aidesPubliquesPf === "number" || egal("mprCoproPct", 0.005));
+}
+
 /** Part d'un lot dans le plan publié au portail (somme sur les PF qui le couvrent). */
 export interface PartLotPortail {
   quotePart: number;
@@ -644,167 +684,163 @@ export interface PartLotPortail {
 export function usePartagerPfCopros(coproId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: {
-      /** Tous les PF validés de la copropriété. */
-      pfs: PfARepartir[];
-      lots: (LotPourRepartition & { id: string; batiment_id: string | null })[];
-      cles: { code: string; is_default: boolean }[];
-      bareme: Bareme;
-      partager: boolean;
-    }) => {
-      const ids = input.pfs.map((p) => p.id);
-      if (!ids.length) return;
-      const ponts = await pontsDesPf(coproId, ids);
-      const existant = ponts.find((s) => s.statut === "partage") ?? ponts[0] ?? null;
-      const autresOuverts = ponts.filter((s) => s.statut === "partage" && s.id !== existant?.id);
-
-      if (!input.partager) {
-        const ouverts = ponts.filter((s) => s.statut === "partage").map((s) => s.id);
-        if (ouverts.length) {
-          const { error } = await supabase.from("scenarios_financiers").update({ statut: "brouillon" }).in("id", ouverts);
-          if (error) throw error;
-        }
-        return;
-      }
-
-      const rep = repartirPfs(input.pfs, input.lots, input.cles);
-      const cleRef = rep.cleRef;
-      if (!rep.complet || !cleRef) throw new Error("Chaque PF validé doit être entièrement réparti avant le partage.");
-
-      // Tantièmes de référence sur tous les lots du copropriétaire : le portail
-      // affiche le cumul de ses lots sans mise à l'échelle (rapport 1).
-      const totalCle = input.lots.reduce((s, l) => s + (l.tantiemes[cleRef] ?? 0), 0);
-      const tantiemesRef = new Map<string, number>();
-      const proprietaire = new Map<string, string>();
-      for (const l of input.lots) {
-        if (!l.coproprietaire_id) continue;
-        proprietaire.set(l.id, l.coproprietaire_id);
-        tantiemesRef.set(l.coproprietaire_id, (tantiemesRef.get(l.coproprietaire_id) ?? 0) + (l.tantiemes[cleRef] ?? 0));
-      }
-      // Détail lot par lot, chaque lot recevant la part du PF de son bâtiment
-      const parLot = new Map<string, Record<string, PartLotPortail>>();
-      for (const { pf, lots } of rep.parPf) {
-        for (const [lotId, p] of repartitionParLot(pf.data, pf.resultat, lots, input.cles)) {
-          const cp = proprietaire.get(lotId);
-          if (!cp) continue;
-          const rec = parLot.get(cp) ?? {};
-          const cur = rec[lotId] ?? { quotePart: 0, cee: 0, subvColl: 0 };
-          rec[lotId] = {
-            quotePart: round2(cur.quotePart + p.quotePartAvant),
-            cee: round2(cur.cee + p.primeCee),
-            subvColl: round2(cur.subvColl + p.aidesEtFonds - p.primeCee),
-          };
-          parLot.set(cp, rec);
-        }
-      }
-
-      // Paramètres choisis pour que les cascades du portail (« Plan de la
-      // copropriété », estimations de repli) retombent sur les montants des PF :
-      // travaux × mprCoproPct = aides publiques, cee = prime CEE (sommes des PF).
-      const somme = (f: (p: PfARepartir) => number) => round2(input.pfs.reduce((s, p) => s + f(p), 0));
-      const travaux = somme((p) => p.resultat.totalTravauxTtc);
-      const totalAides = somme((p) => p.resultat.totalAides);
-      const primeCee = somme((p) => p.resultat.primeCee);
-      const params: FinanceParams = {
-        ...makeDefaultParams(input.bareme),
-        travaux,
-        honoraires: somme((p) => p.resultat.totalMoeTtc),
-        aleas: somme((p) => p.resultat.totalTravauxTtcImprevus - p.resultat.totalTravauxTtc),
-        cle: cleRef,
-        totalCle: totalCle || 1000,
-        mprCoproPct: travaux > 0 ? round2(((totalAides - primeCee) / travaux) * 100) : 0,
-        bonusPassoire: false,
-        cee: primeCee,
-        fonds: somme((p) => p.data.params.fondsTravaux),
-        ecoPtz: true,
-        ecoPtzDuree: input.pfs[0].data.params.dureeEcoPtzAns,
-      };
-      // Le nom du plan importé commence déjà par « PF définitif - … » : pas de double préfixe.
-      const nom =
-        input.pfs.length === 1
-          ? /^PF d[ée]finitif/i.test(input.pfs[0].nom)
-            ? input.pfs[0].nom
-            : `PF définitif - ${input.pfs[0].nom}`
-          : `PF définitifs par bâtiment - ${input.pfs.map((p) => p.nom.replace(/^PF d[ée]finitif\s*-?\s*/i, "")).join(" + ")}`;
-
-      // Ancre : celle du pont existant si elle fait partie des PF, sinon un PF
-      // qui n'ancre pas déjà un autre pont (index unique).
-      const ancres = new Set(ponts.filter((s) => s.id !== existant?.id).map((s) => s.plan_definitif_id));
-      const ancre =
-        existant?.plan_definitif_id && ids.includes(existant.plan_definitif_id)
-          ? existant.plan_definitif_id
-          : ids.find((id) => !ancres.has(id));
-      if (!ancre) throw new Error("Chaque PF validé est déjà relié à un autre partage : retirez ces partages puis recommencez.");
-
-      const champs = {
-        name: nom,
-        statut: "partage" as const,
-        locked: true,
-        // PF par bâtiment : un copropriétaire sans ligne n'est concerné par aucun PF (portail, computeIndiv)
-        params: (input.pfs.some((p) => !couvreToutLaCopro(p.batimentIds))
-          ? { ...params, parBatiment: true }
-          : params) as unknown as Json,
-        plan_definitif_id: ancre,
-        pf_ids: ids,
-      };
-      let scenarioId: string;
-      if (existant) {
-        const { error } = await supabase.from("scenarios_financiers").update(champs).eq("id", existant.id);
-        if (error) throw error;
-        scenarioId = existant.id;
-      } else {
-        const { data: cree, error } = await supabase
-          .from("scenarios_financiers")
-          .insert({ ...champs, copro_id: coproId, bareme_millesime: input.bareme.millesime })
-          .select("id")
-          .single();
-        if (error) throw error;
-        scenarioId = cree.id;
-      }
-      // Un seul plan partagé à la fois pour ces PF (anciens partages séparés)
-      if (autresOuverts.length) {
-        const { error } = await supabase
-          .from("scenarios_financiers")
-          .update({ statut: "brouillon" })
-          .in(
-            "id",
-            autresOuverts.map((s) => s.id)
-          );
-        if (error) throw error;
-      }
-
-      const { error: eDel } = await supabase.from("plans_individuels").delete().eq("scenario_id", scenarioId);
-      if (eDel) throw eDel;
-      if (rep.plans.length) {
-        const { error: eIns } = await supabase.from("plans_individuels").insert(
-          rep.plans.map((p) => ({
-            scenario_id: scenarioId,
-            coproprietaire_id: p.coproprietaireId,
-            tantiemes: tantiemesRef.get(p.coproprietaireId) ?? 0,
-            quote_part: p.quotePartAvant,
-            mpr_indiv: 0,
-            // La prime CEE (versée en fin de chantier) est isolée : elle ne doit
-            // pas être déduite du montant à financer avant travaux (03/09/2026)
-            cee_part: p.primeCee,
-            subv_coll_part: round2(p.aidesEtFonds - p.primeCee),
-            eco_ptz_part: 0,
-            reste: p.reste,
-            mensualite: 0,
-            detail: {
-              source: "pf",
-              planDefinitifId: ancre,
-              planDefinitifIds: ids,
-              parLot: parLot.get(p.coproprietaireId) ?? {},
-            } as unknown as Json,
-          }))
-        );
-        if (eIns) throw eIns;
-      }
-    },
+    mutationFn: (input: PartageInput) => partagerPfs(coproId, input),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["pf-partage"] });
       void qc.invalidateQueries({ queryKey: ["scenarios", coproId] });
       void qc.invalidateQueries({ queryKey: ["portail"] });
     },
   });
+}
+
+interface PartageInput {
+  /** Tous les PF validés de la copropriété. */
+  pfs: PfARepartir[];
+  lots: (LotPourRepartition & { id: string; batiment_id: string | null })[];
+  cles: { code: string; is_default: boolean }[];
+  bareme: Bareme;
+  partager: boolean;
+}
+
+async function partagerPfs(coproId: string, input: PartageInput): Promise<void> {
+  const ids = input.pfs.map((p) => p.id);
+  if (!ids.length) return;
+  const ponts = await pontsDesPf(coproId, ids);
+  const existant = ponts.find((s) => s.statut === "partage") ?? ponts[0] ?? null;
+  const autresOuverts = ponts.filter((s) => s.statut === "partage" && s.id !== existant?.id);
+
+  if (!input.partager) {
+    const ouverts = ponts.filter((s) => s.statut === "partage").map((s) => s.id);
+    if (ouverts.length) {
+      const { error } = await supabase.from("scenarios_financiers").update({ statut: "brouillon" }).in("id", ouverts);
+      if (error) throw error;
+    }
+    return;
+  }
+
+  const rep = repartirPfs(input.pfs, input.lots, input.cles);
+  const cleRef = rep.cleRef;
+  if (!rep.complet || !cleRef) throw new Error("Chaque PF validé doit être entièrement réparti avant le partage.");
+
+  // Tantièmes de référence sur tous les lots du copropriétaire : le portail
+  // affiche le cumul de ses lots sans mise à l'échelle (rapport 1).
+  const totalCle = input.lots.reduce((s, l) => s + (l.tantiemes[cleRef] ?? 0), 0);
+  const tantiemesRef = new Map<string, number>();
+  const proprietaire = new Map<string, string>();
+  for (const l of input.lots) {
+    if (!l.coproprietaire_id) continue;
+    proprietaire.set(l.id, l.coproprietaire_id);
+    tantiemesRef.set(l.coproprietaire_id, (tantiemesRef.get(l.coproprietaire_id) ?? 0) + (l.tantiemes[cleRef] ?? 0));
+  }
+  // Détail lot par lot, chaque lot recevant la part du PF de son bâtiment
+  const parLot = new Map<string, Record<string, PartLotPortail>>();
+  for (const { pf, lots } of rep.parPf) {
+    for (const [lotId, p] of repartitionParLot(pf.data, pf.resultat, lots, input.cles)) {
+      const cp = proprietaire.get(lotId);
+      if (!cp) continue;
+      const rec = parLot.get(cp) ?? {};
+      const cur = rec[lotId] ?? { quotePart: 0, cee: 0, subvColl: 0 };
+      rec[lotId] = {
+        quotePart: round2(cur.quotePart + p.quotePartAvant),
+        cee: round2(cur.cee + p.primeCee),
+        subvColl: round2(cur.subvColl + p.aidesEtFonds - p.primeCee),
+      };
+      parLot.set(cp, rec);
+    }
+  }
+
+  // Paramètres choisis pour que les cascades du portail (« Plan de la
+  // copropriété », estimations de repli) retombent sur les montants des PF
+  const { aidesPubliquesPf, ...montants } = montantsPont(input.pfs);
+  const params: FinanceParams & { aidesPubliquesPf: number } = {
+    ...makeDefaultParams(input.bareme),
+    ...montants,
+    cle: cleRef,
+    totalCle: totalCle || 1000,
+    bonusPassoire: false,
+    ecoPtz: true,
+    ecoPtzDuree: input.pfs[0].data.params.dureeEcoPtzAns,
+    aidesPubliquesPf,
+  };
+  // Le nom du plan importé commence déjà par « PF définitif - … » : pas de double préfixe.
+  const nom =
+    input.pfs.length === 1
+      ? /^PF d[ée]finitif/i.test(input.pfs[0].nom)
+        ? input.pfs[0].nom
+        : `PF définitif - ${input.pfs[0].nom}`
+      : `PF définitifs par bâtiment - ${input.pfs.map((p) => p.nom.replace(/^PF d[ée]finitif\s*-?\s*/i, "")).join(" + ")}`;
+
+  // Ancre : celle du pont existant si elle fait partie des PF, sinon un PF
+  // qui n'ancre pas déjà un autre pont (index unique).
+  const ancres = new Set(ponts.filter((s) => s.id !== existant?.id).map((s) => s.plan_definitif_id));
+  const ancre =
+    existant?.plan_definitif_id && ids.includes(existant.plan_definitif_id)
+      ? existant.plan_definitif_id
+      : ids.find((id) => !ancres.has(id));
+  if (!ancre) throw new Error("Chaque PF validé est déjà relié à un autre partage : retirez ces partages puis recommencez.");
+
+  const champs = {
+    name: nom,
+    statut: "partage" as const,
+    locked: true,
+    // PF par bâtiment : un copropriétaire sans ligne n'est concerné par aucun PF (portail, computeIndiv)
+    params: (input.pfs.some((p) => !couvreToutLaCopro(p.batimentIds))
+      ? { ...params, parBatiment: true }
+      : params) as unknown as Json,
+    plan_definitif_id: ancre,
+    pf_ids: ids,
+  };
+  let scenarioId: string;
+  if (existant) {
+    const { error } = await supabase.from("scenarios_financiers").update(champs).eq("id", existant.id);
+    if (error) throw error;
+    scenarioId = existant.id;
+  } else {
+    const { data: cree, error } = await supabase
+      .from("scenarios_financiers")
+      .insert({ ...champs, copro_id: coproId, bareme_millesime: input.bareme.millesime })
+      .select("id")
+      .single();
+    if (error) throw error;
+    scenarioId = cree.id;
+  }
+  // Un seul plan partagé à la fois pour ces PF (anciens partages séparés)
+  if (autresOuverts.length) {
+    const { error } = await supabase
+      .from("scenarios_financiers")
+      .update({ statut: "brouillon" })
+      .in(
+        "id",
+        autresOuverts.map((s) => s.id)
+      );
+    if (error) throw error;
+  }
+
+  const { error: eDel } = await supabase.from("plans_individuels").delete().eq("scenario_id", scenarioId);
+  if (eDel) throw eDel;
+  if (rep.plans.length) {
+    const { error: eIns } = await supabase.from("plans_individuels").insert(
+      rep.plans.map((p) => ({
+        scenario_id: scenarioId,
+        coproprietaire_id: p.coproprietaireId,
+        tantiemes: tantiemesRef.get(p.coproprietaireId) ?? 0,
+        quote_part: p.quotePartAvant,
+        mpr_indiv: 0,
+        // La prime CEE (versée en fin de chantier) est isolée : elle ne doit
+        // pas être déduite du montant à financer avant travaux (03/09/2026)
+        cee_part: p.primeCee,
+        subv_coll_part: round2(p.aidesEtFonds - p.primeCee),
+        eco_ptz_part: 0,
+        reste: p.reste,
+        mensualite: 0,
+        detail: {
+          source: "pf",
+          planDefinitifId: ancre,
+          planDefinitifIds: ids,
+          parLot: parLot.get(p.coproprietaireId) ?? {},
+        } as unknown as Json,
+      }))
+    );
+    if (eIns) throw eIns;
+  }
 }

@@ -13,6 +13,7 @@ import { recapPhases } from "@/lib/recapPhases";
 import {
   computeIndiv,
   totalTantiemes,
+  useEtatAidesPortail,
   useFichiersPartages,
   pfDuCoproprietaire,
   pfIdsDuScenario,
@@ -30,6 +31,7 @@ import { messageErreur } from "@/lib/erreurs";
 import { ecoPtzPossible, peutRepondreEnquete } from "@/lib/financement";
 import type { SectionId } from "./index";
 import { telechargerPlanIndividuelPdf } from "./planPdf";
+import { BandeauResteApproximatif } from "./Mentions";
 
 export function Accueil({
   membership,
@@ -86,6 +88,8 @@ export function Accueil({
   const { data: taches } = usePortailTaches(copro.id);
   const recap = recapPhases({ phase: copro.phase, energyBefore: dpeAvant, dateAg: copro.date_ag, taches });
   const { data: documents } = useFichiersPartages(copro.id);
+  // Aides pas encore toutes notifiées : reste à charge approximatif (12/10/2026)
+  const etatAides = useEtatAidesPortail(scenario, membership.lots);
   const nbDocuments = documents?.length ?? 0;
 
   const indiv =
@@ -129,6 +133,7 @@ export function Accueil({
         indiv,
         profil,
         cle: params.cle,
+        resteApproximatif: !!etatAides?.approximatif,
       });
     } catch (e) {
       setPdfErreur(messageErreur(e, "Le téléchargement du plan a échoué"));
@@ -259,6 +264,7 @@ export function Accueil({
 
       {indiv ? (
         <>
+          <BandeauResteApproximatif etat={etatAides} />
           {noteReste && (
             <div className="note-attention" role="note">
               <Icon name="alert" size={22} className="ico" />

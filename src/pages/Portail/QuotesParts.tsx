@@ -11,6 +11,7 @@ import {
   lotsRattaches,
   lotTantiemes,
   totalTantiemes,
+  useEtatAidesPortail,
   useMonPlan,
   useRattacherLot,
   type Membership,
@@ -21,7 +22,7 @@ import { readParams } from "@/api/scenarios";
 import { libellesBatiments, PROFILS_MPR, USAGE_LOT_LABEL as USAGE_LABEL } from "@/lib/referentiels";
 import type { Bareme, Profil } from "@/lib/finance";
 import type { SectionId } from "./index";
-import { MentionsPrudence } from "./Mentions";
+import { BandeauResteApproximatif, MentionsPrudence } from "./Mentions";
 import { telechargerPlanIndividuelPdf } from "./planPdf";
 import { ecoPtzPossible, MOTIF_SANS_ECO_PTZ, peutRepondreEnquete } from "@/lib/financement";
 import { noteResteAFinancer } from "@/lib/specificitesCopro";
@@ -52,6 +53,7 @@ export function QuotesParts({
   const rattacher = useRattacherLot();
   const scn = scenarios.find((s) => s.id === scnId) ?? scenarios[0] ?? null;
   const { data: plan } = useMonPlan(scn?.id, membership.coproprietaireId);
+  const etatAides = useEtatAidesPortail(scn, lots);
 
   if (!scn || !bareme) {
     return (
@@ -88,6 +90,7 @@ export function QuotesParts({
         indiv: totalIndiv,
         profil,
         cle,
+        resteApproximatif: !!etatAides?.approximatif,
       });
     } finally {
       setPdfBusy(false);
@@ -101,6 +104,7 @@ export function QuotesParts({
         {lots.length > 1 ? lots.length + " lots dans la copropriété" : "Votre lot"} · estimation par lot et par
         scénario de travaux{scenarios.length > 1 ? " partagé" : ""}.
       </p>
+      <BandeauResteApproximatif etat={etatAides} />
 
       <div className="qp-controls">
         {lots.length > 1 && (

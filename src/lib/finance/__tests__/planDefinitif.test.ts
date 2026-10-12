@@ -1,7 +1,7 @@
 // Non-régression du moteur « plan de financement définitif » contre le classeur
 // de référence Les Violettes : chaque valeur attendue est la valeur calculée par Excel.
 import { describe, expect, it } from "vitest";
-import { computePlanDefinitif, plafondAmoRegle } from "../planDefinitif";
+import { computePlanDefinitif, etatNotificationAides, plafondAmoRegle } from "../planDefinitif";
 import { makeViolettes } from "./fixtureViolettes";
 
 const r = computePlanDefinitif(makeViolettes());
@@ -194,5 +194,69 @@ describe("planDefinitif - plafond AMO (600 € au-delà de 20 logements, 1 000 �
     expect(montant).toBeCloseTo(6300, 2);
     expect(gardeFou.libelle).toBe("AMO < 600 €/logt");
     expect(gardeFou.ok).toBe(false);
+  });
+});
+
+describe("planDefinitif - aides notifiées (12/10/2026)", () => {
+  const notifier = (montants: Record<string, number>, date = "2026-10-12") => {
+    const d = makeViolettes();
+    for (const a of d.aides)
+      if (a.id in montants) {
+        a.montantNotifie = montants[a.id];
+        a.dateNotification = date;
+      }
+    return computePlanDefinitif(d);
+  };
+
+  it("garde l'estimation tant qu'aucune aide n'est notifiée", () => {
+    const mpr = r.aides.find((a) => a.id === "mpr-travaux")!;
+    expect(mpr.notifiee).toBe(false);
+    expect(mpr.montantEstime).toBeCloseTo(243000, 2);
+    expect(mpr.montant).toBeCloseTo(243000, 2);
+    expect(etatNotificationAides(r)).toEqual({ attendues: 9, notifiees: 0, toutes: false, ecart: 0 });
+  });
+
+  it("retient le montant notifié dans les aides et tous les restes à charge", () => {
+    const n = notifier({ "mpr-travaux": 250000 });
+    const mpr = n.aides.find((a) => a.id === "mpr-travaux")!;
+    expect(mpr.notifiee).toBe(true);
+    expect(mpr.montant).toBe(250000);
+    expect(mpr.montantEstime).toBeCloseTo(243000, 2);
+    expect(mpr.dateNotification).toBe("2026-10-12");
+    // + 7 000 € d'aides publiques : chaque reste à charge baisse d'autant
+    expect(n.totalAides).toBeCloseTo(r.totalAides + 7000, 2);
+    expect(n.totalAidesPubliques).toBeCloseTo(r.totalAidesPubliques + 7000, 2);
+    expect(n.resteACharge).toBeCloseTo(r.resteACharge - 7000, 2);
+    expect(n.collectif.resteAFinancer).toBeCloseTo(r.collectif.resteAFinancer - 7000, 2);
+    expect(n.individuel.appelsFonds).toBeCloseTo(r.individuel.appelsFonds - 7000 * 0.7, 2);
+    expect(n.collectif.exemples[0].prixRevient).toBeLessThan(r.collectif.exemples[0].prixRevient);
+    expect(etatNotificationAides(n)).toMatchObject({ attendues: 9, notifiees: 1, toutes: false });
+    expect(etatNotificationAides(n).ecart).toBeCloseTo(7000, 2);
+  });
+
+  it("une aide notifiée à 0 (refusée) sort des calculs", () => {
+    const n = notifier({ "ems-bbc": 0 });
+    expect(n.aides.find((a) => a.id === "ems-bbc")!.montant).toBe(0);
+    expect(n.totalAides).toBeCloseTo(r.totalAides - 12000, 2);
+    expect(etatNotificationAides(n).notifiees).toBe(1);
+  });
+
+  it("le reste à charge n'est plus estimé quand toutes les aides attendues sont notifiées", () => {
+    const tout = Object.fromEntries(r.aides.filter((a) => a.montant != null).map((a) => [a.id, Math.round(a.montant!)]));
+    const n = notifier(tout);
+    const etat = etatNotificationAides(n);
+    expect(etat).toMatchObject({ attendues: 9, notifiees: 9, toutes: true });
+    // la prime CEE (privée) reste hors des aides publiques une fois notifiée
+    expect(n.primeCee).toBe(tout.cee);
+  });
+
+  it("ignore un montant notifié sur une ligne informative et une aide estimée à 0", () => {
+    const d = makeViolettes();
+    d.aides.find((a) => a.id === "mpr-indiv")!.montantNotifie = 3000;
+    d.aides.push({ id: "x", groupe: "Autre", libelle: "Sans objet", calcul: { mode: "manuel", montant: 0 }, publique: true });
+    const n = computePlanDefinitif(d);
+    expect(n.aides.find((a) => a.id === "mpr-indiv")!.montant).toBeNull();
+    expect(n.totalAides).toBeCloseTo(r.totalAides, 2);
+    expect(etatNotificationAides(n).attendues).toBe(9);
   });
 });

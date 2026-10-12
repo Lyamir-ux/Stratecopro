@@ -6,17 +6,19 @@ import { useState, type ReactNode } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { Cascade } from "@/components/Cascade";
-import { fmtEuro, fmtEuroFull } from "@/lib/format";
+import { fmtDate, fmtEuro, fmtEuroFull } from "@/lib/format";
 import { readParams } from "@/api/scenarios";
 import {
   pfDuCoproprietaire,
   pfIdsDuScenario,
+  useEtatAidesPortail,
   usePlansDefinitifsPartages,
   type Membership,
   type Scenario,
 } from "@/api/portail";
 import type { Bareme } from "@/lib/finance";
 import { PHASES_MOE, type AideResult } from "@/lib/finance/planDefinitif";
+import { BandeauResteApproximatif } from "./Mentions";
 
 /** Ligne « clé / valeur » dépliable : le contenu apparaît sous la ligne. */
 function Depliant({
@@ -110,6 +112,8 @@ export function PlanCopro({
   const pfIds = pfIdsDuScenario(scn);
   const parBatiment = pfIds.length > 1;
   const { data: pfs } = usePlansDefinitifsPartages(pfIds);
+  // Aides pas encore toutes notifiées : reste à charge approximatif (12/10/2026)
+  const etatAides = useEtatAidesPortail(scn, membership.lots);
   const [pfId, setPfId] = useState<string | null>(null);
   const pf = pfs ? (pfs.find((p) => p.id === pfId) ?? pfDuCoproprietaire(pfs, membership.lots)) : null;
   // Lots de travaux dépliés (lignes de devis)
@@ -170,6 +174,16 @@ export function PlanCopro({
   const aidesCee: AideResult[] = pv ? pv.aides.filter((a) => !a.publique && a.montant != null) : [];
   const aidesInfo: AideResult[] = pv ? pv.aides.filter((a) => a.montant == null) : [];
   const libelleAide = (a: AideResult) => (a.groupe && !a.libelle.startsWith(a.groupe) ? `${a.groupe} - ${a.libelle}` : a.libelle);
+  // Montant notifié (date) ou estimation en attente de notification
+  const sousLigneAide = (a: AideResult) =>
+    [
+      a.notifiee
+        ? `Montant notifié${a.dateNotification ? ` le ${fmtDate(a.dateNotification)}` : ""}`
+        : "Estimation, en attente de notification",
+      a.commentaire,
+    ]
+      .filter(Boolean)
+      .join(" · ");
 
   return (
     <div className="fade">
@@ -178,6 +192,7 @@ export function PlanCopro({
         Scénario « {scn.name} » · {copro.name}
         {pf ? " · d'après le plan de financement définitif validé par votre AMO" : ""}
       </p>
+      <BandeauResteApproximatif etat={etatAides} />
 
       {parBatiment && pfs && pfs.length > 1 && (
         <div className="qp-controls">
@@ -370,7 +385,7 @@ export function PlanCopro({
                 {pv ? (
                   <>
                     {aidesPubliques.map((a) => (
-                      <SousLigne key={a.id} l={libelleAide(a)} sub={a.commentaire} v={fmtEuro(a.montant ?? 0)} />
+                      <SousLigne key={a.id} l={libelleAide(a)} sub={sousLigneAide(a)} v={fmtEuro(a.montant ?? 0)} />
                     ))}
                     {aidesPubliques.length === 0 && <SousLigne l="Aucune aide collective publique retenue." />}
                     <SousLigne l="Total aides publiques" v={<b>{fmtEuro(pv.totalAidesPubliques)}</b>} />
@@ -397,7 +412,7 @@ export function PlanCopro({
                 {pv ? (
                   <>
                     {aidesCee.map((a) => (
-                      <SousLigne key={a.id} l={libelleAide(a)} sub={a.commentaire} v={fmtEuro(a.montant ?? 0)} />
+                      <SousLigne key={a.id} l={libelleAide(a)} sub={sousLigneAide(a)} v={fmtEuro(a.montant ?? 0)} />
                     ))}
                     {aidesCee.length === 0 && <SousLigne l="Aucune prime CEE retenue." />}
                     <SousLigne l="Prime privée, versée à la réception des travaux." />

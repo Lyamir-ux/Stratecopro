@@ -16,6 +16,7 @@ import {
   computeFinance,
   computePlanDefinitif,
   couvreToutLaCopro,
+  etatNotificationAides,
   itemsARepartirPf,
   readPlanDefinitif,
   lotsDuPerimetre,
@@ -34,6 +35,7 @@ import {
   useDeleteGroupeEstimatif,
   useDeletePlanDefinitif,
   libellePerimetre,
+  montantsPontAJour,
   pfARepartir,
   plansValides,
   plansValidesEnConflit,
@@ -1007,11 +1009,21 @@ function PanelIngenieriePf({
   onOpen: () => void;
 }) {
   const total = pv.totalOperationTtc;
+  const notif = etatNotificationAides(pv);
   return (
     <div className="panel">
       <div className="p-head">
         <Icon name="barChart" size={18} />
         <h3>Ingénierie financière</h3>
+        {notif.attendues > 0 && (
+          <Badge kind={notif.toutes ? "success" : "warn"} dot>
+            {notif.toutes
+              ? "Aides notifiées"
+              : notif.notifiees
+                ? `Aides notifiées : ${notif.notifiees}/${notif.attendues}`
+                : "Aides estimées"}
+          </Badge>
+        )}
         <span style={{ flex: 1 }}></span>
         <button className="se-btn se-btn-ghost btn-sm" onClick={onOpen}>
           Ouvrir le PF définitif
@@ -1034,8 +1046,9 @@ function PanelIngenieriePf({
           </div>
         ))}
         <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>
-          Champs remplis automatiquement à partir du plan de financement définitif validé. Barres à échelle unique :
-          part du coût total de l'opération TTC ({fmtEuro(total)}).
+          Champs remplis automatiquement à partir du plan de financement définitif validé
+          {notif.attendues > 0 && !notif.toutes ? " (aides non notifiées : estimations du plan)" : ""}. Barres à échelle
+          unique : part du coût total de l'opération TTC ({fmtEuro(total)}).
         </p>
       </div>
     </div>
@@ -1136,7 +1149,11 @@ function PlansIndividuelsPfPanel({
   // Partage au portail copropriétaire : tous les PF validés ensemble, un plan
   // cumulé par copropriétaire (plans par bâtiment, choix d'Amir du 11/10/2026).
   const partage = pont?.statut === "partage";
-  const aJour = pontAJour(pont, idsValides);
+  // Mêmes PF, et mêmes montants : une aide notifiée (ou un devis) modifiée
+  // après le partage laisse au portail des restes à charge périmés
+  const memesPf = pontAJour(pont, idsValides);
+  const memesMontants = montantsPontAJour(pont, pfs);
+  const aJour = memesPf && memesMontants;
   const partageable = tous.plans.length > 0 && tous.complet && !!tous.cleRef && !!bareme;
   const pfsIncomplets = tous.parPf.filter((x) => x.repartition.manquants.length > 0 || x.repartition.plans.length === 0);
   const togglePartage = (partager: boolean) => {
@@ -1216,10 +1233,16 @@ function PlansIndividuelsPfPanel({
               la répartition complète de « {pfsIncomplets.map((x) => x.pf.nom).join(" », « ")} ».
             </p>
           )}
-          {partage && !aJour && (
+          {partage && !memesPf && (
             <p className="se-small" style={{ margin: "0 0 6px", color: "var(--color-warning-700)" }}>
               <Icon name="alert" size={12} /> Le portail publie d'autres PF que ceux validés aujourd'hui : mettez à
               jour le partage pour que chaque copropriétaire voie son plan cumulé à jour.
+            </p>
+          )}
+          {partage && memesPf && !memesMontants && (
+            <p className="se-small" style={{ margin: "0 0 6px", color: "var(--color-warning-700)" }}>
+              <Icon name="alert" size={12} /> Les montants du PF ont changé depuis le partage (aides notifiées,
+              devis, fonds travaux) : mettez à jour le partage pour que le portail affiche les nouveaux restes à charge.
             </p>
           )}
         </div>

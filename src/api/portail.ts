@@ -10,7 +10,13 @@ import { determineProfil, type Bareme, type FinanceParams, type Profil } from "@
 import { readParams } from "./scenarios";
 import { estSci, libellePieceSituation, type ContextePieces } from "@/lib/piecesSituation";
 import type { TachePortail } from "@/lib/recapPhases";
-import { computePlanDefinitif, readPlanDefinitif, type PlanDefinitifData, type PlanDefinitifResult } from "@/lib/finance/planDefinitif";
+import {
+  computePlanDefinitif,
+  etatNotificationAides,
+  readPlanDefinitif,
+  type PlanDefinitifData,
+  type PlanDefinitifResult,
+} from "@/lib/finance/planDefinitif";
 import type { PartLotPortail } from "./planDefinitif";
 
 export type Copro = Tables<"coproprietes">;
@@ -214,6 +220,42 @@ export function pfDuCoproprietaire(pfs: PlanDefinitifPartage[], lots: PortalLot[
     pfs[0] ??
     null
   );
+}
+
+export interface EtatAidesPortail {
+  notifiees: number;
+  attendues: number;
+  /** Reste à charge approximatif : des aides du plan publié ne sont pas encore notifiées. */
+  approximatif: boolean;
+}
+
+/**
+ * Notification des aides des PF publiés qui concernent les lots du
+ * copropriétaire (tous, si aucun ne les couvre). Sans PF publié (scénario
+ * simple), les aides sont des estimations : le reste à charge est approximatif.
+ */
+export function etatAidesPortail(pfs: PlanDefinitifPartage[], lots: PortalLot[]): EtatAidesPortail {
+  const couvre = (pf: PlanDefinitifPartage, l: PortalLot) =>
+    !pf.batimentIds?.length || (!!l.batimentId && pf.batimentIds.includes(l.batimentId));
+  const concernes = pfs.filter((pf) => lots.some((l) => couvre(pf, l)));
+  const retenus = concernes.length ? concernes : pfs;
+  let notifiees = 0;
+  let attendues = 0;
+  for (const pf of retenus) {
+    const e = etatNotificationAides(pf.resultat);
+    notifiees += e.notifiees;
+    attendues += e.attendues;
+  }
+  return { notifiees, attendues, approximatif: !retenus.length || notifiees < attendues };
+}
+
+/** État des notifications du scénario publié (null tant qu'il se charge, ou sans scénario). */
+export function useEtatAidesPortail(scenario: Scenario | null, lots: PortalLot[]): EtatAidesPortail | null {
+  const ids = pfIdsDuScenario(scenario);
+  const { data: pfs } = usePlansDefinitifsPartages(ids);
+  if (!scenario) return null;
+  if (!ids.length) return { notifiees: 0, attendues: 0, approximatif: true };
+  return pfs ? etatAidesPortail(pfs, lots) : null;
 }
 
 /** Scénarios partagés par l'AMO pour cette copro (les seuls visibles côté portail). */

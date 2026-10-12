@@ -118,6 +118,15 @@ export interface AideDef {
    * déduite au prorata de la quote-part de l'opération.
    */
   cleRepartition?: string;
+  /**
+   * Montant notifié par le financeur (€) - ou fixé par le contrat pour la
+   * prime CEE. Saisi à réception de la notification : il remplace l'estimation
+   * de la formule dans tous les calculs (reste à charge, plans individuels,
+   * portail, appels de fonds). Absent : aide pas encore notifiée ; 0 = refusée.
+   */
+  montantNotifie?: number;
+  /** Date de la notification (AAAA-MM-JJ). */
+  dateNotification?: string;
   commentaire?: string;
 }
 
@@ -230,8 +239,16 @@ export interface AideResult {
   id: string;
   groupe: string;
   libelle: string;
-  /** null pour les lignes informatives (aides individuelles). */
+  /**
+   * Montant retenu dans les calculs : le montant notifié s'il est saisi, sinon
+   * l'estimation. null pour les lignes informatives (aides individuelles).
+   */
   montant: number | null;
+  /** Estimation de la formule, avant notification (null : ligne informative). */
+  montantEstime: number | null;
+  /** true : `montant` est le montant notifié. */
+  notifiee: boolean;
+  dateNotification?: string;
   publique: boolean;
   commentaire?: string;
 }
@@ -347,6 +364,39 @@ export function estBonusMpr(a: Pick<AideDef, "id" | "libelle">): boolean {
   return estBonusFragile(a) || a.id.includes("bonus") || /bonus/i.test(a.libelle);
 }
 
+/** Montant notifié saisi (un nombre, 0 compris : aide refusée). */
+export function aideNotifiee(a: Pick<AideDef, "montantNotifie">): boolean {
+  return typeof a.montantNotifie === "number" && Number.isFinite(a.montantNotifie);
+}
+
+export interface EtatNotificationAides {
+  /** Aides à montant collectif attendant une notification (estimation non nulle, ou déjà notifiées). */
+  attendues: number;
+  notifiees: number;
+  /** Toutes les aides attendues sont notifiées : le reste à charge n'est plus une estimation. */
+  toutes: boolean;
+  /** Montants notifiés − estimations, sur les aides notifiées. */
+  ecart: number;
+}
+
+/**
+ * Où en sont les notifications des aides d'un PF. Les lignes informatives
+ * (aides individuelles) et les aides estimées à 0 non notifiées n'attendent
+ * rien ; la prime CEE compte (montant fixé par le contrat).
+ */
+export function etatNotificationAides(r: Pick<PlanDefinitifResult, "aides">): EtatNotificationAides {
+  const attendues = r.aides.filter(
+    (a) => a.montantEstime != null && (a.notifiee || Math.abs(a.montantEstime) > 0.005)
+  );
+  const notifiees = attendues.filter((a) => a.notifiee);
+  return {
+    attendues: attendues.length,
+    notifiees: notifiees.length,
+    toutes: notifiees.length === attendues.length,
+    ecart: notifiees.reduce((s, a) => s + (a.montant ?? 0) - (a.montantEstime ?? 0), 0),
+  };
+}
+
 /**
  * Plafond finançable de l'AMO (€ HT / logement) : 600 € pour une copropriété
  * de plus de 20 logements, 1 000 € en dessous (règle d'Amir, 23/09/2026).
@@ -446,37 +496,49 @@ export function computePlanDefinitif(data: PlanDefinitifData): PlanDefinitifResu
   /** Prorata énergétique : part des travaux retenus MPR dans le total travaux HT. */
   const prorataEnergetique = totalTravauxHt > 0 ? assietteMprTravaux / totalTravauxHt : 0;
 
-  // Aides
+  // Aides : estimation par la formule, remplacée par le montant notifié dès
+  // qu'il est saisi (demande d'Amir du 12/10/2026)
   const aides: AideResult[] = data.aides.map((a) => {
-    let montant: number | null;
+    let estime: number | null;
     const c = a.calcul;
     switch (c.mode) {
       case "manuel":
-        montant = c.montant;
+        estime = c.montant;
         break;
       case "parM2Shab":
-        montant = infos.surfaceHabitable * c.tauxEurM2 * c.coef;
+        estime = infos.surfaceHabitable * c.tauxEurM2 * c.coef;
         break;
       case "pctAssietteTravaux":
-        montant = assietteMprTravaux * (c.taux / 100) * c.coef;
+        estime = assietteMprTravaux * (c.taux / 100) * c.coef;
         break;
       case "pctEtudes":
-        montant = htEtudes * (c.taux / 100) * c.coef * prorataEnergetique;
+        estime = htEtudes * (c.taux / 100) * c.coef * prorataEnergetique;
         break;
       case "pctAmo":
-        montant = assietteAmo * (c.taux / 100);
+        estime = assietteAmo * (c.taux / 100);
         break;
       case "forfaitPlusParLogement":
-        montant = c.base + c.parLogement * (c.surEquivalent ? infos.nbLogementsEquiv : infos.nbLogements);
+        estime = c.base + c.parLogement * (c.surEquivalent ? infos.nbLogementsEquiv : infos.nbLogements);
         break;
       case "parLogement":
-        montant = c.montant * (c.surEquivalent ? infos.nbLogementsEquiv : infos.nbLogements);
+        estime = c.montant * (c.surEquivalent ? infos.nbLogementsEquiv : infos.nbLogements);
         break;
       case "info":
-        montant = null;
+        estime = null;
         break;
     }
-    return { id: a.id, groupe: a.groupe, libelle: a.libelle, montant, publique: a.publique, commentaire: a.commentaire };
+    const notifiee = estime != null && aideNotifiee(a);
+    return {
+      id: a.id,
+      groupe: a.groupe,
+      libelle: a.libelle,
+      montant: notifiee ? a.montantNotifie! : estime,
+      montantEstime: estime,
+      notifiee,
+      ...(notifiee && a.dateNotification ? { dateNotification: a.dateNotification } : {}),
+      publique: a.publique,
+      commentaire: a.commentaire,
+    };
   });
   const totalAides = aides.reduce((s, a) => s + (a.montant ?? 0), 0);
   const totalAidesPubliques = aides.reduce((s, a) => s + (a.publique ? (a.montant ?? 0) : 0), 0);
