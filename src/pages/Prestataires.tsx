@@ -183,7 +183,11 @@ function EtatAdresse({ a }: { a: AccesAdresse }) {
         </span>
       );
     default:
-      return <Badge kind="neutral">Sans accès</Badge>;
+      return (
+        <span title="Accès créé d'office avec la prochaine consultation envoyée, ou tout de suite par « Créer l'accès »">
+          <Badge kind="neutral">Sans accès</Badge>
+        </span>
+      );
   }
 }
 
@@ -251,7 +255,8 @@ function AccesEspace({
       <label>Accès à l'espace prestataire</label>
       <p className="se-small" style={{ margin: "2px 0 8px", color: "var(--fg2)" }}>
         Chaque adresse est une personne : elle reçoit son propre accès, et toutes retrouvent le même espace de
-        l'entreprise (consultations, offres, projets, messages).
+        l'entreprise (consultations, offres, projets, messages). Une adresse sans accès reçoit le sien d'office avec
+        la prochaine consultation qui lui est envoyée ; « Créer l'accès » l'ouvre tout de suite.
       </p>
 
       {liste.length === 0 && (
@@ -535,7 +540,8 @@ function PrestaForm({
           />
         ) : (
           <p className="se-small cs-field-full" style={{ margin: 0, color: "var(--fg-muted)" }}>
-            L'accès de chaque adresse à l'espace prestataire se crée ensuite depuis la fiche enregistrée (« Créer l'accès »).
+            L'accès de chaque adresse à l'espace prestataire se crée d'office avec la première consultation envoyée à
+            l'entreprise, ou plus tôt depuis la fiche enregistrée (« Créer l'accès »).
           </p>
         )}
       </div>

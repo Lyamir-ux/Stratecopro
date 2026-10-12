@@ -662,7 +662,9 @@ function PersonnesPanel({ presta }: { presta: Tables<"prestataires"> }) {
                   <Badge kind="warn">Invitée</Badge>
                 </span>
               ) : (
-                <Badge kind="neutral">Sans accès</Badge>
+                <span title="L'accès arrive avec la prochaine consultation envoyée à l'entreprise">
+                  <Badge kind="neutral">Sans accès</Badge>
+                </span>
               )}
             </div>
             {p.moi && <MonNom nom={nomDe(p.nom)} />}
@@ -670,7 +672,8 @@ function PersonnesPanel({ presta }: { presta: Tables<"prestataires"> }) {
         ))}
         <p className="se-small" style={{ margin: "10px 0 0", color: "var(--fg-muted)" }}>
           <Icon name="help" size={12} /> Pour donner accès à une nouvelle personne, ajoutez son adresse dans la fiche
-          ci-dessus, puis demandez l'ouverture de son accès à l'équipe Strat Eco (
+          ci-dessus : elle reçoit son accès personnel avec la prochaine consultation envoyée à l'entreprise (un lien
+          pour choisir son mot de passe). Pour l'ouvrir plus tôt, écrivez à l'équipe Strat Eco (
           <a href="mailto:admin@strateco.fr">admin@strateco.fr</a>). Retirer une adresse de la fiche retire l'accès de
           la personne.
         </p>
