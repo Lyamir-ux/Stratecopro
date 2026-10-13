@@ -7,6 +7,7 @@ import * as XLSX from "xlsx";
 import { useCrumbs } from "@/components/Shell/useCrumbs";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
+import { ChampNombre } from "@/components/ChampNombre";
 import { useCopro } from "@/api/copros";
 import { useDonnees, type DonneesCopro } from "@/api/donnees";
 import {
@@ -56,29 +57,23 @@ const TVA_CHOICES = [0, 5.5, 10, 20];
 
 // ---------- petits helpers d'édition ----------
 
+// Champ texte à clavier décimal : la virgule et le point sont acceptés (bug d'Amir du 13/10/2026,
+// un champ type="number" refuse le point en navigateur français).
 function NumInput({
   value,
   onChange,
   width,
-  step = "any",
-  min,
 }: {
   value: number;
   onChange: (n: number) => void;
   /** Largeur en px ; par défaut, remplit la colonne. */
   width?: number;
-  step?: string;
-  min?: number;
 }) {
   return (
-    <input
-      className="edit-inp"
-      type="number"
-      step={step}
-      min={min}
-      style={{ width: width ?? "100%", textAlign: "right" }}
+    <ChampNombre
       value={Number.isFinite(value) ? value : 0}
-      onChange={(e) => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+      onChange={(n) => onChange(n ?? 0)}
+      width={width}
     />
   );
 }
@@ -148,19 +143,15 @@ function NotificationAide({
   const notifiee = aideNotifiee(aide);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <input
-        className="edit-inp"
-        type="number"
-        step="any"
+      <ChampNombre
         placeholder="Non notifiée"
         title="Montant notifié par le financeur (vide : pas encore notifiée, 0 : aide refusée)"
-        style={{ width: "100%", textAlign: "right" }}
-        value={notifiee ? aide.montantNotifie : ""}
-        onChange={(e) =>
+        value={notifiee ? aide.montantNotifie : undefined}
+        onChange={(n) =>
           onChange(
-            e.target.value === ""
+            n === undefined
               ? { montantNotifie: undefined, dateNotification: aide.dateNotification }
-              : { montantNotifie: Number(e.target.value), dateNotification: aide.dateNotification ?? aujourdhuiParis() }
+              : { montantNotifie: n, dateNotification: aide.dateNotification ?? aujourdhuiParis() }
           )
         }
       />

@@ -65,7 +65,7 @@ import {
 } from "@/api/signature";
 import { messageErreur } from "@/lib/erreurs";
 import { useEspacesCoproprietaires } from "@/api/espaces";
-import { aujourdhuiParis, adhesionDepassee, dossierAdhesionDepose, limiteAdhesion } from "@/lib/financement";
+import { aujourdhuiParis, adhesionDepassee, dossierAdhesionDepose, dureePretDuPf, limiteAdhesion } from "@/lib/financement";
 import { EnvoyerAdhesionFenetre, type ModeEmailAdhesion } from "./AdhesionEmail";
 
 export function FinancementTab({ c }: { c: CoproWithStats }) {
@@ -108,6 +108,15 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
     setDateLimiteAdh(finConfig.date_limite_adhesion ?? "");
     setDateLimite(finConfig.date_limite_choix ?? "");
   }, [finConfig]);
+
+  // Durée du prêt indiquée par le PF validé (bug d'Amir du 13/10/2026 : le PF disait 20 ans, le champ
+  // restait à 15). Elle est reprise à la validation du plan ; sans configuration enregistrée, le champ
+  // la propose d'emblée, et un écart avec la durée enregistrée est signalé sous le champ.
+  const planDuree = plansValides(pfPlans).find((p) => p.id === pfChoisi) ?? plansValides(pfPlans)[0];
+  const dureePf = planDuree ? dureePretDuPf(readPlanDefinitif(planDuree.data).params.dureeEcoPtzAns) : null;
+  useEffect(() => {
+    if (finConfig === null && dureePf != null) setDuree(dureePf);
+  }, [finConfig, dureePf]);
 
   // la date limite d'adhésion est exigée dès que la campagne est ouverte
   const ouvertureSansDate = ouverte && !dateLimiteAdh;
@@ -295,6 +304,16 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                   value={duree}
                   onChange={(e) => setDuree(Number(e.target.value))}
                 />
+                {dureePf != null && dureePf !== duree && (
+                  <button
+                    type="button"
+                    className="se-btn se-btn-ghost btn-sm"
+                    title="Le plan de financement définitif validé indique une autre durée : la reprendre (puis Enregistrer)"
+                    onClick={() => setDuree(dureePf)}
+                  >
+                    Le PF indique {dureePf} ans : reprendre
+                  </button>
+                )}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                 <label

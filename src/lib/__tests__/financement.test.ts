@@ -4,6 +4,7 @@ import {
   adhesionDepassee,
   adhesionPossible,
   dossierAdhesionDepose,
+  dureePretDuPf,
   ecoPtzPossible,
   idsNonConcernesParEnquete,
   limiteAdhesion,
@@ -147,5 +148,27 @@ describe("SCI soumise à l'impôt sur les sociétés : pas d'éco-PTZ (règle d'
     expect(motifSansEcoPtz(LOGEMENT, "SCI soumise à l'impôt sur les sociétés")).toBe(MOTIF_SCI_IS);
     expect(motifSansEcoPtz([{ usage: "garage" }], "SCI soumise à l'impôt sur les sociétés")).toBe(MOTIF_SANS_ECO_PTZ);
     expect(motifSansEcoPtz(LOGEMENT, undefined)).toBeNull();
+  });
+});
+
+describe("dureePretDuPf", () => {
+  it("reprend la durée du plan de financement (20 ans, bug du 13/10/2026)", () => {
+    expect(dureePretDuPf(20)).toBe(20);
+    expect(dureePretDuPf(15)).toBe(15);
+    expect(dureePretDuPf(3)).toBe(3);
+  });
+
+  it("arrondit à l'année entière", () => {
+    expect(dureePretDuPf(14.6)).toBe(15);
+    expect(dureePretDuPf(12.2)).toBe(12);
+  });
+
+  it("ignore une durée hors des bornes du prêt (3 à 20 ans) ou illisible", () => {
+    expect(dureePretDuPf(2)).toBeNull();
+    expect(dureePretDuPf(25)).toBeNull();
+    expect(dureePretDuPf(0)).toBeNull();
+    expect(dureePretDuPf(Number.NaN)).toBeNull();
+    expect(dureePretDuPf("20")).toBeNull();
+    expect(dureePretDuPf(undefined)).toBeNull();
   });
 });

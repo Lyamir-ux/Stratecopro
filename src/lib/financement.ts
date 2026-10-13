@@ -103,6 +103,17 @@ export const MOTIF_SANS_ENQUETE =
 // peut plus en ouvrir un ; qui l'a déposé (bulletin et mandat SEPA) peut encore ajouter des pièces
 // pendant l'instruction.
 
+/**
+ * Durée du prêt collectif indiquée par un plan de financement (bug d'Amir du 13/10/2026 : le PF disait
+ * 20 ans, l'onglet Financement restait à 15). Entière et dans les bornes de la colonne
+ * copro_financement_config.duree_annees (3 à 20 ans) ; null si le plan n'en donne pas d'exploitable.
+ */
+export function dureePretDuPf(ans: unknown): number | null {
+  if (typeof ans !== "number" || !Number.isFinite(ans)) return null;
+  const d = Math.round(ans);
+  return d >= 3 && d <= 20 ? d : null;
+}
+
 /** Date du jour à Paris, au format AAAA-MM-JJ (comparable à une colonne date). */
 export function aujourdhuiParis(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });

@@ -19,6 +19,7 @@ import {
   type PlanDefinitifData,
 } from "@/lib/finance";
 import { libellesBatiments } from "@/lib/referentiels";
+import { dureePretDuPf } from "@/lib/financement";
 import { makeDefaultParams } from "./scenarios";
 import { uploadFichierDirect } from "./fichiers";
 import { construireNomFichier } from "@/lib/nommage";
@@ -461,6 +462,18 @@ export function useValiderPlanDefinitif(coproId: string) {
         const pdata = readPlanDefinitif(row.data);
         const infos = pdata.infos;
 
+        // La durée du prêt collectif suit celle du PF validé (bug d'Amir du 13/10/2026 : le PF disait
+        // 20 ans, la config restait à 15). Seule la durée est écrite : banque, campagne et dates
+        // limites du copropriétaire sont conservées ; une ligne absente est créée avec ses défauts.
+        // Meilleur effort (erreur ignorée) : la validation est déjà acquise, l'onglet Financement
+        // signale l'écart.
+        const duree = dureePretDuPf(pdata.params.dureeEcoPtzAns);
+        if (duree != null) {
+          await supabase
+            .from("copro_financement_config")
+            .upsert({ copro_id: coproId, duree_annees: duree }, { onConflict: "copro_id" });
+        }
+
         // Archivage et versionnage automatiques de l'état validé (feedback
         // Théa 03/09/2026) : un export .xlsx daté par validation dans Fichiers.
         try {
@@ -522,6 +535,8 @@ export function useValiderPlanDefinitif(coproId: string) {
       void qc.invalidateQueries({ queryKey: ["copro", coproId] });
       void qc.invalidateQueries({ queryKey: ["copros"] });
       void qc.invalidateQueries({ queryKey: ["fichiers", coproId] });
+      void qc.invalidateQueries({ queryKey: ["fin-config", coproId] });
+      void qc.invalidateQueries({ queryKey: ["portail", "fin-config", coproId] });
     },
   });
 }

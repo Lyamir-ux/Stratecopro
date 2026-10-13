@@ -3,7 +3,7 @@
 // l'AMO active/désactive chaque question ; les questions socle (identité, usage des
 // lots) sont verrouillées. Les conditions d'affichage sont montrées à titre informatif -
 // elles s'appliquent côté portail copropriétaire au moment de la saisie.
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
@@ -164,6 +164,35 @@ function DateLimiteChamp({ enqueteId, coproId, valeur }: { enqueteId: string; co
 }
 
 /** Ligne de question dans l'écran de configuration (calquée sur la maquette). */
+/**
+ * Texte d'une question personnalisée (bug d'Amir du 13/10/2026 : « on ne voit qu'une partie de la
+ * phrase ») : l'encadré s'agrandit avec le texte au lieu de le faire défiler sur une seule ligne.
+ * Une question reste d'un seul tenant : Entrée ne crée pas de retour à la ligne.
+ */
+function ChampQuestion({ value, onChange }: { value: string; onChange: (text: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      className="edit-inp"
+      rows={2}
+      value={value}
+      placeholder="Texte de la question…"
+      onChange={(e) => onChange(e.target.value.replace(/\s*\n\s*/g, " "))}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.preventDefault();
+      }}
+      style={{ flex: 1, minWidth: 240, maxWidth: "none", resize: "vertical", lineHeight: 1.4 }}
+    />
+  );
+}
+
 function ConfigRow({
   q,
   scope,
@@ -184,7 +213,7 @@ function ConfigRow({
         <div className="qc-line">
           <span className={"qc-chip " + scope}>{q.tag}</span>
           {onEdit ? (
-            <input className="edit-inp" value={q.q} placeholder="Texte de la question…" onChange={(e) => onEdit(e.target.value)} style={{ flex: 1 }} />
+            <ChampQuestion value={q.q} onChange={onEdit} />
           ) : (
             <span className="qc-q">{q.q}</span>
           )}
