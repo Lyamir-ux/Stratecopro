@@ -54,6 +54,7 @@ import { creerFicheMaitreOeuvre, resoudreMaitreOeuvreEnBase, usePrestataires } f
 import type { Enums } from "@/lib/database.types";
 import { trierParNomFamille } from "@/lib/nomFamille";
 import { fmtDate } from "@/lib/format";
+import { telechargerCsv } from "@/lib/csv";
 import { ImportLotsDialog } from "./ImportLotsDialog";
 import { EmailCoproprietaire } from "@/components/EmailCoproprietaire";
 import { NomCoproprietaire } from "@/components/NomCoproprietaire";
@@ -131,6 +132,24 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
   })).filter((u) => u.v > 0 || u.id === "habitation");
   // Dénomination des subdivisions : « Bât. 01 » ou « Entrée 01 » selon la fiche
   const lb = libellesBatiments(c.denomination_batiments);
+
+  // Export des noms sans e-mail (feedback Amir 13/10) : de quoi relancer chaque personne
+  // par un autre canal - lots, bâtiment et téléphone en regard du nom.
+  const exporterSansEmail = () =>
+    telechargerCsv(
+      `sans-email-${slugCopro(c.name) || "copro"}.csv`,
+      ["Copropriétaire", "Lot(s)", lb.singulier, "Téléphone"],
+      sansEmail.map((cp) => {
+        const siens = lots.filter((l) => l.coproprietaire_id === cp.id);
+        const bats = Array.from(new Set(siens.map((l) => l.batiment?.code).filter((v): v is string => !!v)));
+        return [
+          cp.nom,
+          siens.map((l) => `n°${l.num}`).join(" / "),
+          bats.map((b) => `${lb.court} ${b}`).join(" / "),
+          cp.telephone ?? "",
+        ];
+      })
+    );
 
   // Matrice bâtiments × clés : nb de lots et Σ tantièmes par clé
   const cleCodes = cles.map((k) => k.code);
@@ -464,11 +483,22 @@ export function DonneesTab({ c }: { c: CoproWithStats }) {
                       Tous les copropriétaires ont une adresse e-mail.
                     </p>
                   ) : (
-                    <ul>
-                      {sansEmail.map((cp) => (
-                        <li key={cp.id}>{cp.nom}</li>
-                      ))}
-                    </ul>
+                    <>
+                      <button
+                        className="se-btn se-btn-secondary btn-sm"
+                        style={{ marginBottom: 8 }}
+                        title="Exporter les noms sans e-mail (CSV pour Excel)"
+                        onClick={exporterSansEmail}
+                      >
+                        <Icon name="download" size={13} />
+                        Exporter la liste
+                      </button>
+                      <ul>
+                        {sansEmail.map((cp) => (
+                          <li key={cp.id}>{cp.nom}</li>
+                        ))}
+                      </ul>
+                    </>
                   )}
                 </div>
               </details>
