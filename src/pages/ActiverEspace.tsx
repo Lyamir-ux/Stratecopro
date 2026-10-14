@@ -11,6 +11,10 @@
 // Depuis le 12/10/2026, le lien d'accès joint à une consultation
 // (notifier-consultation v18) porte aussi suite=<chemin de la consultation> :
 // la personne y arrive une fois son mot de passe choisi.
+// Depuis le 14/10/2026, l'e-mail « Mot de passe oublié » envoyé par le mailer
+// Supabase pointe aussi ici (via /reinitialisation?token_hash=..., qui renvoie
+// avec motif=reinit) : même protection contre les filtres qui ouvrent les
+// liens, et un texte de réinitialisation plutôt que de bienvenue.
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
@@ -21,6 +25,7 @@ export default function ActiverEspace() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const tokenHash = params.get("token_hash");
+  const reinit = params.get("motif") === "reinit";
   const espace = params.get("espace") === "prestataire" ? "Votre espace prestataire" : "Votre espace copropriétaire";
   const suite = cheminInterne(params.get("suite"));
   const [busy, setBusy] = useState(false);
@@ -54,8 +59,9 @@ export default function ActiverEspace() {
           Lien invalide ou expiré
         </h1>
         <p className="se-body" style={{ marginTop: 0 }}>
-          Ce lien d'activation n'est plus valable. Saisissez votre adresse e-mail sur la page suivante : vous recevrez un
-          nouveau lien pour choisir votre mot de passe.
+          Ce lien n'est plus valable : il a expiré, il a déjà été ouvert, ou un e-mail plus récent l'a remplacé (seul le
+          dernier e-mail reçu fonctionne). Vérifiez d'abord votre boîte de réception et vos courriers indésirables ;
+          sinon saisissez votre adresse e-mail sur la page suivante pour recevoir un nouveau lien.
         </p>
         <Link
           to="/mot-de-passe-oublie"
@@ -71,11 +77,12 @@ export default function ActiverEspace() {
   return card(
     <>
       <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 24, margin: "0 0 10px" }}>
-        {espace}
+        {reinit ? "Nouveau mot de passe" : espace}
       </h1>
       <p className="se-body" style={{ marginTop: 0 }}>
-        Bienvenue ! Pour activer votre espace, choisissez votre mot de passe. Votre identifiant de connexion sera votre
-        adresse e-mail.
+        {reinit
+          ? "Vous avez demandé à réinitialiser votre mot de passe. Cliquez ci-dessous pour en choisir un nouveau."
+          : "Bienvenue ! Pour activer votre espace, choisissez votre mot de passe. Votre identifiant de connexion sera votre adresse e-mail."}
       </p>
       <button
         className="se-btn se-btn-primary"
@@ -83,7 +90,7 @@ export default function ActiverEspace() {
         onClick={() => void activer()}
         disabled={busy}
       >
-        {busy ? "Vérification…" : "Choisir mon mot de passe"}
+        {busy ? "Vérification…" : reinit ? "Choisir un nouveau mot de passe" : "Choisir mon mot de passe"}
         {!busy && <Icon name="arrowRight" size={18} />}
       </button>
     </>

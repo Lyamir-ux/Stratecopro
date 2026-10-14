@@ -1,0 +1,41 @@
+<!--
+  Modèle d'e-mail « Reset Password » (Supabase > Authentication > Emails > Templates).
+  À COLLER dans le tableau de bord : ce fichier n'est lu par aucun script.
+
+  Le lien ne passe plus par {{ .ConfirmationURL }} (qui consomme le jeton dès qu'une
+  messagerie ouvre le lien pour l'analyser) : il pointe vers la page de l'application
+  (/reinitialisation, renvoi vers /activer-espace), qui ne vérifie le jeton qu'au clic
+  sur le bouton. {{ .RedirectTo }} vaut l'adresse passée par l'application à
+  resetPasswordForEmail (<origine>/reinitialisation) : le lien suit donc le domaine
+  de l'application, sans rien coder en dur.
+
+  Durée : le texte annonce 24 heures. Elle doit correspondre au réglage
+  Authentication > Sign In / Providers > Email > « Email OTP Expiration » (86400 s).
+  Si ce réglage reste à 3600 s, remplacer par « 1 heure ».
+
+  Objet suggéré : Réinitialisation de votre mot de passe - Strat Eco Pro
+-->
+<div style="font-family: Arial, Helvetica, sans-serif; max-width: 520px; margin: 0 auto; color: #1f2937;">
+  <h2 style="color: #4d7c0f;">Réinitialisation de votre mot de passe</h2>
+  <p>Bonjour,</p>
+  <p>Vous avez demandé à réinitialiser le mot de passe de votre compte sur la plateforme <strong>Strat Eco</strong>.</p>
+  <p style="margin: 28px 0;">
+    <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}"
+       style="background: #65a30d; color: #ffffff; padding: 12px 24px; border-radius: 8px;
+              text-decoration: none; font-weight: bold;">
+      Choisir un nouveau mot de passe
+    </a>
+  </p>
+  <p style="font-size: 13px; color: #6b7280;">
+    Ce lien est valable 24 heures et ne peut être utilisé qu'une seule fois. Seul le dernier e-mail reçu
+    fonctionne : si vous avez fait plusieurs demandes, utilisez le plus récent.
+    Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet e-mail :
+    votre mot de passe restera inchangé.
+  </p>
+  <p style="font-size: 13px; color: #6b7280;">
+    Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>
+    {{ .RedirectTo }}?token_hash={{ .TokenHash }}
+  </p>
+  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+  <p style="font-size: 12px; color: #9ca3af;">Strat Eco - Stratégie d'économie d'énergie</p>
+</div>

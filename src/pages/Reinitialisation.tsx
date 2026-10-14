@@ -3,8 +3,12 @@
 // récupération ; sans session valide, le lien est expiré ou déjà utilisé.
 // Venue de /activer-espace avec une suite (lien d'accès joint à une
 // consultation), la personne y est menée une fois le mot de passe choisi.
+// Le modèle d'e-mail « Reset Password » de Supabase peut aussi y envoyer avec
+// ?token_hash=... ({{ .RedirectTo }}?token_hash={{ .TokenHash }}) : la page
+// renvoie alors vers /activer-espace, qui ne vérifie le jeton qu'au clic (les
+// filtres de messagerie qui ouvrent les liens ne le consomment plus).
 import { useState, type FormEvent, type ReactNode } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { PasswordInput } from "@/components/PasswordInput";
 import { supabase } from "@/lib/supabase";
@@ -16,6 +20,7 @@ export default function Reinitialisation() {
   const { session, profile, loading } = useAuth();
   const navigate = useNavigate();
   const suite = cheminInterne((useLocation().state as { suite?: string } | null)?.suite);
+  const tokenHash = useSearchParams()[0].get("token_hash");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [done, setDone] = useState(false);
@@ -61,6 +66,11 @@ export default function Reinitialisation() {
     </div>
   );
 
+  // lien du mail « Mot de passe oublié » : on passe par la page à clic (jeton non consommé à l'ouverture)
+  if (tokenHash) {
+    return <Navigate to={`/activer-espace?token_hash=${encodeURIComponent(tokenHash)}&motif=reinit`} replace />;
+  }
+
   if (loading) {
     return card(<p className="se-body" style={{ margin: 0 }}>Vérification du lien…</p>);
   }
@@ -73,7 +83,9 @@ export default function Reinitialisation() {
           Lien invalide ou expiré
         </h1>
         <p className="se-body" style={{ marginTop: 0 }}>
-          Ce lien de réinitialisation n'est plus valable. Refaites une demande pour en recevoir un nouveau.
+          Ce lien de réinitialisation n'est plus valable : il a expiré, il a déjà été ouvert, ou un e-mail plus récent
+          l'a remplacé (seul le dernier e-mail reçu fonctionne). Vérifiez votre boîte de réception, sinon refaites une
+          demande pour en recevoir un nouveau.
         </p>
         <Link
           to="/mot-de-passe-oublie"
