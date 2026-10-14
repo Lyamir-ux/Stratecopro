@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Avatar, Badge } from "@/components/ui";
+import { TamponSyndic } from "@/components/TamponSyndic";
 import { useAuth } from "@/auth/AuthProvider";
 import type { CollaborateurCree } from "@/api/profiles";
 import {
@@ -521,6 +522,27 @@ function Dossiers({ org }: { org: Organisation }) {
 }
 
 /**
+ * Tampon de l'enseigne (demande d'Amir du 14/10/2026) : imprimé dans le cadre « cachet du Syndic »
+ * des bulletins d'adhésion de tous ses dossiers. Le même import existe dans l'onglet Financement
+ * d'un dossier, au moment d'ouvrir la campagne.
+ */
+function TamponOrganisation({ org }: { org: Organisation }) {
+  return (
+    <>
+      <div className="se-eyebrow" style={EYEBROW}>
+        Tampon du syndic
+      </div>
+      <TamponSyndic
+        organisationId={org.id}
+        nomSyndic={org.nom}
+        libelleImport="Importer un tampon"
+        sansTampon={`Aucun tampon pour ${org.nom} : le cadre « cachet du Syndic » des bulletins d'adhésion de ses dossiers reste vide.`}
+      />
+    </>
+  );
+}
+
+/**
  * Module « Suivi PPT » de l'enseigne : activation (la branche apparaît dans
  * l'espace syndic) et paramètres financiers - taux d'honoraires de suivi de
  * travaux (assiette HT ou TTC) et hypothèses du tableau PPT Strat Eco.
@@ -760,6 +782,7 @@ export function OrganisationsPanel() {
               <div style={{ padding: "0 4px 8px" }}>
                 <Membres org={o} />
                 <Dossiers org={o} />
+                <TamponOrganisation org={o} />
                 <ModulePpt org={o} />
               </div>
             )}

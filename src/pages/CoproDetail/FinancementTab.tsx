@@ -1,5 +1,5 @@
 // Onglet Plans de financement - porté de detail.jsx (FinancementTab), branché sur les scénarios réels.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Badge, DpePair, Progress } from "@/components/ui";
@@ -64,8 +64,8 @@ import {
   useRelancerSignataire,
 } from "@/api/signature";
 import { messageErreur } from "@/lib/erreurs";
-import { useImporterTamponSyndic, useTamponOrganisation } from "@/api/tamponSyndic";
-import { ACCEPT_TAMPON, LIBELLE_FORMATS_TAMPON } from "@/lib/tamponSyndic";
+import { useTamponOrganisation } from "@/api/tamponSyndic";
+import { TamponSyndic } from "@/components/TamponSyndic";
 import { useEspacesCoproprietaires } from "@/api/espaces";
 import { aujourdhuiParis, adhesionDepassee, dossierAdhesionDepose, dureePretDuPf, limiteAdhesion } from "@/lib/financement";
 import { EnvoyerAdhesionFenetre, type ModeEmailAdhesion } from "./AdhesionEmail";
@@ -1526,92 +1526,23 @@ function TamponSyndicBloc({
   exige: boolean;
   campagneOuverte: boolean;
 }) {
-  const { data, isLoading, error } = useTamponOrganisation(organisationId);
-  const importer = useImporterTamponSyndic(organisationId);
-  const champ = useRef<HTMLInputElement>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const nom = data?.nom ?? nomSyndic ?? "ce syndic";
-  const image = data?.image ?? null;
-
-  const choisir = (f: File | undefined) => {
-    if (!f) return;
-    setMessage(null);
-    importer.mutate(f, { onError: (e) => setMessage(messageErreur(e, "Import du tampon impossible")) });
-  };
-
-  const bouton = (libelle: string, primaire: boolean) => (
-    <>
-      <button
-        type="button"
-        className={`se-btn ${primaire ? "se-btn-secondary" : "se-btn-ghost"} btn-sm`}
-        disabled={importer.isPending}
-        onClick={() => champ.current?.click()}
-      >
-        <Icon name="upload" size={14} />
-        {importer.isPending ? "Import en cours…" : libelle}
-      </button>
-      <input
-        ref={champ}
-        type="file"
-        accept={ACCEPT_TAMPON}
-        style={{ display: "none" }}
-        onChange={(e) => {
-          choisir(e.target.files?.[0]);
-          e.target.value = "";
-        }}
-      />
-    </>
-  );
-
+  const nom = nomSyndic ?? "ce syndic";
   return (
     <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
       <div style={{ fontSize: 12.5, color: "var(--fg2)", marginBottom: 6 }}>Tampon du syndic sur le bulletin d'adhésion</div>
-      {!organisationId ? (
-        <p className="se-small" style={{ color: "var(--color-error-700)", margin: 0 }}>
-          Ce dossier n'est rattaché à aucune organisation : choisissez-la dans l'onglet Données, le tampon se range par
-          organisation.
-        </p>
-      ) : isLoading ? (
-        <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>Chargement…</p>
-      ) : error ? (
-        <p className="se-small" style={{ color: "var(--color-error-700)", margin: 0 }}>
-          {messageErreur(error, "Lecture du tampon impossible")}
-        </p>
-      ) : image ? (
-        <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-          <img
-            src={image}
-            alt={`Tampon de ${nom}`}
-            style={{ maxHeight: 64, maxWidth: 220, border: "1px solid var(--border)", borderRadius: 6, background: "#fff", padding: 4 }}
-          />
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
-            <span className="se-small" style={{ color: "var(--fg-muted)" }}>
-              Tampon de {nom}, repris sur tous les bulletins des dossiers de l'organisation. Un bulletin déjà généré
-              garde l'ancien tampon.
-            </span>
-            {bouton("Remplacer le tampon", false)}
-          </div>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
-          <span className="se-small" style={{ color: exige || campagneOuverte ? "var(--color-error-700)" : "var(--fg-muted)" }}>
-            {exige
-              ? `Importez le tampon de ${nom} pour ouvrir la campagne : un bulletin signé ne se refait pas, son cadre « cachet du Syndic » ne peut pas être complété après coup.`
-              : campagneOuverte
-                ? `Aucun tampon pour ${nom} : les bulletins générés d'ici l'import auront leur cadre « cachet du Syndic » vide.`
-                : `Aucun tampon pour ${nom} : le cadre « cachet du Syndic » des bulletins resterait vide. Importez-le avant d'ouvrir la campagne.`}
-          </span>
-          {bouton("Importer le tampon du syndic", true)}
-        </div>
-      )}
-      {message && (
-        <p className="se-small" style={{ color: "var(--color-error-700)", margin: "8px 0 0" }}>
-          {message}
-        </p>
-      )}
-      <p className="se-small" style={{ color: "var(--fg-muted)", margin: "8px 0 0" }}>
-        Image du tampon en {LIBELLE_FORMATS_TAMPON} (scan ou photo recadrée sur le tampon, fond transparent de préférence).
-      </p>
+      <TamponSyndic
+        organisationId={organisationId}
+        nomSyndic={nomSyndic}
+        libelleImport="Importer le tampon du syndic"
+        alerte={exige || campagneOuverte}
+        sansTampon={
+          exige
+            ? `Importez le tampon de ${nom} pour ouvrir la campagne : un bulletin signé ne se refait pas, son cadre « cachet du Syndic » ne peut pas être complété après coup.`
+            : campagneOuverte
+              ? `Aucun tampon pour ${nom} : les bulletins générés d'ici l'import auront leur cadre « cachet du Syndic » vide.`
+              : `Aucun tampon pour ${nom} : le cadre « cachet du Syndic » des bulletins resterait vide. Importez-le avant d'ouvrir la campagne.`
+        }
+      />
     </div>
   );
 }
