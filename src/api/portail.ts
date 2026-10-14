@@ -964,7 +964,8 @@ export function useSaveAdhesion(coproId: string, coproprietaireId: string) {
   return useMutation({
     mutationFn: async (input: {
       scenarioId: string | null;
-      form: Json;
+      /** Absent : le brouillon déjà enregistré n'est pas touché (étape RIB, quand les bulletins existent). */
+      form?: Json;
       lieuSignature: string;
       ribConcordance?: string | null;
     }): Promise<string> => {
@@ -976,7 +977,7 @@ export function useSaveAdhesion(coproId: string, coproprietaireId: string) {
             copro_id: coproId,
             coproprietaire_id: coproprietaireId,
             scenario_id: input.scenarioId,
-            form: input.form,
+            ...(input.form !== undefined ? { form: input.form } : {}),
             iban: "",
             bic: "",
             lieu_signature: input.lieuSignature,

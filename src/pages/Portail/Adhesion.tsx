@@ -1436,9 +1436,11 @@ export function Adhesion({
                     await uploadVersBucket("signature-docs", upM.path as string, upM.token as string, mandat);
                     await appelSignature({ action: "principal_mandat_confirmer", bulletin_id: b.id });
                   }
+                  // le brouillon du formulaire n'est pas réécrit : `form` ne porte pas les adhérents
+                  // supplémentaires, la clé disparaissait et le scellement ne les voyait plus
+                  // (retour de SCI SCHMITT PATRIMOINE du 13/10/2026)
                   await save.mutateAsync({
                     scenarioId: scenario.id,
-                    form: form as unknown as Json,
                     lieuSignature: form.lieuSignature,
                     ribConcordance: concordance,
                   });

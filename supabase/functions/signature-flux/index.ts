@@ -45,6 +45,7 @@
 // son téléphone. Le téléphone reste une coordonnée du bulletin, rien de plus.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { PDFDocument, type PDFFont, type PDFPage, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
+import { nbAdherentsSupplementaires } from "./nbSupplementaires.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -616,13 +617,15 @@ function mentionCaseBulletin(
 
 async function genererPdfSigne(
   original: Uint8Array, signataires: Signataire[], b: Bulletin, scelleLe: Date, adherent2: string | null,
-  nbSupplementaires: number | null,
+  formSupplementaires: unknown,
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(original);
   const police = await pdf.embedFont(StandardFonts.Helvetica);
   const gras = await pdf.embedFont(StandardFonts.HelveticaBold);
   const vert = rgb(0.208, 0.341, 0.09);
   const pagesBulletin = pdf.getPageCount();
+  // les pages du bulletin font foi, plus que le brouillon du formulaire (retour du 13/10/2026)
+  const nbSupplementaires = nbAdherentsSupplementaires(pagesBulletin, formSupplementaires);
 
   // Mention dans les cases « Signature Adhérent 1 / 2 » de la première page (retour
   // d'Amir du 09/10/2026 : elle n'apparaissait que sur la page ajoutée en fin de document)
@@ -1008,18 +1011,18 @@ async function sceller(admin: Admin, req: Request | null, bulletinId: string): P
   const origBytes = new Uint8Array(await orig.arrayBuffer());
 
   // nom de l'adhérent 2 (co-emprunteur) déclaré au formulaire : son cosignataire signe
-  // dans la case « Signature Adhérent 2 » ; nombre d'adhérents supplémentaires (une page de
-  // bulletin chacun), absent des dossiers d'avant le 12/10/2026
+  // dans la case « Signature Adhérent 2 » ; adhérents supplémentaires du formulaire (une page de
+  // bulletin chacun), clé absente des dossiers d'avant le 12/10/2026 - le nombre est recoupé avec
+  // les pages du bulletin dans genererPdfSigne
   let adherent2: string | null = null;
-  let nbSupplementaires: number | null = null;
+  let formSupplementaires: unknown = null;
   if (b.adhesion_id) {
     const { data: adh } = await admin.from("adhesions_pret").select("form").eq("id", b.adhesion_id).maybeSingle();
     const form = adh?.form as { adherent2?: { nomPrenom?: string } | null; adherentsSupplementaires?: unknown } | null;
     adherent2 = form?.adherent2?.nomPrenom ?? null;
-    const supplementaires = form?.adherentsSupplementaires;
-    if (Array.isArray(supplementaires)) nbSupplementaires = supplementaires.length;
+    formSupplementaires = form?.adherentsSupplementaires ?? null;
   }
-  const pdfSigne = await genererPdfSigne(origBytes, signataires, b as Bulletin, scelleLe, adherent2, nbSupplementaires);
+  const pdfSigne = await genererPdfSigne(origBytes, signataires, b as Bulletin, scelleLe, adherent2, formSupplementaires);
   const hashFinal = await sha256Hex(pdfSigne);
   const sceau = await scellerHash(hashFinal);
 
