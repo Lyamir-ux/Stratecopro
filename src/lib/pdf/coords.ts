@@ -11,6 +11,10 @@ export interface TextSpot {
 }
 
 export const BULLETIN_COORDS = {
+  /** Cadre « À retourner à : (cachet du Syndic) » (14/10/2026, lu avec pdf.js) : le rectangle du gabarit
+   *  va de x 30 à 243,9 et de y 693,1 à 752,7, son libellé occupe le haut (ligne de base y 743,1,
+   *  corps 8) ; le tampon prend la place libre dessous, marge d'environ 3 pt. */
+  tampon: { x: 34, y: 696, w: 206, h: 43 },
   adresseImmeuble: { x: 262, y: 733, size: 7.5, max: 60 },
   nomSyndic: { x: 324, y: 719, size: 8, max: 40 },
   interlocuteur: { x: 312, y: 702, size: 8, max: 40 },

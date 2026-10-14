@@ -5,9 +5,10 @@
 // souscription passait par la seule banque. Les gabarits (public/modeles/) sont
 // calibrés au rectangle (./coords) ; la mention de signature du mandat est
 // apposée côté serveur (signature-flux), dans la case « Signature(s) ».
-import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import type { CosignataireDeclare } from "@/api/signature";
 import { composerDateLieu } from "../saisie";
+import { ajusterDansCadre, octetsDuTampon } from "../tamponSyndic";
 import { BULLETIN_COORDS, SEPA_COORDS, type TextSpot } from "./coords";
 
 export type SituationMatrimoniale = "mariee" | "divorcee" | "pacsee" | "veuve" | "celibataire";
@@ -145,6 +146,9 @@ export interface BulletinContexte {
   interlocuteur: string;
   lotNum: string;
   tantiemes: string;
+  /** Tampon du syndic (data URL PNG ou JPEG, un par organisation), imprimé dans le cadre « cachet
+   *  du Syndic » de chaque page formulaire ; absent : le cadre reste vide. */
+  tamponSyndic?: string | null;
 }
 
 const INK = rgb(0.08, 0.08, 0.35);
@@ -186,6 +190,17 @@ function drawAdherent(
   if (a.situation !== "celibataire") drawSpot(page, font, a.situationDepuis, c.situationDepuis);
 }
 
+/** Tampon du syndic embarqué dans le document (une seule fois, repris sur chaque page formulaire). */
+async function incrusterTampon(doc: PDFDocument, dataUrl: string): Promise<PDFImage> {
+  const tampon = octetsDuTampon(dataUrl);
+  if (!tampon) throw new Error("Le tampon du syndic enregistré est illisible : prévenez Strat Eco pour qu'il soit réimporté.");
+  try {
+    return tampon.format === "png" ? await doc.embedPng(tampon.octets) : await doc.embedJpg(tampon.octets);
+  } catch {
+    throw new Error("Le tampon du syndic enregistré est illisible : prévenez Strat Eco pour qu'il soit réimporté.");
+  }
+}
+
 /** Remplit la page formulaire du gabarit CEGEE (première page). */
 function remplirBulletin(
   p: PDFPage,
@@ -193,9 +208,11 @@ function remplirBulletin(
   fontBold: PDFFont,
   form: AdhesionForm,
   ctx: BulletinContexte,
-  date: Date
+  date: Date,
+  tampon: PDFImage | null
 ) {
   const C = BULLETIN_COORDS;
+  if (tampon) p.drawImage(tampon, ajusterDansCadre(tampon.width, tampon.height, C.tampon));
   drawSpot(p, font, ctx.adresseImmeuble, C.adresseImmeuble);
   drawSpot(p, font, ctx.nomSyndic, C.nomSyndic);
   drawSpot(p, font, ctx.interlocuteur, C.interlocuteur);
@@ -255,7 +272,8 @@ export async function genBulletin(
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
   const p = doc.getPage(0);
   const C = BULLETIN_COORDS;
-  remplirBulletin(p, font, fontBold, form, ctx, date);
+  const tampon = ctx.tamponSyndic ? await incrusterTampon(doc, ctx.tamponSyndic) : null;
+  remplirBulletin(p, font, fontBold, form, ctx, date, tampon);
 
   const supplementaires = form.adherentsSupplementaires ?? [];
   if (supplementaires.length) {
@@ -263,7 +281,7 @@ export async function genBulletin(
     for (const [i, s] of supplementaires.entries()) {
       const [page] = await doc.copyPages(modele, [0]);
       doc.insertPage(1 + i, page);
-      remplirBulletin(page, font, fontBold, formAdherentSupplementaire(form, s), ctx, date);
+      remplirBulletin(page, font, fontBold, formAdherentSupplementaire(form, s), ctx, date, tampon);
     }
   }
 

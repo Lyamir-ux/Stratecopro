@@ -2739,6 +2739,35 @@ export type Database = {
           },
         ]
       }
+      organisation_tampons: {
+        Row: {
+          image: string
+          organisation_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          image: string
+          organisation_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          image?: string
+          organisation_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organisation_tampons_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: true
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organisations: {
         Row: {
           adresse_facturation: string | null
@@ -5515,6 +5544,10 @@ export type Database = {
           fait: boolean
           titre: string
         }[]
+      }
+      tampon_syndic_copro: {
+        Args: { p_copro_id: string }
+        Returns: string
       }
       presta_peut_ecrire_sur: { Args: { p_copro_id: string }; Returns: boolean }
       peut_voir_consultation: {

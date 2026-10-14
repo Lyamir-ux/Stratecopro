@@ -1,5 +1,5 @@
 // Onglet Plans de financement - porté de detail.jsx (FinancementTab), branché sur les scénarios réels.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "@/components/Icon";
 import { Badge, DpePair, Progress } from "@/components/ui";
@@ -64,6 +64,8 @@ import {
   useRelancerSignataire,
 } from "@/api/signature";
 import { messageErreur } from "@/lib/erreurs";
+import { useImporterTamponSyndic, useTamponOrganisation } from "@/api/tamponSyndic";
+import { ACCEPT_TAMPON, LIBELLE_FORMATS_TAMPON } from "@/lib/tamponSyndic";
 import { useEspacesCoproprietaires } from "@/api/espaces";
 import { aujourdhuiParis, adhesionDepassee, dossierAdhesionDepose, dureePretDuPf, limiteAdhesion } from "@/lib/financement";
 import { EnvoyerAdhesionFenetre, type ModeEmailAdhesion } from "./AdhesionEmail";
@@ -85,6 +87,9 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
   const { data: donneesCopro } = useDonnees(c.id);
   const { data: espaces } = useEspacesCoproprietaires(c.id);
   const { data: bulletinsCopro } = useBulletinsCopro(c.id);
+  // tampon du syndic (une image par organisation, 0163) : imprimé dans le cadre « cachet du Syndic »
+  // de chaque bulletin d'adhésion
+  const tamponQuery = useTamponOrganisation(c.organisation_id);
   const { data: pfPlans } = usePlansDefinitifs(c.id);
   const [pfChoisi, setPfChoisi] = useState<string | null>(null);
   const saveConfig = useSaveFinancementConfig(c.id);
@@ -120,6 +125,11 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
 
   // la date limite d'adhésion est exigée dès que la campagne est ouverte
   const ouvertureSansDate = ouverte && !dateLimiteAdh;
+  // le tampon du syndic aussi : un bulletin signé ne se refait pas, il ne doit pas partir avec un
+  // cadre « cachet du Syndic » vide (une campagne déjà ouverte n'est pas bloquée, seulement signalée)
+  const tamponConnu = !c.organisation_id || tamponQuery.isSuccess;
+  const sansTampon = tamponConnu && !tamponQuery.data?.image;
+  const ouvertureSansTampon = ouverte && !finConfig?.adhesion_ouverte && (sansTampon || !tamponConnu);
   const configDirty =
     !finConfig ||
     finConfig.banque !== banque ||
@@ -357,7 +367,7 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
               <button
                 className="se-btn se-btn-secondary btn-sm"
                 style={{ marginBottom: 4 }}
-                disabled={!configDirty || ouvertureSansDate || saveConfig.isPending || duree < 3 || duree > 20}
+                disabled={!configDirty || ouvertureSansDate || ouvertureSansTampon || saveConfig.isPending || duree < 3 || duree > 20}
                 onClick={() => {
                   // ouverture de la campagne : l'e-mail aux copropriétaires est proposé une fois la config enregistrée
                   const ouvre = ouverte && !finConfig?.adhesion_ouverte;
@@ -382,6 +392,12 @@ export function FinancementTab({ c }: { c: CoproWithStats }) {
                 Indiquez la date limite d'adhésion au prêt collectif pour ouvrir la campagne.
               </p>
             )}
+            <TamponSyndicBloc
+              organisationId={c.organisation_id}
+              nomSyndic={c.organisation?.nom ?? c.syndic_name}
+              exige={ouvertureSansTampon}
+              campagneOuverte={!!finConfig?.adhesion_ouverte}
+            />
             <p className="se-small" style={{ color: "var(--fg-muted)", margin: "12px 0 0" }}>
               {ouverte
                 ? "Le copropriétaire remplit son dossier d'adhésion dans le portail : bulletin pré-rempli et mandat SEPA, signés électroniquement avec un code reçu par e-mail. L'éco-PTZ individuel et les fonds propres n'ont pas de date limite propre ; après la date limite d'adhésion, un copropriétaire qui a déposé son dossier peut encore y ajouter des pièces pendant l'instruction."
@@ -1489,6 +1505,114 @@ function RepartitionClesDialog({
         </button>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Tampon du syndic du bulletin d'adhésion (demande d'Amir du 14/10/2026) : le gabarit CEGEE a un
+ * cadre « À retourner à : (cachet du Syndic) ». Le tampon est unique par organisation : importé ici
+ * une fois, il est repris sur tous les bulletins des dossiers de l'enseigne. Il est imprimé à la
+ * génération du bulletin au portail ; un bulletin déjà généré garde donc le tampon d'alors.
+ */
+function TamponSyndicBloc({
+  organisationId,
+  nomSyndic,
+  exige,
+  campagneOuverte,
+}: {
+  organisationId: string | null;
+  nomSyndic: string | null;
+  /** L'ouverture de la campagne est demandée sans tampon : l'enregistrement est bloqué. */
+  exige: boolean;
+  campagneOuverte: boolean;
+}) {
+  const { data, isLoading, error } = useTamponOrganisation(organisationId);
+  const importer = useImporterTamponSyndic(organisationId);
+  const champ = useRef<HTMLInputElement>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const nom = data?.nom ?? nomSyndic ?? "ce syndic";
+  const image = data?.image ?? null;
+
+  const choisir = (f: File | undefined) => {
+    if (!f) return;
+    setMessage(null);
+    importer.mutate(f, { onError: (e) => setMessage(messageErreur(e, "Import du tampon impossible")) });
+  };
+
+  const bouton = (libelle: string, primaire: boolean) => (
+    <>
+      <button
+        type="button"
+        className={`se-btn ${primaire ? "se-btn-secondary" : "se-btn-ghost"} btn-sm`}
+        disabled={importer.isPending}
+        onClick={() => champ.current?.click()}
+      >
+        <Icon name="upload" size={14} />
+        {importer.isPending ? "Import en cours…" : libelle}
+      </button>
+      <input
+        ref={champ}
+        type="file"
+        accept={ACCEPT_TAMPON}
+        style={{ display: "none" }}
+        onChange={(e) => {
+          choisir(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+    </>
+  );
+
+  return (
+    <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+      <div style={{ fontSize: 12.5, color: "var(--fg2)", marginBottom: 6 }}>Tampon du syndic sur le bulletin d'adhésion</div>
+      {!organisationId ? (
+        <p className="se-small" style={{ color: "var(--color-error-700)", margin: 0 }}>
+          Ce dossier n'est rattaché à aucune organisation : choisissez-la dans l'onglet Données, le tampon se range par
+          organisation.
+        </p>
+      ) : isLoading ? (
+        <p className="se-small" style={{ color: "var(--fg-muted)", margin: 0 }}>Chargement…</p>
+      ) : error ? (
+        <p className="se-small" style={{ color: "var(--color-error-700)", margin: 0 }}>
+          {messageErreur(error, "Lecture du tampon impossible")}
+        </p>
+      ) : image ? (
+        <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+          <img
+            src={image}
+            alt={`Tampon de ${nom}`}
+            style={{ maxHeight: 64, maxWidth: 220, border: "1px solid var(--border)", borderRadius: 6, background: "#fff", padding: 4 }}
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+            <span className="se-small" style={{ color: "var(--fg-muted)" }}>
+              Tampon de {nom}, repris sur tous les bulletins des dossiers de l'organisation. Un bulletin déjà généré
+              garde l'ancien tampon.
+            </span>
+            {bouton("Remplacer le tampon", false)}
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
+          <span className="se-small" style={{ color: exige || campagneOuverte ? "var(--color-error-700)" : "var(--fg-muted)" }}>
+            {exige
+              ? `Importez le tampon de ${nom} pour ouvrir la campagne : un bulletin signé ne se refait pas, son cadre « cachet du Syndic » ne peut pas être complété après coup.`
+              : campagneOuverte
+                ? `Aucun tampon pour ${nom} : les bulletins générés d'ici l'import auront leur cadre « cachet du Syndic » vide.`
+                : `Aucun tampon pour ${nom} : le cadre « cachet du Syndic » des bulletins resterait vide. Importez-le avant d'ouvrir la campagne.`}
+          </span>
+          {bouton("Importer le tampon du syndic", true)}
+        </div>
+      )}
+      {message && (
+        <p className="se-small" style={{ color: "var(--color-error-700)", margin: "8px 0 0" }}>
+          {message}
+        </p>
+      )}
+      <p className="se-small" style={{ color: "var(--fg-muted)", margin: "8px 0 0" }}>
+        Image du tampon en {LIBELLE_FORMATS_TAMPON} (scan ou photo recadrée sur le tampon, fond transparent de préférence).
+      </p>
+    </div>
   );
 }
 

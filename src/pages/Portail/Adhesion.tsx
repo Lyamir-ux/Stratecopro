@@ -93,6 +93,7 @@ import {
   type CosignataireDeclare,
 } from "@/api/signature";
 import { readParams } from "@/api/scenarios";
+import { tamponSyndicPourCopro } from "@/api/tamponSyndic";
 import { libellesBatiments, USAGE_LOT_LABEL } from "@/lib/referentiels";
 import { Modal } from "@/components/Modal";
 import { PiecesDossierPret } from "./Documents";
@@ -844,6 +845,9 @@ export function Adhesion({
     principal: { nom?: string | null; prenom?: string | null }
   ) => {
     const f = formComplet(principal);
+    // tampon du syndic importé par l'AMO (une erreur de lecture arrête ici : un bulletin signé ne se
+    // refait pas, il ne doit pas partir sans tampon sur un simple raté de connexion)
+    const tamponSyndic = await tamponSyndicPourCopro(copro.id);
     const bytes = await genBulletin(
       // SCI : « Représentée par » résolu (par défaut le signataire principal) au moment d'imprimer
       f.personneMorale
@@ -857,6 +861,7 @@ export function Adhesion({
         interlocuteur: copro.gestionnaire_nom?.trim() || copro.syndic_name || "",
         lotNum,
         tantiemes: String(tantiemes ?? ""),
+        tamponSyndic,
       },
       date
     );
