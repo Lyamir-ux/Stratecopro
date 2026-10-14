@@ -12,12 +12,14 @@ import { useBareme } from "@/api/scenarios";
 import { useDonnees } from "@/api/donnees";
 import { useEnquete, useReponses, useSaveReponse, useUpdateEnquete, useVerifierProfil } from "@/api/enquete";
 import {
+  FORMATS_QUESTION_AMO,
   SECTIONS,
   describeType,
   condTexts,
   normalizeConfig,
   resolveQuestions,
   type ConfigItem,
+  type FormatQuestionAmo,
   type ResolvedQuestion,
   type Scope,
 } from "@/lib/enqueteCatalogue";
@@ -26,8 +28,12 @@ import { useGenererRapportEnquete } from "@/api/rapportEnquete";
 import { useFicheEtat } from "@/api/ficheEtat";
 import { useEspacesCoproprietaires, type EtatEspace } from "@/api/espaces";
 import { OuvrirEspacesFenetre } from "@/components/EspacesCoproprietaires";
-import { classerDestinataires, texteEmailEnquete } from "@/lib/emailEnquete";
+import { CONTACT_ENQUETE, classerDestinataires, texteEmailEnquete } from "@/lib/emailEnquete";
 import { idsNonConcernesParEnquete } from "@/lib/financement";
+import { ADRESSE_STRAT_ECO, questionnairePapier } from "@/lib/questionnairePapier";
+import { genererQuestionnaireEnquetePdf, nomFichierQuestionnaireEnquete } from "@/lib/pdf/questionnaireEnquete";
+import { telechargerPdf } from "@/api/ficheEtat";
+import { messageErreur } from "@/lib/erreurs";
 import { EmailEnqueteFenetre, EnvoyerEnqueteFenetre } from "./EnqueteEmail";
 import { RapportEnqueteDialog } from "./RapportEnqueteDialog";
 
@@ -198,12 +204,15 @@ function ConfigRow({
   scope,
   onToggle,
   onEdit,
+  onFormat,
   onDelete,
 }: {
   q: ResolvedQuestion;
   scope: Scope;
   onToggle?: () => void;
   onEdit?: (text: string) => void;
+  /** Question personnalisée : choix du format de réponse (texte libre ou Oui / Non). */
+  onFormat?: (format: FormatQuestionAmo) => void;
   onDelete?: () => void;
 }) {
   const conds = condTexts(q);
@@ -223,7 +232,20 @@ function ConfigRow({
             </span>
           )}
         </div>
-        <div className="qc-meta">{describeType(q)}</div>
+        {onFormat ? (
+          <label className="qc-meta" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            Réponse attendue :
+            <select className="edit-inp" value={q.type === "choix" ? "oui-non" : "texte"} onChange={(e) => onFormat(e.target.value as FormatQuestionAmo)}>
+              {FORMATS_QUESTION_AMO.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <div className="qc-meta">{describeType(q)}</div>
+        )}
         <div className="qc-cond">
           {conds.length === 0 ? (
             scope === "coproprietaire" ? "Cette question concerne tous les copropriétaires." : "Cette question concerne tous les lots."
@@ -277,6 +299,9 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
 
   const [configuring, setConfiguring] = useState(false);
   const [draft, setDraft] = useState<ConfigItem[] | null>(null);
+  // questionnaire papier (idée d'Amir du 14/10/2026) : PDF des questions activées, à renvoyer ou à déposer
+  const [exportEnCours, setExportEnCours] = useState(false);
+  const [erreurExport, setErreurExport] = useState<string | null>(null);
   const [cible, setCible] = useState<"tous" | "nonrep">("nonrep");
   // e-mail du questionnaire vérifié et modifiable avant l'envoi - idée d'Amir du 04/10/2026
   const [fenetreEmail, setFenetreEmail] = useState(false);
@@ -324,6 +349,8 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
     setDraft((prev) => (prev ?? config).map((it) => (ids.includes(it.id) ? { ...it, on } : it)));
   const editCustom = (id: string, text: string) =>
     setDraft((prev) => (prev ?? config).map((it) => (it.id === id ? { ...it, q: text } : it)));
+  const formatCustom = (id: string, format: FormatQuestionAmo) =>
+    setDraft((prev) => (prev ?? config).map((it) => (it.id === id ? { ...it, format } : it)));
   const removeCustom = (id: string) => setDraft((prev) => (prev ?? config).filter((it) => it.id !== id));
   const addCustom = () =>
     setDraft((prev) => [...(prev ?? config), { id: `custom-${crypto.randomUUID()}`, q: "", on: true, custom: true }]);
@@ -346,6 +373,29 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
   };
 
   if (!enquete) return <div style={{ padding: 30, color: "var(--fg-muted)" }}>Chargement…</div>;
+
+  const exporterQuestionnaire = async () => {
+    setErreurExport(null);
+    setExportEnCours(true);
+    try {
+      const bytes = await genererQuestionnaireEnquetePdf({
+        copro: {
+          nom: c.name,
+          adresse: c.adresse,
+          codePostal: c.code_postal,
+          ville: c.city,
+          denominationBatiments: c.denomination_batiments,
+        },
+        dateLimite: enquete.date_limite,
+        questionnaire: questionnairePapier(config),
+      });
+      telechargerPdf(bytes, nomFichierQuestionnaireEnquete(c.name));
+    } catch (e) {
+      setErreurExport(messageErreur(e, "L'export du questionnaire a échoué. Réessayez."));
+    } finally {
+      setExportEnCours(false);
+    }
+  };
 
   const texteEmail = texteEmailEnquete(enquete, c.name);
   const laisses = classement.sansEmail + classement.emailPris;
@@ -455,6 +505,7 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
                   scope="coproprietaire"
                   onToggle={() => toggleQ(q.id)}
                   onEdit={(text) => editCustom(q.id, text)}
+                  onFormat={(format) => formatCustom(q.id, format)}
                   onDelete={() => removeCustom(q.id)}
                 />
               ))}
@@ -585,6 +636,15 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
             <Icon name="clipboard" size={18} />
             <h3>Questionnaire d'enquête</h3>
             <span style={{ flex: 1 }}></span>
+            <button
+              className="se-btn se-btn-ghost btn-sm"
+              title={`PDF à imprimer : les questions activées, à compléter à la main puis à renvoyer à ${CONTACT_ENQUETE} ou à déposer chez Strat Eco, ${ADRESSE_STRAT_ECO}`}
+              disabled={exportEnCours}
+              onClick={() => void exporterQuestionnaire()}
+            >
+              <Icon name="download" size={14} />
+              {exportEnCours ? "Génération…" : "Exporter (PDF papier)"}
+            </button>
             <button className="se-btn se-btn-ghost btn-sm" onClick={startConfig}>
               <Icon name="settings" size={14} />
               Configurer
@@ -615,6 +675,13 @@ export function EnqueteTab({ c }: { c: CoproWithStats }) {
               {activeCount} question{activeCount > 1 ? "s" : ""} active{activeCount > 1 ? "s" : ""} sur {resolved.length} ·
               enquête sociale et technique diffusée via le portail copropriétaire.
             </p>
+            <p className="se-small" style={{ marginTop: 8, marginBottom: 0, color: "var(--fg-muted)" }}>
+              Version papier : le PDF reprend les questions activées ; le copropriétaire le renvoie à {CONTACT_ENQUETE} ou le dépose
+              chez Strat Eco, {ADRESSE_STRAT_ECO}.
+            </p>
+            {erreurExport && (
+              <p className="se-small" style={{ marginTop: 8, marginBottom: 0, color: "var(--color-error-700)" }}>{erreurExport}</p>
+            )}
           </div>
         </div>
       </div>

@@ -119,7 +119,9 @@ export const CATALOGUE: CatalogueQuestion[] = [
   { id: "type-coproprietaire", section: "identite", tag: "Type de copropriétaire", q: "Quel type de copropriétaire êtes-vous ?", type: "choix", options: TYPES_COPRO, locked: true, defaultOn: true },
   { id: "nb-indivisaires", section: "identite", tag: "Nombre d'indivisaires", q: "Combien y a-t-il d'indivisaires ?", type: "nombre", cond: [{ qid: "type-coproprietaire", vals: ["Indivision"] }], locked: true, defaultOn: true },
   { id: "nb-associes-sci", section: "identite", tag: "Nombre d'associés dans la SCI", q: "Combien y a-t-il d'associés dans la SCI ?", type: "nombre", cond: [{ qid: "type-coproprietaire", vals: SCI }], locked: true, defaultOn: true },
-  { id: "personne-physique-sci", section: "identite", tag: "Personne physique dans la SCI", q: "Y a-t-il une personne physique parmi les associés de la SCI ?", type: "choix", options: ["Oui", "Non", "Je ne sais pas"], cond: [{ qid: "type-coproprietaire", vals: SCI }], locked: true, defaultOn: true },
+  // 14/10/2026 (Amir) : « personne physique » devient « personne morale ». Nouvelle clé : les trois réponses
+  // enregistrées sous « personne-physique-sci » (toutes « Oui ») disaient l'inverse et ne sont plus relues.
+  { id: "personne-morale-sci", section: "identite", tag: "Personne morale dans la SCI", q: "Y a-t-il une personne morale parmi les associés de la SCI ?", type: "choix", options: ["Oui", "Non", "Je ne sais pas"], cond: [{ qid: "type-coproprietaire", vals: SCI }], locked: true, defaultOn: true },
 
   // ========== Situation & aides ==========
   {
@@ -389,10 +391,18 @@ const BY_ID = new Map(CATALOGUE.map((q) => [q.id, q]));
 export interface ConfigItem {
   id: string;
   on: boolean;
-  /** Question personnalisée ajoutée par l'AMO (texte libre). */
+  /** Question personnalisée ajoutée par l'AMO (texte libre ou Oui / Non). */
   custom?: boolean;
   q?: string;
+  /** Format de réponse d'une question personnalisée (14/10/2026) : texte libre si absent. */
+  format?: FormatQuestionAmo;
 }
+
+export type FormatQuestionAmo = "texte" | "oui-non";
+export const FORMATS_QUESTION_AMO: { id: FormatQuestionAmo; label: string }[] = [
+  { id: "texte", label: "Texte libre" },
+  { id: "oui-non", label: "Oui ou non" },
+];
 
 /** Question résolue pour l'affichage : définition du catalogue + état de configuration. */
 export interface ResolvedQuestion extends CatalogueQuestion {
@@ -435,7 +445,9 @@ export function resolveQuestions(config: ConfigItem[]): ResolvedQuestion[] {
       section: "confort" as SectionId,
       tag: "Question personnalisée",
       q: it.q ?? "",
-      type: "texte" as QuestionType,
+      ...(it.format === "oui-non"
+        ? { type: "choix" as QuestionType, options: ["Oui", "Non"] }
+        : { type: "texte" as QuestionType }),
       on: it.on,
       custom: true,
       defaultOn: true,

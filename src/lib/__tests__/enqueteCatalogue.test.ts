@@ -233,3 +233,41 @@ describe("nom et prénom de l'enquête (retour de A CHELGHAM du 11/10/2026)", ()
     expect(ids.indexOf("prenom")).toBe(ids.indexOf("nom") + 1);
   });
 });
+
+describe("associés de la SCI : personne morale (demande d'Amir du 14/10/2026)", () => {
+  it("demande s'il y a une personne morale parmi les associés, sous une nouvelle clé", () => {
+    const q = CATALOGUE.find((x) => x.id === "personne-morale-sci");
+    expect(q?.q).toBe("Y a-t-il une personne morale parmi les associés de la SCI ?");
+    expect(q?.locked).toBe(true);
+    // l'ancienne clé portait la question inverse : ses réponses ne doivent plus être relues
+    expect(CATALOGUE.some((x) => x.id === "personne-physique-sci")).toBe(false);
+  });
+
+  it("une enquête configurée avant le changement reçoit la nouvelle question et ignore l'ancienne", () => {
+    const stockee = [...defaultConfig().filter((it) => it.id !== "personne-morale-sci"), { id: "personne-physique-sci", on: true }];
+    const ids = normalizeConfig(stockee).map((it) => it.id);
+    expect(ids).toContain("personne-morale-sci");
+    expect(ids).not.toContain("personne-physique-sci");
+  });
+});
+
+describe("questions personnalisées : texte libre ou Oui / Non (14/10/2026)", () => {
+  const config = [
+    ...defaultConfig(),
+    { id: "custom-a", on: true, custom: true, q: "Question libre ?" },
+    { id: "custom-b", on: true, custom: true, q: "Souhaitez-vous remplacer vos fenêtres ?", format: "oui-non" as const },
+  ];
+  const perso = (id: string) => resolveQuestions(config).find((x) => x.id === id)!;
+
+  it("texte libre par défaut, Oui / Non en choix unique à la demande", () => {
+    expect(perso("custom-a").type).toBe("texte");
+    expect(perso("custom-a").options).toBeUndefined();
+    expect(perso("custom-b").type).toBe("choix");
+    expect(perso("custom-b").options).toEqual(["Oui", "Non"]);
+  });
+
+  it("le format est gardé par la normalisation de la config stockée", () => {
+    const b = normalizeConfig(config).find((it) => it.id === "custom-b");
+    expect(b?.format).toBe("oui-non");
+  });
+});
