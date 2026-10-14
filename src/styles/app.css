@@ -875,6 +875,18 @@ table.dossiers .edit-inp.sm { width: 74px; }
 .cs-textarea:focus { border-color: var(--accent); box-shadow: var(--shadow-focus); }
 @media (max-width: 720px) { .cs-form-grid { grid-template-columns: 1fr; } }
 
+/* postes de travaux envisagés (0164) */
+.cs-postes-tab { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.cs-postes-tab th { text-align: left; font-size: 12px; font-weight: 700; color: var(--fg-muted); padding: 0 8px 6px 0; white-space: nowrap; }
+.cs-postes-tab td { padding: 4px 8px 4px 0; vertical-align: middle; }
+.cs-postes-tab tfoot td { padding-top: 8px; border-top: 1px solid var(--border); }
+.cs-postes-tab .edit-inp { width: 100%; min-width: 150px; }
+.cs-postes-ro td { padding: 6px 10px 6px 0; border-top: 1px solid var(--border); vertical-align: top; color: var(--fg2); }
+.cs-postes-lecture { background: var(--bg-soft); border-radius: var(--radius-md); padding: 8px 12px; margin-bottom: 10px; }
+.cs-postes-lecture > summary { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--fg2); }
+.cs-postes-lecture[open] > summary { margin-bottom: 8px; }
+.cs-postes-total { font-weight: 500; color: var(--fg-muted); }
+
 /* ==========================================================================
    ESPACE SYNDIC - tableau de bord en bulles
    ========================================================================== */

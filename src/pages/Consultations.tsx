@@ -28,8 +28,11 @@ import {
   CONSULT_OPTIONS,
   CONSULT_TYPES,
   DIAG_SOUS_TYPES,
+  consultationAvecPostes,
   consultationCible,
+  lirePostesTravaux,
   optionLabel,
+  postesAEnregistrer,
   sousTypeLabel,
   ouvrirDocConsultation,
   ouvrirOffre,
@@ -46,9 +49,11 @@ import {
   phrasesAcces,
   type Consultation,
   type DestinatairesChoisis,
+  type PosteTravaux,
   type PublishResult,
 } from "@/api/consultations";
 import { CandidatureActions } from "@/components/CandidatureActions";
+import { PostesTravauxEditeur, PostesTravauxTableau } from "@/components/PostesTravaux";
 import { useDemandesAmo, useStatutDemandeAmo } from "@/api/demandesAmo";
 import type { PreremplissageConsultation } from "@/lib/ppt/consultationPppt";
 import { AnalysePourSyndic } from "@/pages/SyndicPpt/AnalyseOffres";
@@ -331,6 +336,7 @@ function Card({ cs }: { cs: Consultation }) {
         )}
       </div>
       <p className="cs-mission">{cs.mission}</p>
+      <PostesTravauxTableau postes={lirePostesTravaux(cs.postes_travaux)} />
       {(cs.options.length > 0 || cs.docs.length > 0) && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
           {cs.options.map((o) => (
@@ -615,6 +621,7 @@ export default function Consultations() {
     date_limite: "",
     budget: "",
     options: [] as string[],
+    postes: [] as PosteTravaux[],
   });
   const [demandeLiee, setDemandeLiee] = useState<string | null>(depuisDemande?.demandeId ?? null);
   const [files, setFiles] = useState<File[]>([]);
@@ -647,12 +654,10 @@ export default function Consultations() {
     const manques: string[] = [];
     if (!cibleOk) manques.push(draft.cible === "existante" ? "choisissez la copropriété" : "renseignez le nom de la copropriété");
     if (draft.type === "diag" && !draft.sous_type) manques.push("choisissez le type de diagnostic");
-    if (!draft.mission.trim())
-      manques.push(
-        draft.sous_type === "amiante_plomb" && draft.type === "diag"
-          ? "décrivez la mission et le programme de travaux pressentis"
-          : "décrivez la mission"
-      );
+    if (!draft.mission.trim()) manques.push("décrivez la mission");
+    // le repérage amiante et plomb porte sur les travaux pressentis : au moins un poste dans le tableau
+    if (draft.type === "diag" && draft.sous_type === "amiante_plomb" && postesAEnregistrer(draft.postes).length === 0)
+      manques.push("renseignez au moins un poste de travaux pressenti");
     if (manques.length > 0) {
       setFormError("Pour publier : " + manques.join(" · ") + ".");
       return false;
@@ -697,6 +702,8 @@ export default function Consultations() {
         sous_type: draft.type === "diag" && draft.sous_type ? draft.sous_type : null,
         // options réservées à la maîtrise d'œuvre - jamais publiées pour les autres métiers
         options: draft.type === "moe" ? draft.options : [],
+        // tableau des postes de travaux : MOE, amiante et plomb, contrôle technique, SPS
+        postes_travaux: consultationAvecPostes(draft.type, draft.sous_type) ? postesAEnregistrer(draft.postes) : [],
         prestataires_choisis: choisis && choisis.length > 0 ? choisis : null,
         destinataires,
         files,
@@ -745,7 +752,7 @@ export default function Consultations() {
       }
       setDemandeLiee(null);
     }
-    setDraft({ type: "moe", sous_type: "", cible: "existante", copro_id: "", ext_nom: "", ext_adresse: "", ext_ville: "", ext_lots: "", ext_batiments: "", mission: "", date_limite: "", budget: "", options: [] });
+    setDraft({ type: "moe", sous_type: "", cible: "existante", copro_id: "", ext_nom: "", ext_adresse: "", ext_ville: "", ext_lots: "", ext_batiments: "", mission: "", date_limite: "", budget: "", options: [], postes: [] });
     setFiles([]);
     setForm(false);
   };
@@ -908,23 +915,31 @@ export default function Consultations() {
                 </>
               )}
               <div className="cs-field cs-field-full">
-                <label>
-                  {draft.type === "diag" && draft.sous_type === "amiante_plomb"
-                    ? "Description de la mission et programme de travaux pressentis"
-                    : "Description de la mission"}
-                </label>
+                <label>Description de la mission</label>
                 <textarea
                   className="cs-textarea"
-                  rows={draft.type === "diag" && draft.sous_type === "amiante_plomb" ? 5 : 3}
+                  rows={3}
                   value={draft.mission}
                   placeholder={
                     draft.type === "diag" && draft.sous_type === "amiante_plomb"
-                      ? "Périmètre du repérage, puis programme de travaux pressentis (postes concernés : façades, menuiseries, toiture, parties communes…)"
+                      ? "Périmètre du repérage, bâtiments et parties concernés, contraintes d'accès…"
                       : "Périmètre, attendus, contraintes particulières…"
                   }
                   onChange={(e) => set("mission", e.target.value)}
                 ></textarea>
               </div>
+              {/* idée de Louis du 13/10/2026 : le tableau des postes de travaux accompagne le budget estimatif */}
+              {consultationAvecPostes(draft.type, draft.sous_type) && (
+                <div className="cs-field cs-field-full">
+                  <label>
+                    {draft.type === "diag" ? "Programme de travaux pressentis" : "Postes de travaux à envisager"}{" "}
+                    <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>
+                      · {draft.type === "diag" ? "les postes sur lesquels portera le repérage" : "le candidat les voit avec le budget estimatif"}
+                    </span>
+                  </label>
+                  <PostesTravauxEditeur postes={draft.postes} onChange={(postes) => set("postes", postes)} />
+                </div>
+              )}
               <div className="cs-field">
                 <label>Date limite de réponse</label>
                 <input

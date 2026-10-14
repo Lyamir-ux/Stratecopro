@@ -13,7 +13,15 @@ import { RenommageDialog } from "@/components/RenommageDialog";
 import { fmtEuro, fmtDate } from "@/lib/format";
 import { adresseComplete } from "@/lib/offres";
 import { messageErreur } from "@/lib/erreurs";
-import { CONSULT_TYPES, optionLabel, ouvrirDocConsultation, ouvrirOffre, sousTypeLabel } from "@/api/consultations";
+import {
+  CONSULT_TYPES,
+  lirePostesTravaux,
+  optionLabel,
+  ouvrirDocConsultation,
+  ouvrirOffre,
+  sousTypeLabel,
+} from "@/api/consultations";
+import { PostesTravauxTableau } from "@/components/PostesTravaux";
 import {
   marquerConsultationRecuperee,
   useConsultationsPresta,
@@ -276,6 +284,7 @@ export function InfosConsultation({ cs, presta }: { cs: ConsultationVue; presta:
         ></iframe>
       )}
       <p className="se-body" style={{ marginTop: 0 }}>{cs.mission}</p>
+      <PostesTravauxTableau postes={lirePostesTravaux(cs.postes_travaux)} ouvert />
       {docs.length > 0 && (
         <div className="cs-field" style={{ marginBottom: 12 }}>
           <label>Pièces du dossier de consultation</label>
@@ -876,6 +885,7 @@ export function ConsultationsPresta({ presta }: { presta: Tables<"prestataires">
                 )}
               </div>
               <p className="cs-mission">{cs.mission}</p>
+              <PostesTravauxTableau postes={lirePostesTravaux(cs.postes_travaux)} />
               {(cs.options.length > 0 || cs.docs.length > 0) && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                   {cs.options.map((o) => (

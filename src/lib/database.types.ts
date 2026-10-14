@@ -950,6 +950,7 @@ export type Database = {
           nb_batiments: number | null
           nb_logements: number | null
           options: string[]
+          postes_travaux: Json
           ppt_copro_id: string | null
           prestataires_choisis: string[] | null
           published_at: string
@@ -974,6 +975,7 @@ export type Database = {
           nb_batiments?: number | null
           nb_logements?: number | null
           options?: string[]
+          postes_travaux?: Json
           ppt_copro_id?: string | null
           prestataires_choisis?: string[] | null
           published_at?: string
@@ -998,6 +1000,7 @@ export type Database = {
           nb_batiments?: number | null
           nb_logements?: number | null
           options?: string[]
+          postes_travaux?: Json
           ppt_copro_id?: string | null
           prestataires_choisis?: string[] | null
           published_at?: string

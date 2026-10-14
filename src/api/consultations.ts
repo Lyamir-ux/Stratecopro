@@ -52,6 +52,61 @@ export const DIAG_SOUS_TYPES: { id: string; label: string }[] = [
 
 export const sousTypeLabel = (id: string): string => DIAG_SOUS_TYPES.find((s) => s.id === id)?.label ?? id;
 
+/**
+ * Poste de travaux envisagé (0164, idée de Louis du 13/10/2026) : une ligne du
+ * tableau complété à la publication, en plus du budget estimatif.
+ */
+// (un type et non une interface : il s'enregistre tel quel dans la colonne JSON)
+export type PosteTravaux = {
+  poste: string;
+  /** Estimation en € HT ; null si le poste n'est pas chiffré. */
+  montant: number | null;
+  precisions: string;
+};
+
+/** Métiers qui reçoivent le tableau des postes de travaux : maîtrise d'œuvre, diagnostic amiante et plomb, contrôle technique, SPS. */
+export const consultationAvecPostes = (type: string, sousType?: string | null): boolean =>
+  type === "moe" || type === "ct" || type === "sps" || (type === "diag" && sousType === "amiante_plomb");
+
+/** Postes courants proposés d'un clic dans le formulaire. */
+export const POSTES_SUGGERES: string[] = [
+  "Isolation thermique des façades (ITE)",
+  "Isolation de la toiture / des combles",
+  "Isolation des planchers bas",
+  "Remplacement des menuiseries extérieures",
+  "Chauffage et eau chaude sanitaire",
+  "Ventilation (VMC)",
+  "Étanchéité de toiture-terrasse",
+  "Parties communes (halls, escaliers, éclairage)",
+];
+
+/** Poste vide, tel qu'affiché dans une ligne à compléter. */
+export const posteVide = (): PosteTravaux => ({ poste: "", montant: null, precisions: "" });
+
+/** Relit la colonne JSON `postes_travaux` : tolérante, ignore tout ce qui n'est pas un poste nommé. */
+export function lirePostesTravaux(json: unknown): PosteTravaux[] {
+  if (!Array.isArray(json)) return [];
+  const postes: PosteTravaux[] = [];
+  for (const l of json) {
+    if (!l || typeof l !== "object") continue;
+    const o = l as Record<string, unknown>;
+    const poste = typeof o.poste === "string" ? o.poste.trim() : "";
+    if (!poste) continue;
+    const montant = typeof o.montant === "number" && Number.isFinite(o.montant) ? o.montant : null;
+    postes.push({ poste, montant, precisions: typeof o.precisions === "string" ? o.precisions.trim() : "" });
+  }
+  return postes;
+}
+
+/** Lignes à enregistrer : les lignes sans poste sont écartées. */
+export const postesAEnregistrer = (lignes: PosteTravaux[]): PosteTravaux[] => lirePostesTravaux(lignes);
+
+/** Somme des postes chiffrés, ou null si aucun ne l'est. */
+export function totalPostesTravaux(postes: PosteTravaux[]): number | null {
+  const chiffres = postes.filter((p) => p.montant != null);
+  return chiffres.length ? chiffres.reduce((s, p) => s + (p.montant ?? 0), 0) : null;
+}
+
 export type Consultation = Tables<"consultations"> & {
   candidatures: Tables<"candidatures">[];
   copro: { name: string; city: string | null; adresse: string | null; code_postal: string | null } | null;
@@ -261,6 +316,8 @@ export function usePublishConsultation() {
       nb_batiments: number | null;
       sous_type: string | null;
       options: string[];
+      /** Postes de travaux envisagés (0164) ; [] si le métier n'a pas de tableau ou s'il reste vide. */
+      postes_travaux: PosteTravaux[];
       /** Entreprises choisies (0125) ; null = toutes les entreprises du métier. */
       prestataires_choisis: string[] | null;
       /** Adresses choisies par entreprise (0139) ; absent = principale + copies. */
