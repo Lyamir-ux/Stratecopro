@@ -229,7 +229,7 @@ export function useArchiverCertificatRgeProjet(presta: Tables<"prestataires"> | 
     mutationFn: async (a: ArchivageRge) => {
       if (!presta) throw new Error("Entreprise inconnue.");
       const file = await fichierCertificat(prefixe, a);
-      await deposerProjetDoc(presta, coproId, file);
+      await deposerProjetDoc(presta, coproId, file, "attestation_rge");
       return file.name;
     },
     onSuccess: () => {

@@ -15,7 +15,7 @@ import { labelsChecklistPourType } from "@/api/fichiers";
 import { PARCOURS, docFiles, docsOfEtape, type MontageDoc, type MontageFile, type MontageId } from "@/api/montage";
 
 /** Types trop génériques pour relier des pièces entre elles. */
-const TYPES_NON_PROPAGES = new Set(["autre", "photo", "courrier", "rapport", "plan"]);
+export const TYPES_NON_PROPAGES = new Set(["autre", "photo", "courrier", "rapport", "plan"]);
 
 /** Documents (montage, définition) attendant un type donné, hors montage source. */
 export function ciblesMontagePourType(type: string, montageSource?: MontageId) {

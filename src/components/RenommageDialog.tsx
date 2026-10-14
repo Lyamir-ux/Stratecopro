@@ -19,6 +19,7 @@ import { VerificationRgeDialog } from "@/components/VerificationRge";
 import { questionnaireEcoPtzPour } from "@/lib/ecoPtzDonnees";
 import { extraireTextePdf, trouverSiret } from "@/lib/pdf/extraitDonnees";
 import { verificationRgePour } from "@/lib/rge";
+import type { Tables } from "@/lib/database.types";
 import {
   construireNomFichier,
   dossierSuggere,
@@ -61,8 +62,10 @@ interface RenommageDialogProps {
   onClose: () => void;
   /** Dossier d'une copropriété : questionnaire éco-PTZ après le dépôt d'un audit, devis ou CCTP / DPGF. */
   ecoPtz?: { coproId: string; peutValider?: boolean };
-  /** Dossier d'une copropriété (AMO) : vérification RGE après le dépôt d'un devis ou d'une DPGF de travaux. */
-  rge?: { coproId: string; codePostal?: string | null };
+  /** Dossier d'une copropriété (AMO) : vérification RGE après le dépôt d'un devis ou d'une DPGF de travaux.
+   *  `presta` : dépôt d'un maître d'œuvre dans ses documents de projet (14/10/2026) - la trace se
+   *  rattache au document de projet créé et le certificat s'archive dans ses documents. */
+  rge?: { coproId: string; codePostal?: string | null; presta?: Tables<"prestataires"> };
 }
 
 export function RenommageDialog({
@@ -188,7 +191,11 @@ export function RenommageDialog({
         objet={verifRge.objet}
         dateDocument={verifRge.date}
         codePostalCopro={rge.codePostal}
-        dossier={{ coproId: rge.coproId, prefixe, fichierId: verifRge.fichierId }}
+        dossier={
+          rge.presta
+            ? { coproId: rge.coproId, prefixe, projetDocId: verifRge.fichierId, presta: rge.presta }
+            : { coproId: rge.coproId, prefixe, fichierId: verifRge.fichierId }
+        }
         libelleFermer={verifRge.ensuite || index + 1 < files.length ? "Continuer" : "Terminer"}
         onClose={() => {
           const { ensuite, file: depose, emetteur } = verifRge;

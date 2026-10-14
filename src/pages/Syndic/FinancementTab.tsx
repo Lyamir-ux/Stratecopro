@@ -3,7 +3,7 @@
 // collectif ou éco-PTZ individuel. Le gestionnaire coordonne ET peut saisir
 // le mode d'un copropriétaire quand il a l'information en direct (ex. fonds
 // propres) - saisie tracée (saisi_par), le copropriétaire garde la main.
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Icon } from "@/components/Icon";
 import { Badge, type BadgeKind } from "@/components/ui";
 import { fmtDate, fmtEuroFull } from "@/lib/format";
@@ -66,18 +66,26 @@ const ORDRE_GROUPES_AIDES = ["ANAH", "EMS", "Climaxion"];
  * Panneau « Plan de financement définitif » : six postes votés, chacun
  * déroulable - travaux regroupés par entreprise, frais annexes par mission,
  * aides de l'État par dispositif (MaPrimeRénov', EMS, Climaxion).
+ * Repris par la fiche projet de la maîtrise d'œuvre (14/10/2026), aussi pour un
+ * scénario du PF prévisionnel (`estimatif`) avec sa propre note de bas de panneau.
  */
-function PfDefinitifPanel({
+export function PfDefinitifPanel({
   plan,
   pv,
   fondsTravaux,
   perimetre,
+  estimatif = false,
+  note,
 }: {
   plan: PlanDefinitif;
   pv: PlanDefinitifResult;
   fondsTravaux: number;
   /** Bâtiments couverts quand la copropriété a un PF par bâtiment. */
   perimetre?: string;
+  /** Scénario d'un PF estimatif (prévisionnel), non validé. */
+  estimatif?: boolean;
+  /** Remplace la note de bas de panneau (destinée au syndic). */
+  note?: ReactNode;
 }) {
   const [ouverts, setOuverts] = useState<Set<string>>(new Set());
   const toggle = (id: string) =>
@@ -136,11 +144,20 @@ function PfDefinitifPanel({
     <div className="panel">
       <div className="p-head">
         <Icon name="fileCheck" size={18} />
-        <h3>Plan de financement définitif{perimetre ? ` · ${perimetre}` : ""}</h3>
+        <h3>
+          {estimatif ? `Plan de financement prévisionnel · ${plan.nom}` : "Plan de financement définitif"}
+          {perimetre ? ` · ${perimetre}` : ""}
+        </h3>
         <span style={{ flex: 1 }}></span>
-        <Badge kind="success" dot>
-          Validé
-        </Badge>
+        {estimatif ? (
+          <Badge kind="blue" dot>
+            Prévisionnel
+          </Badge>
+        ) : (
+          <Badge kind="success" dot>
+            Validé
+          </Badge>
+        )}
       </div>
       <div className="p-body">
         {postes.map((p) => {
@@ -183,14 +200,18 @@ function PfDefinitifPanel({
         <div className="kv">
           <span className="k" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 13, flex: "none" }}></span>
-            Validé le
+            {estimatif ? "Mis à jour le" : "Validé le"}
           </span>
           <span className="v">{fmtDate(plan.updated_at)}</span>
         </div>
         <p className="se-small" style={{ marginTop: 12, marginBottom: 0, color: "var(--fg-muted)" }}>
-          Cliquez sur un poste pour dérouler son détail : travaux par entreprise, frais annexes par mission,
-          aides de l'État par dispositif. Les quotes-parts individuelles (aides déduites) sont communiquées à
-          chaque copropriétaire.
+          {note ?? (
+            <>
+              Cliquez sur un poste pour dérouler son détail : travaux par entreprise, frais annexes par mission,
+              aides de l'État par dispositif. Les quotes-parts individuelles (aides déduites) sont communiquées à
+              chaque copropriétaire.
+            </>
+          )}
         </p>
       </div>
     </div>

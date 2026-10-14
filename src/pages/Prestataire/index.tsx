@@ -24,6 +24,7 @@ import { compteNonLus, nonLusFilGeneral, useFilGeneral, useFilsPresta, useLectur
 import { ConsultationsPresta } from "./Consultations";
 import { MesCandidatures } from "./MesCandidatures";
 import { MesProjets } from "./MesProjets";
+import { ProjetMoeFiche } from "./ProjetMoe";
 import { Messages } from "./Messages";
 import { MonEntreprise } from "./MonEntreprise";
 import type { Tables } from "@/lib/database.types";
@@ -137,7 +138,7 @@ function Loader() {
 export default function Prestataire() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
-  const { section: sectionParam } = useParams();
+  const { section: sectionParam, id: projetId, tab: projetTab } = useParams();
 
   const isAmo = profile?.role === "amo";
   const { data: monPresta, isLoading: monLoading } = useMonPrestataire(!isAmo);
@@ -262,7 +263,8 @@ export default function Prestataire() {
   };
 
   return (
-    <div className="portal">
+    // fiche d'un projet : page élargie (tableaux du financement et des lots), comme la fiche PPT du syndic
+    <div className={"portal" + (section === "projets" && projetId ? " portal-large" : "")}>
       {isAmo && (
         <div className="syndic-preview-bar">
           <Icon name="eye" size={15} />
@@ -315,7 +317,8 @@ export default function Prestataire() {
       <main className="portal-main">
         {section === "consultations" && <ConsultationsPresta presta={presta} />}
         {section === "candidatures" && <MesCandidatures presta={presta} />}
-        {section === "projets" && isMoe && <MesProjets presta={presta} />}
+        {section === "projets" && isMoe && !projetId && <MesProjets presta={presta} />}
+        {section === "projets" && isMoe && projetId && <ProjetMoeFiche presta={presta} coproId={projetId} tab={projetTab} />}
         {section === "messages" && <Messages presta={presta} />}
         {section === "entreprise" && <MonEntreprise presta={presta} />}
       </main>

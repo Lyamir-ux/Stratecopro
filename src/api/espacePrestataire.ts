@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthProvider";
 import type { Tables } from "@/lib/database.types";
 import { consultationProposee } from "@/lib/departements";
+import { nomFichierSansAccents } from "@/lib/nommage";
 
 export type CoproPublic = Pick<
   Tables<"coproprietes">,
@@ -535,6 +536,26 @@ export async function ouvrirDocPresta(path: string): Promise<void> {
   window.open(data.signedUrl, "_blank");
 }
 
+/** Lien signé (5 min) d'un document du bucket presta-docs - aperçu sans
+ *  téléchargement des documents de projet (ApercuDocument). */
+export async function urlSigneeDocPresta(path: string): Promise<string> {
+  const { data, error } = await supabase.storage.from("presta-docs").createSignedUrl(path, 300);
+  if (error || !data) throw error ?? new Error("URL de document indisponible");
+  return data.signedUrl;
+}
+
+/** Télécharge un document de projet sous son nom affiché. */
+export async function telechargerDocPresta(d: { path: string; name: string }): Promise<void> {
+  const { data, error } = await supabase.storage
+    .from("presta-docs")
+    .createSignedUrl(d.path, 300, { download: nomFichierSansAccents(d.name) });
+  if (error || !data) throw error ?? new Error("URL de téléchargement indisponible");
+  const a = document.createElement("a");
+  a.href = data.signedUrl;
+  a.download = d.name;
+  a.click();
+}
+
 /** Dépôt du logo de l'entreprise (remplace l'ancien) + mise à jour de la fiche. */
 export function useUploadLogoPresta(presta: Tables<"prestataires">) {
   const qc = useQueryClient();
@@ -679,7 +700,9 @@ export function useProjetDocs(prestaId: string) {
 export async function deposerProjetDoc(
   presta: Tables<"prestataires">,
   coproId: string,
-  file: File
+  file: File,
+  /** Type de document choisi au dépôt (nomenclature, 14/10/2026). */
+  type: string | null = null
 ): Promise<{ id: string }> {
   const path = `${dossierPresta(presta)}/projet-${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
   const { error: upErr } = await supabase.storage.from("presta-docs").upload(path, file);
@@ -692,6 +715,7 @@ export async function deposerProjetDoc(
       path,
       name: file.name,
       size: file.size,
+      type_document: type,
     })
     .select("id")
     .single();
@@ -703,9 +727,9 @@ export function useUploadProjetDoc(presta: Tables<"prestataires">) {
   const qc = useQueryClient();
   const { session } = useAuth();
   return useMutation({
-    mutationFn: async ({ coproId, file }: { coproId: string; file: File }) => {
+    mutationFn: async ({ coproId, file, type }: { coproId: string; file: File; type?: string | null }) => {
       if (!session) throw new Error("Session expirée");
-      return deposerProjetDoc(presta, coproId, file);
+      return deposerProjetDoc(presta, coproId, file, type ?? null);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["projet-docs"] });

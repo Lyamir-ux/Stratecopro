@@ -81,7 +81,8 @@ export const router = createBrowserRouter([
       },
       {
         element: <RequireRole role="presta" />,
-        children: [{ path: "/prestataire/:section?", element: <Prestataire /> }],
+        // « Mes projets » d'une MOE : /prestataire/projets/:id/:tab? ouvre la fiche d'un projet
+        children: [{ path: "/prestataire/:section?/:id?/:tab?", element: <Prestataire /> }],
       },
       {
         element: <RequireRole role="syndic" />,

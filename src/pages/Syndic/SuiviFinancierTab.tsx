@@ -5,6 +5,8 @@
 // total payé et montant restant se calculent seuls. En tête, les aides
 // (MPR, Climaxion, EMS, CEE) : montant notifié repris du PF définitif validé
 // et montant payé saisi à la main par le syndic (feedback Amir du 15/09/2026).
+// Lecture seule (`lectureSeule`) : fiche projet de la maîtrise d'œuvre (14/10/2026),
+// mêmes chiffres, ni saisie ni enregistrement.
 import { Fragment, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { fmtDate, fmtEuroFull } from "@/lib/format";
@@ -48,7 +50,14 @@ interface LigneSuivi {
 const sommeLigne = (p: PaiementsSuivi, key: string) =>
   (p[key] ?? []).reduce((s: number, v) => s + (v ?? 0), 0);
 
-export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
+export function SuiviFinancierTabSyndic({
+  c,
+  lectureSeule = false,
+}: {
+  c: Pick<SyndicCopro, "id" | "name" | "denomination_batiments">;
+  /** Consultation sans saisie (espace de la maîtrise d'œuvre). */
+  lectureSeule?: boolean;
+}) {
   // Le PF définitif validé est partagé avec le syndic (RLS) - même source que
   // l'onglet Financement.
   const { data: pfPlans, isLoading } = usePlansDefinitifs(c.id);
@@ -192,21 +201,28 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
                 <div className="l">{a.label} notifié</div>
                 <div className="v">{fmtEuroFull(notifie)}</div>
               </div>
-              <div className="moe-tile" title={`${a.titre} - montant effectivement versé, à saisir puis « Enregistrer »`}>
+              <div
+                className="moe-tile"
+                title={lectureSeule ? `${a.titre} - montant effectivement versé` : `${a.titre} - montant effectivement versé, à saisir puis « Enregistrer »`}
+              >
                 <div className="l">{a.label} payé</div>
-                <div className="v aide-paye">
-                  <input
-                    className="moe-tile-inp"
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    placeholder="0"
-                    aria-label={`${a.titre} - montant payé`}
-                    value={paye ?? ""}
-                    onChange={(e) => setAidePayee(a.id, e.target.value)}
-                  />
-                  <span style={{ color: "var(--fg-muted)", fontSize: 14 }}>€</span>
-                </div>
+                {lectureSeule ? (
+                  <div className="v">{paye != null ? fmtEuroFull(paye) : "-"}</div>
+                ) : (
+                  <div className="v aide-paye">
+                    <input
+                      className="moe-tile-inp"
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      placeholder="0"
+                      aria-label={`${a.titre} - montant payé`}
+                      value={paye ?? ""}
+                      onChange={(e) => setAidePayee(a.id, e.target.value)}
+                    />
+                    <span style={{ color: "var(--fg-muted)", fontSize: 14 }}>€</span>
+                  </div>
+                )}
               </div>
             </Fragment>
           );
@@ -223,7 +239,7 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
               Échec de l'enregistrement : {String((save.error as Error)?.message ?? save.error)}
             </span>
           )}
-          {dirty && !save.isPending && (
+          {!lectureSeule && dirty && !save.isPending && (
             <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Modifications non enregistrées</span>
           )}
           <button
@@ -283,14 +299,16 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
             <Icon name="download" size={13} />
             Exporter
           </button>
-          <button
-            className="se-btn se-btn-primary btn-sm"
-            disabled={!dirty || save.isPending}
-            onClick={() => void save.mutateAsync(brouillon!).then(() => setBrouillon(null))}
-          >
-            <Icon name="check" size={14} />
-            {save.isPending ? "Enregistrement…" : "Enregistrer"}
-          </button>
+          {!lectureSeule && (
+            <button
+              className="se-btn se-btn-primary btn-sm"
+              disabled={!dirty || save.isPending}
+              onClick={() => void save.mutateAsync(brouillon!).then(() => setBrouillon(null))}
+            >
+              <Icon name="check" size={14} />
+              {save.isPending ? "Enregistrement…" : "Enregistrer"}
+            </button>
+          )}
         </div>
         <div className="p-body" style={{ paddingTop: 0 }}>
           <div className="sf-wrap">
@@ -329,15 +347,19 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
                           </td>
                           {Array.from({ length: NB_SITUATIONS }, (_, i) => (
                             <td key={i} className="num">
-                              <input
-                                className="sf-inp"
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                placeholder="-"
-                                value={paiements[l.key]?.[i] ?? ""}
-                                onChange={(e) => setCellule(l.key, i, e.target.value)}
-                              />
+                              {lectureSeule ? (
+                                paiements[l.key]?.[i] != null ? fmtEuroFull(paiements[l.key]![i]!) : "-"
+                              ) : (
+                                <input
+                                  className="sf-inp"
+                                  type="number"
+                                  min={0}
+                                  step={0.01}
+                                  placeholder="-"
+                                  value={paiements[l.key]?.[i] ?? ""}
+                                  onChange={(e) => setCellule(l.key, i, e.target.value)}
+                                />
+                              )}
                             </td>
                           ))}
                           <td className="num" style={{ fontWeight: 600 }}>
@@ -381,10 +403,20 @@ export function SuiviFinancierTabSyndic({ c }: { c: SyndicCopro }) {
           </div>
           <p className="se-small" style={{ color: "var(--fg-muted)", marginTop: 12, marginBottom: 0 }}>
             <Icon name="help" size={13} /> Les montants votés TTC reprennent le plan de financement définitif
-            validé le {fmtDate(valides.reduce((d, p) => (p.updated_at > d ? p.updated_at : d), planValide.updated_at))}. Saisissez le montant réglé à chaque situation de
-            travaux (1 à 10) - total payé et restant se calculent automatiquement, puis « Enregistrer ». Les montants
-            d'aides notifiés (MPR, Climaxion, EMS, CEE) reprennent le plan de financement définitif validé ;
-            saisissez le montant payé à réception de chaque versement.
+            validé le {fmtDate(valides.reduce((d, p) => (p.updated_at > d ? p.updated_at : d), planValide.updated_at))}.{" "}
+            {lectureSeule ? (
+              <>
+                Les montants réglés à chaque situation de travaux et les aides versées sont saisis par le syndic,
+                qui règle les entreprises ; ce tableau est en lecture seule.
+              </>
+            ) : (
+              <>
+                Saisissez le montant réglé à chaque situation de travaux (1 à 10) - total payé et restant se
+                calculent automatiquement, puis « Enregistrer ». Les montants d'aides notifiés (MPR, Climaxion,
+                EMS, CEE) reprennent le plan de financement définitif validé ; saisissez le montant payé à
+                réception de chaque versement.
+              </>
+            )}
           </p>
         </div>
       </div>

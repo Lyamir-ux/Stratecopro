@@ -4403,6 +4403,7 @@ export type Database = {
           path: string
           prestataire_id: string
           size: number | null
+          type_document: string | null
           uploaded_at: string
         }
         Insert: {
@@ -4412,6 +4413,7 @@ export type Database = {
           path: string
           prestataire_id: string
           size?: number | null
+          type_document?: string | null
           uploaded_at?: string
         }
         Update: {
@@ -4421,6 +4423,7 @@ export type Database = {
           path?: string
           prestataire_id?: string
           size?: number | null
+          type_document?: string | null
           uploaded_at?: string
         }
         Relationships: [
@@ -5371,8 +5374,24 @@ export type Database = {
           role_compte: Database["public"]["Enums"]["app_role"] | null
         }[]
       }
+      composition_copro_moe: {
+        Args: { p_copro_id: string; p_prestataire_id: string }
+        Returns: Json
+      }
       documents_dossier: {
         Args: { p_copro_id: string }
+        Returns: {
+          depose_le: string
+          dossier: string
+          id: string
+          name: string
+          origine: string
+          path: string
+          taille: number
+        }[]
+      }
+      documents_dossier_moe: {
+        Args: { p_copro_id: string; p_prestataire_id: string }
         Returns: {
           depose_le: string
           dossier: string
@@ -5463,6 +5482,18 @@ export type Database = {
       moe_cite: {
         Args: { p_maitre_oeuvre: string; p_raison_sociale: string }
         Returns: boolean
+      }
+      montage_deposer_moe: {
+        Args: { p_cibles: Json; p_copro_id: string; p_fichier: Json }
+        Returns: undefined
+      }
+      montage_moe: {
+        Args: { p_copro_id: string; p_prestataire_id: string }
+        Returns: Json
+      }
+      montage_retirer_moe: {
+        Args: { p_copro_id: string; p_path: string }
+        Returns: undefined
       }
       my_coproprietaire_ids: { Args: never; Returns: string[] }
       syndic_changer_proprietaire: {
