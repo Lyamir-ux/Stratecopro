@@ -5220,6 +5220,7 @@ export type Database = {
           id: string | null
           lots: number | null
           lots_hab: number | null
+          montant_source: string | null
           montant_ttc: number | null
           next_task: string | null
           reste_a_charge: number | null
