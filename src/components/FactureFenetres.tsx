@@ -4,7 +4,8 @@
 //
 // Un clic sur un jalon ouvre la bonne fenêtre :
 //   - à facturer : confirmation (contre le mauvais clic) puis brouillon ;
-//   - brouillon : aperçu PDF à vérifier, adresse du syndic, numéro de
+//   - brouillon : aperçu PDF à vérifier, adresse du syndic (choisie à chaque
+//     facture pour une enseigne à plusieurs adresses, 0168), numéro de
 //     référence ou d'ordre de service et texte libre sous les articles
 //     (0135), « Valider et envoyer » (numéro, PDF classé dans les fichiers,
 //     e-mail au gestionnaire ou à Hellio, chef de projet et dirigeant en
@@ -28,10 +29,13 @@ import {
   useJournalFacturation,
   useMarquerPaye,
   useModifierBrouillon,
+  useAdressesFacturation,
   useParametresFacturation,
+  useRetirerAdresseFacturation,
   useSupprimerBrouillon,
   useTerminerEnvoi,
   useValiderEtEnvoyer,
+  type AdressesAuChoix,
   type ResultatEmission,
 } from "@/api/factures";
 import { messageErreur } from "@/lib/erreurs";
@@ -41,8 +45,11 @@ import {
   LIBELLE_REFERENCE_CLIENT,
   LONGUEUR_REFERENCE_CLIENT,
   LONGUEUR_TEXTE_LIBRE,
+  adresseDeLaListe,
   avoirDe,
+  cleAdresse,
   dateFr,
+  derniereAdresseFacturee,
   etatPiece,
   euros,
   libelleType,
@@ -343,7 +350,7 @@ function FenetrePiece({
             )}
           </dl>
           {piece.statut === "brouillon" ? (
-            <ActionsBrouillon piece={piece} copro={copro} prochain={parametres ?? null} onClose={onClose} />
+            <ActionsBrouillon piece={piece} pieces={pieces} copro={copro} prochain={parametres ?? null} onClose={onClose} />
           ) : (
             <ActionsEmise
               piece={piece}
@@ -364,11 +371,13 @@ function FenetrePiece({
 
 function ActionsBrouillon({
   piece,
+  pieces,
   copro,
   prochain,
   onClose,
 }: {
   piece: PieceFacture;
+  pieces: PieceFacture[];
   copro: CoproFacturation;
   prochain: { mode: string; prochain_facture: number; prochain_avoir: number } | null;
   onClose: () => void;
@@ -376,6 +385,8 @@ function ActionsBrouillon({
   const modifier = useModifierBrouillon();
   const supprimer = useSupprimerBrouillon();
   const valider = useValiderEtEnvoyer();
+  const saisieAdresse = piece.nature === "amo" && piece.type === "facture";
+  const { data: auChoix, isLoading: chargementAdresses } = useAdressesFacturation(piece.copro_id, saisieAdresse);
   const [adresse, setAdresse] = useState(piece.client_adresse ?? "");
   const [refClient, setRefClient] = useState(piece.reference_client ?? "");
   const [refType, setRefType] = useState<TypeReferenceClient>(piece.reference_client_type ?? "reference");
@@ -435,7 +446,16 @@ function ActionsBrouillon({
 
   return (
     <div className="fz-actions">
-      {amo && piece.type === "facture" && (
+      {saisieAdresse && !chargementAdresses && auChoix && (
+        <ChoixAdresse
+          choix={auChoix}
+          pa={piece.client_pa}
+          adresse={adresse}
+          derniere={derniereAdresseFacturee(pieces, piece.copro_id)}
+          onChange={setAdresse}
+        />
+      )}
+      {saisieAdresse && !chargementAdresses && !auChoix && (
         <div className="fld" style={{ marginBottom: 0 }}>
           <label htmlFor="fz-adresse">Adresse du syndic (P/A {piece.client_pa ?? "syndic"})</label>
           <textarea
@@ -529,13 +549,117 @@ function ActionsBrouillon({
             className="se-btn se-btn-primary btn-sm"
             onClick={() => setConfirmation("valider")}
             disabled={adresseManquante || sansEmail}
-            title={adresseManquante ? "Complétez l'adresse du syndic" : undefined}
+            title={adresseManquante ? (auChoix ? "Choisissez l'adresse du syndic" : "Complétez l'adresse du syndic") : undefined}
           >
             <Icon name="check" size={14} /> Valider et envoyer
           </button>
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Enseigne à plusieurs adresses (0168, Foncia ABFC) : l'adresse se choisit à
+ * chaque facture parmi celles de l'enseigne, ou se saisit (« Nouvelle
+ * adresse », ajoutée à la liste à l'enregistrement du brouillon).
+ */
+function ChoixAdresse({
+  choix,
+  pa,
+  adresse,
+  derniere,
+  onChange,
+}: {
+  choix: AdressesAuChoix;
+  pa: string | null;
+  adresse: string;
+  derniere: string | null;
+  onChange: (adresse: string) => void;
+}) {
+  const retirer = useRetirerAdresseFacturation();
+  const choisie = adresseDeLaListe(choix.adresses, adresse);
+  const [nouvelle, setNouvelle] = useState(() => !!adresse.trim() && !choisie);
+  const [aRetirer, setARetirer] = useState<string | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const cleDerniere = cleAdresse(derniere);
+
+  const confirmerRetrait = async (a: string) => {
+    setErreur(null);
+    try {
+      await retirer.mutateAsync({ organisationId: choix.organisationId, adresse: a });
+      setARetirer(null);
+    } catch (e) {
+      setErreur(messageErreur(e, "L'adresse n'a pas pu être retirée."));
+    }
+  };
+
+  return (
+    <fieldset className="fz-choix-adresse">
+      <legend>Adresse du syndic (P/A {pa ?? "syndic"})</legend>
+      <span className="hint">À choisir pour chaque facture : l'enseigne a plusieurs adresses.</span>
+      {choix.adresses.map((a) => {
+        const active = !nouvelle && choisie === a;
+        return (
+          <div key={a} className={`fz-adresse${active ? " active" : ""}`}>
+            <label>
+              <input
+                type="radio"
+                name="fz-adresse"
+                checked={active}
+                onChange={() => {
+                  setNouvelle(false);
+                  onChange(a);
+                }}
+              />
+              <span>
+                {a.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join(", ")}
+                {cleDerniere && cleAdresse(a) === cleDerniere && <small>Adresse de la dernière facture de ce dossier</small>}
+              </span>
+            </label>
+            {!active &&
+              (aRetirer === a ? (
+                <span className="fz-retirer">
+                  Retirer de la liste ?
+                  <button type="button" className="fz-lien" onClick={() => setARetirer(null)}>Non</button>
+                  <button type="button" className="fz-lien fort" onClick={() => void confirmerRetrait(a)} disabled={retirer.isPending}>Oui</button>
+                </span>
+              ) : (
+                <button type="button" className="fz-lien" title="Retirer cette adresse de la liste" onClick={() => setARetirer(a)}>
+                  Retirer
+                </button>
+              ))}
+          </div>
+        );
+      })}
+      <div className={`fz-adresse${nouvelle ? " active" : ""}`}>
+        <label>
+          <input
+            type="radio"
+            name="fz-adresse"
+            checked={nouvelle}
+            onChange={() => {
+              setNouvelle(true);
+              onChange("");
+            }}
+          />
+          <span>Nouvelle adresse</span>
+        </label>
+      </div>
+      {nouvelle && (
+        <>
+          <textarea
+            aria-label="Nouvelle adresse du syndic"
+            rows={3}
+            value={adresse}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={"14 quai Mullenheim\n67083 Strasbourg"}
+          />
+          <span className="hint">Une ligne par ligne d'adresse, sans le pays. Elle sera proposée pour les prochaines factures de l'enseigne.</span>
+        </>
+      )}
+      {erreur && <p className="fact-erreur">{erreur}</p>}
+    </fieldset>
   );
 }
 

@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { ImagesFacture } from "@/lib/pdf/facture";
 import {
+  cleAdresse,
   nomArchiveFactures,
   nomFichierPiece,
   nomsUniques,
@@ -110,6 +111,7 @@ function invalider(qc: ReturnType<typeof useQueryClient>, coproId?: string) {
   void qc.invalidateQueries({ queryKey: ["facturation-journal"] });
   void qc.invalidateQueries({ queryKey: ["facturation-parametres"] });
   void qc.invalidateQueries({ queryKey: ["honoraires"] });
+  void qc.invalidateQueries({ queryKey: ["adresses-facturation"] });
   if (coproId) void qc.invalidateQueries({ queryKey: ["fichiers", coproId] });
   else void qc.invalidateQueries({ queryKey: ["fichiers"] });
 }
@@ -127,9 +129,57 @@ export function useCreerBrouillon() {
   });
 }
 
+/** Enseigne d'un dossier dont l'adresse de facturation se choisit à chaque facture (0168). */
+export interface AdressesAuChoix {
+  organisationId: string;
+  /** Adresses proposées ; une nouvelle adresse saisie sur une facture s'y ajoute. */
+  adresses: string[];
+}
+
+/** Adresses proposées pour les factures AMO du dossier ; null si son enseigne a une adresse unique (0115). */
+export function useAdressesFacturation(coproId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["adresses-facturation", coproId],
+    enabled,
+    queryFn: async (): Promise<AdressesAuChoix | null> => {
+      const { data, error } = await supabase
+        .from("coproprietes")
+        .select("organisations(id, adresse_facturation_au_choix, adresses_facturation)")
+        .eq("id", coproId)
+        .maybeSingle();
+      if (error) throw error;
+      const org = data?.organisations;
+      if (!org?.adresse_facturation_au_choix) return null;
+      return { organisationId: org.id, adresses: org.adresses_facturation ?? [] };
+    },
+  });
+}
+
+/** Retire une adresse de la liste proposée par l'enseigne (adresse périmée ou mal saisie). */
+export function useRetirerAdresseFacturation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ organisationId, adresse }: { organisationId: string; adresse: string }) => {
+      const { data, error } = await supabase
+        .from("organisations")
+        .select("adresses_facturation")
+        .eq("id", organisationId)
+        .single();
+      if (error) throw error;
+      const cle = cleAdresse(adresse);
+      const { error: e2 } = await supabase
+        .from("organisations")
+        .update({ adresses_facturation: (data.adresses_facturation ?? []).filter((a) => cleAdresse(a) !== cle) })
+        .eq("id", organisationId);
+      if (e2) throw e2;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["adresses-facturation"] }),
+  });
+}
+
 export interface SaisieBrouillon {
   id: string;
-  /** Adresse du syndic (gardée ensuite pour toute l'enseigne) ; vide = effacée. */
+  /** Adresse du syndic (gardée ensuite pour toute l'enseigne, sauf enseigne « au choix » : 0168) ; vide = effacée. */
   adresse: string;
   /** Numéro de référence ou d'ordre de service du client (0135) ; vide = aucun. */
   referenceClient: string;

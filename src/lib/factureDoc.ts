@@ -274,3 +274,22 @@ export function lignesClient(p: Pick<PieceFacture, "client_pa" | "client_adresse
   const lignes = [...(p.client_pa ? [`P/A ${p.client_pa.toUpperCase()}`] : []), ...adresse, "FRANCE"];
   return { lignes, adresseManquante: adresse.length === 0 };
 }
+
+// ---------- adresse choisie à chaque facture (0168) ----------
+
+/** Clé de comparaison de deux adresses : casse, espaces et retours à la ligne ignorés (facturation_adresse_cle). */
+export const cleAdresse = (a: string | null | undefined): string => (a ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+
+/** Adresse de la liste égale à `adresse` (à la casse et aux espaces près), ou null. */
+export function adresseDeLaListe(liste: readonly string[], adresse: string | null | undefined): string | null {
+  const cle = cleAdresse(adresse);
+  return cle ? (liste.find((a) => cleAdresse(a) === cle) ?? null) : null;
+}
+
+/** Adresse de la dernière facture AMO émise pour ce dossier, pour la signaler dans le choix. */
+export function derniereAdresseFacturee(pieces: readonly PieceFacture[], coproId: string): string | null {
+  const derniere = pieces
+    .filter((p) => p.copro_id === coproId && p.type === "facture" && p.nature === "amo" && p.statut === "emise" && !!p.client_adresse?.trim())
+    .sort((a, b) => (b.valide_le ?? "").localeCompare(a.valide_le ?? ""))[0];
+  return derniere?.client_adresse ?? null;
+}

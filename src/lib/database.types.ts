@@ -2774,6 +2774,8 @@ export type Database = {
       organisations: {
         Row: {
           adresse_facturation: string | null
+          adresse_facturation_au_choix: boolean
+          adresses_facturation: string[]
           created_at: string
           id: string
           module_ppt: boolean
@@ -2782,6 +2784,8 @@ export type Database = {
         }
         Insert: {
           adresse_facturation?: string | null
+          adresse_facturation_au_choix?: boolean
+          adresses_facturation?: string[]
           created_at?: string
           id?: string
           module_ppt?: boolean
@@ -2790,6 +2794,8 @@ export type Database = {
         }
         Update: {
           adresse_facturation?: string | null
+          adresse_facturation_au_choix?: boolean
+          adresses_facturation?: string[]
           created_at?: string
           id?: string
           module_ppt?: boolean
